@@ -90,9 +90,9 @@ public final class HelpText {
               --no-skills, -ns               Disable skills discovery
               --prompt-template <name>       Load prompt template (repeatable; Phase 6)
               --no-prompt-templates, -np     Disable prompt template discovery
-              --theme <name|file>            Theme: dark|light or a .tcss file path
-              --no-themes                    Disable theme discovery
-              --use-theme <name>             Select a theme for this run (overrides settings)
+              --theme <path>                 Load a theme file or directory (can be used multiple times)
+              --no-themes                    Disable theme discovery and loading
+              --use-theme <name[/name]>      Set the initial interactive theme for this run
               --no-context-files, -nc        Disable AGENTS.md/CLAUDE.md discovery
               --print, -p                    Non-interactive print mode
               --export <path>                Export session to HTML and exit (Phase 6)

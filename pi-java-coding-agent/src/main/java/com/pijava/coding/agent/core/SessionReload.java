@@ -69,7 +69,9 @@ final class SessionReload {
         // 重扫的 themes 条目）并重装载（pi interactive-mode.ts:6490 的
         // setRegisteredThemes 由模式层在 reload 收尾经 Themes 写入——裁决⑩：
         // 会话层只重算 owner.themes，不碰全局注册表）。
-        var reloadCli = SessionSetup.enabledPaths(assembly.cli().themes());
+        var reloadCli = SessionSetup.mergePaths(
+            SessionSetup.cliThemePaths(session.sessionArgs()),
+            SessionSetup.enabledPaths(assembly.cli().themes()));
         var reloadThemesPaths = session.sessionArgs().noThemes()
             ? reloadCli
             : SessionSetup.mergePaths(reloadCli,

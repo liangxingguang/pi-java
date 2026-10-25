@@ -75,7 +75,7 @@ java `cli/ArgsParser.java` 共 **43 个 `@Option`**，其中 **4 个 java 独有
 | 26 | `--no-extensions` | `args.ts:189` | ✅ `ArgsParser.java:102` | 1 | 对齐 | `AgentSession.java:1142` |
 | 27 | `--skill` | `args.ts:193` | ✅ `ArgsParser.java:105` | 1 | 对齐 | `SkillDiscovery.java:36` |
 | 28 | `--prompt-template` | `args.ts:196` | ✅ `ArgsParser.java:111` | 1 | 对齐 | `PromptTemplates.java:47` |
-| 29 | `--theme` | `args.ts:199` | ⚠️ `ArgsParser.java:117` | 1 | **存疑** | pi 收 **JSON 主题名或文件**；java 只收 `.tcss` 路径（pi-java-tui `PiTheme.java:97`）——**批 14（docs/25 §4）重排批 20**（依赖 JSON 主题系统 E4-4/B163，现做只能是空壳） |
+| 29 | `--theme` | `args.ts:199` | ✅ `ArgsParser.java:117`＋`SessionSetup.cliThemePaths`（批 21） | 1 | **对齐** | **批 21（docs/32 T9）**：pi 语义——值是**路径来源**（本地路径对 cwd 解析，main.ts:555-556 对位）进主题发现（CLI 车道先于 resolve 车道）；删 .tcss 选型误用（裁决⑦）；帮助文案逐字 |
 | 30 | `--use-theme` | `args.ts:202` | ✅ `ArgsParser.java:126` | 1 | **对齐** | **批 14（docs/25 T16）**：flag＋缺值/`-` 起头两诊断（`--use-theme requires a theme name` 逐字）＋消费 `PiTuiLauncher.themeFrom`（优先于 `--theme`）＋`-r` 选择器 SPI `useThemeOverride`（pi `main.ts:681-683` 对位） |
 | 31 | `--no-skills`/`-ns` | `args.ts:210` | ✅ `ArgsParser.java:108` | 1 | 对齐 | |
 | 32 | `--no-prompt-templates`/`-np` | `args.ts:212` | ✅ `ArgsParser.java:114` | 1 | 对齐 | |
@@ -91,9 +91,10 @@ java `cli/ArgsParser.java` 共 **43 个 `@Option`**，其中 **4 个 java 独有
 | 42 | `@files` 位置参数 | `args.ts:248`（另 `:85-86`） | ✅ `ArgsParser.java:204-205` | 2 | 对齐 | 两侧都剥离 `@` 前缀进 `fileArgs` |
 | 43 | 扩展注册的 CLI flag | `args.ts:250-259` + `registerFlag`/`getFlag`（`extensions/types.ts:1664/1680`） | ✅ `extension/ExtensionFlag*.java`＋`Main.java:71` | 1 | **对齐** | **批 16（docs/27 T1）**：registerFlag/getFlag（所有权门＋default set-if-absent）＋`ExtensionFlagBinder`（三态配对＋boolean 恒 true/string 无值诊断/未注册汇总逐字）＋`startupDiagnostics` 落点＋`--help` Extension CLI Flags 段（轻量装载、无 flag 整段消失） |
 
-**汇总：对齐 41 / 缺失 1 / 存疑 1 / 合计 43 = 95.3%**；**Σ权重 62 / Σ(w×c) 60.5 / 加权 97.6%**
+**汇总（批 21 后）：对齐 43 / 缺失 0 / 存疑 0 / 合计 43 = 100%**；**Σ权重 62 / Σ(w×c) 62.0 / 加权 100%（第十个满分域）**
 > 批 14（2026-10-23，docs/25）：**11 行翻动**——A-5/A-12/A-13/A-14/A-15/A-24/A-30/A-40/A-41 存疑⇒对齐、A-17/A-25 缺失⇒对齐（A-17 核销）；A-29 重排批 20、A-43 重排批 15（判定不动，证据改注）。Σ 50.0→**60.5/62 ≈ 97.6%**。
 > 批 16（2026-10-23，docs/27）：A-43 缺失→**对齐**（T1 扩展 flag 面全链＋--help 段）。Σ 60.5→**61.5/62 ≈ 99.2%**（余 A-29〔批 20〕）。
+> 批 21（2026-10-25，docs/32）：A-29 存疑→**对齐**（T9：`--theme` 重裁纯路径来源＋CLI 车道进主题发现；.tcss 选型删除）。Σ 61.5→**62.0/62 = 100%**。
 > pi 新增 `--no-mcp`（`args.ts:191` → `disabledBuiltinExtensions:["mcp"]`，`main.ts:787`）属 MCP 面，判定归 map/07。
 > 本锚点改判：`--tools`（A-20）/ `--exclude-tools`（A-21）对齐 → **存疑**（pi 现收 pattern `*`；`--tools` 另收 `+name`/`-name`/`mcp__`，java 仅裸名切分）。
 > 批 1（2026-10-18，B236/docs/11）：A-20/A-21 存疑 → **对齐**（三层语义全落，窄差 D1 登记）。
@@ -310,11 +311,12 @@ pi `ExtensionUIContext` 共 **28 个成员**（`types.ts:149-323`，两锚点间
 |---|---|---|---|---|---|---|---|
 | E1-1 | `settings.json`（全局） | 配置 | `config.ts:628-630` → `~/.pi/agent/settings.json` | `FileSettingsStorage.java:41/52` | 2 | 对齐 | — |
 | E1-2 | `settings.json`（项目级） | 配置 | `.pi/settings.json`（`settings-manager.ts:192`，另 `:318`） | `FileSettingsStorage.java:42` | 2 | 对齐 | — |
-| E1-3 | `auth.json` | 配置 | `auth-storage.ts:497-498`（revision + 文件锁 + stale 检测） | `ai/auth/FileCredentialStore.java`、`OAuthCredentialStore.java`（＋ AuthKind 分派） | 2 | **存疑** | — |
-| E1-4 | `models.json` | 配置 | `core/models-store.ts` 147 + `model-config.ts:84`（`ModelsConfigSchema`）/`:115`（`ModelConfig`）+ `core/remote-catalog-provider.ts` 158 | `ai/provider/ModelsJsonProvider.java` + **`core/RemoteCatalogProvider.java`（326 行）** + `ModelCatalogRefresh.java` | 2 | **存疑** | **F6**（`ModelsJsonProvider` 钉死 baseUrl） |
-| E1-5 | pi manifest（`package.json` 的 `pi` 字段） | 配置 | `core/pi-manifest.ts`（35 行） | ❌ 无对应物 | 2 | **缺失** | — |
+| E1-3 | `auth.json` | 配置 | `auth-storage.ts:497-498`（revision + 文件锁 + stale 检测） | `ai/auth/FileCredentialStore.java`、`OAuthCredentialStore.java`（＋ AuthKind 分派） | 2 | **对齐** | **批 21（docs/32 T2）**：读-改-写收进同一把 `FileChannel` 锁（pi `withLock(fn)` 对位；修真前 RMW 非原子＋撕裂读）；`FileModelsStore` 同修真；revision 缓存/stale 检测/共享读态不移植（java 无进程内读缓存——窄差 D131） |
+| E1-4 | `models.json` | 配置 | `core/models-store.ts` 147 + `model-config.ts:84`（`ModelsConfigSchema`）/`:115`（`ModelConfig`）+ `core/remote-catalog-provider.ts` 158 | `ai/provider/ModelsJsonProvider.java` + **`core/RemoteCatalogProvider.java`（326 行）** + `ModelCatalogRefresh.java` | 2 | **对齐** | **批 21（docs/32 T1d）核销**：F6 注记症状已过期——`Args.baseUrl` 经 `DefaultProviders:429`（CLI＞settings）＋:225（per-model 投影）消费；`FileModelsStore` 批 21 补跨进程锁（pi FileAuthStorageBackend 对位） |
+| E1-5 | pi manifest（`package.json` 的 `pi` 字段） | 配置 | `core/pi-manifest.ts`（35 行） | `pkg/PiManifest.java`（批 18 已落，逐字对位） | 2 | **对齐** | **批 21（docs/32 T1a）核销**（账面滞后）：`PiManifestTest` 六用例（四键/非字符串键跳过/非对象⇒null/BOM）批 18 已在 |
 
-**E1 汇总：对齐 2 / 缺失 1 / 存疑 2 / 合计 5 = 40.0%**；**Σ权重 10 / Σ(w×c) 6.0 / 加权 60.0%**
+**E1 汇总（批 21 后）：对齐 5 / 缺失 0 / 存疑 0 / 合计 5 = 100%**；**Σ权重 10 / Σ(w×c) 10.0 / 加权 100%（第七个满分域）**
+> 批 21（2026-10-25，docs/32）：**3 行翻动**——E1-3 存疑⇒对齐（+1.0，T2 读改同锁修真＋D131）、E1-4 存疑⇒对齐（+1.0，T1d 核销：F6 症状过期＋FileModelsStore 补锁）、E1-5 缺失⇒对齐（+2.0，T1a 核销：批 18 PiManifest 已逐字落地）。Σ 6.0→**10.0/10 = 100%**。
 
 ### E2 settings.json 键（54）
 
@@ -331,7 +333,7 @@ pi 键全部来自 `core/settings-schema.ts:206-430`（`SettingsSchema`；`inter
 | E2-6 | `transport` | `:218` | `:33` | 2 | 对齐 | 4 处消费 |
 | E2-7 | `steeringMode` | `:224` | `:34` | 2 | 对齐 | `SettingsAccessors.java:60` |
 | E2-8 | `followUpMode` | `:229` | `:35` | 2 | 对齐 | `SettingsAccessors.java:70` |
-| E2-9 | `theme` | `:234` | `:36` | 2 | **存疑** | java 值是 `.tcss` 路径；pi 是 JSON 主题名 |
+| E2-9 | `theme` | `:234` | `:36` | 2 | **对齐** | **批 21（docs/32 T7/T9/T11）**：值语义＝pi 的 JSON 主题名/`light/dark` 对（`SettingsAccessors.getThemeSetting`/`getTheme` 双访问器拆分，settings-manager.ts:741-750 对位）；消费链＝启动 initTheme（TUI 控制器/选择器/Main headless）＋设置页 Theme 子菜单写回＋扩展面 `setTheme`；旧 `.tcss` 值静默回落 system（pi 同） |
 | E2-10 | `compaction` | `:235` | `:37` | **3** | 对齐 | java `Compaction` 含 `enabled/reserveTokens/keepRecentTokens/modelOverrides`（`Settings.java:134-148`）；per-model resolver `getCompactionSettings(ModelId)` 三级回退（`SettingsAccessors.java:260-267`），消费点 `AgentSession.java:420/717-718` —— A9 闭环 |
 | E2-11 | `branchSummary` | `:236` | `:42` | 2 | **对齐** | **批 11（2026-10-22，docs/22 T1）核销**（账面滞后）：B1 已在 agent-core 批 4 销号——字段＋访问器（`getBranchSummaryReserveTokens`/`getBranchSummarySkipPrompt`）＋消费点 `AgentSession.java:1231`（reserve 进分支摘要选项）＋`TreeNavigationFlow.java:169`（skipPrompt 门，TUI） |
 | E2-12 | `retry` | `:237` | `:66` | 2 | 对齐 | `SettingsAccessors.java:197` `getRetrySettings()` → `AgentSession.java:317`；`getProviderRetrySettings():218` → api options |
@@ -379,7 +381,7 @@ pi 键全部来自 `core/settings-schema.ts:206-430`（`SettingsSchema`；`inter
 | E2-54 | `fullscreenCopyOnSelect` | `:424` | `:117` | 1 | **存疑** | 批 11（docs/22 T7）：字段＋UiPrefs 访问器（`?? true`）；**批 12（docs/23 §4）**：消费依赖 alt-screen 选区/复制子系统（map/05 S2a-d 未排期）⇒ **窄差 D59** |
 | E2-55 | `fullscreenWheelScrollLines` | `:430` | `:119` | 1 | **对齐** | **批 12（2026-10-22，docs/23 T12，裁决⑥）**：数字臂接 `ScrollConfig.from` 第三参（固定行数 `withWheelLines`，accessor 已 clamp 1–100）；auto 臂维持既有 Codex 有界加速模型（窄差 D60＝K38：pi auto 是 mac/SSH 判定＋速率加速 ≤6＋Alt×5 的速度模型，不新造） |
 
-**E2 汇总（批 18 后）：对齐 48 / 缺失 0 / 存疑 6 / 出分母 1 / 合计 54**；**Σ权重 84 / Σ(w×c) 80.5 / 加权 95.8%**
+**E2 汇总（批 21 后）：对齐 49 / 缺失 0 / 存疑 5 / 出分母 1 / 合计 54**；**Σ权重 84 / Σ(w×c) 81.5 / 加权 97.0%**
 > `queueMode`（`:436`）/`websockets`（`:442`）只存在于 `SettingsSchema` 输入侧，`interface Settings`（`:471`）显式 Omit，非 settings.json 键，不列单元。
 > 本锚点改判：`compaction`（E2-10）存疑 → **对齐**（modelOverrides 字段＋per-model resolver 接线，A9 闭环）。
 > 批 1（2026-10-18，B236/docs/11）：`defaultTools`（E2-35）缺失 → **对齐**（键＋分层 merge＋解析＋消费点全落，窄差 D3 登记）。
@@ -387,6 +389,8 @@ pi 键全部来自 `core/settings-schema.ts:206-430`（`SettingsSchema`；`inter
 > 批 11（2026-10-22，docs/22）：**22 行翻动**——核销 2（E2-38/E2-11 账面滞后⇒对齐）；消费链 5（E2-5/E2-47/E2-48/E2-25/E2-33⇒对齐，B15-残留-5 销号，窄差 D52–D54）；声明面 14（缺失⇒存疑：E2-1/14/21/22/23/24/42/44/49/50/52/53/54/55）；E2-45 `codemode` **出分母**（裁决②，R5 面外 B161）。Σ 52.0→67.5（出分母后 67.5/84＝80.4%）。
 > 批 12（2026-10-22，docs/23）：**15 行翻动**（全部存疑⇒对齐）＋**表头口径修订（裁决①：TUI 消费点计入）**——核销 3（E2-37 批 9 账面滞后〔裁决②〕；E2-23/E2-24 pi 侧零消费⇒声明面即全量〔裁决③口径先例〕）；TUI 行为键 5（E2-36 双击 Esc／E2-15 外部编辑器／E2-39 编辑器留白／E2-41 补全行数〔裁决④默认 8⇒5〕／E2-40 outputPad 烘焙）；声明面消费点 7（E2-1＋E2-21 changelog 流、E2-42 硬件光标、E2-52 退出两臂、E2-53 滚动条三态、E2-55 滚轮数字臂、E2-44 订阅警告）；窄差 D55–D64（D56 terminal／D57 mermaid／D58 无 WS 传输／D59 选区子系统／D60 auto 加速模型／D61 auto/always 同形／D62 不回溯／D63 纯文本／D64 提示文案）；不动 6 行证据更新（E2-14/E2-49 随 cache-warmer 子系统批）。Σ 67.5→**75.0/84＝89.3%**。另 `setModelThinkingLevel` TUI 入口落地（E2-5 批 11 已对齐，无账面）。
 > 批 13（2026-10-23，docs/24）：**2 行翻动**（存疑⇒对齐）——E2-49 `cacheWarming`（+1.0：cache-warmer 子系统全链＋设置页行）、E2-14 `showCacheMissNotices`（+0.5：有载体三门落地，两门无载体登 D67 随载体批次收，裁决⑥）；窄差 D65–D68（abort＝iterator.close／暖选项现读／E2-14 两门无载体／/session 结构差）。Σ 75.0→**76.5/84 ≈ 91.1%**。
+> 批 18（2026-10-24，docs/29）：E2-20/E2-26 翻对齐（+2.0×2，settings `npmCommand`/`packages`）。Σ 76.5→**80.5/84 ≈ 95.8%**（缺失清零）。
+> 批 21（2026-10-25，docs/32）：E2-9 `theme` 存疑⇒对齐（+1.0，T7/T9/T11——值语义换 pi JSON 主题名/对＋消费链全接）。Σ 80.5→**81.5/84 ≈ 97.0%**。
 
 ### E3 会话管理行为（24）
 
@@ -406,7 +410,7 @@ pi 键全部来自 `core/settings-schema.ts:206-430`（`SettingsSchema`；`inter
 | E3-12 | 导入 JSONL | `session-manager.ts` | `PersistentSessionRepositories.java:109` | 1 | 对齐 | — |
 | E3-13 | 会话命名 | `session-manager.ts:1304` `appendSessionInfo` | `SessionCommands.java:22` + `AgentSession.java:529` | 1 | 对齐 | **B32** |
 | E3-14 | 会话树导航 | `session-manager.ts:1529` `getTree` / `:1579` `branch` | `SessionCommands.java:56` + `RpcDispatcher.java:295` | 1 | 对齐 | — |
-| E3-15 | 分支摘要（branch summary） | `core/compaction/branch-summarization.ts:349-353` | ❌ | 2 | **缺失** | **B1** |
+| E3-15 | 分支摘要（branch summary） | `core/compaction/branch-summarization.ts:349-353` | agent-core `LlmSummaryGenerator.java:163`（branch-summarization.ts:340-356 对位注释）＋`CompactionService`＋TUI `TreeNavigationFlow` | 2 | **对齐** | **批 21（docs/32 T1b）核销**（账面滞后）：B1 族 agent-core 批 4 已落（生成器＋navigateTree＋`branchSummary` 设置门） |
 | E3-16 | 条目标签（labels） | `session-manager.ts:1237/1246` | agent-core `JsonlSessionStorage.java:263/267` | 1 | 对齐 | — |
 | E3-17 | 自定义条目（custom entry） | `session-manager.ts:1290` | agent-core `Session.java:183` | 2 | 对齐 | — |
 | E3-18 | bash 执行条目 | `session-manager.ts:1071` | `AgentSession.java:1036-1045` + `AgentSessionEvent.BashExecutionUpdate:111` | 1 | 对齐 | — |
@@ -414,12 +418,13 @@ pi 键全部来自 `core/settings-schema.ts:206-430`（`SettingsSchema`；`inter
 | E3-20 | `--session-dir` | `session-manager.ts:596` `getDefaultSessionDir` | `AgentSession.java:131/164/180` | 1 | 对齐 | — |
 | E3-21 | 按 cwd 分目录 | `session-manager.ts:589/596` | `AgentSession.java:131`（`--path--` 编码） | 2 | 对齐 | — |
 | E3-22 | 崩溃恢复（settle 未结操作） | `session-manager.ts:341` `migrateSessionEntries` | `SessionPersistence.java:114` `settleOpenOperation` | 2 | 对齐 | — |
-| E3-23 | 会话元数据变更事件 | `session_info_changed`（`types.ts:1575`） | `AgentSessionEvent.SessionInfoChanged` **零生产者** | 1 | **缺失** | **B30** |
+| E3-23 | 会话元数据变更事件 | `session_info_changed`（`types.ts:1575`） | `AgentSession.java:1237`（emit 生产者）＋`SessionEventBridge:123` 扩展桥 | 1 | **对齐** | **批 21（docs/32 T1c）核销**（账面滞后）：B30 已在批 4 台账纠错区销号（生产者早已在），本行未翻 |
 | E3-24 | 提示缓存预热 | `core/cache-warmer.ts`（453 行）+ `settings-schema.ts:395` | `CacheWarmer`＋`CacheWarmingEconomics`＋`CacheStats`＋`CacheWarmingBridge`＋装配四面（批 13，docs/24） | 2 | **对齐** | **批 14 核销**：批 13 对账表漏列本行（cache-warmer 子系统即本行内容），闭环逐行实算补翻 |
 
-**E3 汇总：对齐 22 / 缺失 2 / 存疑 0 / 合计 24 = 91.7%**；**Σ权重 40 / Σ(w×c) 37.0 / 加权 92.5%**
+**E3 汇总（批 21 后）：对齐 24 / 缺失 0 / 存疑 0 / 合计 24 = 100%**；**Σ权重 40 / Σ(w×c) 40.0 / 加权 100%（第八个满分域）**
 > 批 10（2026-10-22，B254/docs/21）：E3-8 `/fork` 存疑 → **对齐**。
 > 批 14（2026-10-23，docs/25）：**7 行翻动**——E3-3 缺失⇒对齐（+2.0，选择器本体）、E3-4/E3-5/E3-6/E3-9 存疑⇒对齐（+4.0）、**E3-19 同翻**（+0.5，B54 销号——设计对账表漏列，批 10 E3-8 先例）、**E3-24 核销**（+2.0，批 13 对账表漏列，cache-warmer 本体已落）。Σ 28.5→**37.0/40 ≈ 92.5%**（余 3.0：E3-15 挂 B1、E3-23 挂 B30）。
+> 批 21（2026-10-25，docs/32）：**2 行翻动**——E3-15（+2.0）/E3-23（+0.5）双核销（B1/B30 早已销号，账面滞后）。Σ 37.0→**40.0/40 = 100%（第八个满分域）**。
 
 ### E4 资源发现（7）
 
@@ -428,12 +433,13 @@ pi 键全部来自 `core/settings-schema.ts:206-430`（`SettingsSchema`；`inter
 | E4-1 | skill 发现（目录 + `SKILL.md` + 忽略文件） | `core/skills.ts:168/414`、`resource-loader.ts` | `skill/SkillDiscovery.java:36/51` + `IgnoreFilter.java` | 2 | 对齐 | — |
 | E4-2 | skill 注册为 `/skill:<name>` 命令 | `interactive-mode.ts:805-815` | ✅ `SkillCommandItems.java`＋`PiTuiApp.loadSlashItems` | 2 | **对齐** | **批 2（2026-10-19，B244/docs/12）**：补全目录条目＋来源标签 u/p/t 三值子集（裁决⑥，npm/git 复合标签窄差 D2）；pi 从不注册真命令——注册面＝补全＋透传（裁决①），同 C 域 #25 |
 | E4-3 | prompt template 发现 + 参数替换 | `core/prompt-templates.ts:222` | `prompt/PromptTemplates.java:47/186` | 2 | 对齐 | **批 3（2026-10-19，B247/docs/13）**：注册面补齐（折叠进本单元，不另计分母）——补全目录模板臂（`PromptTemplateItems`，pi 无门＋u/p/t 标签＋argumentHint 透传）＋dispatch 已注册模板名透传（`CommandRegistry.java`）；记录增 `sourceInfo` 加载期打标（`loadDefaults` user/project、显式 temporary，pi :235-261） |
-| E4-4 | theme 发现（JSON + schema + 目录扫描） | `theme/`：`theme.ts` 1,086 + `theme-controller.ts` 253 + `system-theme.ts` 655 + `theme-schema.ts` 146（typebox）+ `theme-tokens.ts` 121 + dark/light.json 156（旧 JSON-schema 文件已删） | ❌ 只有 2 个内建 `.tcss`（pi-java-tui `PiTheme.java:23-24`） | 2 | **缺失** | — |
+| E4-4 | theme 发现（JSON + schema + 目录扫描） | `theme/`：`theme.ts` 1,086 + `theme-controller.ts` 253 + `system-theme.ts` 655 + `theme-schema.ts` 146（typebox）+ `theme-tokens.ts` 121 + dark/light.json 156（旧 JSON-schema 文件已删） | `coding.agent.theme` 包 14 件（ThemeColor/Oklab/ThemeColorMath/ThemeToken×56/ThemeJsonValidator/Theme/SystemTheme/Themes/ThemeWatcher/ThemeController/ThemeLoader/ThemeSettings…）＋内建 dark/light.json 逐字拷贝＋tui `TuiThemeBridge`/`ThemeApplicator`/`SemanticColors` 委托 | 2 | **对齐** | **批 21（docs/32 T4–T8，B163 销号）**：色数学经 pi 锚点 tsx 实跑 golden 钉死（okhsl(295 50% 67%)⇒#a798d7 等）；校验恒装（裁决②，无 typebox 懒装缝）；终端 OSC 查询面无（裁决③，窄差 D123） |
 | E4-5 | 上下文文件发现（`AGENTS.md`/`CLAUDE.md`） | `resource-loader.ts:185`（5 候选名）+ `loadProjectContextFiles:232` + `findShadowedContextFile:214` + worktree 影子判定（`:252-262`）+ `findGitPaths`（`footer-data-provider.ts:16-48`） | agent-core `prompt/ContextFileDiscovery.java`（5 候选名 / 向上遍历 / canonical 去重 / linked-worktree 影子去重）+ 接线 `AgentSession.java:423-425`（`--no-context-files` 有消费者） | **3** | 对齐 | — |
-| E4-6 | 系统提示词文件发现 | `resource-loader.ts:1213` `discoverSystemPromptFile` | ❌ | 2 | **缺失** | — |
+| E4-6 | 系统提示词文件发现 | `resource-loader.ts:1213` `discoverSystemPromptFile` | `SessionSetup.customPromptFor/appendSystemPromptFor`（发现两臂＋resolvePromptInput file-or-literal，批 21 T3） | 2 | **对齐** | **批 21（docs/32 T3）**：项目 `.pi-java/SYSTEM.md`（信任门）→ `<agentDir>/SYSTEM.md`；APPEND_SYSTEM.md 同形；CLI 值经 resolvePromptInput（现存路径⇒读文件）；/reload 不重读系统提示（窄差 D133） |
 | E4-7 | 资源冲突诊断 | `diagnostics.ts`（`ResourceDiagnostic`/`ResourceCollision`） | `skill/ResourceDiagnostic.java`、`PromptTemplates.Diagnostic` | 1 | 对齐 | — |
 
-**E4 汇总：对齐 5 / 缺失 2 / 存疑 0 / 合计 7 = 71.4%**；**Σ权重 14 / Σ(w×c) 10.0 / 加权 71.4%**
+**E4 汇总（批 21 后）：对齐 7 / 缺失 0 / 存疑 0 / 合计 7 = 100%**；**Σ权重 14 / Σ(w×c) 14.0 / 加权 100%（第九个满分域）**
+> 批 21（2026-10-25，docs/32）：**2 行翻动**——E4-4（+2.0，JSON 主题系统 2,417 行域全落＋B163 销号）、E4-6（+2.0，SYSTEM.md/APPEND_SYSTEM.md 发现＋file-or-literal）。Σ 10.0→**14.0/14 = 100%**。
 
 ### E5 扩展 API 面（35）
 
@@ -640,32 +646,34 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 
 | 域 | Σ权重 | Σ(w×系数) | 加权完成度 | 未加权完成度 |
 |---|---:|---:|---:|---:|
-| A. CLI 参数 | 62 | 61.5 | 99.2% | 97.7% |
+| A. CLI 参数 | 62 | 62.0 | 100% | 100% |
 | B. 子命令 | 15 | 14.0 | 93.3% | 87.5% |
 | C. Slash 命令 | 38 | 34.5 | 90.7% | 80.0% |
 | D. 扩展系统 41 事件 | 83 | 79.0 | 95.2% | 95.1% |
 | D′. 扩展 UI 注入面 | 16 | 1.0 | 6.3% | 0% |
-| E1. 配置文件 / 清单 | 10 | 6.0 | 60.0% | 40.0% |
-| E2. settings.json 键 | 84 | 80.5 | 95.8% | 90.6% |
-| E3. 会话管理行为 | 40 | 37.0 | 92.5% | 91.7% |
-| E4. 资源发现 | 14 | 10.0 | 71.4% | 71.4% |
+| E1. 配置文件 / 清单 | 10 | 10.0 | 100% | 100% |
+| E2. settings.json 键 | 84 | 81.5 | 97.0% | 92.5% |
+| E3. 会话管理行为 | 40 | 40.0 | 100% | 100% |
+| E4. 资源发现 | 14 | 14.0 | 100% | 100% |
 | E5. 扩展 API 面 | 58 | 23.5 | 40.5% | 31.4% |
 | E6. 包管理器 | 31 | 30.0 | 96.8% | 93.8% |
-| E7. RPC 面 | 12 | 8.0 | 66.7% | 33.3% |
+| E7. RPC 面 | 12 | 12.0 | 100% | 100% |
 | G. 主流新增子系统 | 18 | 7.0 | 38.9% | 30.0% |
 | F. 整块缺失（子系统） | 13 | 0.0 | 0% | 0% |
-| **模块合计（不含 E8）** | **494** | **392.5** | **79.5%** | **72.0%** |
+| **模块合计（不含 E8）** | **494** | **409.0** | **82.8%** | **75.1%** |
 | E8. 边缘/面外子系统（与 E3/C/G 重叠，不计入） | 7 | 5.0 | 71.4% | 66.7% |
 
-**模块合计**：Σ权重 494 ／ Σ(w×c) 392.5 ／ **加权完成度 = 392.5/494 ≈ 79.5%**（未加权 208.0/289 ≈ 72.0%；批 19 后值——按 Δ 续列：批 18 的 374.5＋本批 18.0）。
+**模块合计**：Σ权重 494 ／ Σ(w×c) 409.0 ／ **加权完成度 = 409.0/494 ≈ 82.8%**（未加权 217.0/289 ≈ 75.1%；批 21 后值——按 Δ 续列：批 19 的 392.5＋批 20 4.0＋本批 12.5）。
 
-**去重口径**（F 域有 2 行与 E4/E6 重叠＋G-1..G-5 归 map/07）：Σ权重 **485** ／ Σ(w×c) **388.0** ／ **加权完成度 = 388.0/485 ≈ 80.0%**（未加权 208.0/289 ≈ 72.0%）。
+**去重口径**（F 域有 2 行与 E4/E6 重叠＋G-1..G-5 归 map/07）：Σ权重 **485** ／ Σ(w×c) **404.5** ／ **加权完成度 = 404.5/485 ≈ 83.4%**（未加权 217.0/289 ≈ 75.1%）。
 > 口径注记（批 14）：A/E3 域行与未加权汇总表已逐行实算（含往批滞后收平：E2 对齐 44→46、E3 段汇总 27.5→28.5 的批 10 滞后）；模块加权合计按 Δ 续列，与逐行域和的 ±1.5 存量口径差随下次全量重测一并收平（批 4 同例）。
 > 批 15（2026-10-23，docs/26）：C 域 7 行翻动（+7.0：#2/#4/#6/#9/#12/#13/#21——T8–T12＋B79 销号）；E8-2/E8-3 注记行随翻（不计入分母）；E8-1 旧汇总漏算一并更正。
 > 批 16（2026-10-23，docs/27）：**9.5 点翻动**——E5-7/E5-30（+1.0×2）＋E5-11（+1.0）＋E5-18（+2.0）＋E5-29（存疑→对齐 +1.0）＋A-43（+1.0）＋C-23（存疑→对齐 +0.5）＋D#36（+2.0）；D#11 不动（裁决⑤随 E5-23 批）；E8-7 注记行随翻（不计入分母）。B204/B246 销号；B221 收编 ②④⑤。
 > 批 17（2026-10-24，docs/28）：**3.5 点翻动**——E5-31（缺失→存疑 +1.0）＋E5-32（存疑→对齐 +0.5）＋D#26/#27（+2.0）。B221 收编 ③；B214 改注不销号。（本表 D/E5 两行滞后于批 17，批 18 回填时一并收平。）
 > 批 18（2026-10-24，docs/29）：**16.0 点翻动**——E6-3（+3.0）＋E6-4/E6-6/E6-7（+2.0×3）＋E6-5（存疑→对齐 +1.0）＋E6-8/E6-9（+1.0×2）＋E2-20/E2-26（+2.0×2）＋E6-15（缺失→存疑 +1.0）＋E6-16（存疑→缺失 −1.0，T6 后旧 CLI 目录面与装配脱钩、批 19 重裁）；E6 域不再是零对齐域（5.0→17.0/31 ≈ 54.8%）。
 > 批 19（2026-10-24，docs/30）：**18.0 点翻动**——E6-11/E6-16（缺失→对齐 +2.0×2）＋E6-14（缺失→对齐 +3.0）＋E6-12（+1.0）＋E6-1/E6-2/E6-13/E6-15（存疑→对齐 +1.0×4）＋E6-10（缺失→存疑 +1.0，self 恒不可用臂裁决②）＋B-1/B-2/B-5/B-6（存疑→对齐 +1.0×4）＋B-4（缺失→存疑 +1.0）；**E6 域缺失清零**（17.0→30.0/31 ≈ 96.8%）、B 域 9.0→14.0/15 ≈ 93.3%（余 B-4 存疑挂 R29）。修真随批：`setProjectTrusted(false)` 旧实现整本抹项目 settings 文件 ⇒ pi 对位纯内存清空（docs/30 §9）。w3 账面滞后修正：批 18 的 #18/#23（npm 源、包源复合）翻对齐未入 w3 表，连同本批 #19 ⇒ w3 对齐 17→20/23。
+> 批 20（2026-10-25，docs/31）：**4.0 点翻动**——E7-2/E7-4（存疑→对齐 +1.0×2，核销）＋E7-3（+1.0，B31/B32/B33 销号）＋E7-6（+0.5，B237 销号）；**E7 域存疑清零＝第六个满分域**；B253/B257 销号（后者即登即销）。域汇总表 E7 行滞后，批 21 一并收平。
+> 批 21（2026-10-25，docs/32）：**12.5 点翻动**——E1-3/E1-4（存疑→对齐 +1.0×2）＋E1-5（缺失→对齐 +2.0，核销）＋E2-9（存疑→对齐 +1.0）＋E3-15（+2.0）/E3-23（+0.5）（核销）＋E4-4/E4-6（缺失→对齐 +2.0×2）＋A-29（存疑→对齐 +0.5）；**E1/E3/E4/A 四域同批满分**（满分域第七至第十）；**B163 销号**（JSON 主题系统 2,417 行域整体移植）；F6 注记核销（症状过期）。窄差 D123–D133。map/05 S9 缺失→对齐（+1.0）。
 
 **扩展系统单独口径**（D + D′ + E5）：Σ权重 157 ／ Σ(w×c) 71.0 ／ **加权 45.2%**（未加权 28/85 ≈ 32.9%）。
 

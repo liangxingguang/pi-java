@@ -16,7 +16,7 @@
 
 术语（首现释义）：
 
-- **主题令牌（theme token）**：pi 主题的 57 个命名色槽（`accent`/`muted`/
+- **主题令牌（theme token）**：pi 主题的 56 个命名色槽（`accent`/`muted`/
   `userMessageBg`/…），每令牌属 `foreground` 或 `background` 槽位；5 个可选
   令牌缺席时回落另一令牌（`scrollbarTrack→muted` 等，themes.md:120-128）。
 - **terminal default**：色值写 `""`＝终端自己的默认前景/背景色（SGR 39/49）；
@@ -72,7 +72,7 @@
 
 ### 1.1 主题文件格式与校验（theme-tokens.ts / theme-schema.ts）
 
-**令牌表**（theme-tokens.ts:24-101）：57 令牌，每令牌 `{slot, description,
+**令牌表**（theme-tokens.ts:24-101）：56 令牌，每令牌 `{slot, description,
 fallback?}`；`defineThemeTokens` 校验 fallback 存在且同槽位。5 个可选令牌
 （有 fallback）：`scrollbarTrack→muted`、`scrollbarThumb→text`、
 `searchMatchBg→selectedBg`、`searchMatchText→text`、`thinkingMax→thinkingXhigh`。
@@ -80,7 +80,7 @@ fallback?}`；`defineThemeTokens` 校验 fallback 存在且同槽位。5 个可�
 customMessageBg/toolPendingBg/toolSuccessBg/toolErrorBg`＋不算……实为 7＋
 `searchMatchBg`），其余全 foreground。**实现时从锚点文件逐字抄表**
 （`git show ea448f454:packages/coding-agent/src/modes/interactive/theme/theme-tokens.ts`），
-不在本稿重复 57 行字面量。
+不在本稿重复 56 行字面量。
 
 **色值六形**（themes.md:83-94）：`#rgb`/`#rrggbb`、`oklch(L% C H)`、
 `okhsl(H S% L%)`、256 索引整数 0-255、变量引用（`vars` 键名）、`""` 终端默认。
@@ -109,7 +109,7 @@ if (otherErrors.length > 0) {
 }
 ```
 
-`missingColors` 集 = `colors` 对象缺的**必填**令牌（52 个）；`otherErrors` 每条
+`missingColors` 集 = `colors` 对象缺的**必填**令牌（51 个）；`otherErrors` 每条
 形如 `  - /colors/accent: ...`。java 手写校验产出同构文案（逐条 path 措辞与
 typebox 不同 ⇒ 窄差 D125）。
 
@@ -173,7 +173,7 @@ ${descriptor.fallback}`。
 ### 1.3 system 主题生成器（system-theme.ts 655 行）
 
 **全量逐字移植**。结构：14 色族（`FAMILIES`：hue/saturation{min,max}/ANSI slot）、
-`TOKEN_FAMILIES`（57 令牌→族）、`TOKEN_SLOTS`（3 令牌特判槽位）、13 条对比度
+`TOKEN_FAMILIES`（56 令牌→族）、`TOKEN_SLOTS`（3 令牌特判槽位）、13 条对比度
 曲线 `LEVELS`（每条 dark/light 各 6 系数＋reachable 区间）、`RULES`（令牌×
 面×等级）、`SOLVE_ORDER`（拓扑序）、`generateSystemThemeColors`（松弛二分
 20 轮）、`terminalAppearance`（WCAG 对比＋前景方向）、`withTextContrast`
@@ -332,7 +332,7 @@ java 对位：`SessionReload` ⑤ 增主题重扫（重 resolve → `ThemeLoader
 
 ```ts
 function generateThemeVars(themeName?: string): string {
-    const colors = getResolvedThemeColors(themeName);         // 57 令牌 → hex
+    const colors = getResolvedThemeColors(themeName);         // 56 令牌 → hex
     // …每键一行 --token: hex;
     const themeExport = getThemeExportColors(themeName);       // export{pageBg,cardBg,infoBg}
     const userMessageBg = colors.userMessageBg || "#343541";
@@ -501,7 +501,7 @@ Long.MAX_VALUE, true)`）。revision 缓存/共享读态/stale 检测**不移植
 
 ### T5：主题模型（~450 行＋测试）
 
-- `ThemeToken` enum：57 常量，每常量带 `slot`（FG/BG）/`description`/
+- `ThemeToken` enum：56 常量，每常量带 `slot`（FG/BG）/`description`/
   `fallback`（5 个非空）；顺序＝pi 表序（`Object.entries` 序敏感——fallback
   填平与 `colors` 输出序）。**逐字抄锚点表**。
 - `ThemeJson` record：`name/appearance/vars/colors/export`（colors 值 =
@@ -673,6 +673,7 @@ Long.MAX_VALUE, true)`）。revision 缓存/共享读态/stale 检测**不移植
 | D130 | 独立 ThemeSelectorComponent 不移植（pi 仅导出未自用） | 内部 |
 | D131 | auth.json revision 缓存/stale 检测/共享读态不移植（java 无进程内读缓存，盘读即新鲜） | 内部 |
 | D132 | `systemPromptSourcePath` 记录/显示面无（pi 用于 loaded-resources 展示，java 无该面） | 内部 |
+| D133 | `/reload` 不重读系统提示（pi resourceLoader.reload 重发现 SYSTEM.md 并经 _buildRuntime 生效；java harness 提示词装配期烘焙） | 边缘·内部 |
 
 ## §6 裁决
 
@@ -713,16 +714,16 @@ Long.MAX_VALUE, true)`）。revision 缓存/共享读态/stale 检测**不移植
 
 | 行 | 前 | 后 | 证据（实施后回填） |
 |---|---|---|---|
-| E1-3 | 存疑 | 对齐 | T2 |
-| E1-4 | 存疑 | 对齐 | T1d |
-| E1-5 | 缺失 | 对齐 | T1a |
-| E2-9 | 存疑 | 对齐 | T7/T9/T11 |
-| E3-15 | 缺失 | 对齐 | T1b |
-| E3-23 | 缺失 | 对齐 | T1c |
-| E4-4 | 缺失 | 对齐 | T4–T8 |
-| E4-6 | 缺失 | 对齐 | T3 |
-| A-29 | 存疑 | 对齐 | T9 |
-| map/05 S9 | 缺失 | 对齐 | T11 |
+| E1-3 | 存疑 | 对齐 | T2 落地：三存储 RMW 同锁＋`CredentialStoreConcurrencyTest` 3 用例绿 |
+| E1-4 | 存疑 | 对齐 | T1d 核销：`DefaultProviders:429/:225` baseUrl 消费链在＋`FileModelsStore` 补跨进程锁 |
+| E1-5 | 缺失 | 对齐 | T1a 核销：`PiManifestTest` 6 用例批 18 已在 |
+| E2-9 | 存疑 | 对齐 | T7/T9/T11：`getThemeSetting`/`getTheme` 拆分＋控制器/子菜单/扩展面消费链 |
+| E3-15 | 缺失 | 对齐 | T1b 核销：`LlmSummaryGenerator:163`（branch-summarization.ts:340-356 对位） |
+| E3-23 | 缺失 | 对齐 | T1c 核销：`AgentSession:1237` 生产者＋`SessionInfoChangedEventTest` 在 |
+| E4-4 | 缺失 | 对齐 | T4–T8 全落；golden 经 pi 锚点 tsx 实跑钉死（`#a798d7`/`#dee0e1`/`#9da5a9`/`#1c989e`） |
+| E4-6 | 缺失 | 对齐 | T3：`SessionSetupPromptFileTest` 6 用例绿（信任门/优先序/BOM/join） |
+| A-29 | 存疑 | 对齐 | T9：`SessionThemeAssemblyTest` 4 用例绿（CLI 车道/相对路径/诊断/-ne 不裁） |
+| map/05 S9 | 缺失 | 对齐 | T11：`ThemeSubmenuScreenTest` 3 用例绿（single 持久化/自动对/Esc 还原） |
 
 ## §9 闭环回填
 
@@ -731,9 +732,37 @@ S9＋docs/20 §1/§2/§3 五处＋记忆。）
 
 | 回填点 | 内容 |
 |---|---|
-| docs/04 §4 | 批 21 段（范围/决定/风险三段式＋窄差 D123–D132＋行为变化注记） |
+| docs/04 §4 | 批 21 段（范围/决定/风险三段式＋窄差 D123–D133＋行为变化注记） |
 | docs/05 | 模块历史批 21 条目 |
 | map/04 | E1×3/E2-9/E3×2/E4×2/A-29 九行翻动＋四域汇总行（E1/E3/E4/A 满分）＋总计 |
 | map/05 | S9 缺失→对齐＋汇总 |
 | docs/20 | §1 读数、§2 批 21 行、§3 序 20 划线 |
 | 记忆 | coding-agent-batch21-closed.md |
+
+### 实施记录（2026-10-25 闭环）
+
+- **任务全落**：T1–T12 全部完成；verify 史——#1 全量 clean verify 绿（中期态）＋
+  定向三模块测试（coding-agent 主题群 66 用例/tui 主题＋设置 14 用例/ai 凭证 3 用例全绿）
+  ＋#2 全量 clean verify 绿（cliThemePaths 后）＋HelpText/ResourcePaths 尾差定向绿
+  （ExtensionFlagBinderTest 15＋SessionThemeAssemblyTest 4）＋#3 撞 spotbugs 一钉
+  （`Path.getFileName()` 可空——ThemeLoader/Themes/ThemeWatcher 三处守卫）＋#4 唯一红＝
+  `PiTuiAppDequeueTest.escWhileStreamingRestoresQueuedThenAborts` **前存时序窗**
+  （批 19 已登记；带 -am 隔离复跑 4/4 绿 ⇒ 非本批回归；D41 域留待取证）＋#5 撞
+  spotbugs `NP_BOOLEAN_RETURN_NULL` 一钉（`terminalTrueColor` Boolean 返 null ⇒
+  Optional，批 19 先例）＋#6 收口 **exit 0 / BUILD SUCCESS / 零 ERROR**（全量
+  clean verify，spotbugs＋checkstyle＋全测试通过，含前存时序窗该轮通过）。
+- **撞坑与修真**：① TamboUI `loadStylesheet(name, String)` 第二参是 classpath 资源
+  路径——生成内容须走 `addStylesheet(name, content)`（`reloadStylesheet` 只服务
+  文件/资源来源）；② 手写 golden 不可信——最初猜的 `#bb9af7` 错，tsx 直跑 pi 锚点
+  `colors.ts` 取真值 `#a798d7`；③ `SemanticColors` 两处存量 `isSameAs` 断言随
+  访问器化修形为 `isEqualTo`（值相等——`#a798d7` 真主题色已流到断言现场）；
+  ④ @TempDir 在 C: 盘而 cwd 在 D: 盘——跨盘 `relativize` 必炸，相对路径测试改
+  `target/` 下临时目录；⑤ 缺失清单排序按 ASCII（"bashMode" < "border"）。
+- **排障钉（跨批价值）**：pi 侧取证/golden 取值可 `cd D:\workplaceForai\pi &&
+  ./node_modules/.bin/tsx <script>` 直跑锚点代码（本批新增手法）。
+- **评审**：本批无独立评审轮（用户指令：设计稿落地后直接实施）——风险面由
+  测试群与全量 verify 承载；遗留观察项：D123（system tier-3 外观）与裁决⑧
+  的默认主题切换是最大用户可见变化。
+- 回填落位：docs/04 §4 批 21 段＋B163 销号行；docs/05 §1 总表/§2.4/§2.5；
+  map/04 九行＋四域汇总＋域表＋合计＋批 20/21 注记；map/05 S9＋合计＋注记；
+  docs/20 §1/§2/§3。

@@ -72,7 +72,9 @@ public final class FileModelsStore implements ModelsStore {
 
     @Override
     public synchronized Optional<ModelsStoreEntry> read(String providerId) {
-        return Optional.ofNullable(loadMap().get(providerId))
+        // 批 21（T2 同族）：读也过锁，杜绝撕裂读（pi FileModelsStore 的
+        // FileAuthStorageBackend 对位）。
+        return Optional.ofNullable(withLockedFile(channel -> loadFrom(channel).get(providerId)))
             .map(stored -> new ModelsStoreEntry(
                 toModelInfos(providerId, stored.models()),
                 stored.lastModified() != null
@@ -84,52 +86,94 @@ public final class FileModelsStore implements ModelsStore {
 
     @Override
     public synchronized void write(String providerId, ModelsStoreEntry entry) {
-        var map = loadMap();
-        var wires = new ArrayList<RemoteModelWire>();
-        for (ModelInfo model : entry.models()) {
-            wires.add(RemoteModelWire.fromModelInfo(model));
-        }
-        map.put(providerId, new StoredEntry(
-            List.copyOf(wires),
-            entry.lastModified() != null ? entry.lastModified().toEpochMilli() : null,
-            entry.checkedAt() != null ? entry.checkedAt().toEpochMilli() : null,
-            entry.etag()));
-        save(map);
+        withLockedFile(channel -> {
+            var map = loadFrom(channel);
+            var wires = new ArrayList<RemoteModelWire>();
+            for (ModelInfo model : entry.models()) {
+                wires.add(RemoteModelWire.fromModelInfo(model));
+            }
+            map.put(providerId, new StoredEntry(
+                List.copyOf(wires),
+                entry.lastModified() != null ? entry.lastModified().toEpochMilli() : null,
+                entry.checkedAt() != null ? entry.checkedAt().toEpochMilli() : null,
+                entry.etag()));
+            writeTo(channel, map);
+            return null;
+        });
     }
 
     @Override
     public synchronized void delete(String providerId) {
-        var map = loadMap();
-        if (map.remove(providerId) != null) {
-            save(map);
-        }
+        withLockedFile(channel -> {
+            var map = loadFrom(channel);
+            if (map.remove(providerId) != null) {
+                writeTo(channel, map);
+            }
+            return null;
+        });
     }
 
-    private Map<String, StoredEntry> loadMap() {
-        if (!Files.isRegularFile(file)) {
-            return new LinkedHashMap<>();
-        }
-        try {
-            var type = JSON.getTypeFactory()
-                .constructMapType(LinkedHashMap.class, String.class, StoredEntry.class);
-            Map<String, StoredEntry> map = JSON.readValue(file.toFile(), type);
-            return map != null ? map : new LinkedHashMap<>();
-        } catch (IOException e) {
-            // Corrupt cache: treat as empty; next write recreates the file.
-            return new LinkedHashMap<>();
-        }
+    /** 允许 IOException 的通道 I/O body。 */
+    @FunctionalInterface
+    private interface ChannelIo<T> {
+        T apply(java.nio.channels.FileChannel channel) throws IOException;
     }
 
-    private void save(Map<String, StoredEntry> map) {
+    /**
+     * 批 21（T2 同族，E1-4）：打开 CREATE/READ/WRITE 通道并持有跨进程文件锁
+     * 运行 body（pi FileAuthStorageBackend 对位；同 JVM 线程由方法级
+     * synchronized 串行）。
+     */
+    private <T> T withLockedFile(ChannelIo<T> body) {
         try {
             var parent = file.getParent();
             if (parent != null) {
                 Files.createDirectories(parent);
             }
-            JSON.writeValue(file.toFile(), map);
+            try (var channel = java.nio.channels.FileChannel.open(file,
+                    java.nio.file.StandardOpenOption.CREATE,
+                    java.nio.file.StandardOpenOption.READ,
+                    java.nio.file.StandardOpenOption.WRITE);
+                 java.nio.channels.FileLock lock = channel.lock()) {
+                return body.apply(channel);
+            }
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
+    }
+
+    /** 在已加锁的通道上从头部读全量 map（空文件/坏 JSON ⇒ 空表——旧容忍语义保留）。 */
+    private Map<String, StoredEntry> loadFrom(java.nio.channels.FileChannel channel)
+            throws IOException {
+        if (channel.size() == 0) {
+            return new LinkedHashMap<>();
+        }
+        channel.position(0);
+        var bytes = new byte[(int) channel.size()];
+        var buffer = java.nio.ByteBuffer.wrap(bytes);
+        while (buffer.hasRemaining()) {
+            if (channel.read(buffer) < 0) {
+                break;
+            }
+        }
+        try {
+            var type = JSON.getTypeFactory()
+                .constructMapType(LinkedHashMap.class, String.class, StoredEntry.class);
+            Map<String, StoredEntry> map = JSON.readValue(bytes, type);
+            return map != null ? map : new LinkedHashMap<>();
+        } catch (IOException | RuntimeException e) {
+            // Corrupt cache: treat as empty; next write recreates the file.
+            return new LinkedHashMap<>();
+        }
+    }
+
+    /** 在已加锁的通道上截断并全量覆写。 */
+    private static void writeTo(java.nio.channels.FileChannel channel,
+                                Map<String, StoredEntry> map) throws IOException {
+        channel.truncate(0);
+        channel.position(0);
+        channel.write(java.nio.ByteBuffer.wrap(JSON.writeValueAsBytes(map)));
+        channel.force(true);
     }
 
     private static List<ModelInfo> toModelInfos(

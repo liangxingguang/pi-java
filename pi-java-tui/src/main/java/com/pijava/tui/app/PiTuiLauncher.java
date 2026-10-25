@@ -70,7 +70,8 @@ public final class PiTuiLauncher {
         // pi :668-673 对位）。onChanged ⇒ 样式表重生成＋重渲染（pi ui.invalidate
         // ＋requestRender 对位——SemanticColors 访问器现读活跃主题，无须清缓存）。
         com.pijava.coding.agent.theme.Themes.setRegisteredThemes(session.themes());
-        com.pijava.coding.agent.theme.Themes.redetectColorMode(terminalTrueColor(session));
+        com.pijava.coding.agent.theme.Themes.redetectColorMode(
+            terminalTrueColor(session).orElse(null));
         var themeEngineRef = new java.util.concurrent.atomic.AtomicReference<
             dev.tamboui.css.engine.StyleEngine>();
         var themeController = new com.pijava.coding.agent.theme.ThemeController(
@@ -160,9 +161,11 @@ public final class PiTuiLauncher {
     }
 
     /** 批 21（T9，裁决④）：settings {@code terminal.trueColor}（boolean|"auto"）⇒ 覆盖值。 */
-    private static Boolean terminalTrueColor(AgentSession session) {
+    private static java.util.Optional<Boolean> terminalTrueColor(AgentSession session) {
         var terminal = session.services().settings().effective().terminal;
-        return terminal != null && terminal.trueColor() instanceof Boolean value ? value : null;
+        // spotbugs NP_BOOLEAN_RETURN_NULL 坑（批 19 先例）：Boolean 返 null ⇒ Optional。
+        return terminal != null && terminal.trueColor() instanceof Boolean value
+            ? java.util.Optional.of(value) : java.util.Optional.empty();
     }
 
     /** 批 15（T2a）：pi {@code new Date(crash.timestamp).toLocaleString()} 对位。 */

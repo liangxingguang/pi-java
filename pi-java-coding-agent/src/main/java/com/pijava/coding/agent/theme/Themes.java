@@ -248,9 +248,10 @@ public final class Themes {
 
         // Built-in themes. The system theme is generated, so it has no file.
         addTheme.accept(new ThemeInfo(SYSTEM_THEME_NAME, null));
-        var themesDir = Path.of("<builtin>");
+        // 内建主题在 java 是 classpath 资源（无 FS 路径）⇒ path=null（窄差注记：
+        // pi 给包目录里的文件路径； ThemeInfo.path 的消费面是展示）。
         for (var name : builtinThemes().keySet()) {
-            addTheme.accept(new ThemeInfo(name, themesDir.resolve(name + ".json")));
+            addTheme.accept(new ThemeInfo(name, null));
         }
 
         // Custom themes（pi getCustomThemeInfos :436-459：非法主题此处忽略，
@@ -258,8 +259,8 @@ public final class Themes {
         var customDir = customThemesDir();
         if (Files.isDirectory(customDir)) {
             try (var stream = Files.list(customDir)) {
-                for (var path : stream.filter(p -> p.getFileName().toString()
-                        .endsWith(".json")).toList()) {
+                for (var path : stream.filter(p -> p.getFileName() != null
+                        && p.getFileName().toString().endsWith(".json")).toList()) {
                     try {
                         var customTheme = loadThemeFromPath(path);
                         if (customTheme.name() != null) {

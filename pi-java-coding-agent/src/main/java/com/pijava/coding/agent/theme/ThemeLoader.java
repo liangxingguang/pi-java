@@ -76,7 +76,8 @@ public final class ThemeLoader {
                 if (!Files.isRegularFile(entry)) {
                     continue;
                 }
-                if (!entry.getFileName().toString().endsWith(".json")) {
+                var fileName = entry.getFileName();
+                if (fileName == null || !fileName.toString().endsWith(".json")) {
                     continue;
                 }
                 loadThemeFromFile(entry, themes, diagnostics, mode);

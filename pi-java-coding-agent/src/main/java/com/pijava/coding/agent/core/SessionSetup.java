@@ -294,6 +294,25 @@ final class SessionSetup {
         return List.copyOf(merged);
     }
 
+    /**
+     * 批 21（T9，A-29）：pi {@code resolveCliPaths(cwd, parsed.themes)}
+     *（main.ts:555-557 逐字）＋resource-loader.ts:633-635 合并臂——
+     * {@code --theme} 值是<b>路径来源</b>（本地路径对 cwd 解析；npm:/git: 等
+     * 包源原样透传——主题装载只认本地文件/目录，包源在 ThemeLoader 落
+     * "theme path does not exist" 诊断，与 pi 同）。CLI 车道在 resolve 车道
+     * <b>之前</b>（pi cliEnabledThemes 先并入）。
+     */
+    static List<String> cliThemePaths(Args args) {
+        if (args.themes() == null || args.themes().isEmpty()) {
+            return List.of();
+        }
+        var cwd = Path.of(System.getProperty("user.dir"));
+        return args.themes().stream()
+            .map(value -> com.pijava.coding.agent.pkg.SourceParser.isLocalPath(value)
+                ? cwd.resolve(value).normalize().toString() : value)
+            .toList();
+    }
+
     /** pi resource-loader 的 enabled 过滤＋路径提取（:545-553）。 */
     static List<String> enabledPaths(List<ResolvedResource> resources) {
         return resources.stream().filter(ResolvedResource::enabled)

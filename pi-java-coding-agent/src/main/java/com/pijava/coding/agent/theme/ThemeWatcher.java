@@ -81,7 +81,8 @@ final class ThemeWatcher implements AutoCloseable {
                 var context = event.context();
                 // pi：filename 缺失 ⇒ 也重载（:796-798）；只认目标文件名（:800-802）
                 if (context instanceof Path changed
-                        && !changed.getFileName().equals(themeFileName)) {
+                        && (changed.getFileName() == null
+                            || !changed.getFileName().equals(themeFileName))) {
                     continue;
                 }
                 scheduleReload();

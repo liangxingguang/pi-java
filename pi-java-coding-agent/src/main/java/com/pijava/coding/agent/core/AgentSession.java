@@ -2803,7 +2803,9 @@ public final class AgentSession implements AutoCloseable {
         // 评审 M4：resolve 结果复用 wireSession 的装配期单遍（owner.resolveAssembly）。
         var assembly = owner.resolveAssembly;
         var cliResolved = assembly.cli();
-        var cliThemePaths = SessionSetup.enabledPaths(cliResolved.themes());
+        // 批 21（T9，A-29）：CLI --theme 车道先行（pi cliEnabledThemes 序对位）。
+        var cliThemePaths = SessionSetup.mergePaths(SessionSetup.cliThemePaths(args),
+            SessionSetup.enabledPaths(cliResolved.themes()));
         var themeStrings = args.noThemes()
             ? cliThemePaths
             : SessionSetup.mergePaths(cliThemePaths,

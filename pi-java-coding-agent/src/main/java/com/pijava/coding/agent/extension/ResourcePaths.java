@@ -13,7 +13,8 @@ import java.util.List;
  *
  * @param skillPaths  额外技能目录/文件路径
  * @param promptPaths 额外提示模板目录/文件路径
- * @param themePaths  额外主题候选（.tcss 文件或内置名），启动时按序选第一个可用
+ * @param themePaths  额外主题来源（pi JSON 主题文件/目录路径；批 21 起经
+ *                    {@code ThemeLoader} 装载，批前 .tcss 形已删）
  */
 public record ResourcePaths(
     List<Path> skillPaths,

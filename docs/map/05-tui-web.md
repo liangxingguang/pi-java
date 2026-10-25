@@ -52,7 +52,7 @@
 | S6 | 模型选择器：搜索过滤 | ✓ `model-search.ts:7,17` + `model-selector.ts` | ✗ | **缺失** | 1 | java 无过滤输入 |
 | S7 | scoped-models 选择器（Ctrl+P 循环集） | ✓ `components/scoped-models-selector.ts:97`（401 行） | ✗ | **缺失** | 1 | `PiTuiApp.java:419` 直接 `appendSystemText("Use /scoped-models +<model> …")` |
 | S8 | thinking level 选择器 | ✓ `components/thinking-selector.ts:36`（154 行） | ✗ | **缺失** | 2 | java 只在 `SettingsScreen.java:36` 里循环 6 个值 |
-| S9 | theme 选择器 | ✓ `components/theme-selector.ts:13`（67 行） | ✗ | **缺失** | 1 | java 只在 `SettingsScreen.java:30` 里循环 `dark/light` |
+| S9 | theme 选择器 | ✓ `components/theme-selector.ts:13`（67 行）＋`settings-selector.ts` ThemeSubmenu | ✓ `ThemeSubmenuScreen.java`＋`SettingsScreen` Theme 子菜单入口 | **对齐** | 1 | **批 21（docs/32 T11）**：single/automatic 两模式＋预览＋Esc 还原＋对形持久化；独立 ThemeSelectorComponent（pi 仅导出未自用）不移植（窄差 D130） |
 | S10 | 会话选择器（列表 / 选 / 确认） | ✓ `session-selector.ts:694 class SessionSelectorComponent`（1045 行） | ✓ `SessionListScreen.java:16`（50 行） | **对齐** | 2 | java：`session.listSessions()` + 前 8 位 id |
 | S11 | 会话选择器：搜索 / 排序 / 命名过滤 / 路径切换 / 重命名 / 删除 / 进度 | ✓ `session-selector.ts:76-116`、`session-selector-search.ts`、`user-message-selector.ts`；`onProgress` 带 `partialSessions` 增量渲染 + `AbortController` 取消 | ✓ `component/session/`（批 14，docs/25：搜索/三档排序/命名过滤/路径开关/删除流/双 scope 进度全落） | **存疑** | 1 | **批 14 翻判定**：picker 语境与 pi 逐字节一致；**rename 面板 UI 不移植**（picker 臂 pi 本就无生产者，裁决⑦——rename 生产者是会话内 `/resume` 面，随交互选择器批收编）；`SessionListScreen`（S10 的 `/resume` 旧屏）未换引擎 |
 | S12 | 会话树选择器（分支列表） | ✓ `components/tree-selector.ts:1336 class TreeSelectorComponent`（~1400 行） | ✓ `component/tree/TreeSelectorOverlay.java`＋`TreeListModel`＋`TreeListRenderer`（批 9，docs/19） | **对齐** | 2 | 批 9（docs/19）：entry 树本体落地（D37 销号）——树形缩进/连接符/gutter、折叠、活动路径、多根虚拟根全对位；窄差 D43–D46/D48 登记；`/fork` 的 lane 平表留在旧 `TreeSelectorScreen`（pi 实为 user-message 选择器，B254） |
@@ -500,13 +500,14 @@
 | 主题/样式（T1–T11，11 单元） | 18 | 6.5 | **36.1%** | 27.3% |
 | web 对齐面（W1–W16，16 单元） | 33 | 26.0 | **78.8%** | 50.0% |
 
-**模块合计**：Σ权重 **245** ／ Σ(w×c) **120.5** ／ **加权完成度 = 120.5/245 ≈ 49.2%**（未加权 **29.7%**，**+19.5pp**）
+**模块合计**：Σ权重 **245** ／ Σ(w×c) **121.5** ／ **加权完成度 = 121.5/245 ≈ 49.6%**（未加权 **45/148 ≈ 30.4%**，**+19.2pp**）
 
 > 批 10（2026-10-22，docs/21）：S20 缺失→对齐（+1.0）、K11 缺失→对齐（+1.0）；R28 证据更新不翻（流式 bash/工具挂载仍缺）。
 > 批 13（2026-10-23，docs/24）：R24 存疑→对齐（+0.5，cache-warmer 子系统批随收——生产者/文案逐字/门//session 段/footer）。
 > 批 14（2026-10-23，docs/25）：**K16 缺失→对齐（+2.0，app.session.* 键位族）＋K15 缺失→对齐（+1.0，对账表漏列同翻）＋S11 缺失→存疑（+0.5，picker 臂全落、rename 面板留白裁决⑦）**。Σ 113.0→**116.5/245 ≈ 47.6%**。
 > 批 15（2026-10-23，docs/26）：**S29 `/bug` 流程 缺失→对齐（+1.0）＋S30 崩溃记录＋启动提示 缺失→对齐（+1.0）**；R29 安装变更警告挂起注记（裁决④，随自更新批）。Σ 116.5→**118.5/245 ≈ 48.4%**。
 > 批 17（2026-10-24，docs/28）：**S22 扩展对话框四件套 缺失→对齐（+1.0）＋S23 扩展 widget/footer/header/状态槽 缺失→对齐（+1.0）**。Σ 118.5→**120.5/245 ≈ 49.2%**。
+> 批 21（2026-10-25，docs/32）：**S9 theme 选择器 缺失→对齐（+1.0，ThemeSubmenuScreen＋设置页入口）**。Σ 120.5→**121.5/245 ≈ 49.6%**。
 
 > 较前锚点（144 单元：241 权 / 108.0 / **44.8%**）变化 **−0.5pp**，构成：① K20 对齐→存疑（w2）分子 −1.0；② R18/R24 缺失→存疑（w1×2）分子 +1.0；③ 新增 4 单元（R28 存疑 w1 +0.5；R29/K39/C20 缺失 w1×3）分母 +4、分子 +0.5。净效果：分子 +0.5、分母 +4。
 

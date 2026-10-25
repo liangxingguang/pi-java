@@ -213,6 +213,16 @@ public final class Theme {
         return mode;
     }
 
+    /** 令牌是否 dim（SGR 2 暗淡渲染，system 主题 tier-3 的 neutral 令牌）。 */
+    public boolean isDim(ThemeToken token) {
+        return dimTokens.contains(token);
+    }
+
+    /** 令牌是否为 {@code ""}（终端默认色——pi 的 defaultForeground/BackgroundTokens）。 */
+    public boolean isTerminalDefault(ThemeToken token) {
+        return defaultForegroundTokens.contains(token) || defaultBackgroundTokens.contains(token);
+    }
+
     /**
      * pi {@code getThinkingBorderColor}（:348-368）：思考级别 → 对应边框令牌
      的上色函数；未知级别回落 {@code thinkingOff}。
