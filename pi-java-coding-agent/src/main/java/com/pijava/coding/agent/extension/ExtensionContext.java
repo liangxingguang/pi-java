@@ -197,4 +197,12 @@ public interface ExtensionContext {
      * 注册序，配置深拷贝（注册表 list() 语义）。
      */
     java.util.List<com.pijava.mcp.config.RegisteredMcpServer> getMcpServers();
+
+    /**
+     * 批 23（docs/34 T4，E5-20）：pi {@code getCommands}（types.ts:1753；
+     * agent-session.ts:3361-3381 三源序逐字）——当前会话可调用的斜杠命令：
+     * 扩展注册命令（撞名编号后的 invocationName）→ prompt 模板 → 技能
+     * （{@code skill:} 前缀）；无内置命令（pi 语义：内置不可经 prompt 调用）。
+     */
+    java.util.List<com.pijava.coding.agent.core.slash.SlashCommandInfo> getCommands();
 }

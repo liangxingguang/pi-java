@@ -637,10 +637,16 @@ public final class RpcDispatcher {
 
     private List<RpcSlashCommand> buildCommands() {
         var commands = new ArrayList<RpcSlashCommand>();
+        // 批 23（docs/34 T4，B221⑥＋销 D5）：扩展臂第一——pi rpc-mode.ts:684-690
+        // 对位；name 用撞名 {:N} 编号后的 invocationName，sourceInfo 注册期盖章。
+        for (var command : session.services().slashCommands().resolvedExtensionCommands()) {
+            commands.add(new RpcSlashCommand(
+                command.invocationName(), command.command().description(),
+                RpcSlashCommand.Source.EXTENSION, command.sourceInfo()));
+        }
         // B247（pi rpc-mode.ts:691-697）：模板臂。sourceInfo 由加载期打标
         //（B247 §3.2）；手造实例无 sourceInfo ⇒ 组件 null、线格式省略
-        //（pi 恒有，此臂仅测试/手工注册路）。pi 第一臂是扩展注册命令——
-        // java 扩展命令与内置同池、无 sourceInfo 溯源，随 B221（窄差 D5）；
+        //（pi 恒有，此臂仅测试/手工注册路）。
         // 内置不收（pi 语义＝可经 prompt 调用，rpc-types.ts:73-74）。
         for (var template : session.services().promptTemplates().all()) {
             commands.add(new RpcSlashCommand(
@@ -652,33 +658,14 @@ public final class RpcDispatcher {
         for (var skill : session.harness().skillManager().all()) {
             commands.add(new RpcSlashCommand(
                 "skill:" + skill.name(), skill.description(),
-                RpcSlashCommand.Source.SKILL, skillSourceInfo(skill)));
+                RpcSlashCommand.Source.SKILL,
+                com.pijava.coding.agent.core.source.SourceInfos.fromSkill(skill)));
         }
         return commands;
     }
 
-    /**
-     * pi {@code createSkillSourceInfo}（skills.ts:136-157）的 java 三面映射：
-     * USER/PROJECT→同值 scope，EXPLICIT→temporary（pi {@code "path"} 源 scope
-     * 缺省落 temporary）；{@code source} 恒 {@code "local"}、{@code origin}
-     * 恒 {@code "top-level"}。
-     */
-    private static com.pijava.coding.agent.core.source.SourceInfo skillSourceInfo(
-            com.pijava.agent.skill.Skill skill) {
-        var scope = switch (skill.sourceInfo()) {
-            case USER -> com.pijava.coding.agent.core.source.SourceInfo.Scope.USER;
-            case PROJECT -> com.pijava.coding.agent.core.source.SourceInfo.Scope.PROJECT;
-            case EXPLICIT -> com.pijava.coding.agent.core.source.SourceInfo.Scope.TEMPORARY;
-        };
-        var filePath = skill.filePath();
-        var baseDir = skill.baseDir();
-        return new com.pijava.coding.agent.core.source.SourceInfo(
-            // pi path 必填；非文件技能（java 独有边）给空串。
-            filePath == null ? "" : filePath.toString(),
-            "local", scope,
-            com.pijava.coding.agent.core.source.SourceInfo.Origin.TOP_LEVEL,
-            baseDir == null ? null : baseDir.toString());
-    }
+    // 批 23（T4）：skill 折算上移共享件 core.source.SourceInfos.fromSkill
+    //（扩展 ctx.getCommands() 同消费——pi 两处同一规则）。
 
     /**
      * 线格式的思考级别（{@code "off"|"minimal"|…|"max"}）。

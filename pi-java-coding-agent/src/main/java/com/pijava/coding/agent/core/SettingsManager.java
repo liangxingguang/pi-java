@@ -87,6 +87,15 @@ public final class SettingsManager {
     }
 
     /**
+     * 批 23（docs/34 T4）：存储面访问器——扩展 sourceInfo 定域
+     * （{@code core.source.ExtensionSourceInfos}）需要 agent/project 根目录，
+     * 仅 {@link FileSettingsStorage} 携带；内存存储（测试道）返接口原形。
+     */
+    public SettingsStorage storage() {
+        return storage;
+    }
+
+    /**
      * The raw global scope (mutated by {@link SettingsAccessors}).
      * 批 15 转 public：pi {@code settingsManager.getGlobalSettings()} 是公共面
      * （bug 上报包的 settings 节操作数）。

@@ -387,13 +387,38 @@ public final class DefaultExtensionContext implements ExtensionContext {
      */
     @Override
     public ExtensionContext forExtension(String extensionName) {
-        return new PerExtensionContext(extensionName, extensionName);
+        return new PerExtensionContext(extensionName, extensionName,
+            computeSourceInfo(extensionName));
     }
 
     /** 批 23（T1）：带路径身份的派生（pi {@code extension.path} 对位）。 */
     @Override
     public ExtensionContext forExtension(String extensionName, String extensionPath) {
-        return new PerExtensionContext(extensionName, extensionPath);
+        return new PerExtensionContext(extensionName, extensionPath,
+            computeSourceInfo(extensionPath));
+    }
+
+    /**
+     * 批 23（T4，E5-34）：扩展的 sourceInfo——pi {@code applyExtensionSourceInfo}
+     * （resource-loader.ts:918-922）对位。目录根从 settings 存储面取（仅
+     * {@code FileSettingsStorage} 携带）；取不到（内存存储/测试道）⇒
+     * 合成路径规则仍生效，文件路径落 temporary 兜底。
+     */
+    private com.pijava.coding.agent.core.source.SourceInfo computeSourceInfo(
+            String extensionPath) {
+        java.nio.file.Path agentDir = null;
+        java.nio.file.Path projectDir = null;
+        if (services != null && services.settings() != null
+                && services.settings().storage()
+                    instanceof com.pijava.coding.agent.core.FileSettingsStorage files) {
+            var globalPath = files.globalPath();
+            var projectPath = files.projectPath();
+            agentDir = globalPath == null ? null : globalPath.getParent();
+            var projectConfigDir = projectPath == null ? null : projectPath.getParent();
+            projectDir = projectConfigDir == null ? null : projectConfigDir.getParent();
+        }
+        return com.pijava.coding.agent.core.source.ExtensionSourceInfos
+            .forExtensionPath(extensionPath, agentDir, projectDir);
     }
 
     /** per-extension 委托：除 {@code on()} 与 MCP 注册面外全部透传基础上下文。 */
@@ -401,10 +426,14 @@ public final class DefaultExtensionContext implements ExtensionContext {
         private final String extensionName;
         /** 批 23（T1）：pi {@code extension.path} 对位（MCP 所有权门/错文归属用）。 */
         private final String extensionPath;
+        /** 批 23（T4）：本扩展的 sourceInfo 章（pi {@code extension.sourceInfo}）。 */
+        private final com.pijava.coding.agent.core.source.SourceInfo sourceInfo;
 
-        PerExtensionContext(String extensionName, String extensionPath) {
+        PerExtensionContext(String extensionName, String extensionPath,
+                            com.pijava.coding.agent.core.source.SourceInfo sourceInfo) {
             this.extensionName = extensionName;
             this.extensionPath = extensionPath;
+            this.sourceInfo = sourceInfo;
         }
 
         @Override
@@ -423,7 +452,9 @@ public final class DefaultExtensionContext implements ExtensionContext {
 
         @Override
         public CommandRegistry slashCommands() {
-            return DefaultExtensionContext.this.slashCommands();
+            // 批 23（T4）：注册即盖本扩展的 sourceInfo 章（pi loader.ts:317 对位）。
+            return DefaultExtensionContext.this.services().slashCommands()
+                .extensionView(extensionPath, sourceInfo);
         }
 
         @Override
@@ -516,6 +547,36 @@ public final class DefaultExtensionContext implements ExtensionContext {
         public java.util.List<com.pijava.mcp.config.RegisteredMcpServer> getMcpServers() {
             return DefaultExtensionContext.this.getMcpServers();
         }
+
+        @Override
+        public java.util.List<com.pijava.coding.agent.core.slash.SlashCommandInfo>
+                getCommands() {
+            return DefaultExtensionContext.this.getCommands();
+        }
+    }
+
+    /**
+     * 批 23（T4，E5-20）：pi {@code getCommands}（agent-session.ts:3361-3381
+     * 三源序逐字）——扩展编号名 → 模板 → {@code skill:} 前缀技能。
+     */
+    @Override
+    public java.util.List<com.pijava.coding.agent.core.slash.SlashCommandInfo> getCommands() {
+        var out = new java.util.ArrayList<com.pijava.coding.agent.core.slash.SlashCommandInfo>();
+        for (var cmd : services.slashCommands().resolvedExtensionCommands()) {
+            out.add(new com.pijava.coding.agent.core.slash.SlashCommandInfo(
+                cmd.invocationName(), cmd.command().description(), "extension",
+                cmd.sourceInfo()));
+        }
+        for (var template : services.promptTemplates().all()) {
+            out.add(new com.pijava.coding.agent.core.slash.SlashCommandInfo(
+                template.name(), template.description(), "prompt", template.sourceInfo()));
+        }
+        for (var skill : skills.all()) {
+            out.add(new com.pijava.coding.agent.core.slash.SlashCommandInfo(
+                "skill:" + skill.name(), skill.description(), "skill",
+                com.pijava.coding.agent.core.source.SourceInfos.fromSkill(skill)));
+        }
+        return java.util.List.copyOf(out);
     }
 
     @Override
