@@ -118,7 +118,7 @@ public final class ExtensionManager {
         try (var loader = new URLClassLoader(
                 new URL[] {jar.toUri().toURL()}, getClass().getClassLoader())) {
             for (var ext : ServiceLoader.load(PiExtension.class, loader)) {
-                loadIsolated(ext);
+                loadIsolated(ext, jar.toString());
                 names.add(ext.name());
             }
             return Set.copyOf(names);
@@ -133,7 +133,7 @@ public final class ExtensionManager {
         try (var loader = new URLClassLoader(
                 new URL[] {jar.toUri().toURL()}, getClass().getClassLoader())) {
             for (var ext : ServiceLoader.load(PiExtension.class, loader)) {
-                load(ext);
+                load(ext, jar.toString());
                 names.add(ext.name());
             }
             return Set.copyOf(names);
@@ -176,16 +176,32 @@ public final class ExtensionManager {
     }
 
     private void load(PiExtension ext) {
+        load(ext, com.pijava.coding.agent.pkg.PackageManager.BUILTIN_PATH_PREFIX + ext.name());
+    }
+
+    /**
+     * 批 23（docs/34 T1，裁决⑥）：带路径身份的加载——{@code extensionPath} 是
+     * pi {@code extension.path} 对位：ServiceLoader 发现 ⇒ 合成 {@code builtin:<name>}
+     * （resource-loader.ts:110 同约定）；{@link #loadJar} ⇒ JAR 路径串。
+     * MCP 注册的所有权门与命令 sourceInfo 盖章都靠它。
+     */
+    private void load(PiExtension ext, String extensionPath) {
         loaded.put(ext.name(), ext);
         // docs/14：per-extension 上下文 —— 扩展的 on() 订阅带扩展名归属
         // （pi 的 extension.handlers 按扩展分桶 + 错误按 extensionPath 归属）。
-        ext.register(context.forExtension(ext.name()));
+        ext.register(context.forExtension(ext.name(), extensionPath));
     }
 
     /** 逐扩展异常隔离的 {@link #load}（批 16 T1e：--help 装载不被单个扩展搞崩）。 */
     private void loadIsolated(PiExtension ext) {
+        loadIsolated(ext,
+            com.pijava.coding.agent.pkg.PackageManager.BUILTIN_PATH_PREFIX + ext.name());
+    }
+
+    /** 逐扩展异常隔离的 {@link #load(PiExtension, String)}。 */
+    private void loadIsolated(PiExtension ext, String extensionPath) {
         try {
-            load(ext);
+            load(ext, extensionPath);
         } catch (Throwable e) {
             java.util.logging.Logger.getLogger(ExtensionManager.class.getName())
                 .warning("Extension '" + ext.name() + "' register() threw: " + e);

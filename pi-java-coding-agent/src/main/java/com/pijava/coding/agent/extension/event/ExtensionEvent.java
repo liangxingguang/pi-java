@@ -328,4 +328,18 @@ public sealed interface ExtensionEvent {
                                      double continuationProbability,
                                      com.pijava.coding.agent.core.CacheWarming.Action action)
             implements ExtensionEvent {}
+
+    // ═══════════════════════════════════════════════════════════
+    // MCP / 信任（docs/34 批 23）
+    // ═══════════════════════════════════════════════════════════
+
+    /**
+     * 批 23（T2）：pi {@code mcp_servers_change}（types.ts:728-733）——扩展在装配后
+     * 注册/注销 MCP 服务器时广播；载荷是变更后的<b>全量</b>注册列表
+     * （{@code servers: runtime.mcpServers.list()}）。订阅此事件＝声明本扩展负责
+     * 连接已注册服务器（无订阅者时注册方收扩展错误——runner.ts:749-765）。
+     */
+    record McpServersChangeEvent(
+            java.util.List<com.pijava.mcp.config.RegisteredMcpServer> servers)
+            implements ExtensionEvent {}
 }

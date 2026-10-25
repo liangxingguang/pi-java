@@ -2955,6 +2955,16 @@ public final class AgentSession implements AutoCloseable {
             bus, context);
         // 批 17（T2）：ui_prompt 发射器回填（firer 晚于 context 诞生；包装器现读）。
         context.bindUiPromptFirer(owner.extensionFirer);
+        // 批 23（docs/34 T2）：pi runner.ts:457-461 的 bind 期接线——changeListener
+        // 在扩展装载完成后才装 ⇒ 装载期注册静默落表（session_start 处理器经
+        // getMcpServers 读取），之后的注册/注销即时广播＋无处理器臂。
+        var unhandledMcpReporter =
+            new com.pijava.coding.agent.extension.UnhandledMcpServerReporter(bus);
+        context.mcpServers().setChangeListener(() -> {
+            var registered = context.mcpServers().list();
+            owner.extensionFirer.mcpServersChange(registered);
+            unhandledMcpReporter.report(registered);
+        });
         owner.extensionFirer.sessionStart(
             startInfo == null ? "startup" : startInfo.reason(),
             startInfo == null ? null : startInfo.previousSessionFile());

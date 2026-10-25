@@ -114,6 +114,26 @@ public final class SessionEventFirer {
         }
     }
 
+    /**
+     * 批 23（docs/34 T2）：pi runner.ts:457-461 的 changeListener 发射——
+     * 注册表变更后广播 {@code mcp_servers_change}，载荷为变更后<b>全量</b>列表。
+     * 观察型：逐处理器 catch ⇒ emitError ⇒ 继续（生命周期族同纪律）。
+     */
+    public void mcpServersChange(
+            java.util.List<com.pijava.mcp.config.RegisteredMcpServer> servers) {
+        if (!bus.hasHandlers(ExtensionEventSpec.MCP_SERVERS_CHANGE)) {
+            return;
+        }
+        var event = new ExtensionEvent.McpServersChangeEvent(servers);
+        for (var h : bus.snapshot(ExtensionEventSpec.MCP_SERVERS_CHANGE)) {
+            try {
+                h.handle(event, ctx);
+            } catch (Throwable e) {
+                bus.emitError(h.error(e));
+            }
+        }
+    }
+
     // ═══════════════════════════════════════════════════════════
     // before 族（cancel 短路，pi 通用 emit：runner.ts:1089-1118）
     // ═══════════════════════════════════════════════════════════

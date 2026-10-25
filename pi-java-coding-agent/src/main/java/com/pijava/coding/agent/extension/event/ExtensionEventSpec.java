@@ -237,6 +237,12 @@ public final class ExtensionEventSpec<E extends ExtensionEvent, R> {
     public static final ExtensionEventSpec<ExtensionEvent.UiPromptEndEvent, Void>
         UI_PROMPT_END = new ExtensionEventSpec<>("ui_prompt_end");
 
+    // ── MCP / 信任（docs/34 批 23）──
+
+    /** 批 23（T2）：pi {@code "mcp_servers_change"}（types.ts:1591 订阅口，观察型）。 */
+    public static final ExtensionEventSpec<ExtensionEvent.McpServersChangeEvent, Void>
+        MCP_SERVERS_CHANGE = new ExtensionEventSpec<>("mcp_servers_change");
+
     private final String name;
 
     private ExtensionEventSpec(String name) {

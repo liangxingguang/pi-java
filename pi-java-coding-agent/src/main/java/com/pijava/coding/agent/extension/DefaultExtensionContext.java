@@ -59,6 +59,14 @@ public final class DefaultExtensionContext implements ExtensionContext {
         new java.util.LinkedHashMap<>();
     /** 批 16（T4b）：工具渲染器责任链（pi extension.toolRenderers 拍平对位）。 */
     private final ToolRendererRegistry toolRenderers = new ToolRendererRegistry();
+    /**
+     * 批 23（docs/34 T1，裁决⑦）：MCP 注册表（pi {@code runtime.mcpServers} 对位，
+     * 每会话一份随上下文生死）。装载期注册静默落表——changeListener 由
+     * {@code AgentSession.loadExtensions} 尾部接线（裁决⑧：java 同步装载＋
+     * listener 后装 ≡ pi 的 pendingRuntimeChanges/commit 两阶段净效果）。
+     */
+    private final com.pijava.mcp.config.McpServerRegistry mcpServers =
+        new com.pijava.mcp.config.McpServerRegistry();
 
     /** @param services 会话服务（工具/命令/Provider/settings）
      *  @param skills   技能注册表（harness 的 skillManager）
@@ -312,6 +320,66 @@ public final class DefaultExtensionContext implements ExtensionContext {
             "on() 只能在扩展 register 期间经 per-extension 上下文调用（pi 的 assertActive）");
     }
 
+    // ── 批 23（docs/34 T1）：MCP 注册面 ──
+
+    /** MCP 注册表（装配接线用——{@code AgentSession.loadExtensions} 尾部接 changeListener）。 */
+    public com.pijava.mcp.config.McpServerRegistry mcpServers() {
+        return mcpServers;
+    }
+
+    @Override
+    public void registerMcpServer(String name, com.pijava.mcp.config.McpServerConfig config) {
+        throw new IllegalStateException(
+            "registerMcpServer() 需经 per-extension 上下文调用（无扩展归属可记）");
+    }
+
+    @Override
+    public void unregisterMcpServer(String name) {
+        throw new IllegalStateException(
+            "unregisterMcpServer() 需经 per-extension 上下文调用（无扩展归属可记）");
+    }
+
+    @Override
+    public java.util.List<com.pijava.mcp.config.RegisteredMcpServer> getMcpServers() {
+        // pi loader.ts:496-498 无归属门槛——list 是谁都能读的全量视图。
+        return mcpServers.list();
+    }
+
+    /** pi loader.ts:471-489 的本体（per-extension 委托转入；三守卫逐字）。 */
+    void registerMcpServer(String extensionPath, String name,
+                           com.pijava.mcp.config.McpServerConfig config) {
+        var validated = com.pijava.mcp.config.McpServerConfigs.validate(
+            name, com.pijava.mcp.McpJson.mapper().valueToTree(config));
+        switch (validated) {
+            case com.pijava.mcp.config.McpConfigValidation.Invalid invalid ->
+                throw new IllegalArgumentException(
+                    "Invalid MCP server registered by extension \"" + extensionPath
+                        + "\": " + invalid.message());
+            case com.pijava.mcp.config.McpConfigValidation.Valid valid -> {
+                var owner = mcpServers.get(name);
+                if (owner != null && !owner.extensionPath().equals(extensionPath)) {
+                    throw new IllegalStateException(
+                        "MCP server \"" + name + "\" is already registered by extension \""
+                            + owner.extensionPath() + "\"");
+                }
+                // pi：`-`/`_` 归一后同命名空间即冲突（mcpNamespace 比较）。
+                var namespace = com.pijava.mcp.config.McpServerConfigs.namespace(name);
+                for (var server : mcpServers.list()) {
+                    if (!server.name().equals(name)
+                            && com.pijava.mcp.config.McpServerConfigs.namespace(server.name())
+                                .equals(namespace)) {
+                        throw new IllegalStateException(
+                            "MCP server \"" + name + "\" conflicts with registered server \""
+                                + server.name() + "\"");
+                    }
+                }
+                mcpServers.register(
+                    new com.pijava.mcp.config.RegisteredMcpServer(name, valid.config(),
+                        extensionPath));
+            }
+        }
+    }
+
     /**
      * 派生 per-extension 委托上下文：全部服务方法透传，唯 {@code on()} 以扩展名
      * 登记进总线（docs/14 §3.3：错误归属对齐 pi 的 {@code extensionPath}）。
@@ -319,15 +387,24 @@ public final class DefaultExtensionContext implements ExtensionContext {
      */
     @Override
     public ExtensionContext forExtension(String extensionName) {
-        return new PerExtensionContext(extensionName);
+        return new PerExtensionContext(extensionName, extensionName);
     }
 
-    /** per-extension 委托：除 {@code on()} 外全部透传基础上下文。 */
+    /** 批 23（T1）：带路径身份的派生（pi {@code extension.path} 对位）。 */
+    @Override
+    public ExtensionContext forExtension(String extensionName, String extensionPath) {
+        return new PerExtensionContext(extensionName, extensionPath);
+    }
+
+    /** per-extension 委托：除 {@code on()} 与 MCP 注册面外全部透传基础上下文。 */
     private final class PerExtensionContext implements ExtensionContext {
         private final String extensionName;
+        /** 批 23（T1）：pi {@code extension.path} 对位（MCP 所有权门/错文归属用）。 */
+        private final String extensionPath;
 
-        PerExtensionContext(String extensionName) {
+        PerExtensionContext(String extensionName, String extensionPath) {
             this.extensionName = extensionName;
+            this.extensionPath = extensionPath;
         }
 
         @Override
@@ -420,6 +497,24 @@ public final class DefaultExtensionContext implements ExtensionContext {
                                   SendMessageOptions options) {
             return DefaultExtensionContext.this.sendMessage(
                 customType, content, display, details, options);
+        }
+
+        // ── 批 23（docs/34 T1）：MCP 注册面（带归属转入本体） ──
+
+        @Override
+        public void registerMcpServer(String name,
+                                      com.pijava.mcp.config.McpServerConfig config) {
+            DefaultExtensionContext.this.registerMcpServer(extensionPath, name, config);
+        }
+
+        @Override
+        public void unregisterMcpServer(String name) {
+            mcpServers.unregister(name, extensionPath);
+        }
+
+        @Override
+        public java.util.List<com.pijava.mcp.config.RegisteredMcpServer> getMcpServers() {
+            return DefaultExtensionContext.this.getMcpServers();
         }
     }
 

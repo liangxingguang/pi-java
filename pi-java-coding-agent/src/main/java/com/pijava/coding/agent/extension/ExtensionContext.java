@@ -93,6 +93,16 @@ public interface ExtensionContext {
         return this;
     }
 
+    /**
+     * 批 23（docs/34 T1）：带路径身份的 {@link #forExtension(String)}——
+     * {@code extensionPath} 是 pi {@code extension.path} 对位（JAR 路径串；ServiceLoader
+     * 发现 ⇒ 合成 {@code "builtin:<name>"}，裁决⑥），MCP 注册的所有权门与
+     * 命令 sourceInfo 盖章用。默认退化单参（path 即名）。
+     */
+    default ExtensionContext forExtension(String extensionName, String extensionPath) {
+        return forExtension(extensionName);
+    }
+
     // ── 批 16（docs/27）：CLI flag 面 / 激活门 / 工具渲染器 ──
 
     /**
@@ -159,4 +169,32 @@ public interface ExtensionContext {
      *                    投递语义为后续任务
      */
     record SendMessageOptions(boolean triggerTurn) {}
+
+    // ── 批 23（docs/34 T1）：MCP 服务器注册面（pi types.ts:1857-1872） ──
+
+    /**
+     * pi {@code registerMcpServer}（loader.ts:471-489 三守卫逐字）：配置校验失败抛
+     * （{@code Invalid MCP server registered by extension "<path>": <原因>}）；
+     * <b>别的扩展</b>注册的同名抛错；{@code -}/{@code _} 归一后撞命名空间亦抛。
+     * 同名再注册＝替换本扩展的旧注册。注册不持久化——每次加载要重注册（pi 文档注记）。
+     *
+     * <p>装载期注册静默落表（changeListener 装配尾才接，裁决⑧）；装配后注册即时
+     * 触发 {@code mcp_servers_change} 广播。</p>
+     *
+     * @throws IllegalArgumentException 配置校验失败
+     * @throws IllegalStateException    同名被他扩展占用 / 命名空间冲突 / 无扩展归属
+     */
+    void registerMcpServer(String name, com.pijava.mcp.config.McpServerConfig config);
+
+    /**
+     * pi {@code unregisterMcpServer}（loader.ts:491-494）——移除<b>本扩展</b>注册的
+     * 服务器；别的扩展的同名注册静默不动（注册表所有权门，mcp-servers.ts:298-303）。
+     */
+    void unregisterMcpServer(String name);
+
+    /**
+     * pi {@code getMcpServers}（loader.ts:496-498）——全部扩展注册的服务器，
+     * 注册序，配置深拷贝（注册表 list() 语义）。
+     */
+    java.util.List<com.pijava.mcp.config.RegisteredMcpServer> getMcpServers();
 }
