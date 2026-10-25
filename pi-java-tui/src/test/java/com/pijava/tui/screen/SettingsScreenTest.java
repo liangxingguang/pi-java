@@ -17,20 +17,19 @@ import static org.assertj.core.api.Assertions.assertThat;
 class SettingsScreenTest {
 
     @Test
-    void cyclesThemeOnEnterAndFlushes() throws Exception {
+    void themeRowOpensSubmenuInsteadOfCycling() throws Exception {
         withIsolatedHome(() -> {
             try (var session = AgentSession.create(
                     ArgsParser.parse(new String[] {}))) {
                 var screen = new SettingsScreen(session);
 
-                // First field is Theme; unset → dark → light.
-                screen.onKeyEvent(KeyEvent.ofKey(
-                    dev.tamboui.tui.event.KeyCode.ENTER));
+                // 批 21（T11，S9）：首行 Theme 是子菜单入口——Enter 置请求位
+                //（PiTuiApp 检出后开 ThemeSubmenuScreen），不再循环 dark/light。
                 screen.onKeyEvent(KeyEvent.ofKey(
                     dev.tamboui.tui.event.KeyCode.ENTER));
 
-                assertThat(session.services().settings().effective().theme)
-                    .isEqualTo("light");
+                assertThat(screen.pollThemeRequest()).isTrue();
+                assertThat(session.services().settings().effective().theme).isNull();
                 assertThat(screen.isDone()).isFalse();
 
                 screen.onKeyEvent(KeyEvent.ofKey(

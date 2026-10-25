@@ -44,17 +44,15 @@ public final class ThemeApplicator {
      部分；组件重渲染由调用方另行触发）。
      */
     public static void reapply(StyleEngine engine) {
+        // 同名 loadStylesheet 即替换＋变更通知；reloadStylesheet 只服务
+        // classpath/文件来源（对生成内容会去找名为 "theme" 的资源而炸）。
         loadGenerated(engine);
-        engine.reloadStylesheet(STYLESHEET_NAME);
     }
 
-    /** 装载生成内容（生成文本是程序产物——解析失败即本类 bug，转非受检）。 */
+    /** 装载生成内容（{@code addStylesheet(name, content)} 是文本变体——
+     *  {@code loadStylesheet(name, String)} 的第二参是 classpath 资源路径）。 */
     private static void loadGenerated(StyleEngine engine) {
-        try {
-            engine.loadStylesheet(STYLESHEET_NAME, generateTcss(Themes.current()));
-        } catch (java.io.IOException e) {
-            throw new java.io.UncheckedIOException("Generated stylesheet failed to parse", e);
-        }
+        engine.addStylesheet(STYLESHEET_NAME, generateTcss(Themes.current()));
     }
 
     /** 从主题解析色生成 TCSS 文本（映射见类 javadoc）。 */
