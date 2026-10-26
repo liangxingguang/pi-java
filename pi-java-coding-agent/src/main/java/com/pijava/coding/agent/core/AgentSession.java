@@ -1018,14 +1018,23 @@ public final class AgentSession implements AutoCloseable {
     }
 
     /**
-     * 批 18（T6）：resolve 输出的扩展路径消费——{@code builtin:} 前缀在消费点
-     * 过滤（java 内置扩展走既有 ServiceLoader 装配）；目录源先解析显式入口
+     * 批 18（T6）：resolve 输出的扩展路径消费——目录源先解析显式入口
      * （{@code package.json} pi 清单/extensions 条目或 {@code index.jar} 回落，
      * 裁决⑤），无入口则按 classpath 根加载目录。
+     *
+     * <p>批 24（docs/35 T2，裁决①）：{@code builtin:<name>} 从「跳过」改为按名
+     * 加载 ServiceLoader 发现件（pi {@code -e builtin:mcp} 对位）；被
+     * {@code --no-mcp} 禁用的名跳过（pi disabledBuiltinExtensions 恒生效）。</p>
      */
     private static void loadResolvedExtension(
-            com.pijava.coding.agent.extension.ExtensionManager manager, String path) {
-        if (path.startsWith(com.pijava.coding.agent.pkg.PackageManager.BUILTIN_PATH_PREFIX)) {
+            com.pijava.coding.agent.extension.ExtensionManager manager, String path,
+            boolean noMcp) {
+        var prefix = com.pijava.coding.agent.pkg.PackageManager.BUILTIN_PATH_PREFIX;
+        if (path.startsWith(prefix)) {
+            var name = path.substring(prefix.length());
+            if (!(noMcp && "mcp".equals(name))) {
+                manager.loadBuiltin(name);
+            }
             return;
         }
         var p = java.nio.file.Path.of(path);
@@ -1187,10 +1196,11 @@ public final class AgentSession implements AutoCloseable {
      * pi {@code setActiveToolsByName}（agent-session.ts:1518-1525）——注册表查无的
      * 名静默忽略（pi「unknown 忽略」逐字）。系统提示不手动重建：java 的提示每 run
      * 起点由 ContextAssembler 重装配＋promptLoadout diff 补丁（既有机制），与 pi
-     * {@code _rebuildSystemPrompt} 净效果同。pi 的 {@code _pendingToolNames.clear()}
-     * 臂 java 无 pending 概念（批 1 窄差 D4 同族，随 B221⑫b）——不移植。
+     * {@code _rebuildSystemPrompt} 净效果同。批 24（docs/35 D4 销号）：pending 两臂
+     * 落地——减员 ⇒ 清 pending（pi :1524）；已注册名出 pending（pi :1529）。
      */
     public void setActiveToolsByName(java.util.List<String> names) {
+        var previous = getActiveToolNames();
         var deduped = new java.util.LinkedHashSet<>(names);
         var tools = new java.util.LinkedHashSet<AgentTool<?, ?>>();
         for (var name : deduped) {
@@ -1200,6 +1210,51 @@ public final class AgentSession implements AutoCloseable {
             }
         }
         harness.setActiveTools(tools);
+        var active = new java.util.HashSet<>(getActiveToolNames());
+        if (previous.stream().anyMatch(name -> !active.contains(name))) {
+            harness.pendingToolNames().clear();
+        }
+        harness.pendingToolNames().removeIf(name -> services.tools().get(name) != null);
+    }
+
+    /**
+     * 批 24（docs/35 D4/T6）：运行时注册的工具激活缝——pi {@code refreshTools}
+     * 重建合并（agent-session.ts:3570-3592）的 java 对位：{@code names}（调用方
+     * 判好 exposure 的 direct 件）过注册面门（{@code --tools mcp__} 保留臂）激活；
+     * 再消费 pending 晚注册臂（:3590＋:1529——pending 中现已注册的激活并出列，
+     * pi 在此不复查 exposure/allowlist 逐字）。
+     */
+    public void activateRuntimeTools(java.util.Collection<String> names) {
+        var selection = toolSelection;
+        var union = new java.util.LinkedHashSet<String>();
+        for (var name : names) {
+            if (selection == null || selection.isAllowed(name)) {
+                union.add(name);
+            }
+        }
+        var pending = harness.pendingToolNames();
+        for (var name : java.util.List.copyOf(pending)) {
+            if (services.tools().get(name) != null) {
+                union.add(name);
+                pending.remove(name);
+            }
+        }
+        if (!union.isEmpty()) {
+            harness.activateTools(union);
+        }
+    }
+
+    /**
+     * 批 24（docs/35 T6）：运行时撤离激活集（hidden 重注/disable/资源工具 direct
+     撤离的对位）——<b>不</b>清 pending（pi 的 pending 清理只在
+     * {@code setActiveToolsByName} 减员臂）。
+     */
+    public void deactivateRuntimeTools(java.util.Collection<String> names) {
+        var current = new java.util.LinkedHashSet<>(getActiveToolNames());
+        if (current.removeAll(names)) {
+            harness.setActiveTools(new java.util.LinkedHashSet<>(
+                services.tools().activeOf(current)));
+        }
     }
 
     /**
@@ -1590,6 +1645,9 @@ public final class AgentSession implements AutoCloseable {
             }
             harness.setPromptSections(start.sections());
         }
+        // 批 24（docs/35 D4 臂4，pi agent-session.ts:1829 逐字）：run 记装配进转录
+        // ——到此仍未注册的恢复工具放弃等待（永不注册的工具不留 pending）。
+        harness.pendingToolNames().clear();
 
         var queue = new LinkedBlockingQueue<Optional<StreamEvent>>();
         var entriesFuture = new CompletableFuture<List<Entry>>();
@@ -2940,20 +2998,24 @@ public final class AgentSession implements AutoCloseable {
             .map(com.pijava.ai.provider.Provider::name)
             .collect(java.util.stream.Collectors.toSet());
         if (!args.noExtensions()) {
-            manager.loadAll();
+            // 批 24（docs/35 T2）：pi disabledBuiltinExtensions（main.ts:787）——
+            // --no-mcp 从 ServiceLoader 自动发现里摘掉内置 MCP 扩展。
+            manager.loadAll(args.noMcp()
+                ? java.util.Set.of(com.pijava.coding.agent.extension.mcp.McpExtension.NAME)
+                : java.util.Set.of());
             // 批 18（T6）：resolve() 输出取代「扫全局/项目扩展目录」两臂（pi
             // mergePaths(cliEnabledExtensions, enabledExtensions) :577-578 对位；
             // 自动发现臂覆盖原两目录扫描，settings 数组/包自此生效——裁决⑨）。
             for (var path : SessionSetup.mergePaths(
                     SessionSetup.enabledPaths(cliResolved.extensions()),
                     SessionSetup.enabledPaths(assembly.resolved().extensions()))) {
-                loadResolvedExtension(manager, path);
+                loadResolvedExtension(manager, path, args.noMcp());
             }
         } else {
             // 批 18（T6）：pi noExtensions ⇒ cliEnabledExtensions（:577）——
             // -ne 下 CLI 显式源仍加载；-e 本地目录/npm:/git: 经 temporary resolve。
             for (var path : SessionSetup.enabledPaths(cliResolved.extensions())) {
-                loadResolvedExtension(manager, path);
+                loadResolvedExtension(manager, path, args.noMcp());
             }
         }
         owner.extensionManager = manager;
