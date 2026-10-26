@@ -50,7 +50,7 @@ run.cmd -p "hello"      :: print mode
 ./mvnw -Pnative package   # produces pi-java-dist/target/pi-java(.exe)
 ```
 
-Native builds are gated behind the `native` profile. Windows native linking requires Visual Studio 2022 Build Tools (or CI, which pre-installs them). See [`原 docs/10-phase5-native-design.md`](原 docs/10-phase5-native-design.md).
+Native builds are gated behind the `native` profile. Windows native linking requires Visual Studio 2022 Build Tools (or CI, which pre-installs them). 设计记录见 git 历史（原 docs/10-phase5-native-design.md，已随过程文档清理删除）。
 
 ## Modules
 
@@ -71,7 +71,7 @@ Dependencies flow bottom-up: `telemetry ← ai ← agent ← coding-agent ← tu
 
 ## Design documents
 
-Development follows an AI-driven, phase-based process. Each phase begins with a design document in [`docs/`](docs/) — see [`docs/00-ai-driven-development-process.md`](docs/00-ai-driven-development-process.md) and the implementation plan [`docs/04-implementation-plan.md`](docs/04-implementation-plan.md).
+Development follows an AI-driven, batch-based process. Each batch begins with a design document in [`docs/`](docs/) — see [`docs/00-ai-driven-development-process.md`](docs/00-ai-driven-development-process.md), the open-items register [`docs/04-open-items-register.md`](docs/04-open-items-register.md), and the module alignment map [`docs/05-module-alignment-map.md`](docs/05-module-alignment-map.md).
 
 ## Contributing
 
