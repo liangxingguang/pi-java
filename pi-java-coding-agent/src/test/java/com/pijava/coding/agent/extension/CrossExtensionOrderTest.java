@@ -82,7 +82,8 @@ class CrossExtensionOrderTest {
         try (var loader = new URLClassLoader(new URL[] {
                 tmp.toUri().toURL(), testClasses.toUri().toURL()},
                 ExtensionManager.class.getClassLoader())) {
-            manager.loadAll(loader);
+            // 批 24：父委托会捎上主源码集的内置 mcp 扩展——按名排除（--no-mcp 同通道）
+            manager.loadAll(loader, java.util.Set.of("mcp"));
         }
         assertThat(manager.loadedNames()).containsExactlyInAnyOrder("ext-a", "ext-b");
 

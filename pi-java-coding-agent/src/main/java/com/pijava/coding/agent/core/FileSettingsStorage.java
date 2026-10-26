@@ -22,6 +22,7 @@ public final class FileSettingsStorage implements SettingsStorage {
 
     private final Path globalPath;
     private final Path projectPath;
+    private final Path projectDir;
 
     /**
      * Create storage using the default agent directory and the current working
@@ -38,6 +39,7 @@ public final class FileSettingsStorage implements SettingsStorage {
      * @param projectDir project directory holding {@code .pi-java/settings.json}
      */
     public FileSettingsStorage(Path agentDir, Path projectDir) {
+        this.projectDir = projectDir;
         this.globalPath = agentDir.resolve("settings.json");
         this.projectPath = projectDir.resolve(".pi-java").resolve("settings.json");
     }
@@ -55,6 +57,11 @@ public final class FileSettingsStorage implements SettingsStorage {
     /** The global settings file path (for diagnostics). */
     public Path globalPath() {
         return globalPath;
+    }
+
+    /** 批 24（docs/35）：项目目录（MCP 配置与信任判定的消费同源——批 23 同根纪律）。 */
+    public Path projectDir() {
+        return projectDir;
     }
 
     /** The project settings file path (for diagnostics). */

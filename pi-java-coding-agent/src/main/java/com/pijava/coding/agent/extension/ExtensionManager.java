@@ -61,16 +61,56 @@ public final class ExtensionManager {
      * {@code AgentSession.create} 的装配期扩展发现不污染全局 classpath。</p>
      */
     public Set<String> loadAll() {
+        return loadAll(java.util.Set.of());
+    }
+
+    /**
+     * 批 24（docs/35 T2）：{@code pi disabledBuiltinExtensions}
+     * （resource-loader.ts:582）对位——ServiceLoader 发现件全带 {@code builtin:<name>}
+     * 身份，按名过滤（{@code --no-mcp} ⇒ {@code Set.of("mcp")}）。
+     */
+    public Set<String> loadAll(java.util.Set<String> disabledBuiltinNames) {
         var tccl = Thread.currentThread().getContextClassLoader();
-        return loadAll(tccl != null ? tccl : ExtensionManager.class.getClassLoader());
+        return loadAll(tccl != null ? tccl : ExtensionManager.class.getClassLoader(),
+            disabledBuiltinNames);
     }
 
     /** 用指定 classloader 发现并加载（测试用作用域 loader，避免污染全局 classpath）。 */
     Set<String> loadAll(ClassLoader loader) {
+        return loadAll(loader, java.util.Set.of());
+    }
+
+    /** 带内置过滤的 {@link #loadAll(ClassLoader)}。 */
+    Set<String> loadAll(ClassLoader loader, java.util.Set<String> disabledBuiltinNames) {
         for (var ext : ServiceLoader.load(PiExtension.class, loader)) {
+            if (disabledBuiltinNames.contains(ext.name())) {
+                continue;
+            }
             load(ext);
         }
         return Set.copyOf(loaded.keySet());
+    }
+
+    /**
+     * 批 24（docs/35 T2，裁决①）：{@code -e builtin:<name>} 显式臂——从 ServiceLoader
+     * 发现集按名加载（pi「Load an extension file or builtin:&lt;name&gt;」对位）。
+     * 已加载（自动发现已带）⇒ 跳过（pi mergePaths 去重净效果）。
+     *
+     * @return 本次是否加载（不存在或已加载 ⇒ false）
+     */
+    public boolean loadBuiltin(String name) {
+        if (loaded.containsKey(name)) {
+            return false;
+        }
+        var tccl = Thread.currentThread().getContextClassLoader();
+        var loader = tccl != null ? tccl : ExtensionManager.class.getClassLoader();
+        for (var ext : ServiceLoader.load(PiExtension.class, loader)) {
+            if (ext.name().equals(name)) {
+                load(ext);
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

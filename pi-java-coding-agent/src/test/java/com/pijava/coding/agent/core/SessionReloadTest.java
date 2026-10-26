@@ -114,7 +114,8 @@ class SessionReloadTest {
 
     private void seedDefaultTools(List<String> tools) {
         var global = new Settings();
-        global.defaultTools = tools;
+        // 批 24（D3）：字段为原始 JsonNode 承载
+        global.defaultTools = Json.mapper().valueToTree(tools);
         settingsStorage.writeGlobal(global);
     }
 

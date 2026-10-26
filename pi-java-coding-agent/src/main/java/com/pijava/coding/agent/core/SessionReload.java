@@ -27,8 +27,8 @@ import java.util.LinkedHashSet;
  * </ol>
  *
  * <p>flag 值跨 reload 存活：java 不重建扩展运行时 ⇒ 共享值表天然存活（pi 的
- * 快照回灌是重建的产物，净效果相同，docs/27 T5b 注记）。pi reload 的
- * {@code _pendingToolNames} 回填臂不移植（java 无 pending 概念，批 1 窄差 D4 同族）。</p>
+ * 快照回灌是重建的产物，净效果相同，docs/27 T5b 注记）。批 24（docs/35 D4 销号）：
+ * {@code _pendingToolNames} 回填臂已落地（reload 前激活名进 pending，见下）。</p>
  */
 final class SessionReload {
 
@@ -87,6 +87,9 @@ final class SessionReload {
                 session.harness().activateTools(added);
             }
         }
+        // 批 24（docs/35 D4 臂6，pi :3681 对位）：reload 前全部激活名进 pending——
+        //    后注册的工具（如 MCP 服务器在 ⑦ 重连补注册）经激活缝重新激活。
+        session.harness().pendingToolNames().addAll(session.getActiveToolNames());
         // ⑦ session_start{reload}＋resources_discover 重放（pi :3686-3699；hasBindings
         //    门不移植——恒发恒重放，窄差 D93 裁决⑫）。
         if (firer != null) {

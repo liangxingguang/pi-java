@@ -65,8 +65,12 @@ public final class Settings {
      * pi {@code defaultTools}（settings-schema.ts:326-331）：初始工具选择——裸名替换
      * 继承选择，{@code +name}/{@code -name} 增删。分层 merge 特判与解析见
      * {@link ToolSelection#mergeDefaultTools}/{@link ToolSelection#resolveDefaultTools}。
+     *
+     * <p>批 24（docs/35 T8，D3 销号）：原始 JSON 树承载（pi 容忍读对位——
+     * 非数组/非字符串成员不抛，消费点经
+     * {@link ToolSelection#normalizeDefaultTools} 归一）。</p>
      */
-    public List<String> defaultTools;
+    public com.fasterxml.jackson.databind.JsonNode defaultTools;
     public String doubleEscapeAction;
     public String treeFilterMode;
     public Integer editorPaddingX;

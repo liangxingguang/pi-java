@@ -33,6 +33,8 @@ import java.util.List;
  * @param noBuiltinTools        disable built-in tools only
  * @param extensions            extension sources (repeatable)
  * @param noExtensions          disable extension discovery
+ * @param noMcp                 disable built-in MCP support: no servers connect and no MCP
+ *                              tools（pi args.ts:191-192 ⇒ main.ts:787 `disabledBuiltinExtensions`）
  * @param skills                skills to load (repeatable)
  * @param noSkills              disable skills discovery
  * @param promptTemplates       prompt templates to load (repeatable)
@@ -82,6 +84,7 @@ public record Args(
         boolean noBuiltinTools,
         List<String> extensions,
         boolean noExtensions,
+        boolean noMcp,
         List<String> skills,
         boolean noSkills,
         List<String> promptTemplates,

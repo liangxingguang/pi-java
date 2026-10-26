@@ -345,7 +345,16 @@ public final class SettingsManager {
         // pi mergeDefaultTools（settings-manager.ts:124-129）经 deepMergeSettings 特判（:139-145）：
         // JSON 深合并里数组整体替换；pi 对 defaultTools 另立语义——覆盖层全是 +name/-name
         // 修饰符时追加到继承选择之后（逐层修饰），否则整体替换。
-        merged.defaultTools = ToolSelection.mergeDefaultTools(base.defaultTools, override.defaultTools);
+        // 批 24（D3）：defaultTools 是原始 JsonNode（容忍读）——合并前各自归一：
+        // 缺席 ⇒ null；在场即归一（非数组 ⇒ 空表，pi getDefaultTools 的 [] 臂对位），
+        // 合并结果回树。
+        var mergedTools = ToolSelection.mergeDefaultTools(
+            base.defaultTools == null || base.defaultTools.isNull() ? null
+                : ToolSelection.normalizeDefaultTools(base.defaultTools),
+            override.defaultTools == null || override.defaultTools.isNull() ? null
+                : ToolSelection.normalizeDefaultTools(override.defaultTools));
+        merged.defaultTools =
+            mergedTools == null ? null : Json.mapper().valueToTree(mergedTools);
         return merged;
     }
 

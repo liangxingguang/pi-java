@@ -60,6 +60,25 @@ public final class ToolSelection {
         return tools;
     }
 
+    /**
+     * 批 24（docs/35 T8，D3 销号）：pi {@code getDefaultTools} 的容忍读
+     * （settings-manager.ts:1328-1333 逐字——{@code Array.isArray(tools) ?
+     * tools.filter(typeof === "string") : []}）：非数组 ⇒ 空表；非字符串成员滤掉。
+     */
+    public static List<String> normalizeDefaultTools(
+            com.fasterxml.jackson.databind.@org.jspecify.annotations.Nullable JsonNode raw) {
+        if (raw == null || !raw.isArray()) {
+            return List.of();
+        }
+        var result = new ArrayList<String>();
+        for (var element : raw) {
+            if (element.isTextual()) {
+                result.add(element.asText());
+            }
+        }
+        return result;
+    }
+
     /** pi {@code resolveDefaultTools}（:135-138）：裸名替换默认集，修饰符再按序叠。 */
     public static List<String> resolveDefaultTools(List<String> entries) {
         var plain = entries.stream().filter(e -> !isToolModifier(e)).toList();

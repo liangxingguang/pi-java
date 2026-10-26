@@ -114,6 +114,10 @@ public final class ArgsParser {
     @Option(names = "--no-extensions")
     boolean noExtensions;
 
+    /** 批 24（docs/35 T2）：pi {@code --no-mcp}（args.ts:191-192）。 */
+    @Option(names = "--no-mcp")
+    boolean noMcp;
+
     @Option(names = "--skill")
     List<String> skills = new ArrayList<>();
 
@@ -321,7 +325,7 @@ public final class ArgsParser {
             thinking, continue_, resume, help, version, mode, port, name, noSession,
             session, sessionId, fork, sessionDir,
             split(models), toolEntries, splitOrNull(excludeTools, excludeToolsFlagPresent),
-            noTools, noBuiltinTools, List.copyOf(extensions), noExtensions,
+            noTools, noBuiltinTools, List.copyOf(extensions), noExtensions, noMcp,
             List.copyOf(skills), noSkills,
             List.copyOf(promptTemplates), noPromptTemplates,
             List.copyOf(themes), noThemes, useTheme, noContextFiles,

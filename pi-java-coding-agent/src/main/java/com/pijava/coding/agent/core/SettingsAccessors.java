@@ -200,10 +200,12 @@ public final class SettingsAccessors {
      */
     public List<String> getDefaultTools() {
         var tools = manager.effective().defaultTools;
-        if (tools == null) {
+        // 批 24（D3）：显式 JSON null ⇒ Jackson 绑成 NullNode——与缺席同视
+        //（pi undefined 对位），否则容忍读：非数组 ⇒ 空选择，非字符串成员滤掉
+        if (tools == null || tools.isNull()) {
             return null;
         }
-        return ToolSelection.resolveDefaultTools(tools);
+        return ToolSelection.resolveDefaultTools(ToolSelection.normalizeDefaultTools(tools));
     }
 
     public String getTuiMode() {

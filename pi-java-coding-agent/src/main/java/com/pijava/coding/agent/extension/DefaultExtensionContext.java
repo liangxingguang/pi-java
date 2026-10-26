@@ -303,6 +303,18 @@ public final class DefaultExtensionContext implements ExtensionContext {
         toolRenderers.register(resolver);
     }
 
+    /**
+     * 批 24（docs/35 T1）：内置 MCP 扩展的宿主会话缝——pi {@code ExtensionContext}
+     * 的 {@code cwd}/{@code isProjectTrusted} 等会话成员的 java 内部通道
+     * （不公开进 {@link ExtensionContext} 接口；仅供 {@code extension.mcp} 包）。
+     *
+     * @return 绑定的会话；未绑（--help 轻量道等）⇒ {@code null}
+     */
+    public com.pijava.coding.agent.core.AgentSession hostSessionOrNull() {
+        var supplier = toolControl;
+        return supplier == null ? null : supplier.get();
+    }
+
     private com.pijava.coding.agent.core.AgentSession requireToolControl() {
         var supplier = toolControl;
         var session = supplier == null ? null : supplier.get();

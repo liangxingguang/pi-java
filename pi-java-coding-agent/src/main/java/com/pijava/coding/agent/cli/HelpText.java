@@ -84,8 +84,9 @@ public final class HelpText {
               --no-builtin-tools, -nbt       Disable built-in tools by default but keep extension/custom tools enabled
               --approve, -a                  Trust project local files for this run
               --no-approve, -na              Ignore project local files for this run
-              --extension, -e <source>       Load an extension JAR (repeatable; explicit paths still load with -ne)
-              --no-extensions, -ne           Disable extension discovery
+              --extension, -e <source>       Load an extension JAR or builtin:<name> (repeatable; explicit paths still load with -ne)
+              --no-extensions, -ne           Disable extension discovery and built-in extensions (explicit -e paths still work)
+              --no-mcp                       Disable built-in MCP support: no servers connect and no MCP tools
               --skill <name>                 Load skill (repeatable; Phase 6)
               --no-skills, -ns               Disable skills discovery
               --prompt-template <name>       Load prompt template (repeatable; Phase 6)

@@ -66,7 +66,8 @@ class DefaultToolsSelectionTest {
         var storage = new InMemorySettingsStorage();
         if (defaultTools != null) {
             var global = new Settings();
-            global.defaultTools = defaultTools;
+            // 批 24（D3）：字段为原始 JsonNode 承载
+            global.defaultTools = Json.mapper().valueToTree(defaultTools);
             storage.writeGlobal(global);
         }
         var handle = PersistentSessionRepositories.jsonl(dir);
