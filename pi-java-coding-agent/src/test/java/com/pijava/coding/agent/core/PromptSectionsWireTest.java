@@ -50,12 +50,12 @@ class PromptSectionsWireTest {
         @Override public void register(ExtensionContext ctx) {
             ctx.on(BEFORE_AGENT_START, (e, c) -> {
                 OBSERVED.add("first sees: " + e.sections());
-                e.sections().put("mcp_servers", "server: probe");
+                e.sections().put("probe_section", "server: probe");
                 return null;
             });
             ctx.on(BEFORE_AGENT_START, (e, c) -> {
                 // pi「同一 options 对象贯穿所有处理器」逐字：后者见前者改动。
-                OBSERVED.add("second sees: " + e.sections().get("mcp_servers"));
+                OBSERVED.add("second sees: " + e.sections().get("probe_section"));
                 return null;
             });
         }
@@ -119,7 +119,7 @@ class PromptSectionsWireTest {
             assertThat(OBSERVED).containsExactly(
                 "first sees: {}", "second sees: server: probe");
             assertThat(s.harness().getPromptSections())
-                .containsEntry("mcp_servers", "server: probe");
+                .containsEntry("probe_section", "server: probe");
         }
     }
 
@@ -132,7 +132,7 @@ class PromptSectionsWireTest {
             s.processPrompt("again").status();
 
             assertThat(OBSERVED.get(0))
-                .as("第二跑基线＝第一跑终值").isEqualTo("first sees: {mcp_servers=server: probe}");
+                .as("第二跑基线＝第一跑终值").isEqualTo("first sees: {probe_section=server: probe}");
         }
     }
 }

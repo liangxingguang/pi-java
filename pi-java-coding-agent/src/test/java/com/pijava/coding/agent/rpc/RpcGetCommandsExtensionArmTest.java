@@ -87,16 +87,19 @@ class RpcGetCommandsExtensionArmTest {
                 .get("commands");
 
             // 第一源序：扩展臂在最前（模板/技能空 ⇒ 全是扩展条目）。
-            assertThat(commands).hasSize(3);
-            assertThat(commands.get(0).get("name").asText()).isEqualTo("hello");
+            // 批 24：内置 MCP 扩展的 /mcp 装配期注册 ⇒ 序在最前。
+            assertThat(commands).hasSize(4);
+            assertThat(commands.get(0).get("name").asText()).isEqualTo("mcp");
             assertThat(commands.get(0).get("source").asText()).isEqualTo("extension");
-            assertThat(commands.get(0).get("sourceInfo").get("source").asText())
+            assertThat(commands.get(1).get("name").asText()).isEqualTo("hello");
+            assertThat(commands.get(1).get("source").asText()).isEqualTo("extension");
+            assertThat(commands.get(1).get("sourceInfo").get("source").asText())
                 .isEqualTo("builtin");
             // 撞名编号：跨扩展同名 ⇒ dup:1/dup:2（runner.ts:805-840 逐字）。
-            assertThat(commands.get(1).get("name").asText()).isEqualTo("dup:1");
-            assertThat(commands.get(1).get("description").asText()).isEqualTo("from b");
-            assertThat(commands.get(2).get("name").asText()).isEqualTo("dup:2");
-            assertThat(commands.get(2).get("sourceInfo").get("path").asText())
+            assertThat(commands.get(2).get("name").asText()).isEqualTo("dup:1");
+            assertThat(commands.get(2).get("description").asText()).isEqualTo("from b");
+            assertThat(commands.get(3).get("name").asText()).isEqualTo("dup:2");
+            assertThat(commands.get(3).get("sourceInfo").get("path").asText())
                 .isEqualTo("/ext/c.jar");
         } finally {
             System.setProperty("user.home", savedHome);

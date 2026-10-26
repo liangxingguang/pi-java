@@ -120,9 +120,10 @@ class RpcDispatcherTest {
         assertThat(output).contains("\"command\":\"compact\"");
         assertThat(output).contains("\"command\":\"set_auto_compaction\",\"success\":true");
         // B247（pi rpc-types.ts:241）：data 包 {commands} 键、内置不收——
-        // 空会话即空数组（旧钉 "name":"help" 是 java 自造形状，随对齐删除）。
+        //（旧钉 "name":"help" 是 java 自造形状，随对齐删除）。
+        // 批 24：内置 MCP 扩展的 /mcp 经扩展臂在列（pi 同形）。
         assertThat(output).contains("\"command\":\"get_commands\",\"success\":true")
-            .contains("\"commands\":[]");
+            .contains("\"name\":\"mcp\"");
         assertThat(output).contains("\"command\":\"get_session_stats\",\"success\":true");
 
         // set_model 实际改动了 harness 模型

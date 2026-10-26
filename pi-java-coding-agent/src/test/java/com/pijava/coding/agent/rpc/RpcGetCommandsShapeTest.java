@@ -99,7 +99,10 @@ class RpcGetCommandsShapeTest {
         try (var session = createSession(null)) {
             var commands = getCommands(session).get("commands");
 
-            assertThat(commands).isEmpty();
+            // 批 24：内置 MCP 扩展的 /mcp 自此在列（pi 同——内建扩展命令经
+            // registerCommand 进扩展臂）；除此之外无他（空会话语义保持）
+            assertThat(commands).hasSize(1);
+            assertThat(commands.get(0).get("name").asText()).isEqualTo("mcp");
             // 注册一条技能再查：任意条目都无 argumentHint 键（pi 形状无此字段）。
             session.harness().skillManager().register(
                 skill("demo-skill", "Demo skill", SkillSource.USER));
