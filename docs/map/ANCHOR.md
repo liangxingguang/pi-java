@@ -153,15 +153,15 @@ bash docs/map/check-drift.sh
 
 | # | 旧判定 | 实测 |
 |---|---|---|
-| 1 | `docs/06 §3.4`：「SQLite schema 分叉」＝全项目单点最大拖累（Σ权重 25，+16.2pp） | **自始即错**：`git grep -l "session-backends" 3390bd936 -- 'packages/*/src/**'` **只命中它自己的 `package.json`** ⇒ 它在**旧锚点上就已经零消费者**，从没上过 `bin pi` 这条线。那 25 点权重给了个 R5 不可达的子系统 |
-| 2 | `docs/06 §1.3`：「JSONL v4 双向不可读」＝用户可见硬故障 | **参照物已删**：主流 pi 的会话持久化一直是 JSONL，头为 `{type:"session", version:3, id, timestamp, cwd}`（`coding-agent/src/core/session-manager.ts:41` `CURRENT_SESSION_VERSION = 3`）。旧图据以判定的 `{v:4, storageVersion:1}` 是 **harness 的格式**——`git grep storageVersion 200387122 -- 'packages/*/src/**'` **零命中** |
+| 1 | `原 docs/06 §3.4`：「SQLite schema 分叉」＝全项目单点最大拖累（Σ权重 25，+16.2pp） | **自始即错**：`git grep -l "session-backends" 3390bd936 -- 'packages/*/src/**'` **只命中它自己的 `package.json`** ⇒ 它在**旧锚点上就已经零消费者**，从没上过 `bin pi` 这条线。那 25 点权重给了个 R5 不可达的子系统 |
+| 2 | `原 docs/06 §1.3`：「JSONL v4 双向不可读」＝用户可见硬故障 | **参照物已删**：主流 pi 的会话持久化一直是 JSONL，头为 `{type:"session", version:3, id, timestamp, cwd}`（`coding-agent/src/core/session-manager.ts:41` `CURRENT_SESSION_VERSION = 3`）。旧图据以判定的 `{v:4, storageVersion:1}` 是 **harness 的格式**——`git grep storageVersion 200387122 -- 'packages/*/src/**'` **零命中** |
 
 ### 处置
 
 1. ✅ **换锚裁决**——`原 docs/11-pi-reanchor-ruling.md`（2026-10-04，J1–J5 全按建议；文档已删，历史在 git）。
 2. ✅ **6 份地图重测**——已对顶部新 `PI_PIN` ＋ pi-java `351d199` 全部重写。
-3. ✅ **`docs/06` 总表重算**——全项目 **44.31% → 52.59%**（分母 1,423 → 1,273），含 §5.1 作废面与 §5.2 不可达面。（52.59% 是**换锚当刻**值；此后 ⑧/⑨/⑩ 与 `原 docs/40` 的回填只改判定不改分母 ⇒ 现为 **53.50%**，最新读数见 `docs/05` §1。）
-4. ✅ **`docs/05`**（B59/B60/B61/B62 改写＋新增 B158–B165）／**`docs/07`**（补全包清单按 R5 重排）**已同步**。
+3. ✅ **`原 docs/06` 总表重算**——全项目 **44.31% → 52.59%**（分母 1,423 → 1,273），含 §5.1 作废面与 §5.2 不可达面。（52.59% 是**换锚当刻**值；此后 ⑧/⑨/⑩ 与 `原 docs/40` 的回填只改判定不改分母 ⇒ 现为 **53.50%**，最新读数见 `docs/05` §1。）
+4. ✅ **`原 docs/05`**（B59/B60/B61/B62 改写＋新增 B158–B165）／**`原 docs/07`**（补全包清单按 R5 重排）**已同步**。
 
 **2026-10-04 收尾**：本地 pi clone（`D:\workplaceForai\pi`）已快进到 `200387122`（工作树干净、`--ff-only` 成功）⇒ `check-drift.sh` 恢复一致（报「✓ 无漂移」）。**此前那次「✓ 无漂移」是假绿**（本地 HEAD 与 `PI_PIN` 都还停在旧的 `3390bd936`，脚本比的是工作树 HEAD 而不是 `origin/main`）。
 
