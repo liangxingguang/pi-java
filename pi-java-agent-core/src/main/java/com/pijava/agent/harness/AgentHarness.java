@@ -466,6 +466,14 @@ public class AgentHarness extends HarnessBootstrap {
     }
 
     /**
+     * 批 24（docs/35 D4）：pi {@code _pendingToolNames} 的宿主访问器
+     * （lane 级集合；线程纪律同 {@code activeTools}——车道装配/事件线程）。
+     */
+    public java.util.Set<String> pendingToolNames() {
+        return lane.pendingToolNames;
+    }
+
+    /**
      * 批 16（T5b）：pi {@code syncQueueModesFromSettings} 对位——/reload 后
      * steer/followUp 排空模式随设置（pi agent-session.ts:3679 同位）。
      */

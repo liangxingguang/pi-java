@@ -249,6 +249,12 @@ public final class LaneState {
      */
     java.util.Map<String, String> promptSections = java.util.Map.of();
     Set<AgentTool<?, ?>> activeTools;
+    /**
+     * 批 24（docs/35 D4）：pi {@code _pendingToolNames}（agent-session.ts:447）——
+     * 恢复/reload 时声明过但<b>尚未注册</b>的工具名（MCP 服务器后连即晚注册）；
+     * 注册即激活并出列（消费点见 AgentSession.activateRuntimeTools）。
+     */
+    final java.util.Set<String> pendingToolNames = new java.util.LinkedHashSet<>();
     /** steer / followUp 队列的排空模式（pi 在 Agent 上是纯内存的，不入日志）。 */
     QueueMode steeringMode;
     QueueMode followUpMode;

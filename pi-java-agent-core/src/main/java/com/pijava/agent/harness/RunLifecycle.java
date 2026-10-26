@@ -335,8 +335,9 @@ final class RunLifecycle {
     /**
      * pi {@code _restoreToolsFromTranscript}（agent-session.ts:1809-1820）：树导航后按
      * 新叶最新系统消息的 {@code toolsAdded} 恢复激活装配（pi 的调用点
-     * {@code navigateTree:4138}）。未注册名静默落 —— {@code activeOf} 按注册表过滤
-     * （pi 的 {@code _pendingToolNames} 晚注册臂随 B221 ⑫b，docs/10 窄差 D4 同族）。
+     * {@code navigateTree:4138}）。批 24（docs/35 D4 销号）：未注册名进
+     * {@code pendingToolNames} 晚注册臂（pi :1810-1814 逐字——先清、播种只留未注册名；
+     * pi 的 {@code _isAllowedTool} 播种过滤在 java 移到消费点，净效果同）。
      * 无系统消息 ⇒ 不动（pi {@code if (!current) return}）。
      *
      * <p>调用方须先于本方法重建工作副本（{@link #replaceTranscript}）：
@@ -350,6 +351,12 @@ final class RunLifecycle {
         for (int i = lane.messages.size() - 1; i >= 0; i--) {
             if (lane.messages.get(i) instanceof Message.SystemMessage sm) {
                 var names = sm.toolsAdded().stream().map(ToolDefinition::name).toList();
+                lane.pendingToolNames.clear();
+                for (var name : names) {
+                    if (ctx.toolRegistry().get(name) == null) {
+                        lane.pendingToolNames.add(name);
+                    }
+                }
                 lane.activeTools = Set.copyOf(ctx.toolRegistry().activeOf(names));
                 return;
             }
