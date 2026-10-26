@@ -20,19 +20,19 @@
 
 ---
 
-## §1 进度总览（2026-10-25 实算，批 22 闭环后）
+## §1 进度总览（2026-10-25 实算，批 23 闭环后）
 
 | 指标 | 读数 |
 |---|---|
-| 已闭环批次 | **22**（批 1–22，docs/11–33） |
-| 设计待审批次 | **0**（下一包号 docs/34） |
-| 计划批次（批 23 起） | **0 计划行**（§3 计划表清空；剩余＝§3.3 未拍板变量） |
-| **总批次估计** | **22＋变量**（§3.3 三变量每个摆动 1–6 批） |
-| 模块账面（Σ 485，去重） | 406.5 ≈ **83.8%** |
-| 满分域 | **12 个**（批 22 新增二：E6/B——存疑全清零） |
-| D 域（扩展事件，Σ 83） | 79.0 ≈ **95.2%**（余 2 缺失随子系统：#1 project_trust／#11 随 E5-23 批） |
+| 已闭环批次 | **23**（批 1–23，docs/11–34） |
+| 设计待审批次 | **0**（下一包号 docs/35） |
+| 计划批次（批 24 起） | **1 候选行**（批 24＝内置 MCP 扩展本体，批 23 裁决①立项；其余＝§3.3 未拍板变量） |
+| **总批次估计** | **23＋变量**（批 24 候选 1 批＋§3.3 三变量每个摆动 1–6 批） |
+| 模块账面（Σ 485，去重） | 416.0 ≈ **85.8%** |
+| 满分域 | **13 个**（批 23 新增一：D——缺失清零） |
+| D 域（扩展事件，Σ 83） | 83.0 ＝ **100%**（批 23 满分） |
 | E2 域（settings 键，Σ 84） | 81.5 ≈ **97.0%**（余 5 存疑全是窄差登记项） |
-| 全仓账面（Σ 1379） | 1,090.0 ≈ **79.0%** |
+| 全仓账面（Σ 1379） | 1,103.5 ≈ **80.0%** |
 
 > ⚠️ 总批次是**估计值**，不是承诺。三个拍板变量（§3.3）每个能摆动 1–3 批。
 > 每批闭环时按当时真实欠账重排 §3，允许增删批次。
@@ -65,6 +65,7 @@
 | 20 | docs/31 | 2026-10-25 | RPC/协议尾合包（序 19）：T1 B237 disposition 三态全链（CommandRegistry EXTENSION 标签＋撞名旁表＋processPrompt 扩展命令臂〔pi :1978-1984，出错也是 handled〕＋steer/followUp 全序〔throwIfExtensionCommand 错文逐字→input 事件→disposition 返回〕＋RPC disposition/images 透传＋InteractiveMode 重路由〔裁决①②〕）→ T2 get_state 三字段（`RpcModel` 全对象〔B31；裁决③④⑥〕＋sessionName stored 缺席化＋--name 写 session_info〔B32；裁决⑧〕＋messageCount 工作副本〔B33〕）→ T5 new_session 修形（**B257 即登即销**：`{cancelled}` 响应形＋parentSession 落 header＋before_switch 取消臂）→ T6 attribution 头层（B253：`ProviderAttribution` 逐字四家头＋`InstallTelemetry` 门＋恒执行接线、钩见合并全集、暖路径同；裁决⑤ reportInstallTelemetry 不移植）→ T3/T4 核销（E7-2/E7-4 parity 测试翻行）；**B237/B253/B31/B32/B33 销号**；D33 改注（余两层）；窄差 D117–D122；**评审回补 1C＋4I**（I-1 扩展命令独立虚拟线程〔同步 join 死锁 RPC 读线程 Critical〕＋I-2 --name 限定启动链＋I-3 input behavior 流式门＋I-4 装配目录快照＋I-5 重放命令臂；M-1 E1 拆分挂起） | 392.0/485 ≈ **80.8%**（+4.0：**E7 域 8.0→12.0/12＝100%**〔存疑清零，**第六个满分域**〕）；全仓 1,073.5/1379 ≈ **77.8%** |
 | 21 | docs/32 | 2026-10-25 | E1/E3/E4 尾＋JSON 主题系统 2,417 行域（序 20）：T4 色数学（`ThemeColor` ADT＋`Oklab`＋`ThemeColorMath`——pi-tui colors.ts/oklab.ts 逐字，golden 经锚点 tsx 实跑钉死 okhsl(295 50% 67%)⇒#a798d7）→ T5 主题模型（`ThemeToken`×56＋手写恒装校验〔裁决②〕＋`Theme`）→ T6 `SystemTheme` 生成器（14 族/15 曲线/RULES/SOLVE_ORDER 全表逐字；裁决③ 无 OSC 面恒 tier-3）→ T7 `Themes` 注册表＋`ThemeWatcher` 热重载（WatchService＋100ms 防抖）＋`ThemeController`（裁终端查询面）→ T8 发现接线（`ThemeLoader`＋`AgentSession.reloadThemes`＋SessionReload ⑤ 主题臂〔批 16 裁决⑨挂账落地〕＋reload 监听者模式层收尾〔裁决⑩〕）→ T9 A-29 `--theme` 重裁纯路径来源（`cliThemePaths`＝pi resolveCliPaths 逐字；删 .tcss 选型〔裁决⑦〕；`Main` headless initTheme）→ T10 TUI 适配（`TuiThemeBridge`/`ThemeApplicator` 生成 TCSS〔.Screen/.StatusBar 底色移除，裁决⑥〕/`SemanticColors` 委托活跃主题〔裁决⑨，130 调用点机械改写〕）→ T11 map/05 S9 `ThemeSubmenuScreen`（single/automatic 两模式＋预览＋Esc 还原＋对形持久化）→ T12 HTML 导出主题变量（deriveExportColors 逐字含 0.03928 阈值）＋T2 auth.json/models-store.json 读改同锁修真（pi withLock 对位）＋T3 SYSTEM.md/APPEND_SYSTEM.md 发现＋resolvePromptInput file-or-literal＋T1 四核销（E1-5/E3-15/E3-23/E1-4——F6 症状过期）；**B163 销号**；窄差 D123–D133 | 404.5/485 ≈ **83.4%**（+12.5：**E1/E3/E4/A 四域同批满分**＝满分域第七至第十＋E2-9 翻 97.0%）；map/05 S9 缺失→对齐（tui/web 120.5→**121.5/245 ≈ 49.6%**）；全仓 1,087.0/1379 ≈ **78.8%** |
 | 22 | docs/33 | 2026-10-25 | 会话管理尾＋自更新终裁（序 21，收尾批）：T1 W15 web 渐进会话列表（`sessionsProgress`/`cancelSessions` 协议帧＋`AgentSession.listSessionsSummary` 进度/信号重载＋WebDispatcher 虚拟线程富列表＋代次闸〔裁决④〕＋前端渐进渲染/取消）→ T2 自更新终裁（裁决①：pi-java 无 npm/managed 分发形态 ⇒ pi 未知形态臂＝终局，E6-10/B#4 翻对齐，D115 保留，pruneManagedReleases 同覆盖）→ T3 R29 终裁不做（裁决②：C 类登记＋map/05 出分母 245→244）；**E6/B 两域同批满分**（满分域第十一、十二——存疑全清零）；**§3 计划表清空**；无新 B/窄差 | 406.5/485 ≈ **83.8%**（+2.0：E6/B 各 +1.0）；map/05 122.5/244 ≈ **50.2%**（W15 +1.0＋R29 出分母）；全仓 1,090.0/1379 ≈ **79.0%** |
+| 23 | docs/34 | 2026-10-25 | 触发条件型欠账首批立项（扩展 MCP API 面＋`project_trust`/`mcp_servers_change`＋RPC `get_commands` 扩展臂）：T1 扩展 MCP 三件（三守卫逐字；注册表安家 `DefaultExtensionContext`；`forExtension(name,path)`；**B218 销号**）→ T2 `mcp_servers_change`（装配尾 changeListener 接线＋无处理器臂逐字错文）→ T4 RPC 扩展臂（登记目＋`:N` 撞名编号＋buildCommands 第一臂〔**批 3 窄差 D5 销号**〕＋E5-20 三源序＋`ExtensionSourceInfos`〔E5-34 翻〕；**B221 收编 ⑥，余 ①＝批 24 候选**）→ T3 `project_trust` 全链（first-wins firer＋`ProjectTrustStore`〔trust.json 逐字节线格式/FileChannel 锁——删 `TrustManager`，裁决②〕＋敏感资源门＋七级解析＋预信任装配＋TUI 信任弹窗；**行为变化：ask 默认从「当信任」变 pi 逐字语义**）；窄差 D134–D137；评审无独立轮（用户指令直实施）；verify 收口 5,179 测 0 失败 spotbugs 零钉 | 416.0/485 ≈ **85.8%**（+9.5：**D 域 79.0→83.0/83＝100%**〔满分域第十三，缺失清零〕＋E5 域 23.5→29.0/58 ≈ **50.0%**）；map/07 +4.0（#87＋#81/#84 批 16 回填，79.1%）；全仓 1,103.5/1379 ≈ **80.0%** |
 
 > 口径注记：批 8 起模块分母按**去重** 487（原 496），读数以最新一批闭环回填为准。
 
@@ -85,14 +86,19 @@
 | ~~21~~ | ~~会话管理尾（E3：listSessions onProgress、B54）＋自更新~~ | — | **批 22 已闭环**（docs/33）：W15 web 渐进会话列表（sessionsProgress/cancelSessions＋代次闸＋前端渐进渲染）＋自更新终裁（裁决①：恒不可用臂＝pi 未知形态臂终局——E6-10/B#4 翻对齐，E6/B 两域满分）＋R29 终裁不做（裁决②，C 类＋出分母）。**§3 计划表清空** |
 
 **触发条件型欠账**（不占独立批次，随宿主批顺带收）：~~B246~~（批 16 已销号）、
-B202/B203（codemode 消费者，R5）、D 域余 2 缺失（#1 project_trust／#11 随 E5-23
-批；#26/#27 批 17 已收）、D41 残余（扩展 abortHandler 的 restore——批 10 已重裁
-两臂〔Esc 流式／树导航〕，扩展 `ctx.abort()` 两臂随 E5 批次）、D42（摘要窗口期
-followUp 滞留压缩缓冲——批 10 给了手动取回通道，自动重放时机差维持登记）、
-D67（E2-14 两门无载体——压缩成本通知随 B38 压缩重建批、thinking-drop 通知随
-diagnostics 面批）。批 16 撞出：~~主题运行期重载（pi reload 的 themes 臂）
-归批 20（裁决⑨，JSON 主题系统依附）~~——**批 21 已落**（SessionReload ⑤ 主题臂
-＋`ThemeWatcher` 文件监视热重载＋模式层监听者收尾，docs/32 T7/T8）。
+B202/B203（codemode 消费者，R5）、~~D 域余 2 缺失（#1 project_trust／#11；
+#26/#27 批 17 已收）~~（**批 23 全收——D 域满分**）、D41 残余（扩展 abortHandler
+的 restore——批 10 已重裁两臂〔Esc 流式／树导航〕，扩展 `ctx.abort()` 两臂随
+E5 批次）、D42（摘要窗口期 followUp 滞留压缩缓冲——批 10 给了手动取回通道，
+自动重放时机差维持登记）、D67（E2-14 两门无载体——压缩成本通知随 B38 压缩重建
+批、thinking-drop 通知随 diagnostics 面批）。批 16 撞出：~~主题运行期重载
+（pi reload 的 themes 臂）归批 20（裁决⑨，JSON 主题系统依附）~~——**批 21
+已落**（SessionReload ⑤ 主题臂＋`ThemeWatcher` 文件监视热重载＋模式层监听者
+收尾，docs/32 T7/T8）。批 23 撞出：**批 24 候选＝内置 MCP 扩展本体**（B221①
+剩余——pi `extensions/mcp/index.ts` 1,344 行工厂：六事件订阅＋连接编排＋工具
+注册同步＋`/mcp` 命令＋管理器视图载荷〔B214〕＋startupWaitMs；收编 map/07 G 组
+余 12 缺失、B188 shellPath/B189/B195、docs/11 D3/D4 `_pendingToolNames`；
+docs/34 裁决①立项——面与本体分层，批 23 已把面全落）。
 
 ### §3.3 未拍板变量（进 F 类待裁决，每个摆动 1–3 批）
 

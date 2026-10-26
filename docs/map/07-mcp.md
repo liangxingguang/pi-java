@@ -144,6 +144,7 @@ pi SDK 逐文件（`packages/mcp/src`）：`client.ts` 615 · `transports/stream
 > pi 的集成是一个扩展工厂（`index.ts` 1344 行），靠扩展 API 六个事件＋工具/命令/渲染器挂载面活着。
 > pi-java 有钩子系统但**扩展事件面是另一域**（D 域/E5）；MCP 运行时**唯一生产消费者是进程外 CLI**（F 组）。
 > 下列除 75/88 两件纯件外**全部缺失**——缺的不是 MCP 语义，是挂载点。
+> **批 23 回填**：81（激活门）/84（渲染器挂载面）批 16 已落（本批收平账面滞后）、87（registerMcpServer 挂载点）批 23 T1 落——缺失 15→12；余 12 行全随 B221① 内置扩展本体批（批 24 候选）。
 
 | # | 能力单元 | 类别 | pi 证据 | java 证据 | 判定 | 权重 | 台账 |
 |---|---|---|---|---|---|---|---|
@@ -155,13 +156,13 @@ pi SDK 逐文件（`packages/mcp/src`）：`client.ts` 615 · `transports/stream
 | 78 | `turn_start`：拾取进程外 `pi mcp login` 写入的新凭证并重连 | 接线 | `index.ts:1209-1212,536-545` | 无（`TurnStart` 不转发到会话层） | **缺失** | 1 | B221 |
 | 79 | `mcp_servers_change`：扩展注册服务器热插拔（增连/删关/配置变重连） | 接线 | `index.ts:1214-1247` | 无观察点（注册表 3 无监听接线） | **缺失** | 1 | B221 |
 | 80 | `session_shutdown`：abort＋关闭全部连接＋收敛后台动作 | 接线 | `index.ts:1249-1255` | 无（扩展无 close 生命周期） | **缺失** | 1 | B221 |
-| 81 | 激活门暴露给扩展：`getActiveTools/setActiveTools/getAllTools` | 接线 | `index.ts:490-490,522,778` | 机制在 `AgentHarness.getActiveTools:528`，**`ExtensionContext` 拿不到** | **缺失** | 2 | B221 |
+| 81 | 激活门暴露给扩展：`getActiveTools/setActiveTools/getAllTools` | 接线 | `index.ts:490-490,522,778` | `AgentSession` 三件套＋`ExtensionContext` 面（批 16 T2） | 对齐 | 2 | ~~B221~~（批 16 已落；批 23 回填收平账面滞后） |
 | 82 | 工具运行时注册/改名裁定/撤销重注 hidden/disable 隐藏 | 接线 | `index.ts:388-463` | 适配件齐（52/56），无注册路径 | **缺失** | 2 | B221 |
 | 83 | 资源工具 exposure 同步（取可达服务器最宽 exposure；direct→active 集） | 接线 | `index.ts:466-491` | 无 | **缺失** | 1 | B221 |
-| 84 | `pi.registerToolRenderer` ＋ `createMcpToolRenderers`（Text/Container/VisualLinePreview） | 接线 | `index.ts:383-386`；`tools.ts:301-339` | 无渲染器挂载面 | **缺失** | 1 | B204 |
+| 84 | `pi.registerToolRenderer` ＋ `createMcpToolRenderers`（Text/Container/VisualLinePreview） | 接线 | `index.ts:383-386`；`tools.ts:301-339` | `ToolRendererRegistry`＋`McpToolCallRenderer`＋tui `ToolRenderers` 消费缝（批 16 T4，文本级责任链） | 对齐 | 1 | ~~B204~~（批 16 已销号；批 23 回填收平账面滞后） |
 | 85 | `ctx.ui.custom` 组件挂载面 ＋ `/mcp` 管理器视图（菜单/状态/redirectUrl 屏） | 接线 | `extensions/mcp/ui.ts:73,244-258` | **挂载面已落**（批 17：docs/28 T5——`TuiExtensionUI.custom`＋`ExtensionComponentOverlay`＋`ExtensionComponentFactory` SPI）；载荷（`McpManagerView` 菜单编排九调用点）随 MCP 扩展工厂批（G 组 73–84/86–87） | **缺失** | 1 | B214（批 17 改注：挂载面落、载荷随工厂批） |
 | 86 | `/mcp` 斜杠命令（manager、login/logout/reconnect）＋管理动作（enable/disable/exposure/project override） | 接线 | `index.ts:1257-1344,743-778` | 无（进程外 CLI 无 reconnect/enable/disable/exposure） | **缺失** | 2 | B221 |
-| 87 | `pi.registerMcpServer/getMcpServers` 扩展挂载点 | 接线 | `index.ts:349-364` | `McpServerRegistry` 无生产者 | **缺失** | 1 | B218 |
+| 87 | `pi.registerMcpServer/getMcpServers` 扩展挂载点 | 接线 | `index.ts:349-364` | `ExtensionContext.registerMcpServer/unregisterMcpServer/getMcpServers`（批 23 T1，三守卫逐字；注册表安家 `DefaultExtensionContext`） | 对齐 | 1 | ~~B218~~（批 23 销号） |
 | 88 | `SettingsManager.load(agentDir,projectDir,override)` 三参信任解析缝 | 接线 | `index.ts:1112`（默认 loadConfig） | coding-agent `core/SettingsManager.java:49` | 对齐 | 1 | B216（缝已开） |
 | 89 | `--no-mcp` 开关（不连任何服务器、无 MCP 工具） | 接线 | `cli/args.ts:191,328` | 无 | **缺失** | 1 | — |
 
@@ -185,13 +186,13 @@ pi SDK 逐文件（`packages/mcp/src`）：`client.ts` 615 · `transports/stream
 
 | 档 | 数 | 占比 |
 |---|---:|---:|
-| 对齐 | **56** | 60.2% |
-| 缺失 | **21**（计分母 17 ＋ 权重 0 的 4） | 22.6% |
+| 对齐 | **59** | 63.4% |
+| 缺失 | **18**（计分母 14 ＋ 权重 0 的 4） | 19.4% |
 | 存疑 | **16** | 17.2% |
 | **合计** | **93** | 100% |
 
-**非目标口径未加权完成度 = 56/89 = 62.9%**（分母 93 − 4 个权重 0）；
-对齐＋存疑视为「有件」：72/89 = **80.9%**。
+**非目标口径未加权完成度 = 59/89 = 66.3%**（分母 93 − 4 个权重 0）；
+对齐＋存疑视为「有件」：75/89 = **84.3%**。
 
 ---
 
@@ -205,20 +206,22 @@ pi SDK 逐文件（`packages/mcp/src`）：`client.ts` 615 · `transports/stream
 | D OAuth（15） | 21 | 18.0 | **85.7%** | 60.0%（9/15） |
 | E 工具/资源/结果（18） | 26 | 24.5 | **94.2%** | 88.9%（16/18） |
 | F CLI（8） | 12 | 11.5 | **95.8%** | 87.5%（7/8） |
-| G 接线（17） | 23 | 2.0 | **8.7%** | 11.8%（2/17） |
-| **模块合计（89 单位）** | **129** | **98.0** | **76.0%** | **62.9%（56/89）** |
+| G 接线（17） | 23 | 6.0 | **26.1%** | 29.4%（5/17） |
+| **模块合计（89 单位）** | **129** | **102.0** | **79.1%** | **66.3%（59/89）** |
 
-**模块合计**：Σ权重 **129** ／ Σ(w×c) **98.0** ／ **加权完成度 = 98.0/129 = 76.0%**（未加权 62.9%）。
+**模块合计**：Σ权重 **129** ／ Σ(w×c) **102.0** ／ **加权完成度 = 102.0/129 = 79.1%**（未加权 66.3%）。
 数字可复算：`grep -E '^\| [0-9]+ \|' docs/map/07-mcp.md` 取判定列（7）与权重列（8）。
 
 **权重 3 只有 1 条（#15 initialize 协商），对齐**。缺口集中在 G 组接线：
-w2 缺失 6 条（73/74/76/81/82/86，均 B221 族）—— 全补齐边际 **12.0/129 = +9.3pp**（→ 85.3%）；
-G 组整体（21 分缺口）补齐边际 **+16.3pp**（→ 92.2%）。
+w2 缺失 5 条（73/74/76/82/86，均 B221① 族）—— 全补齐边际 **10.0/129 = +7.8pp**（→ 86.8%）；
+G 组整体（17 分缺口）补齐边际 **+13.2pp**（→ 92.2%）。
 
-### 缺失的权重分布（计分母 17 条）
+> 批 23（2026-10-25，coding-agent docs/34）：**3 行翻动 +4.0**——#87 缺失→对齐（+1.0，扩展 MCP 注册三件，B218 销号）＋#81（+2.0）/#84（+1.0）批 16 已落、本批回填收平账面滞后（G 组 2.0→6.0/23 ≈ 26.1%）。
 
-- w2：6 条全在 G 组（73/74/76/81/82/86）。
-- w1：11 条 —— 24（shellPath）、50（structuredContent 消费者）、77/78/79/80/83/84/85/87/89。
+### 缺失的权重分布（计分母 14 条）
+
+- w2：5 条全在 G 组（73/74/76/82/86）。
+- w1：9 条 —— 24（shellPath）、50（structuredContent 消费者）、77/78/79/80/83/85/89。
 
 ### 存疑 16 条（均 w1，方言/字节形态/测试缺口）
 
@@ -237,16 +240,16 @@ D：38/40/41/43/44/46（B193/B198/B212/B192/provider 源/B217）· E：53（B203
 | `on("turn_start")` | `index.ts:1209` | `PiLoop.Event.TurnStart` 不转发会话层 | 缺失 |
 | `on("mcp_servers_change")` | `index.ts:1214` | 无配置变更观察点（注册表 changeListener 无接线） | 缺失 |
 | `on("session_shutdown")` | `index.ts:1249` | 扩展无 close 生命周期 | 缺失 |
-| 激活门 `get/setActiveTools` | `index.ts:490,522` | 机制在 `AgentHarness:528/533`，`ExtensionContext` 不暴露 | 缺失 |
-| `ctx.ui.custom` | `ui.ts:248` | 扩展 UI＝RPC 请求/应答，无组件挂载面（E5 域） | 缺失（B214） |
-| `registerToolRenderer` | `index.ts:383` | 无渲染器注册面 | 缺失（B204） |
-| 提示分节 `.sections(...)` | `index.ts:1178` | 管道齐（`SystemPromptOptions.sections`/`SystemPrompts.buildSections`），`ContextAssembler:104-148` 不产 mcp 段 | 缺失 |
-| `registerMcpServer` | `index.ts:349` | 注册表（#3）无生产者 | 缺失（B218） |
+| 激活门 `get/setActiveTools` | `index.ts:490,522` | 机制在 `AgentHarness:528/533`＋**批 16 已暴露 `ExtensionContext` 面** | 对齐（批 16） |
+| `ctx.ui.custom` | `ui.ts:248` | **批 17 挂载面已落**（`TuiExtensionUI.custom`＋`ExtensionComponentOverlay`）；载荷 `/mcp` 管理器视图随 B221① | 面落/载荷缺（B214） |
+| `registerToolRenderer` | `index.ts:383` | **批 16 已落**（`ToolRendererRegistry`＋`McpToolCallRenderer`＋tui 消费缝） | 对齐（批 16，B204 销号） |
+| 提示分节 `.sections(...)` | `index.ts:1178` | 管道齐（`SystemPromptOptions.sections`/`SystemPrompts.buildSections`）＋批 16 `before_agent_start` 可变 sections 写回链，`ContextAssembler:104-148` 不产 mcp 段 | 缺失（无 MCP 生产者） |
+| `registerMcpServer` | `index.ts:349` | **批 23 已落**（`ExtensionContext` MCP 三件，三守卫逐字；注册表安家 `DefaultExtensionContext`） | 对齐（批 23，B218 销号） |
 
 **结论**：MCP 的 SDK/配置/OAuth/工具适配/进程外 CLI 已整体落地（A–F 加权 96.0/106 = **90.6%**）；
-**会话内主流激活整面未接**（G 加权 8.7%，仅两件不依赖扩展 API 的纯件对齐：提示段渲染器、settings 缝）。
-G 组缺口归属 **D 域（扩展事件）/E5（扩展 API 面）/扩展 UI 挂载面/系统提示分节接线**，不是 MCP 语义；
-台账已将其整体登记为 **B221**（含 B204/B214/B218），与本图判定一致。
+**会话内主流激活整面未接**（G 加权 26.1%——五件对齐：提示段渲染器、settings 缝、激活门、渲染器挂载面、registerMcpServer 挂载点）。
+G 组缺口归属 **B221① 内置 MCP 扩展本体**（批 24 候选：六事件订阅＋提示段生产＋`/mcp` 命令＋管理器视图载荷），不是 MCP 语义；
+台账 B221 已收编 ②③④⑤⑥（批 16/17/23），余 ①（含 B204 已销/B214 载荷/B218 已销），与本图判定一致。
 
 ## 不确定项
 
