@@ -436,7 +436,37 @@ G 组 23/23 ⇒ 满分域。map/04 账面以逐行实算为准（E5/G 域注记�
 定向测试全绿 → `mvn clean verify` 全量（spotbugs 在 verify 阶段）→ 收口复跑；
 日志落盘看退出码（管道接 head 假绿坑）；定向测试带 `-am`（旧 jar 假绿坑）。
 
-## 9. 闭环回填（实施完成后照抄回填三处）
+## 9. 闭环回填（2026-10-27 实施完成）
 
-docs/04（B221①/B188/B189/B195/B214 销号＋新窄差）＋docs/05 §1/§2＋map/07 G 组逐行与汇总＋
-docs/06 §1/§2/§3。
+**回填三处已落**：docs/04（B221①/B188/B189/B195/B214 销号行＋§4 批 24 段〔裁决①–⑬＋
+窄差 D138–D142＋行为变化注记〕＋E1 3,067→3,129）＋docs/05（§1 总表 mcp 行/合计行＋
+§2.2 mcp 段＋§2.4 批 24 条目＋原始口径注 420.5→422.5）＋map/07（G 组 12 行＋#24/#44
+逐行翻正＋G 组满分域注记＋未加权/加权汇总＋缺失分布＋B221 摘要表＋结论）＋map/04
+（G-1/G-4 翻对齐）＋docs/06（§1 四读数＋§2 批 24 行＋§3 候选行收销）。
+
+**实施对稿差**（设计稿审核后实施期的偏差，均已按稿内裁决口径处理）：
+- 六事件返回值族修形：`before_agent_start`/`tool_call` 的结果类型是
+  `BeforeAgentStartEventResult`/`ToolCallEventResult`（非 Void）——handlers 返回 null
+  （pi 不发言）＋sections 经共享可变图原地改写（批 16 链）。
+- `onToolCall` 的工具存在性判定从 `ctx.getAllTools()`（需宿主会话缝）改注册表直查
+  （`ctx.tools().get`）——pi 语义同（注册表存在性），无宿主路径不炸。
+- 无事件总线的退化宿主（`--help` 轻量道/旧夹具）：六订阅整体 try/catch 退化命令面
+  （pi assertActive 同形守卫不升级为装配失败）。
+- `McpManagerActions` 超 500 行 ⇒ 拆出 `McpServerOps`（连接/写回动作）。
+- ScriptedMcpServer 夹具＝pi-java-mcp 测试源集 ScriptedServer/ScriptedTransport 的
+  自包含翻版（跨模块不可见）。
+
+**排障钉**（进 docs/04 批 24 段）：
+1. **无宿主装配路的 sessionCwd 必须落 settings 存储面 projectDir**——落
+   `process.cwd()` 会把测试污染写进调用方工作区（调试期 `.pi-java/mcp.json` 被写进
+   模块目录，已清）。
+2. **显式 JSON `null` 经 Jackson 进 `JsonNode` 字段变 `NullNode` 非 Java null**——
+   D3 首版把真 home 的 `defaultTools:null` 读成空选择 ⇒ 三处存量测试红（修真：缺席
+   与 NullNode 同视）。
+3. pi `renderServersSection` 的条目名是**命名空间形**（`mcp__docs`）非裸名。
+4. `ArrayDeque` 不收 null（脚本化 UI 答案队列用 `LinkedList`）。
+5. 定向测试恒带 `-am`（agent-core 新方法的旧 jar 假绿坑再现一次）。
+
+**verify 史**：定向测试全绿（coding-agent 1,648＋agent-core 872）→ 全量
+`mvn clean verify` 收口 **exit 0 BUILD SUCCESS，5,231 测 0 失败 0 错，checkstyle 0
+违规，spotbugs 零钉**（一次通过；日志落盘 /tmp 看退出码）。

@@ -534,10 +534,10 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 
 | # | 能力单元 | pi 侧证据 | 权重 | 判定 | 说明 |
 |---|---|---|---|---|---|
-| G-1 | MCP 客户端 + 协议 + 连接运行时 | `packages/mcp`（3,244）＋ `extensions/mcp/runtime.ts`·`index.ts`（1,344） | 2 | **存疑** | **明细见 map/07**：客户端/协议/运行时已落；builtin 工厂接线卡在扩展系统六事件/激活门/`ui.custom`（B221，归属 D 域/E5） |
+| G-1 | MCP 客户端 + 协议 + 连接运行时 | `packages/mcp`（3,244）＋ `extensions/mcp/runtime.ts`·`index.ts`（1,344） | 2 | **对齐** | **明细见 map/07**：客户端/协议/运行时已落；builtin 工厂接线批 24 落地（**B221① 销号**——六事件订阅＋注册同步全通） |
 | G-2 | MCP 传输（stdio / streamable-http / in-memory） | `packages/mcp/src/transports/*` | 2 | **对齐** | **明细见 map/07**（三条传输全落） |
 | G-3 | MCP OAuth（discovery + RFC 9207 + client ID metadata + callback server） | `packages/mcp/src/oauth/*` ＋ `extensions/mcp/oauth.ts` | 1 | **对齐** | **明细见 map/07**（两半全落；两侧均未端到端实测） |
-| G-4 | `mcp.json` 配置 + `pi mcp` 子命令 + 审批 UI | `extensions/mcp/config.ts` 242、`cli.ts` 599、`ui.ts` 259；`main.ts:617` | 2 | **存疑** | **明细见 map/07**：配置面与 `pi mcp` 五个子命令已落（`subcommand/Mcp*`）；管理器 UI 未落（B214，随 B221 顺延） |
+| G-4 | `mcp.json` 配置 + `pi mcp` 子命令 + 审批 UI | `extensions/mcp/config.ts` 242、`cli.ts` 599、`ui.ts` 259；`main.ts:617` | 2 | **对齐** | **明细见 map/07**：配置面与 `pi mcp` 五个子命令已落（`subcommand/Mcp*`）；管理器 UI 批 24 落地（**B214 销号**——文本级 `McpManagerView`） |
 | G-5 | MCP 工具暴露（`codemode`/`deferred`/`direct`/`hidden`）+ 工具/资源接入模型 | `core/mcp-servers.ts`（346）、`extensions/mcp/tools.ts`、`resources.ts` | 2 | **对齐** | **明细见 map/07**：exposure ADT 与 `AgentTool` 适配全落；激活路径依赖 B161/B162（B203） |
 | G-6 | codemode 沙箱运行时（quickjs-wasi host/worker/protocol/prelude） | `packages/codemode`（2,597）＋ `extensions/codemode/execute.ts`（733） | 2 | **缺失** | builtin 扩展；R5 面外增量不展开 |
 | G-7 | codemode 工具（执行 JS、描述/inlineBudget、`mode: on\|only`、renderer） | `extensions/codemode/tool.ts`（420）、`renderer.ts`（150）；`settings-schema.ts:154-167` | 2 | **缺失** | |

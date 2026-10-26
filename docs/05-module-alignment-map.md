@@ -77,20 +77,20 @@ protocol/client/server 按 R1 整体排除（未加权数字见 map/01）。pi-j
 
 ---
 
-## 1 总表（coding-agent 批 23 后值，2026-10-25；agent-core 批 5 后值，2026-10-18；telemetry 批 1 后值，2026-10-17；ai 批 10 后 2026-10-16；批 3b/4/6/8 为台账行为项、加权不变；其余模块为 2026-10-12 重测值）
+## 1 总表（coding-agent 批 24 后值，2026-10-27；agent-core 批 5 后值，2026-10-18；telemetry 批 1 后值，2026-10-17；ai 批 10 后 2026-10-16；批 3b/4/6/8 为台账行为项、加权不变；其余模块为 2026-10-12 重测值）
 
 | 模块（地图） | Σ权重 | Σ(w×c) | **加权完成度** | 未加权 | 权重 3 层 |
 |---|---:|---:|---:|---:|---:|
 | pi-java-ai（map/02，**批10后**） | 219 | 207.0 | **94.5%** | 85.5%（100/117） | **100%（33/33）** |
-| pi-java-mcp（map/07，**批23后**） | 129 | 102.0 | **79.1%** | 66.3%（59/89） | 100%（1/1） |
+| pi-java-mcp（map/07，**批24后**） | 129 | 120.5 | **93.4%** | 82.0%（73/89） | 100%（1/1） |
 | pi-java-agent-core（map/03，**批5后**） | 180 | 180.0 | **100%** | 100%（90/90） | **100%（27/27）** |
 | session-sqlite ＋ evals（map/06） | 87 | 44.5 | **51.1%** | 50.0%（20/40） | — |
 | pi-java-telemetry（map/01，**批1后**） | 34 | 34.0 | **100%** | 100%（16/16） | 100%（21/21） |
 | pi-java-tui/web（map/05） | 244 | 122.5 | **50.2%** | 31.3%（46/147） | 67.3% |
 | pi-java-coding-agent（map/04，剔 MCP 粗单元） | 485 | 416.0 | **85.8%** | 78.0%（225.5/289） | 87.0%（20/23） |
-| **合计（去重后，coding-agent 批23后）** | **1,379** | **1,103.5** | **80.0%** | — | — |
+| **合计（去重后，coding-agent 批24后）** | **1,379** | **1,122.0** | **81.4%** | — | — |
 
-> map/04 原始口径（含 G-1..G-5）：Σw 494 ／ Σwc 420.5 ／ **85.1%**；两处账都在，总表用去重值。
+> map/04 原始口径（含 G-1..G-5）：Σw 494 ／ Σwc 422.5 ／ **85.6%**（批 24：G-1/G-4 翻对齐 +2.0）；两处账都在，总表用去重值。
 > w3 注记（批 19）：包管理器 #18/#19/#23 清零（批 18 两翻当时漏入 w3 表，本批收平）⇒ 73.9%（17/23）→ 87.0%（20/23）。
 > ⚠️ 批 4 复核修正：D 域基线逐行实算 11.5（旧汇总行 10.5，存疑漏计 1.0）＋设计稿 §8 正文 Δ 加总错误（30.5→32.5）⇒ 账面较批 4 设计稿预期（258.5/52.1%）高 3.0。
 > protocol/client/server（R1 排除）未加权：map/01 全层 10 对齐 / 40 缺失 / 35 存疑（85 单元）。
@@ -98,7 +98,7 @@ protocol/client/server 按 R1 整体排除（未加权数字见 map/01）。pi-j
 **读数**：
 
 - **ai 层权重 3 全齐**：每轮都走的请求/响应/计量主路无缺口。批 10 后计分母缺失仅 1 条（#8 namespace），无半成品——#90 图片缩放消费链已落 agent-core/coding-agent，#98 federation 批 10 闭环。分类器面已裁 R5。
-- **mcp 模块本体完成度高（79.1%）**，但会话内接线面是缺口（B221 余 ①＝内置扩展本体批 24 候选：六个 on() 订阅、提示段生产、`/mcp` 命令与管理器视图载荷；**挂载面已随批 16/17/23 齐**——激活门、ui.custom、工具渲染器、registerMcpServer）。G 组 17 单元缺失 15→12——**进程外 `pi mcp` CLI 可用、会话内 MCP 不激活**。
+- **mcp 批 24 后 93.4%**：会话内接线全通（**G 组满分域**——批 24 内置 MCP 扩展本体 B221① 落地：六事件订阅＋提示段生产＋运行时注册三表＋`/mcp` 命令与管理器视图＋`--no-mcp`）；计分母缺失仅剩 #50（structuredContent 消费者，B202/codemode 族）；#92/#93（codemode 默认激活）仍 R5 出分母随 B161/B162 重裁。
 - **coding-agent 批 23 后 85.8%（去重）**：**D 扩展事件 100%（批 23，满分域第十三——#1 project_trust／#11 mcp_servers_change 两缺失清零）**、A CLI/E1/E3/E4/**E6/B/E7** 七域 100%、E2 settings 97.0%、C slash 90.7%；**E5 扩展 API 50.0%（批 23：MCP 三件＋getCommands＋SourceInfo）** 与 G 域新子系统（codemode 3,957 行＋tool-search/virtual-models/nested 766 行仍为 0，B161/B162）是主要余量。
 - **agent-core 批 5 后 180/180 = 100%**（第二个满分模块）：权重 3 层 27/27、工具表 21/21、确认缺失与存疑**双清零**（批 5 收编 22 条存疑：13 做、8 裁决、#60 R1 出分母），未得分池 = 0。
 
@@ -122,11 +122,11 @@ protocol/client/server 按 R1 整体排除（未加权数字见 map/01）。pi-j
 
 残余计分母缺失仅 1 条：#8 namespace（随 MCP 包 B203）。其余欠账全是存疑方言（见 map/02 存疑行；原 docs/06 ai 清单 2026-10-26 删除）。
 
-### 2.2 mcp — 79.1% ｜ map/07（2026-10-12 新建）
+### 2.2 mcp — 93.4% ｜ map/07（2026-10-12 新建）
 
-配置/协议/传输/OAuth/工具内容/CLI 六组加权 83–96%；**G 组生命周期与接线 26.1%**（批 23：#81/#84/#87 三行翻动 +4.0——激活门/渲染器挂载面批 16 已落收平、registerMcpServer 挂载点本批落地销 B218；余 12 缺失全随 B221① 内置扩展本体批，批 24 候选）。
+配置/协议/传输/OAuth/工具内容/CLI 六组加权 88–96%；**G 组生命周期与接线批 24 满分**（批 23：#81/#84/#87 三行 +4.0；批 24：余 12 缺失全翻对齐＝B221① 内置扩展本体落地——六事件订阅/提示段生产/运行时注册三表//mcp 命令与管理器视图/--no-mcp，B214/B195 同销）。
 方言项（B181–B220 族）多判存疑：mcp-auth.json 字节形态、错误文本、WHATWG URL、redirect 平台替代等。
-codemode-only 的 4 个单元（exposure/deferred/discovery）权重 0，B161/B162 闭环时重裁。
+codemode-only 的 4 个单元（exposure/deferred/discovery）权重 0，B161/B162 闭环时重裁；计分母缺失仅剩 #50（structuredContent 消费者，同族）。
 
 ### 2.3 agent-core — 100% ｜ map/03（批 5 后）
 
@@ -175,6 +175,7 @@ G 域新子系统：MCP 明细在 map/07；codemode 3,957 行＋tool-search/virt
 - 批 22（2026-10-25 闭环，docs/33，会话管理尾＋自更新终裁——docs/06 §3 计划表清空）：**T1 W15 web 渐进会话列表**——协议 `sessionsProgress`/`cancelSessions`＋`AgentSession.listSessionsSummary(cwd, progress, signal)` 重载（JSONL 臂透传 listRich 渐进发布）＋WebDispatcher 虚拟线程富列表＋代次闸（裁决④）＋前端渐进渲染/取消（picker 关闭发 cancelSessions；bundle 随 frontend-maven-plugin 重建）→ **T2 自更新终裁**（裁决①：无 npm/managed 分发形态 ⇒ pi 未知形态臂＝终局——E6-10/B#4 翻对齐，D115 保留）→ **T3 R29 终裁不做**（裁决②：C 类＋出分母 245→244）。map/04 **E6/B 两域同批满分**（满分域第十一、十二——**存疑全清零**）；map/05 **W15 缺失→对齐**（+1.0）。无新 B/窄差。83.4% → **83.8%**（未加权 75.1% → 75.8%；w3 87.0% 不动）。合计 78.8% → **79.0%**（1,087.0 → 1,090.0/1379）。测试新增 2 件 6 用例；排障钉：夹具自身会话落盘计数 +1／await 轮询须收集非匹配帧／无 -am 拾旧 jar 再撞（NoSuchMethodError 逃出 catch 静默死线程）。
 
 - 批 23（2026-10-25 闭环，docs/34，触发条件型欠账首批立项——B221⑥＋D 域余 2 缺失＋E5 扩展 MCP 三件）：**T1 扩展 MCP API 三件**（`registerMcpServer/unregisterMcpServer/getMcpServers`——loader.ts:471-498 三守卫逐字；注册表安家 `DefaultExtensionContext`；`forExtension(name,path)` 路径身份〔裁决⑥ `builtin:<name>`〕；**B218 销号**、map/07 #87 翻）→ **T2 `mcp_servers_change`**（D#11：事件变体＋firer 广播＋装配尾 changeListener 接线〔pi bindCore 相对序〕＋`UnhandledMcpServerReporter` 无处理器臂逐字错文按名去重）→ **T4 RPC `get_commands` 扩展臂**（登记目＋`:N` 撞名编号〔runner.ts:805-840 逐字——裸名撞名不可调〕＋buildCommands 第一臂〔**批 3 窄差 D5 销号**〕＋E5-20 getCommands 三源序＋`ExtensionSourceInfos` 四规则〔E5-34 翻〕；**B221 收编 ⑥，余 ①**）→ **T3 `project_trust` 全链**（D#1：first-wins firer＋`ProjectTrustStore`〔trust.json 最近祖先继承/null 删键/逐字节线格式/FileChannel 锁——**删 `TrustManager` 标记文件**，裁决②〕＋`ProjectTrustResources` 敏感资源门＋七级 `ProjectTrustResolver`＋预信任装配＋TUI `TrustPromptRunner` 启动壳；行为变化：**`defaultProjectTrust:"ask"` 从「当信任」变 pi 逐字语义**——有 `.pi-java/` 敏感资源的项目 TUI 弹窗、print/rpc 不信任）。map/04 **七行翻动 +9.5**——**D 域 79.0→83.0/83＝100%（满分域第十三，缺失清零）**、E5 域 23.5→**29.0/58＝50.0%**、E7-1 注记随收；map/07 **三行 +4.0**（#87 本批＋#81/#84 批 16 回填收平，G 组 2.0→6.0/23 ≈ 26.1%）98.0→**102.0/129 ≈ 79.1%**。83.8% → **85.8%**（未加权 75.8% → 78.0%；w3 87.0% 不动）。合计 79.0% → **80.0%**（1,090.0 → 1,103.5/1379）。窄差 D134–D137；新文件 13＋测试 11 件 59 用例＋存量修形 9 件；排障钉：信任判定 cwd 须取 settings 存储面项目目录（判定消费同根）／spotbugs 七钉全是 `Path.getParent()` 空路径／pi 撞名编号自增从 occurrence 起（`dup:2:2`）；verify 收口 exit 0 BUILD SUCCESS（5,179 测 0 失败，spotbugs 零钉）。E1 涨到 3,067、E2 767。
+- 批 24（2026-10-27 闭环，docs/35，内置 MCP 扩展本体——B221① 收尾）：**T1 装配**（`McpExtension` PiExtension＋主源码集 ServiceLoader 注册〔`builtin:mcp` 身份〕）→ **T2 `--no-mcp`**（Args/Parser/HelpText＋装配按名过滤＋`-e builtin:mcp` 显式臂 `ExtensionManager.loadBuiltin`）→ **T3/T4 session_start**（两源配置＋注册表合并〔mcp.json 压同名注册、overridden 名单逐字〕＋虚拟线程后台连接＋reportProblems 聚合＋裁决⑥不可达一次性警告；B188 两段式壳＋B189 身份注入在连接创建处）→ **T5 before_agent_start**（direct 首提示有界 10s 等待〔超时通知文案逐字〕＋`mcp_servers` 提示段写删）→ **T6 运行时注册**（toolOwners/serverTools/definitions 三表＋Codex 序无关哈希后缀＋撤销重注 hidden＋资源工具最宽 exposure 同步＋getClient 三错文逐字）→ **T7 事件余臂**（tool_call 就绪等待〔codemode/tool_search 两臂 R5〕＋turn_start 凭证拾取＋mcp_servers_change 热插拔＋session_shutdown 收敛）→ **T8 D3/D4 销号**（defaultTools JsonNode 容忍读＋`_pendingToolNames` 五臂：lane 宿主/setActiveToolsByName 两臂/restore 播种/run 起点清/reload 回填/运行时合并缝）→ **T9 `/mcp` 命令**（manager/login/logout/reconnect＋formatStatus/pickServer 逐字＋写回 `McpConfig.update`）→ **T10 管理器视图**（B214 销号——ExtensionComponent 文本级复刻 SelectList〔光标/12 行窗口/订阅重建保选中〕＋status/redirect 屏）。map/07 **14 行翻动 +18.5**——**G 组 23.0/23＝100%（满分域）**、#24（B188 销）/#44（B189 会话臂销）翻正 ⇒ 102.0→**120.5/129 ≈ 93.4%**；模块去重账面不动（G 组属 map/07）；合计 80.0% → **81.4%**（1,103.5 → 1,122.0/1379）。窄差 D138–D142；**B221 全销/B188/B189/B195/B214 销号、docs(11) D3/D4 收编销号**。行为变化注记：**mcp.json 服务器会话内自连**、**MCP 工具按 exposure 进声明面**（direct 即激活；间接 exposure 一次性不可达警告）、**`mcp_servers` 提示段上线**（模型可见新段）、**`/mcp` 命令与 TUI 管理器上线**、**get_commands 自此含 /mcp**（pi 同形）、**defaultTools 容忍读**。排障钉：**无宿主装配路 sessionCwd 落 settings 存储面 projectDir**（落 process.cwd() 会把测试写进调用方工作区）／**显式 JSON null 进 JsonNode 字段变 NullNode 非 null**（D3 首版坑，真 home `defaultTools:null` 读成空选择）／pi 提示段条目名是命名空间形 `mcp__docs`。新文件 12＋测试 8 件 47 用例＋存量修形 7 件。E1 涨到 3,129。
 
 ### 2.5 tui/web — 50.2%（总表行；map/05 域表 50.2%）｜ map/05
 
