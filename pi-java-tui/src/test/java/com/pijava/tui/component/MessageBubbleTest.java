@@ -205,9 +205,11 @@ class MessageBubbleTest {
         assertThat(ChatMessage.from(new Entry.BranchSummary(
                 "b", 0, null, null, "from-1", "summ", null, null, null)))
             .isEqualTo(new ChatMessage.System("Branch: summ", MetaKind.BRANCH));
+        // 批 26（docs/37 T10）：无渲染器的 custom 条目不渲（pi
+        // interactive-mode.ts:3848-3850——getEntryRenderer 缺席 ⇒ 直接 return）。
         assertThat(ChatMessage.from(new Entry.Custom(
                 "x", 0, null, null, "progress", null)))
-            .isEqualTo(new ChatMessage.System("Custom event: progress", MetaKind.CUSTOM));
+            .isNull();
     }
 
     @Test

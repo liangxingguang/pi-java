@@ -70,6 +70,9 @@ public final class PiTuiApp {
     // 会话事件通道（pi subscribeToAgent）：唯一一处结构性接线，见 SessionEventChannel。
     private final SessionEventChannel sessionEvents;
     private AgentSession session;
+    /** 批 26（docs/37 T9）：解决后的扩展快捷键（随会话 attach/switch 重解析）。 */
+    private volatile java.util.List<com.pijava.coding.agent.extension.ExtensionShortcuts
+        .ResolvedShortcut> extensionShortcuts = java.util.List.of();
     private ToolkitRunner runner;
     private WatchHandle<com.pijava.agent.harness.SessionSnapshot> snapshotHandle;
     // Written on the render thread (dispatcher drain) and read by the global
@@ -135,6 +138,13 @@ public final class PiTuiApp {
         injectSlashContext(session);
         // 批 16（T4d）：工具渲染器责任链随会话注入（MessageBubble 查表消费）。
         com.pijava.tui.component.ToolRenderers.install(session.toolRenderers());
+        // 批 26（docs/37 T10）：custom 消息/条目渲染器解析缝随会话注入。
+        com.pijava.tui.component.CustomRenderers.install(
+            session::messageRendererFor, session::entryRendererFor);
+        // 批 26（docs/37 T11）：markdown 变换链随会话注入（现读供应器）。
+        com.pijava.tui.component.MarkdownTransformers.install(session::markdownTransformers);
+        // 批 26（docs/37 T9）：扩展快捷键随会话解析（pi setupExtensionShortcuts 对位）。
+        resolveExtensionShortcuts(session);
         // 批 25（docs/36 T7）：markdown.codeBlockIndent 现读缝（现读 this.session
         // ⇒ switchSession 后新会话的设置面自然生效；E2-43 消费点）。
         com.pijava.tui.component.MarkdownTheme.installCodeBlockIndent(
@@ -467,6 +477,25 @@ public final class PiTuiApp {
             overlay.onKeyEvent(event);
             closeOverlayIfDone();
             return EventResult.HANDLED;
+        }
+        // 批 26（docs/37 T9）：扩展快捷键最先查（pi custom-editor.ts:88-92
+        // 「Check extension-registered shortcuts first」对位——先于内置键与 Enter）。
+        if (!extensionShortcuts.isEmpty()) {
+            var stroke = TamboUIAdapter.toStroke(event);
+            for (var shortcut : extensionShortcuts) {
+                if (shortcut.stroke().equals(stroke)) {
+                    Thread.startVirtualThread(() -> {
+                        try {
+                            shortcut.handler().run(session.extensionShortcutContext());
+                        } catch (Exception e) {
+                            // pi interactive-mode.ts:2289-2291 逐字前缀
+                            dispatcher.dispatch(() -> chatScreen.appendSystemText(
+                                "Shortcut handler error: " + e.getMessage()));
+                        }
+                    });
+                    return EventResult.HANDLED;
+                }
+            }
         }
         if (TamboUIAdapter.isSendEnter(event)) {
             chatScreen.applyCompletion(); // Enter picks the highlighted command
@@ -989,6 +1018,20 @@ public final class PiTuiApp {
             () -> new SlashContext(target, keys, this::exit, this::switchSession));
     }
 
+    /**
+     * 批 26（docs/37 T9）：pi {@code setupExtensionShortcuts} 对位——按会话解析
+     * 扩展快捷键（冲突三规则在 {@code AgentSession.extensionShortcuts} 内）；
+     * 诊断上屏（pi 的 TUI 诊断面方言——pi 走 shortcutDiagnostics 数组，java 经
+     * 启动诊断同款 appendSystemText 通道）。
+     */
+    private void resolveExtensionShortcuts(AgentSession target) {
+        var resolution = target.extensionShortcuts(keys);
+        extensionShortcuts = resolution.shortcuts();
+        for (var diagnostic : resolution.diagnostics()) {
+            chatScreen.appendSystemText(diagnostic);
+        }
+    }
+
     /** Visible for testing (docs/16 ExitPathCloseTest 的替换臂驱动口)。 */
     void switchSession(AgentSession newSession) {
         // 批 17 评审回补（Important #2）：模式层扩展 UI/mode 随切换携带——pi
@@ -1000,6 +1043,14 @@ public final class PiTuiApp {
         this.session = newSession;
         // 批 16（T4d）：渲染器注册表随会话切换重装。
         com.pijava.tui.component.ToolRenderers.install(newSession.toolRenderers());
+        // 批 26（docs/37 T10）：custom 渲染器解析缝随会话重装。
+        com.pijava.tui.component.CustomRenderers.install(
+            newSession::messageRendererFor, newSession::entryRendererFor);
+        // 批 26（docs/37 T11）：markdown 变换链随会话重装。
+        com.pijava.tui.component.MarkdownTransformers.install(
+            newSession::markdownTransformers);
+        // 批 26（docs/37 T9）：扩展快捷键随会话重解析。
+        resolveExtensionShortcuts(newSession);
         mode.switchSession(newSession);
         // 批 12 T13：警告 guard 随会话重建（pi anthropicSubscriptionWarningShown
         // 每会话一次）。

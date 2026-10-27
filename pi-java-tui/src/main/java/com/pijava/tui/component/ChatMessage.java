@@ -73,11 +73,11 @@ public sealed interface ChatMessage {
      * 逐字节同形），pad 1 包 {@link Padded}（append 时烘焙，D62 不回溯）。
      */
     static ChatMessage from(Entry entry, int pad) {
-        var projected = project(entry);
+        var projected = project(entry, pad);
         return projected == null || pad <= 0 ? projected : new Padded(projected, pad);
     }
 
-    private static ChatMessage project(Entry entry) {
+    private static ChatMessage project(Entry entry, int pad) {
         return switch (entry) {
             case Entry.Message message -> fromMessage(message);
             case Entry.ModelChange change ->
@@ -92,12 +92,34 @@ public sealed interface ChatMessage {
 
             case Entry.BranchSummary summary ->
                 new System("Branch: " + summary.summary(), MetaKind.BRANCH);
-            case Entry.Custom custom ->
-                new System("Custom event: " + custom.customType(), MetaKind.CUSTOM);
-            case Entry.CustomMessage customMessage -> customMessage.display()
-                ? new System("[" + customMessage.customType() + "] "
-                    + customMessage.content().plainText(), MetaKind.CUSTOM)
-                : null;
+            case Entry.Custom custom -> {
+                // 批 26（docs/37 T10）：pi interactive-mode.ts:3846-3866——entry
+                // renderer 缺席 ⇒ 不渲（批 26 前的 "Custom event:" 兜底退役）。
+                var renderer = CustomRenderers.resolveEntry(custom.customType());
+                if (renderer == null) {
+                    yield null;
+                }
+                var rendered = renderer.render(custom.customType(), custom.data(), false);
+                yield rendered.isEmpty() ? null
+                    : new System(String.join("\n", rendered), MetaKind.CUSTOM);
+            }
+            case Entry.CustomMessage customMessage -> {
+                // 批 26（docs/37 T10）：pi interactive-mode.ts:3889-3902——display 门
+                // 在先；renderer 缺席 ⇒ 回落默认（pi 组件内回落，java 投影层回落）。
+                if (!customMessage.display()) {
+                    yield null;
+                }
+                var renderer = CustomRenderers.resolveMessage(customMessage.customType());
+                if (renderer != null) {
+                    var rendered = renderer.render(customMessage.customType(),
+                        customMessage.content(), customMessage.details(), false, pad);
+                    if (!rendered.isEmpty()) {
+                        yield new System(String.join("\n", rendered), MetaKind.CUSTOM);
+                    }
+                }
+                yield new System("[" + customMessage.customType() + "] "
+                    + customMessage.content().plainText(), MetaKind.CUSTOM);
+            }
             case Entry.Usage usage -> cacheWarmNotice(usage);
             // #57（docs/10 §3.3 ⑧）：bashExecution 按消息条目同格渲染，文本取 pi
             // bashExecutionToText（!! 条目持久化但不进上下文，仍照 pi 显示；

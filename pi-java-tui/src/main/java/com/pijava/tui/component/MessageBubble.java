@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Map;
 
 import com.pijava.ai.message.ContentBlock;
+import com.pijava.coding.agent.extension.MarkdownTransformContext.MarkdownMessageType;
 import com.pijava.coding.agent.theme.ThemeToken;
 import com.pijava.tui.theme.TuiThemeBridge;
 import com.pijava.tui.util.TextLayout;
@@ -106,8 +107,12 @@ public final class MessageBubble {
                 // text 块走 Markdown 渲染（trim＋paddingY=0 ⇒ 无块外空行）；"• "
                 // 前缀/MESSAGE_INDENT 形状保持（既有 java 形，各行 indent 结构保留）。
                 case ContentBlock.TextContent(var text, _) -> {
+                    // 批 26（docs/37 T11）：渲染前变换缝（pi assistant-message.ts:113-117
+                    // 的 createMarkdownTransform("assistant", ...) 对位）。
                     var rendered = MarkdownRenderer.toLogicalLines(
-                        text.trim(), MarkdownTheme.current(), Style.EMPTY);
+                        MarkdownTransformers.apply(text.trim(),
+                            MarkdownMessageType.ASSISTANT),
+                        MarkdownTheme.current(), Style.EMPTY);
                     if (!prefixed && !rendered.isEmpty()) {
                         // The bullet belongs to the assistant prose, not to a
                         // leading tool card (which has its own status prefix).
@@ -122,7 +127,12 @@ public final class MessageBubble {
                 // already the right thing to draw (a redacted block's text is pi's
                 // "[Reasoning redacted]" placeholder — anthropic-messages.ts:641).
                 case ContentBlock.ThinkingContent(var text, _, _) ->
-                    MarkdownRenderer.toLogicalLines(text, MarkdownTheme.current(),
+                    // 批 26（docs/37 T11）："assistant-thinking" 型变换缝
+                    //（pi assistant-message.ts:146-162 对位）。
+                    MarkdownRenderer.toLogicalLines(
+                        MarkdownTransformers.apply(text,
+                            MarkdownMessageType.ASSISTANT_THINKING),
+                        MarkdownTheme.current(),
                         TuiThemeBridge.fg(ThemeToken.THINKING_TEXT).italic());
                 // 批 16（T4d）：渲染器责任链优先（扩展/MCP resolver），未命中 ⇒
                 // 原 ToolCallCard 路径不变。renderer 产已转义文本行（裁决⑦），
