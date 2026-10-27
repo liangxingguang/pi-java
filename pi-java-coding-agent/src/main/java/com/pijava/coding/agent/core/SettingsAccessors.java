@@ -443,6 +443,27 @@ public final class SettingsAccessors {
         return images != null && Boolean.TRUE.equals(images.blockImages());
     }
 
+    /**
+     * pi {@code getCodeBlockIndent}（settings-manager.ts:1403-1405 逐字回落）：
+     * {@code markdown?.codeBlockIndent ?? "  "}（SETTINGS_DEFAULTS）。消费点＝
+     * tui {@code MarkdownTheme} 注入缝（批 25/docs/36 T7，E2-43）。
+     */
+    public String getMarkdownCodeBlockIndent() {
+        var md = manager.effective().markdown;
+        return md != null && md.codeBlockIndent() != null ? md.codeBlockIndent() : "  ";
+    }
+
+    /**
+     * pi {@code getMermaidRenderingMode}（settings-manager.ts:1407-1410 逐字）：
+     * {@code "off"/"final"} 直传，其余（含缺省）⇒ {@code "streaming"}。
+     * <b>accessor 补上不消费</b>（mermaid 渲染本体＝R7 未落；E2-43 半键挂起）。
+     */
+    public String getMarkdownMermaid() {
+        var md = manager.effective().markdown;
+        var mode = md == null ? null : md.mermaid();
+        return "off".equals(mode) || "final".equals(mode) ? mode : "streaming";
+    }
+
     /** pi {@code getCompactionTokenSetting}（:927-953）的单字段三级回退 + 校验。 */
     private static int compactionToken(Settings.Compaction c,
                                         com.pijava.ai.model.ModelId<?> model,

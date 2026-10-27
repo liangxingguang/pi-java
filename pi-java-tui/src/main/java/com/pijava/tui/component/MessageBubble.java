@@ -5,6 +5,8 @@ import java.util.List;
 import java.util.Map;
 
 import com.pijava.ai.message.ContentBlock;
+import com.pijava.coding.agent.theme.ThemeToken;
+import com.pijava.tui.theme.TuiThemeBridge;
 import com.pijava.tui.util.TextLayout;
 
 import dev.tamboui.style.Color;
@@ -41,6 +43,9 @@ public final class MessageBubble {
             case ChatMessage.Error(var message) ->
                 TextLayout.split("[red]" + TextLayout.escapeMarkup(message) + "[/]", false);
             case ChatMessage.System(var text, var kind) -> system(text, kind);
+            // 批 25（docs/36 T8）：markdown 源文本走渲染管线（pi Markdown 组件对位）。
+            case ChatMessage.Markdown(var text) ->
+                MarkdownRenderer.toLogicalLines(text, MarkdownTheme.current(), Style.EMPTY);
             case ChatMessage.TurnSeparator(var label) ->
                 List.of(new LogicalLine(separator(label), 0, 0, false, Style.EMPTY.dim()));
             // 批 12 T6：outputPad 烘焙包装——每个 LogicalLine 左 indent 加 pad
@@ -64,6 +69,26 @@ public final class MessageBubble {
         return out;
     }
 
+    /**
+     * 批 25（docs/36 T7）：markdown 行的 "• " 前缀——与 {@link #prefix} 同形但
+     * <b>保留各行自身 indent 结构</b>（列表悬垂/代码 preformatted 不被拍平）：
+     * 首行 "• " 缀内容、续行缩进 +2；其余行整体 +2（MESSAGE_INDENT 对位）。
+     */
+    private static List<LogicalLine> prefixMarkdown(List<LogicalLine> lines) {
+        var out = new ArrayList<LogicalLine>(lines.size());
+        for (int i = 0; i < lines.size(); i++) {
+            var line = lines.get(i);
+            out.add(i == 0
+                ? new LogicalLine("• " + line.markup(), line.initialIndent(),
+                    MESSAGE_INDENT + line.subsequentIndent(),
+                    line.preformatted(), line.style())
+                : new LogicalLine(line.markup(), MESSAGE_INDENT + line.initialIndent(),
+                    MESSAGE_INDENT + line.subsequentIndent(),
+                    line.preformatted(), line.style()));
+        }
+        return out;
+    }
+
     /** A dim rule spanning the separator label, or a plain rule without one. */
     private static String separator(String label) {
         String safe = label == null ? "" : TextLayout.escapeMarkup(label);
@@ -77,21 +102,28 @@ public final class MessageBubble {
         boolean prefixed = false;
         for (var block : blocks) {
             var blockLines = switch (block) {
+                // 批 25（docs/36 T7，pi assistant-message.ts:110-117 对位）：助手
+                // text 块走 Markdown 渲染（trim＋paddingY=0 ⇒ 无块外空行）；"• "
+                // 前缀/MESSAGE_INDENT 形状保持（既有 java 形，各行 indent 结构保留）。
                 case ContentBlock.TextContent(var text, _) -> {
-                    var split = TextLayout.split(TextLayout.escapeMarkup(text), false);
-                    if (!prefixed) {
+                    var rendered = MarkdownRenderer.toLogicalLines(
+                        text.trim(), MarkdownTheme.current(), Style.EMPTY);
+                    if (!prefixed && !rendered.isEmpty()) {
                         // The bullet belongs to the assistant prose, not to a
                         // leading tool card (which has its own status prefix).
-                        split = prefix(split, "• ", MESSAGE_INDENT);
+                        rendered = prefixMarkdown(rendered);
                         prefixed = true;
                     }
-                    yield split;
+                    yield rendered;
                 }
+                // 批 25（docs/36 T7，pi :146-162 对位）：thinking 块走 Markdown 渲染，
+                // defaultTextStyle＝thinkingText 色＋italic。
                 // `signature`/`redacted` ride along for replay only; the visible text is
                 // already the right thing to draw (a redacted block's text is pi's
                 // "[Reasoning redacted]" placeholder — anthropic-messages.ts:641).
-                case ContentBlock.ThinkingContent(var text, _, _) -> dim(
-                    TextLayout.split(TextLayout.escapeMarkup(text), false));
+                case ContentBlock.ThinkingContent(var text, _, _) ->
+                    MarkdownRenderer.toLogicalLines(text, MarkdownTheme.current(),
+                        TuiThemeBridge.fg(ThemeToken.THINKING_TEXT).italic());
                 // 批 16（T4d）：渲染器责任链优先（扩展/MCP resolver），未命中 ⇒
                 // 原 ToolCallCard 路径不变。renderer 产已转义文本行（裁决⑦），
                 // 着色由本适配层补。

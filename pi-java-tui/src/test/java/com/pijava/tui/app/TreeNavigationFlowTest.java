@@ -213,6 +213,7 @@ class TreeNavigationFlowTest {
             case ChatMessage.ToolCall t -> t.name();
             case ChatMessage.ToolResult tr -> "";
             case ChatMessage.TurnSeparator ts -> ts.label();
+            case ChatMessage.Markdown md -> md.text();
             case ChatMessage.Padded p -> "padded:" + p.pad();
         }).toList();
     }

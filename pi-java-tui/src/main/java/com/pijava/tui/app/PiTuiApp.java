@@ -135,6 +135,10 @@ public final class PiTuiApp {
         injectSlashContext(session);
         // 批 16（T4d）：工具渲染器责任链随会话注入（MessageBubble 查表消费）。
         com.pijava.tui.component.ToolRenderers.install(session.toolRenderers());
+        // 批 25（docs/36 T7）：markdown.codeBlockIndent 现读缝（现读 this.session
+        // ⇒ switchSession 后新会话的设置面自然生效；E2-43 消费点）。
+        com.pijava.tui.component.MarkdownTheme.installCodeBlockIndent(
+            () -> session.services().settings().accessors().getMarkdownCodeBlockIndent());
         this.sessionEvents = new SessionEventChannel(dispatcher, chatScreen::onSessionEvent);
         // 批 12（docs/23）：settings 消费键 live-read 注入——先于补全目录装配
         // （completer 重建带上 maxVisible 源）；现读 this.session ⇒ switchSession
@@ -618,7 +622,17 @@ public final class PiTuiApp {
                 new BugReportFlow(session, chatScreen, dispatcher, this::openOverlay)
                     .begin(hint.isEmpty() ? null : hint);
             }
-            default -> chatScreen.appendSystemText(result);
+            default -> {
+                // 批 25（docs/36 T8）：/help /hotkeys 的结果文本是 markdown 源
+                //（MiscCommands/CommandRegistry 产），走 Markdown 渲染（pi 的
+                // Markdown 组件对位）；判定走原始输入行，命令协议不携 marker。
+                var command = input == null ? "" : input.strip().split(" ")[0];
+                if ("/help".equals(command) || "/hotkeys".equals(command)) {
+                    chatScreen.appendMarkdownText(result);
+                } else {
+                    chatScreen.appendSystemText(result);
+                }
+            }
         }
     }
 

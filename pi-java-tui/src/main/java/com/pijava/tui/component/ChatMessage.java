@@ -33,6 +33,13 @@ public sealed interface ChatMessage {
     record TurnSeparator(String label) implements ChatMessage {}
 
     /**
+     * 批 25（docs/36 T8）：Markdown 源文本气泡——经 {@code MarkdownRenderer}
+     * 渲染（pi 的 {@code Markdown} 组件对位，/hotkeys interactive-mode.ts:6921）。
+     * 消费面＝/help /hotkeys 等 markdown 源命令结果。
+     */
+    record Markdown(String text) implements ChatMessage {}
+
+    /**
      * 批 12 T6（docs/23 §3）：{@code outputPad} 烘焙包装——append 时记下当时的
      * 水平留白（0|1），改值<b>不回溯</b>已渲染条目（窄差 D62：pi 遍历容器
      * duck-type 热更；java 新条目用新值）。渲染语义：每行左 indent 加 pad、

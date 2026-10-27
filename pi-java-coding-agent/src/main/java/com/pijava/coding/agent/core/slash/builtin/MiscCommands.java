@@ -246,18 +246,24 @@ public final class MiscCommands {
         return false;
     }
 
+    /**
+     * 批 25（docs/36 T8，裁决⑤）：输出改 markdown 源（pi /hotkeys 同形——
+     * 粗体标题＋管道表格＋codespan 键名，interactive-mode.ts:6853-6913），
+     * TUI 侧经 Markdown 渲染。java 动作集动态枚举（pi 是手工固定行，
+     * S24 判定不翻＝增强）；空绑定动作（批 14：app.session.new 等）键格留空。
+     */
     private static String hotkeys(SlashContext ctx) {
         var keys = ctx.keybindings();
-        var builder = new StringBuilder("Keybindings:\n");
+        var builder = new StringBuilder("**Keybindings**\n\n| Action | Key |\n|------|-----|\n");
         for (var actionId : keys.actionIds()) {
-            var stroke = keys.strokeFor(actionId);
-            builder.append("  ")
-                .append(actionId.replaceFirst("^app\\.", ""))
-                .append("  ")
-                .append(describe(stroke))
-                .append('\n');
+            var keyText = describe(keys.strokeFor(actionId));
+            builder.append("| `").append(actionId.replaceFirst("^app\\.", "")).append("` | ");
+            if (!keyText.isEmpty()) {
+                builder.append('`').append(keyText).append('`');
+            }
+            builder.append(" |\n");
         }
-        return builder.toString();
+        return builder.toString().stripTrailing();
     }
 
     private static String describe(KeybindingsManager.KeyStroke stroke) {

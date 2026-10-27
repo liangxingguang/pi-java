@@ -85,6 +85,57 @@ class MessageBubbleTest {
         assertThat(lines.get(0).markup()).isEqualTo("• reply");
     }
 
+    // ── 批 25（docs/36 T7/T8）：Markdown 接线 ─────────────────
+
+    @Test
+    void assistantTextRendersMarkdownBlocksEndToEnd() {
+        var lines = MessageBubble.lines(new ChatMessage.Assistant(List.of(
+            new ContentBlock.TextContent("**bold** answer\n\n```java\nint x = 1;\n```"))));
+
+        // 首行 "• " 前缀＋行内 bold 标签（行 style EMPTY，样式全在行内）
+        assertThat(lines.get(0).markup()).isEqualTo("• [bold]bold[/] answer");
+        assertThat(lines.get(1).markup()).isEmpty();          // 块间空行（space token）
+        // 代码围栏行可见＋preformatted；缩进随消息 +2 而内容自身带 codeBlockIndent
+        assertThat(lines.get(2).markup()).isEqualTo("```java");
+        assertThat(lines.get(2).preformatted()).isTrue();
+        assertThat(lines.get(2).initialIndent()).isEqualTo(2);
+        assertThat(lines.get(3).markup()).startsWith("  [#");
+        assertThat(lines.get(3).markup()).contains("int[/]");
+        assertThat(lines.get(4).markup()).isEqualTo("```");
+    }
+
+    @Test
+    void assistantTableAndLinkRenderThrough() {
+        var lines = MessageBubble.lines(new ChatMessage.Assistant(List.of(
+            new ContentBlock.TextContent("| a |\n|---|\n| 1 |\n\nsee [pi](https://e.com)"))));
+        var markups = lines.stream().map(LogicalLine::markup).toList();
+        // 首块是表格 ⇒ "• " 前缀落表格顶行；链接段落行无前缀
+        assertThat(markups.get(0)).isEqualTo("• ┌───┐");
+        assertThat(markups).anyMatch(m -> m.startsWith("see ")
+            && m.contains("[link=https://e.com]"));
+    }
+
+    @Test
+    void thinkingBlockRendersMarkdownWithThinkingStyle() {
+        var lines = MessageBubble.lines(new ChatMessage.Assistant(List.of(
+            new ContentBlock.ThinkingContent("let me **think**", null, false))));
+
+        assertThat(lines).hasSize(1);
+        assertThat(lines.get(0).markup()).isEqualTo("let me [bold]think[/]");
+        // pi :146-162：defaultTextStyle＝thinkingText 色＋italic
+        assertThat(lines.get(0).style().fg()).isPresent();
+        assertThat(lines.get(0).style().addModifiers())
+            .contains(dev.tamboui.style.Modifier.ITALIC);
+    }
+
+    @Test
+    void markdownVariantRendersThroughPipeline() {
+        var lines = MessageBubble.lines(new ChatMessage.Markdown("**T**\n\n| a |\n|---|"));
+        assertThat(lines.get(0).markup()).isEqualTo("[bold]T[/]");
+        assertThat(lines.stream().map(LogicalLine::markup).toList())
+            .anyMatch(m -> m.startsWith("┌"));
+    }
+
     @Test
     void turnSeparatorRendersDimRuleWithLabel() {
         var lines = MessageBubble.lines(new ChatMessage.TurnSeparator("Worked for 1m 2s"));

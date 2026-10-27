@@ -253,16 +253,22 @@ public final class CommandRegistry {
      * One-line help listing every registered command.
      * Used by the {@code /help} command (pi has no {@code /help}; this is a
      * pi-java usability addition — full CLI help stays on {@code --help}).
+     *
+     * <p><b>批 25（docs/36 T8，裁决⑤）</b>：输出改 markdown 源（粗体标题＋管道
+     * 表格），TUI 侧经 Markdown 渲染（pi 的 /hotkeys Markdown 组件对位，
+     * interactive-mode.ts:6921；S24 判定不翻＝增强）。</p>
      */
     public String helpText() {
-        var builder = new StringBuilder("Slash commands:\n");
+        var builder = new StringBuilder("**Slash commands**\n\n");
+        builder.append("| Command | Description |\n|---------|-------------|\n");
         for (var name : names()) {
             var command = get(name);
-            builder.append("  /").append(name);
+            var usage = new StringBuilder("/").append(name);
             if (command.argumentHint() != null && !command.argumentHint().isEmpty()) {
-                builder.append(' ').append(command.argumentHint());
+                usage.append(' ').append(command.argumentHint());
             }
-            builder.append("  — ").append(command.description()).append('\n');
+            builder.append("| `").append(usage).append("` | ")
+                .append(command.description().replace("|", "\\|")).append(" |\n");
         }
         builder.append("\nFull CLI help: pi-java --help");
         return builder.toString();

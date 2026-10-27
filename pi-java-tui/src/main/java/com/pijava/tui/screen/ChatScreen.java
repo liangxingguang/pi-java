@@ -1000,6 +1000,15 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
         chatPanel.append(new ChatMessage.System(text, MetaKind.GENERIC));
     }
 
+    /**
+     * 批 25（docs/36 T8）：markdown 源气泡（pi 的 {@code Markdown} 组件对位，
+     * /hotkeys interactive-mode.ts:6921）——消费面＝/help /hotkeys 等
+     * markdown 源命令结果。
+     */
+    public void appendMarkdownText(String text) {
+        chatPanel.append(new ChatMessage.Markdown(text));
+    }
+
     /** Show the user's message immediately on submit (optimistic bubble). */
     public void appendUserText(String text) {
         pendingUserText = text;

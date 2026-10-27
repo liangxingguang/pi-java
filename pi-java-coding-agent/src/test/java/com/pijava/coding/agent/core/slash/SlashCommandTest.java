@@ -40,7 +40,8 @@ class SlashCommandTest {
         var result = registry.dispatch("/help", SlashContext.of(null))
             .toCompletableFuture().join();
 
-        assertThat(result).contains("Slash commands:", "/model", "/settings");
+        // 批 25（docs/36 T8）：helpText 改 markdown 源（粗体标题＋管道表格）。
+        assertThat(result).contains("**Slash commands**", "| `/model", "| `/settings` |");
     }
 
     @Test
