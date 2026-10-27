@@ -56,19 +56,39 @@ public sealed interface ExtensionEvent {
      * pi {@code ToolCallEvent}（types.ts:1165-1228）。{@code input} 原地可变
      * （pi types.ts:1224-1227 注释：后面的处理器看得到前面的改写）。
      * java 不做 pi 的逐工具判别子类型（{@code BashToolCallEvent} 等 9 支），
-     * {@code input} 恒 map 形（窄差 D2）；{@code parentToolCallId} 不带（G-10 零对应，D7）。
+     * {@code input} 恒 map 形（窄差 D2）。
+     * 批 27（B162）：{@code parentToolCallId} 落地（D7 销号）——嵌套调用
+     * （某工具经 {@code ctx.executeTool()} 发起）时为父调用 id，顶层为 null
+     * （≙ pi 的键省略，types.ts:1171-1175）。
      */
     record ToolCallEvent(String toolCallId, String toolName,
-                         Map<String, Object> input) implements ExtensionEvent {}
+                         Map<String, Object> input, String parentToolCallId)
+            implements ExtensionEvent {
+        /** 批 27 之前的三参形状（顶层调用；存量构造点零改签）。 */
+        public ToolCallEvent(String toolCallId, String toolName, Map<String, Object> input) {
+            this(toolCallId, toolName, input, null);
+        }
+    }
 
     /**
      * pi {@code ToolResultEvent}（types.ts:1239-1316）。{@code input} 是改写后参数
-     * （pi 的 {@code prepared.args}）。
+     * （pi 的 {@code prepared.args}）。批 27（B162）：{@code parentToolCallId} 同
+     * {@link ToolCallEvent}（types.ts:1239-1244）。
      */
     record ToolResultEvent(String toolCallId, String toolName, Map<String, Object> input,
                            List<ContentBlock> content, Object details, Object structuredContent,
-                           boolean isError, ToolResult.UsageInfo usage)
-            implements ExtensionEvent {}
+                           boolean isError, ToolResult.UsageInfo usage,
+                           String parentToolCallId)
+            implements ExtensionEvent {
+        /** 批 27 之前的八参形状（顶层调用；存量构造点零改签）。 */
+        public ToolResultEvent(String toolCallId, String toolName, Map<String, Object> input,
+                               List<ContentBlock> content, Object details,
+                               Object structuredContent, boolean isError,
+                               ToolResult.UsageInfo usage) {
+            this(toolCallId, toolName, input, content, details, structuredContent, isError,
+                usage, null);
+        }
+    }
 
     // ═══════════════════════════════════════════════════════════
     // 宿主事件族（观察型，docs/14）
@@ -100,23 +120,44 @@ public sealed interface ExtensionEvent {
      */
     record MessageEndEvent(Message message) implements ExtensionEvent {}
 
-    /** pi {@code tool_execution_start}（types.ts:1067）。 */
+    /** pi {@code tool_execution_start}（types.ts:1065-1073；批 27 起含 parentToolCallId?）。 */
     record ToolExecutionStartEvent(String toolCallId, String toolName,
-                                   Map<String, Object> args) implements ExtensionEvent {}
+                                   Map<String, Object> args, String parentToolCallId)
+            implements ExtensionEvent {
+        /** 批 27 之前的三参形状（顶层调用；存量构造点零改签）。 */
+        public ToolExecutionStartEvent(String toolCallId, String toolName,
+                                       Map<String, Object> args) {
+            this(toolCallId, toolName, args, null);
+        }
+    }
 
-    /** pi {@code tool_execution_update}（types.ts:1076）。 */
+    /** pi {@code tool_execution_update}（types.ts:1076-1084；批 27 起含 parentToolCallId?）。 */
     record ToolExecutionUpdateEvent(String toolCallId, String toolName,
-                                    Map<String, Object> args, Object partialResult)
-            implements ExtensionEvent {}
+                                    Map<String, Object> args, Object partialResult,
+                                    String parentToolCallId)
+            implements ExtensionEvent {
+        /** 批 27 之前的四参形状（顶层调用；存量构造点零改签）。 */
+        public ToolExecutionUpdateEvent(String toolCallId, String toolName,
+                                        Map<String, Object> args, Object partialResult) {
+            this(toolCallId, toolName, args, partialResult, null);
+        }
+    }
 
     /**
      * pi {@code tool_execution_end}（types.ts:1086-1097 逐字段：toolCallId/toolName/result/
      * isError/durationMs?——⚠️ **无 {@code args}**，pi 的 end 是独立 interface，不继承
-     * start/update 的字段；{@code durationMs} 可空 ≙ 键省略）。
+     * start/update 的字段；{@code durationMs} 可空 ≙ 键省略；批 27 起含 parentToolCallId?）。
      */
     record ToolExecutionEndEvent(String toolCallId, String toolName,
-                                 Object result, boolean isError, Long durationMs)
-            implements ExtensionEvent {}
+                                 Object result, boolean isError, Long durationMs,
+                                 String parentToolCallId)
+            implements ExtensionEvent {
+        /** 批 27 之前的五参形状（顶层调用；存量构造点零改签）。 */
+        public ToolExecutionEndEvent(String toolCallId, String toolName,
+                                     Object result, boolean isError, Long durationMs) {
+            this(toolCallId, toolName, result, isError, durationMs, null);
+        }
+    }
 
     /**
      * pi {@code session_compact}（types.ts:787-795）——docs/15 起带

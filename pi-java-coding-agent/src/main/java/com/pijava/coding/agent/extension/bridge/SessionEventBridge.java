@@ -108,13 +108,16 @@ public final class SessionEventBridge {
             case AgentSessionEvent.MessageEnd ignored -> { }
             case AgentSessionEvent.ToolExecutionStart e ->
                 fire(TOOL_EXECUTION_START,
-                    new ToolExecutionStartEvent(e.toolCallId(), e.toolName(), e.args()));
+                    new ToolExecutionStartEvent(e.toolCallId(), e.toolName(), e.args(),
+                        e.parentToolCallId()));
             case AgentSessionEvent.ToolExecutionUpdate e ->
                 fire(TOOL_EXECUTION_UPDATE, new ToolExecutionUpdateEvent(
-                    e.toolCallId(), e.toolName(), e.args(), e.partialResult()));
+                    e.toolCallId(), e.toolName(), e.args(), e.partialResult(),
+                    e.parentToolCallId()));
             case AgentSessionEvent.ToolExecutionEnd e ->
                 fire(TOOL_EXECUTION_END, new ToolExecutionEndEvent(
-                    e.toolCallId(), e.toolName(), e.result(), e.isError(), e.durationMs()));
+                    e.toolCallId(), e.toolName(), e.result(), e.isError(), e.durationMs(),
+                    e.parentToolCallId()));
             case AgentSessionEvent.ThinkingLevelChanged e -> {
                 fire(THINKING_LEVEL_SELECT,
                     new ThinkingLevelSelectEvent(e.level(), previousLevel));

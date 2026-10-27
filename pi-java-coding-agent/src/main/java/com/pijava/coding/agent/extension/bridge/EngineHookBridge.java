@@ -244,7 +244,8 @@ public final class EngineHookBridge {
         for (var h : bus.snapshot(TOOL_CALL)) {
             ToolCallEventResult r;
             try {
-                r = h.handle(new ToolCallEvent(call.toolCallId(), call.toolName(), input), ctx);
+                r = h.handle(new ToolCallEvent(call.toolCallId(), call.toolName(), input,
+                    call.parentToolCallId()), ctx);
             } catch (Exception e) {
                 // 裁决③：不捕获、向上传播。sneaky throw —— BeforeToolHook 接口无
                 // throws 声明，原样抛出保住 pi 的错误文本（messageOf 取 getMessage）。
@@ -289,7 +290,7 @@ public final class EngineHookBridge {
             try {
                 var r = h.handle(new ToolResultEvent(call.toolCallId(), call.toolName(),
                     call.arguments(), currentContent, currentDetails, currentStructured,
-                    currentIsError, currentUsage), ctx);
+                    currentIsError, currentUsage, call.parentToolCallId()), ctx);
                 if (r == null) {
                     continue;
                 }

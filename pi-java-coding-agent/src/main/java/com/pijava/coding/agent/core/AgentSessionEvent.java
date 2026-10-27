@@ -143,12 +143,31 @@ public sealed interface AgentSessionEvent {
 
     /** pi {@code {type:"tool_execution_start"; toolCallId; toolName; args}}。 */
     record ToolExecutionStart(String toolCallId, String toolName,
-                              Map<String, Object> args) implements AgentSessionEvent {}
+                              Map<String, Object> args,
+                              /**
+                               * 批 27（B162；pi {@code WithParentToolCallId}，
+                               * agent-session.ts:188-193）：嵌套调用的父调用 id；
+                               * 顶层调用为 null（≙ pi 的键省略）。
+                               */
+                              String parentToolCallId) implements AgentSessionEvent {
+        /** 批 27 之前的三参形状（顶层调用；存量构造点零改签）。 */
+        public ToolExecutionStart(String toolCallId, String toolName,
+                                  Map<String, Object> args) {
+            this(toolCallId, toolName, args, null);
+        }
+    }
 
     /** pi {@code {type:"tool_execution_update"; …; args; partialResult}}。 */
     record ToolExecutionUpdate(String toolCallId, String toolName,
-                               Map<String, Object> args, Object partialResult)
-        implements AgentSessionEvent {}
+                               Map<String, Object> args, Object partialResult,
+                               String parentToolCallId)
+        implements AgentSessionEvent {
+        /** 批 27 之前的四参形状（顶层调用；存量构造点零改签）。 */
+        public ToolExecutionUpdate(String toolCallId, String toolName,
+                                   Map<String, Object> args, Object partialResult) {
+            this(toolCallId, toolName, args, partialResult, null);
+        }
+    }
 
     /**
      * pi {@code {type:"tool_execution_end"; …; result; isError; durationMs?}}。
@@ -157,12 +176,19 @@ public sealed interface AgentSessionEvent {
      *                   blocked/执行前 abort/截断）为 null ⇒ 线上键省略
      */
     record ToolExecutionEnd(String toolCallId, String toolName,
-                            Object result, boolean isError, Long durationMs)
+                            Object result, boolean isError, Long durationMs,
+                            String parentToolCallId)
             implements AgentSessionEvent {
         /** B234 之前的四参形状（存量构造点零改签）。 */
         public ToolExecutionEnd(String toolCallId, String toolName,
                                 Object result, boolean isError) {
             this(toolCallId, toolName, result, isError, null);
+        }
+
+        /** 批 27 之前的五参形状（顶层调用；存量构造点零改签）。 */
+        public ToolExecutionEnd(String toolCallId, String toolName,
+                                Object result, boolean isError, Long durationMs) {
+            this(toolCallId, toolName, result, isError, durationMs, null);
         }
     }
 
