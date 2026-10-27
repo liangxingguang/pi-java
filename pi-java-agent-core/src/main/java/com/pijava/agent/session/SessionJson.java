@@ -91,6 +91,10 @@ public final class SessionJson {
             if (tool.durationMs() != null) {
                 node.put("durationMs", tool.durationMs());
             }
+            // 批 27（B162；pi types.ts:630）：嵌套调用记录；缺席 ⇒ 键省略。
+            if (tool.nestedCalls() != null) {
+                node.set("nestedCalls", MAPPER.valueToTree(tool.nestedCalls()));
+            }
         }
         if (message instanceof Message.UserMessage user) {
             // 原 docs/71 G1：用户消息的时间戳（pi types.ts:512 必填）。

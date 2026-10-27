@@ -234,7 +234,7 @@ public final class ContextEntries {
         if (message instanceof Message.ToolResultMessage tool) {
             return new Message.ToolResultMessage(tool.toolUseId(), tool.toolName(), blocks,
                 tool.details(), tool.usage(), tool.addedToolNames(), tool.isError(),
-                tool.timestamp(), tool.durationMs());
+                tool.timestamp(), tool.durationMs(), tool.nestedCalls());
         }
         return message;
     }

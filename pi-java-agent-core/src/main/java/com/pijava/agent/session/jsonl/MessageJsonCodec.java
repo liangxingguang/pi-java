@@ -72,7 +72,9 @@ final class MessageJsonCodec {
                 decodeStringList(node.get("addedToolNames")),
                 node.has("isError") && node.get("isError").asBoolean(false),
                 decodeTimestamp(node.get("timestamp")),
-                JsonlCodec.optionalLong(node, "durationMs"));
+                JsonlCodec.optionalLong(node, "durationMs"),
+                // 批 27（B162）：旧盘无此键 ⇒ null，写侧不出键，向前兼容。
+                decodeNestedCalls(node.get("nestedCalls")));
             case "system" -> new Message.SystemMessage(
                 content,
                 decodeTimestamp(node.get("timestamp")),
@@ -250,6 +252,36 @@ final class MessageJsonCodec {
             JsonlCodec.optionalLong(node, "expiresAt"),
             JsonlCodec.optionalLong(node, "pollAfterMs"),
             JsonlCodec.optionalObject(node, "data"));
+    }
+
+    /**
+     * 批 27（B162）：tool result 的嵌套调用记录（pi {@code NestedToolCalls}，
+     * {@code types.ts:613-618}）。缺席/JSON null ⇒ null（写侧省略）。
+     */
+    private static com.pijava.ai.message.NestedToolCalls decodeNestedCalls(JsonNode node) {
+        if (node == null || node.isNull()) {
+            return null;
+        }
+        if (!node.isObject() || !node.has("calls") || !node.get("calls").isArray()) {
+            throw JsonlCodec.DecodeError.schema("has invalid nestedCalls");
+        }
+        var calls = new ArrayList<com.pijava.ai.message.NestedToolCallRecord>(node.get("calls").size());
+        for (var item : node.get("calls")) {
+            if (!item.isObject()) {
+                throw JsonlCodec.DecodeError.schema("has invalid nestedCalls entry");
+            }
+            calls.add(new com.pijava.ai.message.NestedToolCallRecord(
+                JsonlCodec.requireString(item, "id"),
+                JsonlCodec.requireString(item, "name"),
+                item.get("arguments"),
+                JsonlCodec.optionalLong(item, "argumentsBytes"),
+                com.pijava.ai.message.NestedToolCallRecord.Status.fromWire(
+                    JsonlCodec.requireString(item, "status")),
+                JsonlCodec.optionalLong(item, "durationMs"),
+                JsonlCodec.optionalString(item, "error")));
+        }
+        return new com.pijava.ai.message.NestedToolCalls(
+            List.copyOf(calls), node.has("complete") && node.get("complete").asBoolean(false));
     }
 
     /** 3a：assistant 消息的 token 计量（pi 必有字段；旧文件缺席 ⇒ null，键省略）。 */
