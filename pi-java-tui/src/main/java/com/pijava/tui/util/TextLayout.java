@@ -8,6 +8,10 @@ import com.pijava.tui.component.LogicalLine;
 import com.pijava.tui.component.RenderRow;
 
 import dev.tamboui.style.Style;
+import dev.tamboui.text.Line;
+import dev.tamboui.text.MarkupParser;
+import dev.tamboui.text.Span;
+import dev.tamboui.text.Text;
 
 /**
  * Display-width aware layout utilities (Phase 3 alignment design §5.1):
@@ -125,6 +129,24 @@ public final class TextLayout {
     /** markup 感知可见宽（批 25/docs/36 T2）：标签零宽，转义按解码后字符计列。 */
     public static int displayWidthMarkup(String markup) {
         return MarkupTokens.displayWidth(markup);
+    }
+
+    /**
+     * {@link RenderRow} → TamboUI {@link Line}（批 25/docs/36 T2 补）：行 style 作底、
+     * 行内 markup span 优先（行内标签是更具体意图——pi 的 codespan 色在标题/引用内
+     * 不被块色盖掉的对位）。{@code Line.patchStyle} 的方向是参数覆盖 span，与本义
+     * 相反，故逐 span 重建。存量内容（行 style 与标签从不共存）行为不变。
+     */
+    public static Line toLine(RenderRow row) {
+        Text parsed = MarkupParser.parse(row.text());
+        Line line = parsed.lines().isEmpty() ? Line.empty() : parsed.lines().get(0);
+        if (row.style().equals(Style.EMPTY)) {
+            return line;
+        }
+        var spans = line.spans().stream()
+            .map(span -> Span.styled(span.content(), row.style().patch(span.style())))
+            .toList();
+        return Line.from(spans);
     }
 
     // ── 批 25（docs/36 T2）：markup 感知 wrap ────────────────────

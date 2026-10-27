@@ -10,8 +10,6 @@ import dev.tamboui.layout.Rect;
 import dev.tamboui.style.Style;
 import dev.tamboui.terminal.Frame;
 import dev.tamboui.text.Line;
-import dev.tamboui.text.MarkupParser;
-import dev.tamboui.text.Text;
 import dev.tamboui.toolkit.element.RenderContext;
 import dev.tamboui.toolkit.element.Size;
 import dev.tamboui.toolkit.element.StyledElement;
@@ -280,9 +278,8 @@ public final class ChatViewportElement extends StyledElement<ChatViewportElement
 
     /** Parses markup into a styled, single-row line (visible rows only). */
     private static Line toLine(RenderRow row) {
-        Text parsed = MarkupParser.parse(row.text());
-        Line line = parsed.lines().isEmpty() ? Line.empty() : parsed.lines().get(0);
-        return row.style().equals(Style.EMPTY) ? line : line.patchStyle(row.style());
+        // 批 25（docs/36 T2 补）：共享口——行 style 作底、span 优先。
+        return TextLayout.toLine(row);
     }
 
     private void renderScrollbar(Frame frame, Rect area, int rowCount,

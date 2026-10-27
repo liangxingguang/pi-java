@@ -13,8 +13,6 @@ import com.pijava.tui.util.TextLayout;
 
 import dev.tamboui.style.Style;
 import dev.tamboui.text.Line;
-import dev.tamboui.text.MarkupParser;
-import dev.tamboui.text.Text;
 
 /**
  * Prints the chat transcript into the terminal's native scrollback (Codex
@@ -102,9 +100,8 @@ public final class ScrollbackTranscript {
         List<RenderRow> rows = TextLayout.wrap(logical, Math.max(1, width));
         var out = new ArrayList<Line>(rows.size());
         for (RenderRow row : rows) {
-            Text parsed = MarkupParser.parse(row.text());
-            Line line = parsed.lines().isEmpty() ? Line.empty() : parsed.lines().get(0);
-            out.add(row.style().equals(Style.EMPTY) ? line : line.patchStyle(row.style()));
+            // 批 25（docs/36 T2 补）：共享口——行 style 作底、span 优先。
+            out.add(TextLayout.toLine(row));
         }
         return out;
     }

@@ -4,6 +4,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
+import com.pijava.coding.agent.theme.ThemeToken;
+import com.pijava.tui.theme.TuiThemeBridge;
+
 import dev.tamboui.style.Color;
 import dev.tamboui.style.Style;
 
@@ -11,16 +14,17 @@ import dev.tamboui.style.Style;
  * 轻量代码语法高亮（P6-23）：把一行文本切分为带样式的片段。
  *
  * <p>识别关键字、字符串字面量、数字与 {@code //}、{@code #} 行注释；其余文本
- * 保持基础样式。用于输入编辑器当前行的着色。颜色取自 pi 暗色主题的语法色板。</p>
+ * 保持基础样式。</p>
+ *
+ * <p><b>批 25（docs/36 T6）</b>：颜色改走主题令牌（{@code syntaxKeyword}/
+ * {@code syntaxString}/{@code syntaxNumber}/{@code syntaxComment}，现读活跃主题），
+ * 取代硬编码 VSCode 色板；输入编辑器当前行着色（{@code EditorElement}）与
+ * Markdown 代码块高亮（{@code MarkdownRenderer}）两消费点同色。</p>
  */
 public final class SyntaxHighlighter {
 
     /** 行内样式片段。 */
     public record Segment(String text, Style style) {}
-
-    private static final Color KEYWORD = Color.hex("#569CD6");
-    private static final Color STRING = Color.hex("#CE9178");
-    private static final Color NUMBER = Color.hex("#B5CEA8");
 
     private static final Set<String> KEYWORDS = Set.of(
         "if", "else", "elif", "for", "while", "return", "def", "class", "import",
@@ -30,6 +34,26 @@ public final class SyntaxHighlighter {
         "switch", "case", "break", "continue");
 
     private SyntaxHighlighter() {}
+
+    /** 关键字色（{@code syntaxKeyword}，活跃主题现读）。 */
+    public static Color keywordColor() {
+        return TuiThemeBridge.tokenColor(ThemeToken.SYNTAX_KEYWORD);
+    }
+
+    /** 字符串色（{@code syntaxString}）。 */
+    public static Color stringColor() {
+        return TuiThemeBridge.tokenColor(ThemeToken.SYNTAX_STRING);
+    }
+
+    /** 数字色（{@code syntaxNumber}）。 */
+    public static Color numberColor() {
+        return TuiThemeBridge.tokenColor(ThemeToken.SYNTAX_NUMBER);
+    }
+
+    /** 注释色（{@code syntaxComment}）。 */
+    public static Color commentColor() {
+        return TuiThemeBridge.tokenColor(ThemeToken.SYNTAX_COMMENT);
+    }
 
     /**
      * 高亮一行文本。
@@ -46,13 +70,13 @@ public final class SyntaxHighlighter {
             char ch = line.charAt(i);
             if ((ch == '/' && i + 1 < line.length() && line.charAt(i + 1) == '/') || ch == '#') {
                 flush(segments, plain, base);
-                segments.add(new Segment(line.substring(i), base.dim()));
+                segments.add(new Segment(line.substring(i), base.fg(commentColor())));
                 break;
             }
             if (ch == '"' || ch == '\'') {
                 flush(segments, plain, base);
                 int end = closingQuote(line, i, ch);
-                segments.add(new Segment(line.substring(i, end + 1), base.fg(STRING)));
+                segments.add(new Segment(line.substring(i, end + 1), base.fg(stringColor())));
                 i = end + 1;
                 continue;
             }
@@ -63,7 +87,7 @@ public final class SyntaxHighlighter {
                         && (Character.isDigit(line.charAt(j)) || line.charAt(j) == '.')) {
                     j++;
                 }
-                segments.add(new Segment(line.substring(i, j), base.fg(NUMBER)));
+                segments.add(new Segment(line.substring(i, j), base.fg(numberColor())));
                 i = j;
                 continue;
             }
@@ -76,7 +100,7 @@ public final class SyntaxHighlighter {
                 var word = line.substring(i, j);
                 if (KEYWORDS.contains(word)) {
                     flush(segments, plain, base);
-                    segments.add(new Segment(word, base.fg(KEYWORD)));
+                    segments.add(new Segment(word, base.fg(keywordColor())));
                 } else {
                     plain.append(word);
                 }

@@ -1,105 +1,140 @@
 package com.pijava.tui.component;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
-import java.util.regex.Pattern;
 
-import com.pijava.tui.util.TamboUIAdapter;
+import com.pijava.tui.util.MarkupTokens;
+import com.pijava.tui.util.TextLayout;
 
-import dev.tamboui.style.Color;
 import dev.tamboui.style.Style;
-import dev.tamboui.toolkit.element.Element;
 
 /**
- * Lightweight Markdown → widget conversion (Phase 3 design §5.1).
+ * Markdown → {@link LogicalLine} 排放器（批 25/docs/36 T3/T5；pi
+ * {@code Markdown} 组件 markdown.ts:170-1024 的 java 对位子集）。
  *
- * <p>Phase 3 supports headings, bold/italic markup, fenced code blocks,
- * bullet lists and quotes with a hand-rolled line parser; Phase 6 (P6-22)
- * adds pipe tables, image placeholders and mermaid diagram blocks.</p>
+ * <p>历史：本类原是 Markdown → Element 的渲染器（221 行死代码，B65），本批
+ * 删除 Element 面（裁决⑦），改为聊天管线的宽度无感 LogicalLine 排放——换行
+ * 由渲染期 {@link TextLayout#wrap} 承担。</p>
+ *
+ * <p>块后间距规则（pi {@code nextTokenType !== "space"} 对位）：源有空行（space
+ * token）⇒ 一空行；无空行 ⇒ heading/code/quote/hr/table 补空行，paragraph 在
+ * next≠list 时补，list 不补。</p>
  */
 public final class MarkdownRenderer {
 
-    private static final Pattern IMAGE = Pattern.compile("!\\[([^\\]]*)\\]\\(([^)]+)\\)");
-    private static final Pattern TABLE_SEPARATOR = Pattern.compile("^\\s*\\|[\\s:|-]+\\|?\\s*$");
+    private MarkdownRenderer() {}
 
-    /** Render markdown text into a widget column. */
-    public Element render(String markdown) {
-        return TamboUIAdapter.column(parseBlocks(markdown).stream()
-            .map(this::renderBlock)
-            .toList());
-    }
+    private static final int HR_WIDTH = 80;   // pi min(width,80)——管线宽度无感（窄差 D-new6）
+    private static final int LIST_DEPTH_INDENT = 4;   // pi "    ".repeat(depth)
 
-    private Element renderBlock(Block block) {
-        return switch (block) {
-            case Block.Heading(int level, String text) ->
-                TamboUIAdapter.text(text).bold();
-            case Block.Paragraph(String text) ->
-                TamboUIAdapter.markupText(text);
-            case Block.Code(String lang, String code) ->
-                "mermaid".equals(lang)
-                    ? TamboUIAdapter.panel(TamboUIAdapter.text("[mermaid diagram]\n" + code))
-                        .gray().rounded()
-                    : renderHighlightedCode(code);
-            case Block.ListBlock(List<String> items) ->
-                TamboUIAdapter.column(items.stream()
-                    .map(item -> TamboUIAdapter.text("" + (char) 0x2022 + " " + item))
-                    .toList());
-            case Block.Quote(String text) ->
-                TamboUIAdapter.text(text).dim();
-            case Block.Image(String alt, String url) ->
-                TamboUIAdapter.text("" + (char) 0x1F5BC + " " + (alt.isEmpty() ? url : alt)).dim();
-            case Block.Table(List<List<String>> rows) -> renderTable(rows);
-        };
-    }
-
-    /** 渲染管道表格：按列宽对齐，边框用盒绘制字符。 */
-    private Element renderTable(List<List<String>> rows) {
-        int cols = rows.stream().mapToInt(List::size).max().orElse(0);
-        int[] widths = new int[cols];
-        for (var row : rows) {
-            for (int c = 0; c < Math.min(cols, row.size()); c++) {
-                widths[c] = Math.max(widths[c], row.get(c).length());
-            }
+    /**
+     * Markdown → 逻辑行。
+     *
+     * @param markdown     源文本（{@code null}/空白 ⇒ 空表——pi 的 trim()=="" 臂）
+     * @param theme        Markdown 主题（{@link MarkdownTheme#current()}）
+     * @param defaultStyle pi 的 {@code defaultTextStyle} 对位（thinking 臂＝
+     *                     thinkingText 色＋italic；助手文本臂＝{@link Style#EMPTY}）
+     */
+    public static List<LogicalLine> toLogicalLines(String markdown, MarkdownTheme theme,
+                                                   Style defaultStyle) {
+        if (markdown == null || markdown.isBlank()) {
+            return List.of();
         }
-        var elements = new ArrayList<Element>();
-        for (int r = 0; r < rows.size(); r++) {
-            var row = rows.get(r);
-            var sb = new StringBuilder((char) 0x2502 + " ");
-            for (int c = 0; c < cols; c++) {
-                var cell = c < row.size() ? row.get(c) : "";
-                sb.append(cell).append(" ".repeat(widths[c] - cell.length()))
-                    .append(" ").append((char) 0x2502).append(" ");
+        // pi 逐字：tab → 3 空格（lexing 前）
+        var blocks = MarkdownBlocks.parse(markdown.replace("\t", "   "));
+        var out = new ArrayList<LogicalLine>();
+        for (int i = 0; i < blocks.size(); i++) {
+            var spaced = blocks.get(i);
+            emitBlock(spaced.block(), theme, defaultStyle, out);
+            if (i + 1 >= blocks.size()) {
+                break;
             }
-            elements.add(TamboUIAdapter.text(sb.toString()));
-            if (r == 0) {
-                var sep = new StringBuilder((char) 0x251C);
-                for (int c = 0; c < cols; c++) {
-                    sep.append(String.valueOf((char) 0x2500).repeat(widths[c] + 2));
-                    sep.append(c < cols - 1 ? (char) 0x2534 : (char) 0x2524);
+            var next = blocks.get(i + 1).block();
+            if (spaced.blankAfter()) {
+                out.add(blank());                        // space token ⇒ ""
+                continue;
+            }
+            switch (spaced.block()) {
+                case MarkdownBlocks.Block.Paragraph p -> {
+                    if (!(next instanceof MarkdownBlocks.Block.ListBlock)) {
+                        out.add(blank());
+                    }
                 }
-                elements.add(TamboUIAdapter.text(sep.toString()));
+                case MarkdownBlocks.Block.ListBlock l -> { }   // list 不补（pi 同）
+                default -> out.add(blank());
             }
         }
-        return TamboUIAdapter.column(elements);
+        return out;
     }
 
-    /** 代码块语法高亮（P6-23 对齐）：逐行 SyntaxHighlighter 分段 → markup
-     *  {@code [#hex]...[/]}；转义 {@code [}/\text{\}} 避免被 markup 误解析。 */
-    private Element renderHighlightedCode(String code) {
-        var lines = Arrays.stream(code.split("\n", -1))
-            .map(MarkdownRenderer::highlightLine)
-            .map(TamboUIAdapter::markupText)
-            .toList();
-        return TamboUIAdapter.panel(TamboUIAdapter.column(lines)).gray().rounded();
+    private static LogicalLine blank() {
+        return new LogicalLine("", 0, 0, false, Style.EMPTY);
     }
 
-    /** 把 SyntaxHighlighter 行内分段转成 markup 字符串（包私有供测试）。 */
+    private static void emitBlock(MarkdownBlocks.Block block, MarkdownTheme theme,
+                                  Style defaultStyle, List<LogicalLine> out) {
+        switch (block) {
+            case MarkdownBlocks.Block.Heading h -> emitHeading(h, theme, defaultStyle, out);
+            case MarkdownBlocks.Block.Paragraph p -> {
+                // 软换行分行排放（pi 的 wrapTextWithAnsi 按 \n 分行对位）
+                for (var line : p.text().split("\n", -1)) {
+                    out.add(new LogicalLine(InlineMarkup.render(line, theme),
+                        0, 0, false, defaultStyle));
+                }
+            }
+            case MarkdownBlocks.Block.Code c -> emitCode(c, theme, out);
+            case MarkdownBlocks.Block.ListBlock l -> emitList(l, theme, defaultStyle, out);
+            case MarkdownBlocks.Block.Quote q -> emitQuote(q, theme, out);
+            case MarkdownBlocks.Block.Image img -> out.add(new LogicalLine(
+                "🖼 " + TextLayout.escapeMarkup(img.alt().isEmpty() ? img.url() : img.alt()),
+                0, 0, false, Style.EMPTY.dim()));
+            case MarkdownBlocks.Block.Table t -> emitTable(t, theme, defaultStyle, out);
+            case MarkdownBlocks.Block.Hr hr -> out.add(new LogicalLine(
+                "─".repeat(HR_WIDTH), 0, 0, true, fg(theme.hr())));
+        }
+    }
+
+    // ── 标题（pi :473-498：L1 加下划线；L≥3 显 "#"*level+" " 前缀） ──
+
+    private static void emitHeading(MarkdownBlocks.Block.Heading h, MarkdownTheme theme,
+                                    Style defaultStyle, List<LogicalLine> out) {
+        var style = fg(theme.heading()).bold();
+        if (h.level() == 1) {
+            style = style.underlined();
+        }
+        var prefix = h.level() >= 3 ? "#".repeat(h.level()) + " " : "";
+        out.add(new LogicalLine(prefix + InlineMarkup.render(h.text(), theme),
+            0, 0, false, style));
+    }
+
+    // ── 代码（pi :530-549：围栏行可见＋codeBlockIndent 缩进＋高亮门） ──
+
+    private static void emitCode(MarkdownBlocks.Block.Code c, MarkdownTheme theme,
+                                 List<LogicalLine> out) {
+        var borderStyle = fg(theme.codeBlockBorder());
+        out.add(new LogicalLine("```" + TextLayout.escapeMarkup(c.language()),
+            0, 0, true, borderStyle));
+        // 高亮门（裁决 D-new4）：lang 非空 ⇒ 语法高亮（pi 是 supportsLanguage 白名单）；
+        // 否则整行 mdCodeBlock 色（pi theme.ts:1053-1055 对位——自动侦测不可靠）。
+        boolean highlight = !c.language().isEmpty();
+        var indent = theme.codeBlockIndent();
+        for (var line : c.code().split("\n", -1)) {
+            if (highlight) {
+                out.add(new LogicalLine(indent + highlightLine(line), 0, 0, true, Style.EMPTY));
+            } else {
+                out.add(new LogicalLine(indent + TextLayout.escapeMarkup(line),
+                    0, 0, true, fg(theme.codeBlock())));
+            }
+        }
+        out.add(new LogicalLine("```", 0, 0, true, borderStyle));
+    }
+
+    /** SyntaxHighlighter 行内分段 → markup（{@code [#hex]…[/]}；文本转义）。 */
     static String highlightLine(String line) {
         var sb = new StringBuilder();
         for (var segment : SyntaxHighlighter.highlight(line, Style.EMPTY)) {
-            var hex = segment.style().fg().map(c -> toHex(c.toRgb())).orElse(null);
-            var text = escape(segment.text());
+            var hex = segment.style().fg().map(c -> MarkdownTheme.toHex(c)).orElse(null);
+            var text = TextLayout.escapeMarkup(segment.text());
             if (hex == null) {
                 sb.append(text);
             } else {
@@ -109,113 +144,88 @@ public final class MarkdownRenderer {
         return sb.toString();
     }
 
-    /** markup 转义：{@code [[} → {@code [}，{@code ]]} → {@code ]}。 */
-    private static String escape(String text) {
-        return text.replace("[", "[[").replace("]", "]]");
+    // ── 列表（pi :766-816：marker 整段 listBullet 色；悬垂缩进＝marker 显示宽） ──
+
+    private static void emitList(MarkdownBlocks.Block.ListBlock l, MarkdownTheme theme,
+                                 Style defaultStyle, List<LogicalLine> out) {
+        for (var item : l.items()) {
+            int base = item.depth() * LIST_DEPTH_INDENT;
+            var marker = item.marker();
+            var markup = MarkdownTheme.tag(theme.listBullet())
+                + TextLayout.escapeMarkup(marker) + "[/]"
+                + InlineMarkup.render(item.text(), theme);
+            out.add(new LogicalLine(markup, base, base + marker.length(),
+                false, defaultStyle));
+        }
     }
 
-    /** RGB → {@code #RRGGBB}（markup 真彩 token）。 */
-    private static String toHex(Color color) {
-        var rgb = color.toRgb();
-        return String.format("#%02X%02X%02X", rgb.r(), rgb.g(), rgb.b());
+    // ── 引用（pi :566-612："│ " 前缀 quoteBorder 色；内容 quote 色＋italic） ──
+
+    private static void emitQuote(MarkdownBlocks.Block.Quote q, MarkdownTheme theme,
+                                  List<LogicalLine> out) {
+        var border = MarkdownTheme.tag(theme.quoteBorder()) + "│ [/]";
+        var contentStyle = fg(theme.quote()).italic();
+        for (var line : q.lines()) {
+            out.add(new LogicalLine(border + InlineMarkup.render(line, theme),
+                0, 2, false, contentStyle));
+        }
     }
 
-    /** Parse markdown into a block list (line-based). */
-    static List<Block> parseBlocks(String markdown) {
-        var blocks = new ArrayList<Block>();
-        var lines = markdown.split("\r?\n", -1);
-        var index = 0;
-        while (index < lines.length) {
-            var line = lines[index];
-            if (line.isBlank()) {
-                index++;
-                continue;
+    // ── 表格（pi :852-1024 全边框；自然宽不收缩不 wrap——窄差 D-new3） ──
+
+    private static void emitTable(MarkdownBlocks.Block.Table t, MarkdownTheme theme,
+                                  Style defaultStyle, List<LogicalLine> out) {
+        if (t.rows().isEmpty()) {
+            return;
+        }
+        int cols = t.rows().stream().mapToInt(List::size).max().orElse(0);
+        // 单元格先过行内渲染（pi 单元格走 renderInlineTokens）
+        var rendered = t.rows().stream()
+            .map(row -> row.stream().map(cell -> InlineMarkup.render(cell, theme)).toList())
+            .toList();
+        int[] widths = new int[cols];
+        for (var row : rendered) {
+            for (int c = 0; c < Math.min(cols, row.size()); c++) {
+                widths[c] = Math.max(widths[c], MarkupTokens.displayWidth(row.get(c)));
             }
-            if (line.startsWith("```")) {
-                var lang = line.substring(3).trim();
-                var code = new StringBuilder();
-                index++;
-                while (index < lines.length && !lines[index].startsWith("```")) {
-                    code.append(lines[index]).append('\n');
-                    index++;
+        }
+        var top = border("┌", "┬", "┐", widths);
+        var mid = border("├", "┼", "┤", widths);
+        var bottom = border("└", "┴", "┘", widths);
+        out.add(new LogicalLine(top, 0, 0, true, Style.EMPTY));
+        for (int r = 0; r < rendered.size(); r++) {
+            var row = rendered.get(r);
+            var sb = new StringBuilder("│ ");
+            for (int c = 0; c < cols; c++) {
+                var cell = c < row.size() ? row.get(c) : "";
+                sb.append(cell)
+                    .append(" ".repeat(widths[c] - MarkupTokens.displayWidth(cell)));
+                if (c < cols - 1) {
+                    sb.append(" │ ");
                 }
-                index++; // closing fence
-                blocks.add(new Block.Code(lang, code.toString().stripTrailing()));
-                continue;
             }
-            if (isTableStart(lines, index)) {
-                var rows = new ArrayList<List<String>>();
-                rows.add(parseTableRow(lines[index]));
-                index += 2; // header + separator
-                while (index < lines.length && lines[index].trim().startsWith("|")) {
-                    rows.add(parseTableRow(lines[index]));
-                    index++;
-                }
-                blocks.add(new Block.Table(rows));
-                continue;
+            sb.append(" │");
+            // 表头行 bold（pi theme.bold(padded) 对位）；行 style 作底、span 优先。
+            out.add(new LogicalLine(sb.toString(), 0, 0, true,
+                r == 0 ? Style.EMPTY.bold() : Style.EMPTY));
+            // 表头后恒有分隔线；数据行间分隔（pi separatorLine 对位）。
+            if (r == 0 || r < rendered.size() - 1) {
+                out.add(new LogicalLine(mid, 0, 0, true, Style.EMPTY));
             }
-            var image = IMAGE.matcher(line);
-            if (image.matches()) {
-                blocks.add(new Block.Image(image.group(1), image.group(2)));
-                index++;
-                continue;
-            }
-            if (line.startsWith("### ")) {
-                blocks.add(new Block.Heading(3, line.substring(4)));
-            } else if (line.startsWith("## ")) {
-                blocks.add(new Block.Heading(2, line.substring(3)));
-            } else if (line.startsWith("# ")) {
-                blocks.add(new Block.Heading(1, line.substring(2)));
-            } else if (line.startsWith("> ")) {
-                blocks.add(new Block.Quote(line.substring(2)));
-            } else if (line.startsWith("- ") || line.startsWith("* ")) {
-                var items = new ArrayList<String>();
-                while (index < lines.length
-                        && (lines[index].startsWith("- ")
-                            || lines[index].startsWith("* "))) {
-                    items.add(lines[index].substring(2));
-                    index++;
-                }
-                blocks.add(new Block.ListBlock(items));
-                continue;
-            } else {
-                blocks.add(new Block.Paragraph(line));
-            }
-            index++;
         }
-        return blocks;
+        out.add(new LogicalLine(bottom, 0, 0, true, Style.EMPTY));
     }
 
-    /** 判断是否为管道表格开头（当前行 + 下一行分隔线）。 */
-    private static boolean isTableStart(String[] lines, int index) {
-        if (index + 1 >= lines.length || !lines[index].trim().startsWith("|")) {
-            return false;
+    /** pi 逐字形：{@code ┌─}＋单元格 {@code "─"*w} 以 {@code ─┬─} 相接＋{@code ─┐}。 */
+    private static String border(String left, String junction, String right, int[] widths) {
+        var cells = new ArrayList<String>(widths.length);
+        for (int w : widths) {
+            cells.add("─".repeat(w));
         }
-        var separator = lines[index + 1].trim();
-        return TABLE_SEPARATOR.matcher(separator).matches()
-            && separator.chars().filter(c -> c == '-').count() > 0;
+        return left + "─" + String.join("─" + junction + "─", cells) + "─" + right;
     }
 
-    /** 解析单行管道表格：去掉首尾 | 后按 | 切分并 trim。 */
-    private static List<String> parseTableRow(String line) {
-        var content = line.trim();
-        if (content.startsWith("|")) {
-            content = content.substring(1);
-        }
-        if (content.endsWith("|")) {
-            content = content.substring(0, content.length() - 1);
-        }
-        return Arrays.stream(content.split("\\|")).map(String::trim).toList();
-    }
-
-    /** Parsed markdown block (internal). */
-    sealed interface Block {
-        record Heading(int level, String text) implements Block {}
-        record Paragraph(String text) implements Block {}
-        record Code(String language, String code) implements Block {}
-        record ListBlock(List<String> items) implements Block {}
-        record Quote(String text) implements Block {}
-        record Image(String alt, String url) implements Block {}
-        record Table(List<List<String>> rows) implements Block {}
+    private static Style fg(dev.tamboui.style.Color color) {
+        return Style.create().fg(color);
     }
 }
