@@ -16,7 +16,13 @@ import com.pijava.agent.tool.ToolResult;
  */
 public record ToolResultContext(String lane, String toolCallId, String toolName,
                                  ToolResult<?> result, boolean isError,
-                                 Map<String, Object> arguments) {
+                                 Map<String, Object> arguments,
+                                 /**
+                                  * 批 27（B162；pi {@code ToolResultEventBase.parentToolCallId}，
+                                  * types.ts:1239-1244）：嵌套调用的父调用 id；顶层为
+                                  * {@code null}（≙ pi 的键省略）。
+                                  */
+                                 String parentToolCallId) {
 
     /** Defensively copies {@code arguments} when non-null. */
     public ToolResultContext {
@@ -29,5 +35,12 @@ public record ToolResultContext(String lane, String toolCallId, String toolName,
     public ToolResultContext(String lane, String toolCallId, String toolName,
                              ToolResult<?> result, boolean isError) {
         this(lane, toolCallId, toolName, result, isError, null);
+    }
+
+    /** 批 27 之前的六参形状（顶层调用无父 id；存量构造点零改签）。 */
+    public ToolResultContext(String lane, String toolCallId, String toolName,
+                             ToolResult<?> result, boolean isError,
+                             Map<String, Object> arguments) {
+        this(lane, toolCallId, toolName, result, isError, arguments, null);
     }
 }

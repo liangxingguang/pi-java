@@ -78,6 +78,12 @@ public final class PiToolRunner implements PiLoop.ToolRunner {
      *  {@code currentContext.tools}，agent-loop.ts:712-716 对位——失活工具调用即
      *  {@code Tool <name> not found}）；{@code null} ⇒ 回落注册表全局查找（旧行为）。 */
     private final java.util.function.Supplier<java.util.Set<AgentTool<?, ?>>> activeTools;
+    /**
+     * 批 27（B162）：嵌套调用的父调用 id（pi {@code runToolCall} 的
+     * {@code parentToolCallId} 参，agent-loop.ts:811-819 对位——嵌套调用走同一条
+     * 校验/钩子/权限管线，钩子上下文带父 id）。顶层调用为 {@code null}。
+     */
+    private final String parentToolCallId;
 
     /**
      * @param laneName    车道名（传给钩子；pi 的钩子事件带 {@code lane}）
@@ -101,6 +107,18 @@ public final class PiToolRunner implements PiLoop.ToolRunner {
     public PiToolRunner(String laneName, ToolRegistry registry, HookSystem hooks,
                         ToolContext toolContext, AbortSignal signal, ToolObserver observer,
                         java.util.function.Supplier<java.util.Set<AgentTool<?, ?>>> activeTools) {
+        this(laneName, registry, hooks, toolContext, signal, observer, activeTools, null);
+    }
+
+    /**
+     * 批 27（B162）：嵌套调用形态——{@code parentToolCallId} 非空时，before/after 钩子
+     * 上下文带上父调用 id（pi {@code _beforeToolCall(context, parentToolCallId)}，
+     * agent-session.ts:657-681 对位）。
+     */
+    public PiToolRunner(String laneName, ToolRegistry registry, HookSystem hooks,
+                        ToolContext toolContext, AbortSignal signal, ToolObserver observer,
+                        java.util.function.Supplier<java.util.Set<AgentTool<?, ?>>> activeTools,
+                        String parentToolCallId) {
         this.laneName = laneName;
         this.registry = registry;
         this.hooks = hooks;
@@ -108,6 +126,7 @@ public final class PiToolRunner implements PiLoop.ToolRunner {
         this.signal = signal;
         this.observer = observer;
         this.activeTools = activeTools;
+        this.parentToolCallId = parentToolCallId;
     }
 
     /**
@@ -129,7 +148,8 @@ public final class PiToolRunner implements PiLoop.ToolRunner {
         try {
             ToolArgumentsValidator.validate(tool.inputSchema(), call.args());
             decision = hooks == null ? null : hooks.fireBeforeTool(laneName,
-                new ToolCallContext(laneName, call.toolCallId(), call.toolName(), call.args()));
+                new ToolCallContext(laneName, call.toolCallId(), call.toolName(), call.args(),
+                    parentToolCallId));
         } catch (Exception e) {
             return immediate(call, true, messageOf(e), false);
         }
@@ -226,7 +246,7 @@ public final class PiToolRunner implements PiLoop.ToolRunner {
             var finalized = hooks == null ? new AfterToolOutcome(executed, isError)
                 : hooks.fireAfterTool(laneName, new ToolResultContext(
                     laneName, call.toolCallId(), call.toolName(), executed, isError,
-                    state.args()));
+                    state.args(), parentToolCallId));
             // B85（批 9）：pi agent-session.ts:705-712 在扩展钩子之后对最终 content
             // 跑 normalizeToolResultImages——扩展/MCP/截图工具直接塞回的 base64 大图
             // 也要在入历史前按当前模型档位归一。无图/无变化返回同一引用。
