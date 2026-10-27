@@ -392,7 +392,15 @@ public sealed interface Message
                               * 本体的单调钟毫秒数（不含校验/审批/hook）；未执行的调用
                               * 与旧数据为 null（≙ pi 的 undefined，键省略）。
                               */
-                             Long durationMs) implements Message {
+                             Long durationMs,
+                             /**
+                              * 批 27（B162；pi {@code types.ts:630}）：本工具经
+                              * {@code ctx.executeTool()} 发起的嵌套调用记录。只为会话
+                              * 记录保留，<b>不发给模型</b>（pi 注释逐字 "Kept for the
+                              * session record; not sent to the model"）——provider 投影
+                              * 只读 {@code content}，天然不携带。null ≙ pi 的缺席。
+                              */
+                             NestedToolCalls nestedCalls) implements Message {
         /** Compact constructor: defensive copies; empty {@code addedToolNames} ≙ pi 的省略。 */
         public ToolResultMessage {
             content = List.copyOf(content);
@@ -422,6 +430,35 @@ public sealed interface Message
                                  boolean isError, java.time.Instant timestamp) {
             this(toolUseId, toolName, content, details, usage, addedToolNames,
                 isError, timestamp, null);
+        }
+
+        /**
+         * 批 27 之前的规范九参构造：{@code nestedCalls} 缺席（无嵌套调用的结果、
+         * 存量构造点零改签用）。
+         */
+        public ToolResultMessage(String toolUseId, String toolName,
+                                 List<ContentBlock> content,
+                                 Object details, Object usage, List<String> addedToolNames,
+                                 boolean isError, java.time.Instant timestamp,
+                                 Long durationMs) {
+            this(toolUseId, toolName, content, details, usage, addedToolNames,
+                isError, timestamp, durationMs, null);
+        }
+
+        /**
+         * pi 的挂载点是不可变对象的字段赋值（{@code agent-session.ts:1106-1112}
+         * {@code message.nestedCalls = summary.calls}）；java record 不可变，
+         * 对位为 wither——<b>必须先于落盘调用</b>（宿主缝在 message_start 事件臂）。
+         */
+        public ToolResultMessage withNestedCalls(NestedToolCalls calls) {
+            return new ToolResultMessage(toolUseId, toolName, content, details, usage,
+                addedToolNames, isError, timestamp, durationMs, calls);
+        }
+
+        /** 嵌套调用的 usage 并入（pi 同点 {@code message.usage = combineUsage(...)}）。 */
+        public ToolResultMessage withUsage(Object mergedUsage) {
+            return new ToolResultMessage(toolUseId, toolName, content, details, mergedUsage,
+                addedToolNames, isError, timestamp, durationMs, nestedCalls);
         }
 
         @Override

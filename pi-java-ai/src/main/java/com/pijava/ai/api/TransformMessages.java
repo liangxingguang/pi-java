@@ -187,7 +187,7 @@ public final class TransformMessages {
         }
         return new Message.ToolResultMessage(msg.toolUseId(), msg.toolName(), content,
                 msg.details(), msg.usage(), msg.addedToolNames(), msg.isError(), msg.timestamp(),
-                msg.durationMs());
+                msg.durationMs(), msg.nestedCalls());
     }
 
     /**
@@ -200,7 +200,7 @@ public final class TransformMessages {
         }
         return new Message.ToolResultMessage(toolUseId, msg.toolName(), msg.content(),
                 msg.details(), msg.usage(), msg.addedToolNames(), msg.isError(), msg.timestamp(),
-                msg.durationMs());
+                msg.durationMs(), msg.nestedCalls());
     }
 
     /**
