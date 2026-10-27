@@ -47,35 +47,6 @@ public record Usage(
     }
 
     /**
-     * Sum of two usages, keeping the optional token splits when either side
-     * reports them (pi {@code combineUsage}, {@code core/usage-totals.ts:31-52};
-     * 批 27/B162 裁决⑧：落 ai 模块，coding-agent/agent-core 共用——嵌套工具
-     * 调用的 usage 并入父 tool result 消息）。
-     */
-    public static Usage combine(Usage first, Usage second) {
-        return new Usage(
-            first.input + second.input,
-            first.output + second.output,
-            first.cacheRead + second.cacheRead,
-            first.cacheWrite + second.cacheWrite,
-            first.cacheWrite1h != null || second.cacheWrite1h != null
-                ? (first.cacheWrite1h == null ? 0 : first.cacheWrite1h)
-                    + (second.cacheWrite1h == null ? 0 : second.cacheWrite1h)
-                : null,
-            first.reasoning != null || second.reasoning != null
-                ? (first.reasoning == null ? 0 : first.reasoning)
-                    + (second.reasoning == null ? 0 : second.reasoning)
-                : null,
-            first.totalTokens + second.totalTokens,
-            new Cost(
-                first.cost.input + second.cost.input,
-                first.cost.output + second.cost.output,
-                first.cost.cacheRead + second.cost.cacheRead,
-                first.cost.cacheWrite + second.cost.cacheWrite,
-                first.cost.total + second.cost.total));
-    }
-
-    /**
      * Create a usage with only input/output token counts and zero cost.
      * Convenience for providers that do not report cache/cost breakdowns.
      */
