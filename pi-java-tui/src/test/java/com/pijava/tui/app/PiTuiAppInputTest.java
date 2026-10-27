@@ -84,8 +84,9 @@ class PiTuiAppInputTest {
             assertThat(routed).isNotEmpty();
             assertThat(backend.drawCount()).isGreaterThan(drawsBefore);
             assertThat(chatScreen.messageCount()).isGreaterThan(0);
+            // 批 25（docs/36 T8）：/help 结果走 Markdown 渲染（pi Markdown 组件对位）。
             assertThat(chatScreen.lastMessage())
-                .isInstanceOf(ChatMessage.System.class);
+                .isInstanceOf(ChatMessage.Markdown.class);
 
             // "/settings" opens the settings overlay.
             backend.feed("/settings\r");
