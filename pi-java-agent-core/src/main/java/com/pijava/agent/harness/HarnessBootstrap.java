@@ -160,6 +160,23 @@ abstract class HarnessBootstrap implements AutoCloseable {
         return queueManager.followUp(laneName, prompt, images == null ? List.of() : images);
     }
 
+    /**
+     * 批 26（docs/37 T1）：pi {@code agent.steer(appMessage)} 的 custom 臂——
+     * 扩展 custom 消息进 steering 队列（content 为 null ≙ pi 的 {@code ?? []}）。
+     */
+    public String steerCustom(String laneName, String customType,
+                              com.pijava.agent.entry.CustomMessageContent content,
+                              boolean display, java.util.Map<String, Object> details) {
+        return queueManager.steerCustom(laneName, customType, content, display, details);
+    }
+
+    /** {@link #steerCustom} 的 followUp 臂（pi {@code agent.followUp(appMessage)}）。 */
+    public String followUpCustom(String laneName, String customType,
+                                 com.pijava.agent.entry.CustomMessageContent content,
+                                 boolean display, java.util.Map<String, Object> details) {
+        return queueManager.followUpCustom(laneName, customType, content, display, details);
+    }
+
     /** Enqueue a next-run prompt (starts a run when the lane is idle). */
     public String nextRun(String laneName, String prompt) {
         return queueManager.nextRun(laneName, prompt);

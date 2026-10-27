@@ -432,7 +432,7 @@ class PostRunCompactionCheckTest {
             new Message.UserMessage(List.of(new ContentBlock.TextContent("hello")))));
         lane.transcript.add(messageEntry("e2", "e1", ok));
         lane.messages.add(ok);
-        lane.steerQueue.add(new LaneInfo.QueuedItem("next", 0));
+        lane.steerQueue.add(new LaneInfo.QueuedItem.Text("next", 0));
         var r = rig(lane, SETTINGS, MODEL);
         assertThat(r.check().checkAfterRun("default", lane, ok)).isTrue();
         assertThat(r.obs().starts).isEmpty();   // 没压，只是队列
@@ -443,7 +443,7 @@ class PostRunCompactionCheckTest {
     void nullLastAssistantShortCircuitsBeforeQueues() {
         // pi :1118-1121：本 pass 没见过助手消息 ⇒ 直接 false，队列也不算。
         var lane = new LaneState();
-        lane.steerQueue.add(new LaneInfo.QueuedItem("next", 0));
+        lane.steerQueue.add(new LaneInfo.QueuedItem.Text("next", 0));
         var r = rig(lane, SETTINGS, MODEL);
         assertThat(r.check().checkAfterRun("default", lane, null)).isFalse();
     }

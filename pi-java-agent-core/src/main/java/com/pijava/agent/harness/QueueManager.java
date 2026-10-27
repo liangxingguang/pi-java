@@ -38,7 +38,8 @@ final class QueueManager {
 
     /** Enqueue a steer prompt with images. */
     String steer(String laneName, String prompt, List<PromptImage> images) {
-        return enqueue(laneName, prompt, images, target -> target.steerQueue, QueueKind.STEER);
+        return enqueue(laneName, new LaneInfo.QueuedItem.Text(prompt, images, 0),
+            target -> target.steerQueue, QueueKind.STEER);
     }
 
     /** Enqueue a follow-up prompt. Phase 3. */
@@ -48,8 +49,8 @@ final class QueueManager {
 
     /** Enqueue a follow-up prompt with images. */
     String followUp(String laneName, String prompt, List<PromptImage> images) {
-        return enqueue(laneName, prompt, images, target -> target.followUpQueue,
-            QueueKind.FOLLOW_UP);
+        return enqueue(laneName, new LaneInfo.QueuedItem.Text(prompt, images, 0),
+            target -> target.followUpQueue, QueueKind.FOLLOW_UP);
     }
 
     /** Enqueue a next-run prompt. Phase 3. */
@@ -59,26 +60,57 @@ final class QueueManager {
 
     /** Enqueue a next-run prompt with images. */
     String nextRun(String laneName, String prompt, List<PromptImage> images) {
-        return enqueue(laneName, prompt, images, target -> target.nextRunQueue,
-            QueueKind.NEXT_RUN);
+        return enqueue(laneName, new LaneInfo.QueuedItem.Text(prompt, images, 0),
+            target -> target.nextRunQueue, QueueKind.NEXT_RUN);
+    }
+
+    /**
+     * 批 26（docs/37 T1）：pi {@code agent.steer(appMessage)} 的 custom 臂——
+     * 扩展 custom 消息进 steering 队列（pi 里 custom 不进会话级
+     * {@code _steeringMessages} 文本表，只在 agent 队列）。
+     */
+    String steerCustom(String laneName, String customType,
+                       com.pijava.agent.entry.CustomMessageContent content,
+                       boolean display, java.util.Map<String, Object> details) {
+        return enqueue(laneName,
+            new LaneInfo.QueuedItem.Custom(customType, content, display, details, 0),
+            target -> target.steerQueue, QueueKind.STEER);
+    }
+
+    /** {@link #steerCustom} 的 followUp 臂（pi {@code agent.followUp(appMessage)}）。 */
+    String followUpCustom(String laneName, String customType,
+                          com.pijava.agent.entry.CustomMessageContent content,
+                          boolean display, java.util.Map<String, Object> details) {
+        return enqueue(laneName,
+            new LaneInfo.QueuedItem.Custom(customType, content, display, details, 0),
+            target -> target.followUpQueue, QueueKind.FOLLOW_UP);
     }
 
     /**
      * Append an item to the selected queue and emit its {@code QueueEnqueued}
      * record (原 docs/21 D2 — the record log is the audit source, so every
-     * enqueue must be recorded).
+     * enqueue must be recorded). {@code item} 的 seq 在此分配（入参恒 0）。
      */
-    private String enqueue(String laneName, String prompt, List<PromptImage> images,
+    private String enqueue(String laneName, LaneInfo.QueuedItem item,
                            QueueAccessor accessor, QueueKind kind) {
         var lane = requireLane(laneName);
         synchronized (lane) {
-            var item = new LaneInfo.QueuedItem(prompt, images, lane.queueSeq++);
-            accessor.queueOf(lane).addLast(item);
+            var queued = withSeq(item, lane.queueSeq++);
+            accessor.queueOf(lane).addLast(queued);
             lane.records.add(new LaneRecord.QueueEnqueued(
                 UUID.randomUUID().toString(), 0, laneName, null, kind,
-                currentRunId(lane), HarnessUtils.provisionedQueueTarget(item)));
-            return Long.toString(item.seq());
+                currentRunId(lane), HarnessUtils.provisionedQueueTarget(queued)));
+            return Long.toString(queued.seq());
         }
+    }
+
+    private static LaneInfo.QueuedItem withSeq(LaneInfo.QueuedItem item, long seq) {
+        return switch (item) {
+            case LaneInfo.QueuedItem.Text t -> new LaneInfo.QueuedItem.Text(
+                t.prompt(), t.images(), seq);
+            case LaneInfo.QueuedItem.Custom c -> new LaneInfo.QueuedItem.Custom(
+                c.customType(), c.content(), c.display(), c.details(), seq);
+        };
     }
 
     /**
@@ -187,7 +219,12 @@ final class QueueManager {
         synchronized (lane) {
             var result = new ArrayList<String>();
             for (var item : accessor.queueOf(lane)) {
-                result.add(item.prompt());
+                // 批 26（docs/37 T1）：custom 项不进文本快照——pi 的
+                // {@code _steeringMessages}/{@code _followUpMessages} 只装用户文本，
+                // custom 消息直进 agent 队列（agent-session.ts:2371-2378 对位）。
+                if (item instanceof LaneInfo.QueuedItem.Text text) {
+                    result.add(text.prompt());
+                }
             }
             return result;
         }

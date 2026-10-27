@@ -476,7 +476,7 @@ public final class PiLaneEngine {
             return List.of();
         }
         emitQueueConsumed(laneName, QueueKind.STEER, items);
-        return toMessages(items);
+        return toMessages(laneName, items);
     }
 
     /** follow-up 队列 → 内层循环耗尽后的下一轮。 */
@@ -486,7 +486,7 @@ public final class PiLaneEngine {
             return List.of();
         }
         emitQueueConsumed(laneName, QueueKind.FOLLOW_UP, items);
-        return toMessages(items);
+        return toMessages(laneName, items);
     }
 
     private void emitQueueConsumed(String laneName, QueueKind kind,
@@ -505,10 +505,25 @@ public final class PiLaneEngine {
      * {@code message_start}/{@code message_end}（{@code agent-loop.ts:200-208}）
      * —— **没有合并**。旧的 {@code ActionExecutor} 把整批拼成一条带空行分隔的用户消息，
      * 那是 pi-java 自己的构造，本次对齐予以纠正。</p>
+     *
+     * <p>批 26（docs/37 T1，裁决⑧）：custom 项经
+     * {@link HarnessUtils#buildQueuedCustomMessage} 投影为 user 消息，并把
+     * 「消息实例 ⇒ custom 载荷」登记到 {@code lane.customOrigins}——
+     * {@link PiLaneSink} 的 message_end 落盘臂凭它落成
+     * {@code Entry.CustomMessage}（pi agent-session.ts:1147-1155 对位）。</p>
      */
-    private static List<Message> toMessages(List<LaneInfo.QueuedItem> items) {
+    private List<Message> toMessages(String laneName, List<LaneInfo.QueuedItem> items) {
+        var lane = ctx.requireLane(laneName);
         return items.stream()
-            .map(i -> HarnessUtils.buildUserMessage(i.prompt(), i.images()))
+            .map(item -> switch (item) {
+                case LaneInfo.QueuedItem.Text text -> HarnessUtils.buildUserMessage(
+                    text.prompt(), text.images());
+                case LaneInfo.QueuedItem.Custom custom -> {
+                    var message = HarnessUtils.buildQueuedCustomMessage(custom);
+                    lane.customOrigins.put(message, custom);
+                    yield message;
+                }
+            })
             .collect(Collectors.toList());
     }
 

@@ -270,6 +270,17 @@ public final class LaneState {
     /** Next-run queue — starts a new run when the lane is idle. */
     final ArrayDeque<LaneInfo.QueuedItem> nextRunQueue = new ArrayDeque<>();
 
+    /**
+     * 批 26（docs/37 T1）：custom 队列项的落盘身份通道——排空时 custom 项以
+     * user 投影进 LLM 上下文（转换见 {@code PiLaneEngine}），其 {@code Message}
+     * 实例在此登记；{@code PiLaneSink.onMessageEnd} 命中即落成
+     * {@code Entry.CustomMessage}（pi 的 message_end 处理器对 custom role 落
+     * custom_message 条目的对位，agent-session.ts:1147-1155）。按对象引用键
+     * （sink 的 alreadyPresent 抑制同款）。
+     */
+    final java.util.IdentityHashMap<com.pijava.ai.message.Message, LaneInfo.QueuedItem.Custom>
+        customOrigins = new java.util.IdentityHashMap<>();
+
     /** Monotonic sequence number shared by all three queues. */
     long queueSeq;
 

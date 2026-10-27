@@ -75,6 +75,14 @@ final class HarnessUtils {
     }
 
     /**
+     * 批 26（docs/37 T1）：custom 队列项的 LLM 投影——pi {@code convertToLlm}
+     * 的 custom case（custom_message ⇒ user 消息；display/details 不进上下文）。
+     */
+    static Message.UserMessage buildQueuedCustomMessage(LaneInfo.QueuedItem.Custom item) {
+        return new Message.UserMessage(item.content().toBlocks(), java.time.Instant.now());
+    }
+
+    /**
      * Provision a queued item as a placeholder entry for queue records
      * ({@code QueueEnqueued} target / {@code QueueConsumed} targets).
      *
@@ -84,9 +92,14 @@ final class HarnessUtils {
      * stable so a cancel/consume record can reference the same item.</p>
      */
     static ProvisionedEntry<?> provisionedQueueTarget(LaneInfo.QueuedItem item) {
-        return new ProvisionedEntry<>(new Entry.Message(
-            Long.toString(item.seq()), 0, null, null,
-            buildUserMessage(item.prompt(), item.images()), null));
+        return switch (item) {
+            case LaneInfo.QueuedItem.Text text -> new ProvisionedEntry<>(new Entry.Message(
+                Long.toString(text.seq()), 0, null, null,
+                buildUserMessage(text.prompt(), text.images()), null));
+            case LaneInfo.QueuedItem.Custom custom -> new ProvisionedEntry<>(new Entry.CustomMessage(
+                Long.toString(custom.seq()), 0, null, null,
+                custom.customType(), custom.content(), custom.display(), custom.details()));
+        };
     }
 
     static LaneState.NewestOwn deriveNewestOwn(LaneState lane) {

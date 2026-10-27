@@ -341,7 +341,17 @@ final class PiLaneSink implements PiLoop.Sink {
                 lane.newestOwn = HarnessUtils.deriveNewestOwn(lane);
             }
             case Message.ToolResultMessage result -> emitToolRecords(lane, append(lane, message), result);
-            default -> append(lane, message);
+            default -> {
+                // 批 26（docs/37 T1）：custom 队列项的 user 投影落盘为
+                // Entry.CustomMessage（pi agent-session.ts:1147-1155——message_end
+                // 处理器把 role==="custom" 落成 custom_message 条目）。
+                var custom = lane.customOrigins.remove(message);
+                if (custom != null) {
+                    appendCustom(lane, message, custom);
+                } else {
+                    append(lane, message);
+                }
+            }
         }
         // 状态发布：旧路径在 AgentHarness 的每个 action 后发布，
         // 新驱动的等价点是「每条 entry 产生后」。少了这一步，会话快照会停在
@@ -356,6 +366,19 @@ final class PiLaneSink implements PiLoop.Sink {
         // RunLifecycle.startRun() 在起手时写入，不走这里，语义不受影响。
         return lane.appendDeferredEntry((seq, parentId) -> new Entry.Message(
             UUID.randomUUID().toString(), 0, parentId, null, message, null));
+    }
+
+    /**
+     * 批 26（docs/37 T1）：custom 队列项的落盘臂——载荷取自队列项
+     * （customType/content/display/details），时间戳取自 user 投影消息。
+     */
+    private Entry.CustomMessage appendCustom(LaneState lane, Message message,
+                                             LaneInfo.QueuedItem.Custom custom) {
+        // 生产者（PiLaneEngine.toMessages 的 custom 臂）恒造 UserMessage。
+        var timestamp = message instanceof Message.UserMessage user ? user.timestamp() : null;
+        return lane.appendDeferredEntry((seq, parentId) -> new Entry.CustomMessage(
+            UUID.randomUUID().toString(), 0, parentId, timestamp,
+            custom.customType(), custom.content(), custom.display(), custom.details()));
     }
 
     // ═══════════════════════════════════════════════════════════
