@@ -282,16 +282,31 @@ final class MarkdownBlocks {
         return new ParseResult(new Block.Table(rows), j);
     }
 
-    /** 解析单行管道表格：去掉首尾 | 后按 | 切分并 trim。 */
+    /** 解析单行管道表格：去首尾 | 后按未转义 | 切分并 trim（`\|` ⇒ 字面 |，GFM 同形）。 */
     private static List<String> parseTableRow(String line) {
         var content = line.trim();
         if (content.startsWith("|")) {
             content = content.substring(1);
         }
-        if (content.endsWith("|")) {
+        if (content.endsWith("|") && !content.endsWith("\\|")) {
             content = content.substring(0, content.length() - 1);
         }
-        return java.util.Arrays.stream(content.split("\\|")).map(String::trim).toList();
+        var cells = new ArrayList<String>();
+        var cell = new StringBuilder();
+        for (int k = 0; k < content.length(); k++) {
+            char c = content.charAt(k);
+            if (c == '\\' && k + 1 < content.length() && content.charAt(k + 1) == '|') {
+                cell.append('|');
+                k++;
+            } else if (c == '|') {
+                cells.add(cell.toString().trim());
+                cell.setLength(0);
+            } else {
+                cell.append(c);
+            }
+        }
+        cells.add(cell.toString().trim());
+        return cells;
     }
 
     // ── 段落（连续非空行合并，块起始行中断） ─────────────────
