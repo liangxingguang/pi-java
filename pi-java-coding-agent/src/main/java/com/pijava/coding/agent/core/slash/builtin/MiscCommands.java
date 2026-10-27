@@ -263,6 +263,22 @@ public final class MiscCommands {
             }
             builder.append(" |\n");
         }
+        // 批 26（docs/37 T9）：pi interactive-mode.ts:6901-6915——扩展快捷键段
+        //（描述缺省回落 extensionPath，pi `shortcut.description ?? shortcut.extensionPath`）。
+        var session = ctx.session();
+        var extensionShortcuts = session == null
+            ? java.util.List.<com.pijava.coding.agent.extension.ExtensionShortcuts
+                .ResolvedShortcut>of()
+            : session.extensionShortcuts(keys).shortcuts();
+        if (!extensionShortcuts.isEmpty()) {
+            builder.append("\n\n**Extensions**\n\n| Key | Action |\n|-----|--------|\n");
+            for (var shortcut : extensionShortcuts) {
+                builder.append("| `").append(describe(shortcut.stroke())).append("` | ")
+                    .append(shortcut.description() != null
+                        ? shortcut.description() : shortcut.extensionPath())
+                    .append(" |\n");
+            }
+        }
         return builder.toString().stripTrailing();
     }
 

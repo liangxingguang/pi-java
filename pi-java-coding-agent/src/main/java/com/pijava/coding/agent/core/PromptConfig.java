@@ -17,14 +17,32 @@ import com.pijava.ai.thinking.ModelThinkingLevel;
  *                          null ⇒ {@code "interactive"}）——docs/15 {@code input} 事件载荷
  * @param images            图片附件（pi {@code PromptOptions.images}，agent-session.ts:318；
  *                          null/空 ≙ 缺席）——批 20（B237）随 RPC images 透传接通
+ * @param expandPromptTemplates 批 26（docs/37 T3，裁决⑨）：pi {@code prompt()} 的
+ *                          {@code expandPromptTemplates} 门（agent-session.ts:1973——
+ *                          管控扩展命令派发与 skill/模板展开；null ≙ pi undefined ⇒
+ *                          <b>true</b>，CLI/TUI 存量路径行为不变；扩展的
+ *                          {@code sendUserMessage} 默认 false，pi :2390 逐字）
  */
 public record PromptConfig(
     String systemPrompt,
     ModelThinkingLevel thinkingLevel,
     StreamingBehavior streamingBehavior,
     String source,
-    List<PromptImage> images
+    List<PromptImage> images,
+    Boolean expandPromptTemplates
 ) {
+    /** 兼容构造器：五参形（expandPromptTemplates = null ≙ pi 默认 true）。 */
+    public PromptConfig(String systemPrompt, ModelThinkingLevel thinkingLevel,
+                        StreamingBehavior streamingBehavior, String source,
+                        List<PromptImage> images) {
+        this(systemPrompt, thinkingLevel, streamingBehavior, source, images, null);
+    }
+
+    /** pi {@code options?.expandPromptTemplates ?? true}（agent-session.ts:1973）。 */
+    public boolean expandOrDefault() {
+        return expandPromptTemplates == null || expandPromptTemplates;
+    }
+
     /** Default config: no overrides. */
     public static PromptConfig defaults() {
         return new PromptConfig(null, null, null, null, null);
@@ -43,5 +61,11 @@ public record PromptConfig(
     /** 批 20（B237）：RPC 输入源＋排队行为＋图片附件（pi rpc-mode.ts:398-402 全参）。 */
     public static PromptConfig rpc(StreamingBehavior behavior, List<PromptImage> images) {
         return new PromptConfig(null, null, behavior, "rpc", images);
+    }
+
+    /** 批 26（docs/37 T3）：扩展输入源全参形（pi {@code sendUserMessage} 对位）。 */
+    public static PromptConfig extension(StreamingBehavior deliverAs, List<PromptImage> images,
+                                         Boolean expandPromptTemplates) {
+        return new PromptConfig(null, null, deliverAs, "extension", images, expandPromptTemplates);
     }
 }

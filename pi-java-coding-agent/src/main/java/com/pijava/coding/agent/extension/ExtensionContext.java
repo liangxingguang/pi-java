@@ -6,6 +6,7 @@ import com.pijava.agent.entry.CustomMessageContent;
 import com.pijava.agent.skill.SkillManager;
 import com.pijava.agent.tool.ToolRegistry;
 import com.pijava.ai.provider.ProviderRegistry;
+import com.pijava.coding.agent.core.CustomMessageDelivery;
 import com.pijava.coding.agent.core.SessionServices;
 import com.pijava.coding.agent.core.SettingsManager;
 import com.pijava.coding.agent.core.slash.CommandRegistry;
@@ -154,21 +155,64 @@ public interface ExtensionContext {
      */
     default String sendMessage(String customType, CustomMessageContent content,
                                boolean display, Map<String, Object> details) {
-        return sendMessage(customType, content, display, details, new SendMessageOptions(false));
+        return sendMessage(customType, content, display, details,
+            new SendMessageOptions(Boolean.FALSE, null));
     }
 
-    /** 带选项的 {@link #sendMessage} 重载；{@code options.triggerTurn()} 本轮未实现。 */
+    /**
+     * 批 26（docs/37 T3，E5-12 收口）：pi {@code sendMessage} 全行为
+     * （agent-session.ts:2293-2329 五臂逐字——nextTurn 缓冲／流式 steer·followUp
+     * 队列〔默认 steer〕／triggerTurn 起轮〔settled 发射窗内延迟〕／流式延迟落盘／
+     * 空闲立即落盘）。
+     *
+     * @return 立即落盘臂的条目 id；其余臂（缓冲/排队/起轮）无即时条目 ⇒ {@code null}
+     */
     String sendMessage(String customType, CustomMessageContent content, boolean display,
                        Map<String, Object> details, SendMessageOptions options);
 
     /**
-     * sendMessage 投递选项（对齐 pi {@code SendMessageOptions}）。
-     *
-     * @param triggerTurn 是否触发一次 LLM 回合——当前版本未实现，{@code true} 时抛
-     *                    {@link UnsupportedOperationException}；steer/followUp/nextTurn
-     *                    投递语义为后续任务
+     * 批 26（docs/37 T3，E5-13）：pi {@code sendUserMessage}
+     * （agent-session.ts:2365-2393 逐字）——发用户消息，<b>恒触发回合</b>；流式中
+     * 按 {@code deliverAs} 排队。content 数组形：文本块 {@code "\n"} 拼接＋图片另表。
+     * {@code expandPromptTemplates} 默认 <b>false</b>（pi :2390——不派发扩展命令、
+     * 不展开 skill/模板）。
      */
-    record SendMessageOptions(boolean triggerTurn) {}
+    default void sendUserMessage(String content, SendUserMessageOptions options) {
+        sendUserMessage(CustomMessageContent.of(content), options);
+    }
+
+    /** {@link #sendUserMessage(String, SendUserMessageOptions)} 的数组形（text/image 块）。 */
+    void sendUserMessage(CustomMessageContent content, SendUserMessageOptions options);
+
+    /** {@link #sendUserMessage(String, SendUserMessageOptions)} 无选项便捷形。 */
+    default void sendUserMessage(String content) {
+        sendUserMessage(content, null);
+    }
+
+    /**
+     * sendMessage 投递选项（对齐 pi {@code SendMessageOptions}，批 26 扩 deliverAs）。
+     *
+     * @param triggerTurn 是否触发一次 LLM 回合——{@code null} ≙ pi 的 undefined
+     *                    （流式中视同 true 进队列臂，空闲视同 false 直接落盘）
+     * @param deliverAs   投递语义（{@code null} ≙ 未给）
+     */
+    record SendMessageOptions(Boolean triggerTurn, CustomMessageDelivery deliverAs) {
+        /** 兼容构造器（批 26 前的单参形）。 */
+        public SendMessageOptions(boolean triggerTurn) {
+            this(triggerTurn, null);
+        }
+    }
+
+    /**
+     * sendUserMessage 选项（pi {@code {deliverAs?: "steer"|"followUp",
+     * expandPromptTemplates?: boolean}}）。
+     *
+     * @param deliverAs 流式中的排队行为（null ≙ 未给——流式中未给则按 prompt 路由门语义）
+     * @param expandPromptTemplates null ≙ pi undefined ⇒ <b>false</b>
+     *        （sendUserMessage 私有默认，pi :2390）
+     */
+    record SendUserMessageOptions(com.pijava.coding.agent.core.StreamingBehavior deliverAs,
+                                  Boolean expandPromptTemplates) {}
 
     // ── 批 23（docs/34 T1）：MCP 服务器注册面（pi types.ts:1857-1872） ──
 
@@ -205,4 +249,106 @@ public interface ExtensionContext {
      * （{@code skill:} 前缀）；无内置命令（pi 语义：内置不可经 prompt 调用）。
      */
     java.util.List<com.pijava.coding.agent.core.slash.SlashCommandInfo> getCommands();
+
+    // ── 批 26（docs/37 T4/T5）：会话元数据与模型面 ──
+
+    /**
+     * pi {@code appendEntry}（types.ts:1719；loader.ts:391-394）——追加 custom 条目
+     * （状态持久化用，<b>不进 LLM 上下文</b>）；落盘后广播 {@code entry_appended}。
+     */
+    void appendEntry(String customType, Map<String, Object> data);
+
+    /**
+     * pi {@code setSessionName}（agent-session.ts:3942-3947）——换行消毒＋trim＋空名
+     * 清除（规范化在会话层），落 session_info 并双发 {@code session_info_changed}。
+     */
+    void setSessionName(String name);
+
+    /**
+     * pi {@code getSessionName}（session-manager.ts:1318-1327）——最新 session_info
+     * 的名（stored 名，非显示名）；未命名 ⇒ {@code null} ≙ pi undefined（裁决⑪）。
+     */
+    String getSessionName();
+
+    /**
+     * pi {@code setLabel}（loader.ts:406-409 → session-manager.ts:1441-1462）——
+     * 设置/清除条目标签（null ≙ undefined ⇒ 清除）；目标条目不存在抛
+     * {@code Entry <id> not found}（文案逐字，裁决⑦已核两存储经 validateTarget 抛）。
+     */
+    void setLabel(String entryId, String label);
+
+    /**
+     * pi 扩展面 {@code setModel}（agent-session.ts:3429-3432 逐字）：auth 未配置 ⇒
+     * <b>返回 false 不抛</b>；配置 ⇒ 会话内换模（不写全局默认——pi 扩展面
+     * 恒不 persist）＋ {@code model_select}（源 "set"）。
+     */
+    boolean setModel(com.pijava.ai.model.ModelId<?> model);
+
+    /** pi {@code getThinkingLevel}（types.ts:1766）——当前思考级别。 */
+    com.pijava.ai.thinking.ModelThinkingLevel getThinkingLevel();
+
+    /**
+     * pi {@code setThinkingLevel}（types.ts:1772 → agent-session.ts:2612-2635）——
+     * 会话内设级（不写全局默认）；级别真变才发 {@code thinking_level_changed}＋
+     * 扩展事件 {@code thinking_level_select}（桥已在 SessionEventBridge:118-120）。
+     */
+    void setThinkingLevel(com.pijava.ai.thinking.ModelThinkingLevel level);
+
+    /**
+     * 批 26（docs/37 T6，E5-17）：pi {@code exec}（types.ts:1735 → core/exec.ts
+     * 逐字语义）——无壳 spawn、timeout/signal 两臂、出错 code=1。java 侧为
+     * <b>阻塞</b>调用（pi 返回 Promise；调用方要异步请自行包虚拟线程）。
+     * cwd 默认扩展加载 cwd（loader.ts:413 对位）。
+     */
+    ExtensionExec.ExecResult exec(String command, java.util.List<String> args,
+                                  ExtensionExec.ExecOptions options);
+
+    /**
+     * 批 26（docs/37 T8，E5-5）：pi {@code unregisterProvider}（types.ts:1846；
+     * loader.ts:466-468 → modelRegistry.unregisterProvider）——移除该 provider 的
+     * 注册；未注册静默无效果（pi 同）。[裁决⑥：内置模型恢复面不做]
+     */
+    void unregisterProvider(String name);
+
+    /**
+     * 批 26（docs/37 T7，E5-28）：pi {@code ExtensionAPI.events}（types.ts:1889-1890；
+     * core/event-bus.ts:1-33）——扩展间共享通道总线。经本面 {@code on} 的订阅被
+     * 跟踪（pi {@code trackEventBusSubscription}），会话失效（替换/reload）时统一
+     * 退订。
+     */
+    ExtensionChannelBus events();
+
+    /**
+     * 批 26（docs/37 T9，E5-6）：pi {@code registerShortcut}（types.ts:1655；
+     * loader.ts:320-323）——注册键盘快捷键。keyId 非法即在注册点抛
+     * {@link IllegalArgumentException}（裁决⑫）。与内置保留键/其他扩展的冲突在
+     * 解决期按 pi 三规则处理（保留键跳过／非保留内置扩展赢／互撞后者赢，均记诊断）。
+     * 需经 per-extension 上下文调用（归属进诊断与 /hotkeys 段）。
+     */
+    void registerShortcut(String keyId, String description,
+                          ExtensionShortcut.ShortcutHandler handler);
+
+    /**
+     * 批 26（docs/37 T10，E5-8）：pi {@code registerMessageRenderer}
+     * （types.ts:1687-1688）——为 customType 的 custom 消息注册 TUI 渲染器；
+     * 解决期按扩展加载序 first-wins（runner.ts:775-782）。需经 per-extension
+     * 上下文调用。
+     */
+    void registerMessageRenderer(String customType, ExtensionMessageRenderer renderer);
+
+    /**
+     * 批 26（docs/37 T10，E5-10）：pi {@code registerEntryRenderer}
+     * （types.ts:1693-1694）——为 customType 的 custom 条目注册 TUI 渲染器；
+     * 无渲染器的 custom 条目<b>不渲染</b>（pi interactive-mode.ts:3848-3850）。
+     * 需经 per-extension 上下文调用。
+     */
+    void registerEntryRenderer(String customType, ExtensionEntryRenderer renderer);
+
+    /**
+     * 批 26（docs/37 T11，E5-9）：pi {@code registerMarkdownTransformer}
+     * （types.ts:1690-1691）——注册 markdown 变换器（渲染前应用于 assistant/
+     * thinking 消息）。<b>单槽</b>：同扩展重复注册后者覆盖（loader.ts:361 的
+     * 赋值语义）；跨扩展按加载序链式串行。需经 per-extension 上下文调用。
+     */
+    void registerMarkdownTransformer(MarkdownTransformer transformer);
 }

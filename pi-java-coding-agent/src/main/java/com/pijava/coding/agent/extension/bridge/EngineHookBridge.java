@@ -107,8 +107,22 @@ public final class EngineHookBridge {
                                        java.util.function.Consumer<com.pijava.agent.entry.Entry> commitSink,
                                        java.util.function.BooleanSupplier abortProbe,
                                        BoundaryBridge.TurnIndex turnIndex) {
+        installBoundary(hooks, harness, laneName, bus, ctx, commitSink, abortProbe, turnIndex,
+            () -> { });
+    }
+
+    /**
+     * 批 26（docs/37 T2）：带延迟 custom flush 钩的装配（pi :1903——before_settle
+     * 草稿提交后 {@code _flushPendingCustomMessages}）。
+     */
+    public static void installBoundary(HookSystem hooks, AgentHarness harness, String laneName,
+                                       ExtensionEventBus bus, ExtensionContext ctx,
+                                       java.util.function.Consumer<com.pijava.agent.entry.Entry> commitSink,
+                                       java.util.function.BooleanSupplier abortProbe,
+                                       BoundaryBridge.TurnIndex turnIndex,
+                                       Runnable pendingCustomFlush) {
         var boundary = new BoundaryBridge(harness, laneName, bus, ctx, commitSink, abortProbe,
-            turnIndex);
+            turnIndex, pendingCustomFlush);
         hooks.onFinishTurn(laneName, boundary::turnEnd);
         hooks.onBeforeSettle(laneName, boundary::beforeSettle);
     }

@@ -64,11 +64,20 @@ public final class BoundaryBridge {
     private final Consumer<Entry> commitSink;
     private final BooleanSupplier abortProbe;
     private final TurnIndex turnIndex;
+    /** 批 26（docs/37 T2）：pi :1903 对位——草稿提交后 flush 延迟 custom 消息。 */
+    private final Runnable pendingCustomFlush;
     private String outcome = "completed";
 
     BoundaryBridge(AgentHarness harness, String laneName, ExtensionEventBus bus,
                    ExtensionContext ctx, Consumer<Entry> commitSink,
                    BooleanSupplier abortProbe, TurnIndex turnIndex) {
+        this(harness, laneName, bus, ctx, commitSink, abortProbe, turnIndex, () -> { });
+    }
+
+    BoundaryBridge(AgentHarness harness, String laneName, ExtensionEventBus bus,
+                   ExtensionContext ctx, Consumer<Entry> commitSink,
+                   BooleanSupplier abortProbe, TurnIndex turnIndex,
+                   Runnable pendingCustomFlush) {
         this.harness = harness;
         this.laneName = laneName;
         this.bus = bus;
@@ -76,6 +85,7 @@ public final class BoundaryBridge {
         this.commitSink = commitSink;
         this.abortProbe = abortProbe;
         this.turnIndex = turnIndex;
+        this.pendingCustomFlush = pendingCustomFlush;
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -132,7 +142,9 @@ public final class BoundaryBridge {
         }
         var result = dispatchBeforeSettle();
         commit(result.entries());
-        // pi _flushPendingCustomMessages：java 无 pendingCustom 面（sendMessage 即写，D21）。
+        // 批 26（docs/37 T2）：pi :1903——commit 后 flush 延迟 custom 消息
+        //（批 26 前 java 无 pendingCustom 面〔D21〕，本批落地）。
+        pendingCustomFlush.run();
         if (abortProbe.getAsBoolean()) {
             return false; // pi _abortDuringBeforeSettle
         }

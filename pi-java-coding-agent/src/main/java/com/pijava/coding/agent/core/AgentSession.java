@@ -153,6 +153,15 @@ public final class AgentSession implements AutoCloseable {
     // pi _pendingBashMessages（agent-session.ts:421）：运行中暂存的会话级 bash 结果，
     // settled 时 flush（保 tool_use/tool_result 次序）。
     private final List<Entry.BashExecution> pendingBashMessages = new ArrayList<>();
+    // ── 批 26（docs/37 T2）：pi sendCustomMessage 的三缓冲对位 ──
+    /** pi {@code _pendingNextTurnMessages}（:397）：随下一条用户 prompt 注入的 custom 消息。 */
+    private final List<QueuedCustomMessage> pendingNextTurnMessages = new ArrayList<>();
+    /** pi {@code _pendingCustomMessages}（:400）：流式中 triggerTurn=false 的延迟落盘缓冲。 */
+    private final List<QueuedCustomMessage> pendingCustomMessages = new ArrayList<>();
+    /** pi {@code _deferredSettledActions}（:434）：settled 发射窗内 triggerTurn 的延迟动作。 */
+    private final List<Runnable> deferredSettledActions = new ArrayList<>();
+    /** pi {@code _isEmittingAgentSettled}（:433）。包内可见：SessionRunner 双发射点共享。 */
+    boolean emittingAgentSettled;
     // B137：--models/settings patterns 解析出的 scope（Ctrl+P / cycle_model 在其间轮转）。
     private List<com.pijava.ai.model.ScopedModel> scopedModels = List.of();
     // scope 解析与轮转都对全目录（assemble 构造的同一实例）。
@@ -1282,6 +1291,60 @@ public final class AgentSession implements AutoCloseable {
     }
 
     /**
+     * 批 26（docs/37 T9）：pi {@code runner.getShortcuts} 的会话出口——冲突三规则
+     * 解决后的扩展快捷键表（TUI 在 attach/switch 时取；无扩展装配 ⇒ 空）。
+     * 诊断随 {@code Resolution} 返回（TUI 有 UI ⇒ 不打 stderr，pi 同门）。
+     */
+    public com.pijava.coding.agent.extension.ExtensionShortcuts.Resolution extensionShortcuts(
+            KeybindingsManager keys) {
+        var context = extensionContext;
+        if (context == null) {
+            return new com.pijava.coding.agent.extension.ExtensionShortcuts.Resolution(
+                List.of(), List.of());
+        }
+        return context.resolvedShortcuts(keys, true);
+    }
+
+    /**
+     * 批 26（docs/37 T9）：快捷键 handler 的会话级上下文（pi setupExtensionShortcuts
+     * 的 createContext 对位——中性会话 ctx，非 per-extension API；无装配 ⇒ null）。
+     */
+    public com.pijava.coding.agent.extension.ExtensionContext extensionShortcutContext() {
+        return extensionContext;
+    }
+
+    /**
+     * 批 26（docs/37 T10）：pi {@code runner.getMessageRenderer} 的会话出口
+     * （first-wins；无装配/无命中 ⇒ null）。
+     */
+    public com.pijava.coding.agent.extension.ExtensionMessageRenderer messageRendererFor(
+            String customType) {
+        var context = extensionContext;
+        return context == null ? null : context.resolveMessageRenderer(customType);
+    }
+
+    /**
+     * 批 26（docs/37 T10）：pi {@code runner.getEntryRenderer} 的会话出口
+     * （first-wins；无装配/无命中 ⇒ null）。
+     */
+    public com.pijava.coding.agent.extension.ExtensionEntryRenderer entryRendererFor(
+            String customType) {
+        var context = extensionContext;
+        return context == null ? null : context.resolveEntryRenderer(customType);
+    }
+
+    /**
+     * 批 26（docs/37 T11）：pi {@code runner.getMarkdownTransformers} 的会话出口
+     * （扩展加载序的变换链；无装配 ⇒ 空表）。
+     */
+    public java.util.List<com.pijava.coding.agent.extension.MarkdownTransformer>
+            markdownTransformers() {
+        var context = extensionContext;
+        return context == null
+            ? java.util.List.of() : context.markdownTransformers();
+    }
+
+    /**
      * 批 16（T5b，C-23/E5-29/B246）：pi {@code AgentSession.reload()}
      * （agent-session.ts:3660-3701）的 java 对位——七步序见 {@link SessionReload}。
      * 双门（isStreaming/isCompacting）在命令层（pi interactive-mode.ts:6430-6440 同位）。
@@ -1565,12 +1628,45 @@ public final class AgentSession implements AutoCloseable {
             PromptConfig config,
             StreamObserver streamObserver,
             EntryObserver entryObserver) {
+        // 批 26（docs/37 T3，pi :1968-1972 对位）：settled 发射窗内的 prompt 延迟到
+        // settled 收尾后执行（pi 进 _deferredSettledActions）。外层 SessionResult 的
+        // stream/futures 经桥接跟随内层。
+        if (emittingAgentSettled) {
+            var deferredQueue = new LinkedBlockingQueue<Optional<StreamEvent>>();
+            var deferredEntries = new CompletableFuture<List<Entry>>();
+            var deferredStatus = new CompletableFuture<RunStatus>();
+            deferredSettledActions.add(() -> {
+                var inner = processPrompt(prompt, config,
+                    streamObserver == null
+                        ? event -> deferredQueue.add(Optional.of(event)) : streamObserver,
+                    entryObserver);
+                inner.statusFuture().whenComplete((st, err) -> {
+                    if (err != null) {
+                        deferredStatus.completeExceptionally(err);
+                        deferredEntries.completeExceptionally(err);
+                    }
+                });
+                deferredEntries.complete(inner.entries());
+                deferredStatus.complete(inner.status());
+                deferredQueue.add(Optional.empty());
+            });
+            Stream<StreamEvent> stream = Stream.generate(() -> {
+                try {
+                    return deferredQueue.take();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return Optional.<StreamEvent>empty();
+                }
+            }).takeWhile(Optional::isPresent).map(Optional::get);
+            return new SessionResult(stream, deferredEntries, deferredStatus, "deferred");
+        }
+        boolean expandPromptTemplates = config.expandOrDefault();
         // 批 20（B237，pi agent-session.ts:1978-1984 逐字序）：扩展命令臂在
         // input 事件与压缩门**之前**——"Handle extension commands first (execute
         // immediately, even during streaming)"（pi 注释逐字）；handled ⇒ 不展开、
-        // 不排队、不驱动。pi 的 expandPromptTemplates 门 java 无 SDK 开关面、
-        // 恒真（窄差 D117）。
-        if (prompt.startsWith("/")) {
+        // 不排队、不驱动。批 26（docs/37 T3，裁决⑨）：expandPromptTemplates 门落地
+        //（pi :1977——false ⇒ 不派发扩展命令；CLI/TUI 存量路径恒 true）。
+        if (expandPromptTemplates && prompt.startsWith("/")) {
             var command = services.slashCommands() == null ? null
                 : services.slashCommands().extensionCommand(prompt);
             if (command != null) {
@@ -1599,7 +1695,9 @@ public final class AgentSession implements AutoCloseable {
             inputText = outcome.text();
         }
         // pi :2008-2009（prompt 主路径）与 :2191-2192（队列路径同序）：先 /skill: 后模板。
-        var expandedPrompt = expandUserPrompt(inputText);
+        // 批 26（docs/37 T3，裁决⑨）：expandPromptTemplates 门（pi :2007）——false ⇒
+        // 原文透传（扩展 sendUserMessage 默认 false，pi :2390）。
+        var expandedPrompt = expandPromptTemplates ? expandUserPrompt(inputText) : inputText;
         // A5（原 docs/25）：路由门在任何副作用之前 —— 压缩中/运行中未指定
         // streamingBehavior 的 prompt 在调用线程同步抛出（pi 同形状，
         // agent-session.ts:1939-1979）；运行中显式 steer/followUp 仅排队。
@@ -1631,6 +1729,9 @@ public final class AgentSession implements AutoCloseable {
         // docs/15：pi :2061-2110 —— before_agent_start（仅非流式驱动路；流式排队路
         // 在上面路由门已返回）。systemPrompt 覆盖是 harness 全局态（窄差 D11）；
         // result.message 落盘序为 custom 条目先于用户消息（窄差 D19）。
+        // 批 26（docs/37 T2，pi :2028-2030 对位）：新 prompt 驱动前 flush 延迟
+        // custom 消息（在 before_agent_start 与模型校验之前，pi 同序）。
+        flushPendingCustomMessages();
         if (extensionFirer != null) {
             // 批 16（T3c）：sections 基线＝harness 当前自定义段的拷贝，处理器改写
             // 的终态写回 harness——下一 run 的 promptLoadout diff 自动产补丁
@@ -1653,9 +1754,14 @@ public final class AgentSession implements AutoCloseable {
         var entriesFuture = new CompletableFuture<List<Entry>>();
         var statusFuture = new CompletableFuture<RunStatus>();
 
+        // 批 26（docs/37 T2，pi :2088-2092 对位）：nextTurn custom 消息随本条
+        // prompt 注入（排在用户消息之后，经 initialMessages 进待发列表）。
+        var nextTurnCustoms = drainPendingNextTurnMessages().stream()
+            .map(QueuedCustomMessage::toQueuedItem).toList();
+
         Thread.startVirtualThread(() -> SessionRunner.drive(
-            this, expandedPrompt, config.images(), queue, entriesFuture, statusFuture,
-            streamObserver, entryObserver));
+            this, expandedPrompt, config.images(), nextTurnCustoms, queue, entriesFuture,
+            statusFuture, streamObserver, entryObserver));
 
         Stream<StreamEvent> stream = Stream.generate(() -> {
             try {
@@ -2425,6 +2531,10 @@ public final class AgentSession implements AutoCloseable {
         var previousId = sessionId();
         // 批 17（T7）：pi setBeforeSessionInvalidate 对位——切换前复位扩展 UI。
         extensionUI.onSessionInvalidated();
+        // 批 26（docs/37 T7）：pi runtime.invalidate 的 eventBus 半——通道订阅统一退订。
+        if (extensionContext != null) {
+            extensionContext.invalidateChannels();
+        }
         fireSessionShutdown("resume", idOrPrefix);
         var found = findSession(idOrPrefix).orElseThrow();
         // 批 17 评审回补（Important #2）：模式层 UI/mode 注入换入会话（pi
@@ -2675,6 +2785,166 @@ public final class AgentSession implements AutoCloseable {
         return harness.snapshot(laneName()).leafId();
     }
 
+    // ── 批 26（docs/37 T2）：pi sendCustomMessage 五臂（agent-session.ts:2293-2329）──
+
+    /**
+     * pi {@code sendCustomMessage} 全行为对位（批 26，E5-12）。臂序即语义（pi 是
+     * if-else 链，次序不可换）：
+     *
+     * <ol>
+     *   <li>{@code deliverAs == NEXT_TURN} ⇒ 进 {@link #pendingNextTurnMessages}
+     *       （无视流式态与 triggerTurn，pi :2306-2307）；</li>
+     *   <li>流式中且 {@code triggerTurn != false} ⇒ followUp/steer 队列（默认 steer，
+     *       pi :2308-2314）；</li>
+     *   <li>{@code triggerTurn == true}（非流式）⇒ settled 发射窗内进
+     *       {@link #deferredSettledActions}，否则异步起一轮（pi :2315-2320；异步与
+     *       错误通道对位 pi 的 actions 包装 :3389-3396——失败经 emitError 上报，
+     *       {@code event: "send_message"}）；</li>
+     *   <li>流式中且 triggerTurn=false ⇒ {@link #pendingCustomMessages}（此刻不发
+     *       任何消息事件，pi :2321-2326）；</li>
+     *   <li>其余 ⇒ 立即落盘＋广播（pi :2327-2328）。</li>
+     * </ol>
+     *
+     * @return 立即落盘臂的条目 id；其余臂无即时条目 ⇒ {@code null}
+     */
+    public String sendCustomMessage(String customType,
+                                    com.pijava.agent.entry.CustomMessageContent content,
+                                    boolean display, Map<String, Object> details,
+                                    Boolean triggerTurn, CustomMessageDelivery deliverAs) {
+        var payload = new QueuedCustomMessage(customType, content, display, details);
+        if (deliverAs == CustomMessageDelivery.NEXT_TURN) {
+            pendingNextTurnMessages.add(payload);
+            return null;
+        }
+        boolean streaming = harness.isRunning(laneName());
+        if (streaming && !Boolean.FALSE.equals(triggerTurn)) {
+            if (deliverAs == CustomMessageDelivery.FOLLOW_UP) {
+                harness.followUpCustom(laneName(), customType, payload.content(), display, details);
+            } else {
+                harness.steerCustom(laneName(), customType, payload.content(), display, details);
+            }
+            return null;
+        }
+        if (Boolean.TRUE.equals(triggerTurn)) {
+            if (emittingAgentSettled) {
+                deferredSettledActions.add(() -> driveCustomTurn(payload));
+                return null;
+            }
+            Thread.startVirtualThread(() -> {
+                try {
+                    driveCustomTurn(payload);
+                } catch (Throwable t) {
+                    // pi agent-session.ts:3389-3396：runtime 面 catch ⇒ emitError
+                    if (extensionFirer != null) {
+                        extensionFirer.bus().emitError(
+                            com.pijava.coding.agent.extension.ExtensionError.of(
+                                "<runtime>", "send_message", t));
+                    }
+                }
+            });
+            return null;
+        }
+        if (streaming) {
+            pendingCustomMessages.add(payload);
+            return null;
+        }
+        return appendCustomMessageNow(payload);
+    }
+
+    /**
+     * pi {@code _appendCustomMessage}（:2331-2341）对位：落 custom_message 条目＋
+     * 重建工作副本（pi {@code _refreshFinalizedContext}）＋广播＋落盘。
+     *
+     * <p>事件面窄差：pi 发 {@code message_start}/{@code message_end} 对（载荷是
+     * custom 消息本体）；java 的 {@code AgentSessionEvent.MessageStart/End} 走
+     * {@code ai.Message} 通道载不动 custom role ⇒ 以 {@code EntryAppended} 载
+     * （TUI/RPC 消费面同达，docs/37 §5 登记）。</p>
+     *
+     * @return 条目 id
+     */
+    private String appendCustomMessageNow(QueuedCustomMessage p) {
+        Entry.CustomMessage entry;
+        if (harness.isRunning(laneName())) {
+            entry = harness.appendDeferredLaneEntry(laneName(),
+                (seq, parentId) -> new Entry.CustomMessage(
+                    java.util.UUID.randomUUID().toString(), seq, parentId, Instant.now(),
+                    p.customType(), p.content(), p.display(), p.details()));
+            // pi _refreshFinalizedContext（:938-944）：flush 点可在 run 中途。
+            harness.refreshLaneMessages(laneName());
+        } else {
+            entry = new Entry.CustomMessage(
+                java.util.UUID.randomUUID().toString(), 0, null, Instant.now(),
+                p.customType(), p.content(), p.display(), p.details());
+            harness.appendLaneEntry(laneName(), entry);
+        }
+        emitSessionEvent(new AgentSessionEvent.EntryAppended(entry));
+        if (session != null) {
+            SessionPersistence.persistPending(this, session, laneName());
+        }
+        return entry.id();
+    }
+
+    /**
+     * pi {@code _flushPendingCustomMessages}（:2343-2355）对位。四个调用点：
+     * turn_end 派发后（SessionRunner）、run 收尾（SessionRunner）、before_settle
+     * 边界（BoundaryBridge）、prompt 主路径起手（processPrompt）。
+     */
+    void flushPendingCustomMessages() {
+        if (pendingCustomMessages.isEmpty()) {
+            return;
+        }
+        var pending = List.copyOf(pendingCustomMessages);
+        pendingCustomMessages.clear();
+        for (var p : pending) {
+            appendCustomMessageNow(p);
+        }
+    }
+
+    /** pi :2088-2092 的取出半：清空并返回 nextTurn 缓冲（包内可见，processPrompt 用）。 */
+    List<QueuedCustomMessage> drainPendingNextTurnMessages() {
+        var drained = List.copyOf(pendingNextTurnMessages);
+        pendingNextTurnMessages.clear();
+        return drained;
+    }
+
+    /**
+     * pi {@code _runAgentPrompt(appMessage)}（:1822-1851）对位：条目先落（idle 臂
+     * 自带重建，尾部即 user 投影）⇒ 续跑（{@code continueRun} 走
+     * {@code runContinuation}——尾部非助手 ⇒ 空 prompt 续跑，pi continue 同门）。
+     * 调用方保证车道空闲（五臂结构保证：triggerTurn 臂只在非流式到达）。
+     */
+    private void driveCustomTurn(QueuedCustomMessage p) {
+        appendCustomMessageNow(p);
+        var queue = new LinkedBlockingQueue<Optional<com.pijava.ai.stream.StreamEvent>>();
+        var entriesFuture = new CompletableFuture<List<Entry>>();
+        var statusFuture = new CompletableFuture<RunStatus>();
+        SessionRunner.driveContinuation(this, queue, entriesFuture, statusFuture,
+            event -> { }, null);
+    }
+
+    /**
+     * pi {@code _emitAgentSettled}（:1078-1099）对位：发 {@code AgentSettled}（窗内
+     * triggerTurn 进延迟表）⇒ 快照延迟表顺序执行。SessionRunner 的两个发射点共用
+     * （正常路/catch 路）；cache-warmer 调和在调用点先行（pi :1079 同序）。
+     */
+    void emitAgentSettled() {
+        emittingAgentSettled = true;
+        try {
+            emitSessionEvent(new AgentSessionEvent.AgentSettled(agentRunAbortRequested()));
+        } finally {
+            emittingAgentSettled = false;
+        }
+        if (deferredSettledActions.isEmpty()) {
+            return;
+        }
+        var deferred = List.copyOf(deferredSettledActions);
+        deferredSettledActions.clear();
+        for (var action : deferred) {
+            action.run();
+        }
+    }
+
+
     // ── 批 13（T8）：cache-warmer 会话四面 ─────────────────────────
 
     /**
@@ -2856,6 +3126,10 @@ public final class AgentSession implements AutoCloseable {
         // 批 17（T7，docs/28 §3-T7.2）：pi setBeforeSessionInvalidate 对位——
         // 会话失效前复位扩展 UI（活动对话框/注入槽位/状态段）。
         extensionUI.onSessionInvalidated();
+        // 批 26（docs/37 T7）：pi runtime.invalidate 的 eventBus 半——通道订阅统一退订。
+        if (extensionContext != null) {
+            extensionContext.invalidateChannels();
+        }
         closeWith(reason, targetSessionFile, true);
     }
 
@@ -2868,6 +3142,10 @@ public final class AgentSession implements AutoCloseable {
         // 扩展 UI 先复位（Ruling：设计稿 T7.2 只列 closeForReplacement/switchTo，
         // fork 臂补上以对齐 pi「一切 swap 前复位」语义）。
         extensionUI.onSessionInvalidated();
+        // 批 26（docs/37 T7）：pi runtime.invalidate 的 eventBus 半——通道订阅统一退订。
+        if (extensionContext != null) {
+            extensionContext.invalidateChannels();
+        }
         closeWith("fork", forkedSessionId, false);
     }
 
@@ -3051,7 +3329,8 @@ public final class AgentSession implements AutoCloseable {
             new com.pijava.coding.agent.extension.bridge.BoundaryBridge.TurnIndex();
         com.pijava.coding.agent.extension.bridge.EngineHookBridge.installBoundary(
             harness.hookSystem(), harness, owner.laneName(), bus, context,
-            owner::appendBoundaryEntry, owner.agentRunAbortRequested::get, turnIndex);
+            owner::appendBoundaryEntry, owner.agentRunAbortRequested::get, turnIndex,
+            owner::flushPendingCustomMessages);
         owner.subscribe(new com.pijava.coding.agent.extension.bridge.SessionEventBridge(
             bus, context, harness.getThinkingLevel(), turnIndex)::onEvent);
         bus.onError(err ->

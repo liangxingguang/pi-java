@@ -86,7 +86,7 @@ public final class SessionState {
     /** Throw {@code not_found} when the target id is non-null and missing. */
     public void validateTarget(String targetId) {
         if (targetId != null && !entriesById.containsKey(targetId)) {
-            throw new SessionError(SessionErrorCode.NOT_FOUND, "Entry not found: " + targetId);
+            throw new SessionError(SessionErrorCode.NOT_FOUND, "Entry " + targetId + " not found");
         }
     }
 

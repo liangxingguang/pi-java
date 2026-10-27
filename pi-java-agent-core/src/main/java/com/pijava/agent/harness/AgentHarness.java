@@ -110,6 +110,20 @@ public class AgentHarness extends HarnessBootstrap {
     }
 
     /**
+     * 批 26（docs/37 T2）：带 nextTurn custom 消息的 prompt 运行（pi
+     * {@code agent-session.ts:2088-2092} 对位）——custom 投影排在用户消息之后进
+     * 待发列表，落盘经 sink 的 custom 臂成 {@code Entry.CustomMessage}。
+     */
+    public PiLaneEngine.RunOutcome promptWithCustoms(String laneName, String text,
+                                          List<PromptImage> images,
+                                          List<LaneInfo.QueuedItem.Custom> customs,
+                                          PiLoop.Sink downstream) {
+        if (closed) throw new HarnessClosedException();
+        return piEngine.run(laneName, text, images == null ? List.of() : images,
+            customs == null ? List.of() : customs, downstream);
+    }
+
+    /**
      * Continue a run from the current transcript tail（pi {@code Agent.continue}）：
      * 不写新的用户 entry，直接进助手流。
      *
@@ -245,6 +259,17 @@ public class AgentHarness extends HarnessBootstrap {
     public <E extends Entry> E appendDeferredLaneEntry(
             String laneName, LaneState.EntryFactory<E> factory) {
         return requireLane(laneName).appendDeferredEntry(factory);
+    }
+
+    /**
+     * 批 26（docs/37 T2）：pi {@code _refreshFinalizedContext}
+     * （agent-session.ts:938-944）对位——从转录投影整体重建工作副本。
+     * 与 {@code replaceTranscript} 不同：不动转录，且<b>运行中可用</b>（pi 在
+     * turn_end/边界 flush 点于 run 中途整体替换 {@code agent.state.messages}；
+     * java 的调用点同样在运行线程上、循环停在事件发射里，无并发窗口）。
+     */
+    public void refreshLaneMessages(String laneName) {
+        HarnessUtils.rebuildLaneMessages(requireLane(laneName));
     }
 
     /**

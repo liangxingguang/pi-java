@@ -8,6 +8,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicReference;
 
 import com.pijava.agent.entry.Entry;
+import com.pijava.agent.harness.PiLaneEngine;
 import com.pijava.agent.harness.PiLoop;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.Message;
@@ -43,10 +44,63 @@ final class SessionRunner {
 
     private SessionRunner() {}
 
+    /** 驱动步：prompt 路 / 续跑路（批 26 driveContinuation）的分叉点。 */
+    private interface RunStep {
+        PiLaneEngine.RunOutcome run(String laneName, PiLoop.Sink sink);
+    }
+
     static void drive(
             AgentSession owner,
             String prompt,
             java.util.List<com.pijava.agent.harness.PromptImage> images,
+            LinkedBlockingQueue<Optional<StreamEvent>> queue,
+            CompletableFuture<List<Entry>> entriesFuture,
+            CompletableFuture<RunStatus> statusFuture,
+            StreamObserver streamObserver,
+            EntryObserver entryObserver) {
+        drive(owner, prompt, images, List.of(), queue, entriesFuture, statusFuture,
+            streamObserver, entryObserver);
+    }
+
+    /**
+     * 批 26（docs/37 T2）：prompt 路带 nextTurn custom 消息（pi
+     * {@code agent-session.ts:2088-2092}——custom 投影排在用户消息后进待发列表）。
+     */
+    static void drive(
+            AgentSession owner,
+            String prompt,
+            java.util.List<com.pijava.agent.harness.PromptImage> images,
+            java.util.List<com.pijava.agent.harness.LaneInfo.QueuedItem.Custom> nextTurnCustoms,
+            LinkedBlockingQueue<Optional<StreamEvent>> queue,
+            CompletableFuture<List<Entry>> entriesFuture,
+            CompletableFuture<RunStatus> statusFuture,
+            StreamObserver streamObserver,
+            EntryObserver entryObserver) {
+        var safeImages = images == null ? java.util.List.<com.pijava.agent.harness.PromptImage>of() : images;
+        driveImpl(owner, (laneName, sink) -> owner.harness()
+                .promptWithCustoms(laneName, prompt, safeImages, nextTurnCustoms, sink),
+            queue, entriesFuture, statusFuture, streamObserver, entryObserver);
+    }
+
+    /**
+     * 批 26（docs/37 T2）：pi {@code _runAgentPrompt(customMessage)} 对位——无新用户
+     * prompt 的续跑驱动（custom 条目已由调用方落进车道，尾部 user 投影 ⇒
+     * {@code runContinuation}）。事件面/收口/summary 与 prompt 路同。
+     */
+    static void driveContinuation(
+            AgentSession owner,
+            LinkedBlockingQueue<Optional<StreamEvent>> queue,
+            CompletableFuture<List<Entry>> entriesFuture,
+            CompletableFuture<RunStatus> statusFuture,
+            StreamObserver streamObserver,
+            EntryObserver entryObserver) {
+        driveImpl(owner, (laneName, sink) -> owner.harness().continueRun(laneName, sink),
+            queue, entriesFuture, statusFuture, streamObserver, entryObserver);
+    }
+
+    private static void driveImpl(
+            AgentSession owner,
+            RunStep runStep,
             LinkedBlockingQueue<Optional<StreamEvent>> queue,
             CompletableFuture<List<Entry>> entriesFuture,
             CompletableFuture<RunStatus> statusFuture,
@@ -104,11 +158,9 @@ final class SessionRunner {
             // Agent.prompt —— 起手与收口都在其中，调用方只提供会话层的事件接收器。
             List<Entry> transcript = List.of();
             try {
-                var outcome = owner.harness()
-                    .prompt(laneName, prompt,
-                        images == null ? List.of() : images, passEvents(owner, laneName));
-                // 用户 prompt 的 entry 由引擎起手写入，此处补一次落盘
-                // （原 docs/27 §2.1：pi 的 `_appendEntry` → `_persist` 逐条写）。
+                var outcome = runStep.run(laneName, passEvents(owner, laneName));
+                // 起手写入的 entry（用户 prompt / custom）在引擎侧落转录，此处补一次
+                // 落盘（原 docs/27 §2.1：pi 的 `_appendEntry` → `_persist` 逐条写）。
                 flush(owner, laneName);
                 // 收集本次驱动实际跑过的全部 pass 的 run id（①续跑不换
                 // session 运行身份、每 pass 各 roll 一个 —— passRunIds 记账），
@@ -171,13 +223,16 @@ final class SessionRunner {
             for (var pendingBash : owner.drainPendingBashMessages()) {
                 owner.harness().appendLaneEntry(laneName, pendingBash);
             }
+            // 批 26（docs/37 T2，pi _runAgentPrompt finally :1843-1850 对位）：
+            // 流式中延迟的 custom 消息在 settled 前落进车道（次序：bash ⇒ custom ⇒
+            // 落盘 ⇒ settled，pi finally 块同序）。
+            owner.flushPendingCustomMessages();
             flush(owner, laneName);
             // pi agent_settled（agent-session.ts:203/:1083/:1849）：每次驱动恰一条，
             // aborted 读会话层 abort 请求旗。每回合的 turn_end 由漏斗直供（引擎发射）。
             // 批 13（T8-①，pi :1079 对位）：settled 第一步先调和 cache warmer。
             owner.notifyCacheWarmerSettled();
-            owner.emitSessionEvent(new AgentSessionEvent.AgentSettled(
-                owner.agentRunAbortRequested()));
+            owner.emitAgentSettled();
             var summary = RunSummaryAggregator.aggregate(
                 owner.harness().snapshot(laneName).records(), runIds)
                 .withTotals(new RunSummaryAggregator.Totals(
@@ -204,8 +259,7 @@ final class SessionRunner {
             owner.emitSessionEvent(new AgentSessionEvent.AgentEnd(List.of(), false));
             // 批 13（T8-①）：双发射点同序（pi :1079 对位）。
             owner.notifyCacheWarmerSettled();
-            owner.emitSessionEvent(new AgentSessionEvent.AgentSettled(
-                owner.agentRunAbortRequested()));
+            owner.emitAgentSettled();
             statusFuture.complete(new RunStatus(1, "error"));
             entriesFuture.complete(List.of());
         } finally {
@@ -238,9 +292,14 @@ final class SessionRunner {
                     owner.emitSessionEvent(new AgentSessionEvent.AgentStart());
                 case PiLoop.Event.TurnStart ignored ->
                     owner.emitSessionEvent(new AgentSessionEvent.TurnStart());
-                case PiLoop.Event.TurnEnd e ->
+                case PiLoop.Event.TurnEnd e -> {
                     owner.emitSessionEvent(new AgentSessionEvent.TurnEnd(
                         e.message(), e.toolResults()));
+                    // 批 26（docs/37 T2，pi :1187-1195 对位）：turn_end 派发后 flush
+                    // 延迟 custom 消息——turn_end 处理器里 sendMessage(
+                    // triggerTurn=false) 的货也在此捞出。
+                    owner.flushPendingCustomMessages();
+                }
                 case PiLoop.Event.MessageStart m ->
                     owner.emitSessionEvent(new AgentSessionEvent.MessageStart(m.message()));
                 case PiLoop.Event.MessageEnd m -> {

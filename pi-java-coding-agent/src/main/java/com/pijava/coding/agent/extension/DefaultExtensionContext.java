@@ -67,6 +67,39 @@ public final class DefaultExtensionContext implements ExtensionContext {
      */
     private final com.pijava.mcp.config.McpServerRegistry mcpServers =
         new com.pijava.mcp.config.McpServerRegistry();
+    /** 批 26（docs/37 T7）：pi {@code eventBus}（每会话一条，loader.ts:688 对位）。 */
+    private final ExtensionChannelBus channelBus = new ExtensionChannelBus();
+    /** pi {@code eventBusUnsubscribers}（loader.ts:161）——跟踪表，失效时统一退订。 */
+    private final java.util.List<AutoCloseable> channelSubscriptions =
+        new java.util.concurrent.CopyOnWriteArrayList<>();
+    /** pi 的 {@code api.events}（跟踪视图，loader.ts:517-522 对位）。 */
+    private final ExtensionChannelBus eventsView =
+        channelBus.trackedView(channelSubscriptions::add);
+    /**
+     * 批 26（docs/37 T9）：pi {@code extension.shortcuts} 对位——按扩展加载序的
+     * 快捷键表（extensionPath →〔keyId 原串 → 注册〕；注册点已解析校验 keyId）。
+     */
+    private final java.util.LinkedHashMap<String,
+        java.util.LinkedHashMap<String, ExtensionShortcut>> shortcutsByExtension =
+            new java.util.LinkedHashMap<>();
+    /**
+     * 批 26（docs/37 T10）：pi {@code extension.messageRenderers}/{@code entryRenderers}
+     * 对位——按扩展加载序（first-wins 解决序，runner.ts:775-805）。
+     */
+    private final java.util.LinkedHashMap<String,
+        java.util.Map<String, ExtensionMessageRenderer>> messageRenderersByExtension =
+            new java.util.LinkedHashMap<>();
+    /** 见 {@link #messageRenderersByExtension}。 */
+    private final java.util.LinkedHashMap<String,
+        java.util.Map<String, ExtensionEntryRenderer>> entryRenderersByExtension =
+            new java.util.LinkedHashMap<>();
+    /**
+     * 批 26（docs/37 T11）：pi {@code extension.markdownTransformer} 对位——
+     * <b>单槽</b>（loader.ts:361 赋值语义：同扩展重复注册后者覆盖）；跨扩展按
+     * 加载序链式（runner.ts:785-787 的 flatMap 对位）。
+     */
+    private final java.util.LinkedHashMap<String, MarkdownTransformer> markdownTransformers =
+        new java.util.LinkedHashMap<>();
 
     /** @param services 会话服务（工具/命令/Provider/settings）
      *  @param skills   技能注册表（harness 的 skillManager）
@@ -542,6 +575,88 @@ public final class DefaultExtensionContext implements ExtensionContext {
                 customType, content, display, details, options);
         }
 
+        @Override
+        public void sendUserMessage(CustomMessageContent content, SendUserMessageOptions options) {
+            DefaultExtensionContext.this.sendUserMessage(content, options);
+        }
+
+        // ── 批 26（docs/37 T4/T5）：会话元数据与模型面（透传本体） ──
+
+        @Override
+        public void appendEntry(String customType, Map<String, Object> data) {
+            DefaultExtensionContext.this.appendEntry(customType, data);
+        }
+
+        @Override
+        public void setSessionName(String name) {
+            DefaultExtensionContext.this.setSessionName(name);
+        }
+
+        @Override
+        public String getSessionName() {
+            return DefaultExtensionContext.this.getSessionName();
+        }
+
+        @Override
+        public void setLabel(String entryId, String label) {
+            DefaultExtensionContext.this.setLabel(entryId, label);
+        }
+
+        @Override
+        public boolean setModel(com.pijava.ai.model.ModelId<?> model) {
+            return DefaultExtensionContext.this.setModel(model);
+        }
+
+        @Override
+        public com.pijava.ai.thinking.ModelThinkingLevel getThinkingLevel() {
+            return DefaultExtensionContext.this.getThinkingLevel();
+        }
+
+        @Override
+        public void setThinkingLevel(com.pijava.ai.thinking.ModelThinkingLevel level) {
+            DefaultExtensionContext.this.setThinkingLevel(level);
+        }
+
+        @Override
+        public ExtensionExec.ExecResult exec(String command, java.util.List<String> args,
+                                             ExtensionExec.ExecOptions options) {
+            return DefaultExtensionContext.this.exec(command, args, options);
+        }
+
+        @Override
+        public void unregisterProvider(String name) {
+            DefaultExtensionContext.this.unregisterProvider(name);
+        }
+
+        @Override
+        public ExtensionChannelBus events() {
+            return DefaultExtensionContext.this.events();
+        }
+
+        @Override
+        public void registerShortcut(String keyId, String description,
+                                     ExtensionShortcut.ShortcutHandler handler) {
+            DefaultExtensionContext.this.registerShortcut(extensionPath, keyId, description,
+                handler);
+        }
+
+        @Override
+        public void registerMessageRenderer(String customType, ExtensionMessageRenderer renderer) {
+            DefaultExtensionContext.this.registerMessageRenderer(extensionPath, customType,
+                renderer);
+        }
+
+        @Override
+        public void registerEntryRenderer(String customType, ExtensionEntryRenderer renderer) {
+            DefaultExtensionContext.this.registerEntryRenderer(extensionPath, customType,
+                renderer);
+        }
+
+        @Override
+        public void registerMarkdownTransformer(MarkdownTransformer transformer) {
+            DefaultExtensionContext.this.registerMarkdownTransformer(extensionPath, transformer);
+        }
+
         // ── 批 23（docs/34 T1）：MCP 注册面（带归属转入本体） ──
 
         @Override
@@ -594,9 +709,19 @@ public final class DefaultExtensionContext implements ExtensionContext {
     @Override
     public String sendMessage(String customType, CustomMessageContent content, boolean display,
                               Map<String, Object> details, SendMessageOptions options) {
-        if (options != null && options.triggerTurn()) {
+        // 批 26（docs/37 T3）：委托 AgentSession.sendCustomMessage 五臂
+        //（pi agent-session.ts:2293-2329 逐字；UOE 占位退役）。
+        var host = hostSessionOrNull();
+        if (host != null) {
+            var opts = options == null ? new SendMessageOptions(null, null) : options;
+            return host.sendCustomMessage(customType, content, display, details,
+                opts.triggerTurn(), opts.deliverAs());
+        }
+        // 轻量夹具回落（无宿主会话、仅绑会话树）：仅落盘臂（批 26 前全量行为）；
+        // triggerTurn 无车道可驱动 ⇒ 维持 UOE（本批的 triggerTurn 落地在宿主路径）。
+        if (options != null && Boolean.TRUE.equals(options.triggerTurn())) {
             throw new UnsupportedOperationException(
-                "sendMessage(triggerTurn=true) is not implemented yet");
+                "sendMessage(triggerTurn=true) requires a bound host session");
         }
         var supplier = sessionSupplier;
         var tree = supplier == null ? null : supplier.get();
@@ -605,5 +730,263 @@ public final class DefaultExtensionContext implements ExtensionContext {
                 "sendMessage requires a bound session; none is available yet");
         }
         return tree.appendCustomMessageEntry(customType, content, display, details);
+    }
+
+    /**
+     * 批 26（docs/37 T3，E5-13）：pi {@code sendUserMessage}（agent-session.ts:2365-2393
+     * 逐字）——归一后走 {@code processPrompt}（source "extension"、deliverAs 作
+     * streamingBehavior、expandPromptTemplates 默认 false 经 PromptConfig 门）。
+     */
+    @Override
+    public void sendUserMessage(CustomMessageContent content, SendUserMessageOptions options) {
+        var host = hostSessionOrNull();
+        if (host == null) {
+            throw new IllegalStateException(
+                "sendUserMessage requires a bound session; none is available yet");
+        }
+        var opts = options == null ? new SendUserMessageOptions(null, null) : options;
+        String text;
+        java.util.List<com.pijava.agent.harness.PromptImage> images = null;
+        switch (content) {
+            case CustomMessageContent.Text t -> text = t.text();
+            case CustomMessageContent.Blocks b -> {
+                var textParts = new java.util.ArrayList<String>();
+                var imageParts = new java.util.ArrayList<com.pijava.agent.harness.PromptImage>();
+                for (var block : b.blocks()) {
+                    if (block instanceof com.pijava.ai.message.ContentBlock.TextContent text2) {
+                        textParts.add(text2.text());
+                    } else if (block instanceof com.pijava.ai.message.ContentBlock.ImageContent img) {
+                        imageParts.add(new com.pijava.agent.harness.PromptImage(
+                            img.mediaType(), img.data()));
+                    }
+                }
+                text = String.join("\n", textParts);
+                if (!imageParts.isEmpty()) {
+                    images = imageParts;
+                }
+            }
+        }
+        host.processPrompt(text, com.pijava.coding.agent.core.PromptConfig.extension(
+            opts.deliverAs(), images, opts.expandPromptTemplates()));
+    }
+
+    // ── 批 26（docs/37 T4）：会话元数据面（委托宿主会话，pi types.ts:1719-1732）──
+
+    /** pi {@code appendEntry}——custom 条目＋entry_appended＋落盘（AgentSession 既有全链）。 */
+    @Override
+    public void appendEntry(String customType, Map<String, Object> data) {
+        requireToolControl().appendCustomEntry(customType, data);
+    }
+
+    /** pi {@code setSessionName}——规范化＋落 session_info＋session_info_changed 双发。 */
+    @Override
+    public void setSessionName(String name) {
+        requireToolControl().setSessionName(name);
+    }
+
+    /** pi {@code getSessionName}——stored 名（批 20 B32 面），未命名 ⇒ null。 */
+    @Override
+    public String getSessionName() {
+        return requireToolControl().storedSessionName();
+    }
+
+    /** pi {@code setLabel}——目标不存在抛 {@code Entry <id> not found}（文案批 26 修真）。 */
+    @Override
+    public void setLabel(String entryId, String label) {
+        requireToolControl().setLabel(entryId, label);
+    }
+
+    // ── 批 26（docs/37 T5）：模型与思考级别面（pi types.ts:1763-1772）──
+
+    /**
+     * pi 扩展面 {@code setModel}（agent-session.ts:3429-3432 逐字）：auth 未配置 ⇒
+     * false 不抛。auth 判据对位 pi {@code hasConfiguredAuth}（配置快照）——java 读
+     * 活凭证链（{@code Credentials.resolveCredential}：环境变量＋存储；比快照更准，
+     * 同真值域）。
+     */
+    @Override
+    public boolean setModel(com.pijava.ai.model.ModelId<?> model) {
+        var host = requireToolControl();
+        if (com.pijava.ai.auth.Credentials.resolveCredential(model.provider()).isEmpty()) {
+            return false;
+        }
+        host.setModel(model);
+        return true;
+    }
+
+    /** pi {@code getThinkingLevel}——harness 车道当前档。 */
+    @Override
+    public com.pijava.ai.thinking.ModelThinkingLevel getThinkingLevel() {
+        return requireToolControl().harness().getThinkingLevel();
+    }
+
+    /** pi {@code setThinkingLevel}——会话内设级（变化才发双事件，桥已在）。 */
+    @Override
+    public void setThinkingLevel(com.pijava.ai.thinking.ModelThinkingLevel level) {
+        requireToolControl().setThinkingLevel(level);
+    }
+
+    /**
+     * 批 26（docs/37 T6，E5-17）：pi {@code exec}——cwd 回落宿主会话 cwd
+     * （loader.ts:413 的 {@code options?.cwd ?? cwd} 对位）；无宿主 ⇒ 进程当前目录。
+     */
+    @Override
+    public ExtensionExec.ExecResult exec(String command, java.util.List<String> args,
+                                         ExtensionExec.ExecOptions options) {
+        var host = hostSessionOrNull();
+        return ExtensionExec.execCommand(command, args == null ? java.util.List.of() : args,
+            host == null ? null : host.cwd(), options);
+    }
+
+    /**
+     * 批 26（docs/37 T8，E5-5）：pi {@code unregisterProvider}——删注册
+     * （裁决⑥：内置模型恢复面不做；未注册静默，pi 同）。
+     */
+    @Override
+    public void unregisterProvider(String name) {
+        providers().remove(name);
+    }
+
+    /** 批 26（docs/37 T7，E5-28）：pi {@code events}——跟踪视图（失效退订的载体）。 */
+    @Override
+    public ExtensionChannelBus events() {
+        return eventsView;
+    }
+
+    // ── 批 26（docs/37 T9，E5-6）：快捷键注册面 ──
+
+    /**
+     * pi {@code registerShortcut}（loader.ts:320-323）——写本扩展的表
+     * （keyId 在注册点解析校验，裁决⑫）；同名键再注册＝覆盖本扩展旧注册
+     * （pi 的 Map.set 同形）。
+     */
+    void registerShortcut(String extensionPath, String keyId, String description,
+                          ExtensionShortcut.ShortcutHandler handler) {
+        com.pijava.coding.agent.core.KeyIdParser.parse(keyId); // 裁决⑫：注册点校验
+        shortcutsByExtension
+            .computeIfAbsent(extensionPath, k -> new java.util.LinkedHashMap<>())
+            .put(keyId, new ExtensionShortcut(keyId, description, handler, extensionPath));
+    }
+
+    /** 无归属的共享基础上下文调用 ⇒ 抛（registerMcpServer 同纪律，批 23 先例）。 */
+    @Override
+    public void registerShortcut(String keyId, String description,
+                                 ExtensionShortcut.ShortcutHandler handler) {
+        throw new IllegalStateException(
+            "registerShortcut() 需经 per-extension 上下文调用（无扩展归属可记）");
+    }
+
+    // ── 批 26（docs/37 T10）：message/entry 渲染器注册面 ──
+
+    /** pi {@code extension.messageRenderers.set}（loader.ts:351-354）。 */
+    void registerMessageRenderer(String extensionPath, String customType,
+                                 ExtensionMessageRenderer renderer) {
+        messageRenderersByExtension
+            .computeIfAbsent(extensionPath, k -> new java.util.LinkedHashMap<>())
+            .put(customType, renderer);
+    }
+
+    /** pi {@code extension.entryRenderers ??= new Map(); .set}（loader.ts:361-365）。 */
+    void registerEntryRenderer(String extensionPath, String customType,
+                               ExtensionEntryRenderer renderer) {
+        entryRenderersByExtension
+            .computeIfAbsent(extensionPath, k -> new java.util.LinkedHashMap<>())
+            .put(customType, renderer);
+    }
+
+    /** pi {@code getMessageRenderer}（runner.ts:775-782）：扩展加载序 first-wins。 */
+    public ExtensionMessageRenderer resolveMessageRenderer(String customType) {
+        for (var renderers : messageRenderersByExtension.values()) {
+            var renderer = renderers.get(customType);
+            if (renderer != null) {
+                return renderer;
+            }
+        }
+        return null;
+    }
+
+    /** pi {@code getEntryRenderer}（runner.ts:798-805）：扩展加载序 first-wins。 */
+    public ExtensionEntryRenderer resolveEntryRenderer(String customType) {
+        for (var renderers : entryRenderersByExtension.values()) {
+            var renderer = renderers.get(customType);
+            if (renderer != null) {
+                return renderer;
+            }
+        }
+        return null;
+    }
+
+    /** 无归属共享面 ⇒ 抛（同 registerShortcut 纪律）。 */
+    @Override
+    public void registerMessageRenderer(String customType, ExtensionMessageRenderer renderer) {
+        throw new IllegalStateException(
+            "registerMessageRenderer() 需经 per-extension 上下文调用（无扩展归属可记）");
+    }
+
+    /** 无归属共享面 ⇒ 抛（同 registerShortcut 纪律）。 */
+    @Override
+    public void registerEntryRenderer(String customType, ExtensionEntryRenderer renderer) {
+        throw new IllegalStateException(
+            "registerEntryRenderer() 需经 per-extension 上下文调用（无扩展归属可记）");
+    }
+
+    // ── 批 26（docs/37 T11）：markdown 变换器注册面 ──
+
+    /** pi {@code extension.markdownTransformer = transformer}（loader.ts:361，单槽覆盖）。 */
+    void registerMarkdownTransformer(String extensionPath, MarkdownTransformer transformer) {
+        markdownTransformers.put(extensionPath, transformer);
+    }
+
+    /** pi {@code getMarkdownTransformers}（runner.ts:785-787）：扩展加载序的链。 */
+    public java.util.List<MarkdownTransformer> markdownTransformers() {
+        return java.util.List.copyOf(markdownTransformers.values());
+    }
+
+    /** 无归属共享面 ⇒ 抛（同 registerShortcut 纪律）。 */
+    @Override
+    public void registerMarkdownTransformer(MarkdownTransformer transformer) {
+        throw new IllegalStateException(
+            "registerMarkdownTransformer() 需经 per-extension 上下文调用（无扩展归属可记）");
+    }
+
+    /**
+     * pi {@code runner.getShortcuts}（runner.ts:673-716）——冲突三规则解决。
+     *
+     * @param keys    内置键位表；{@code null} ⇒ 空表（无键位面的宿主：RPC/headless）
+     * @param hasUi   pi 的「无 UI ⇒ console.warn」门：false ⇒ 诊断写 stderr
+     */
+    public ExtensionShortcuts.Resolution resolvedShortcuts(
+            com.pijava.coding.agent.core.KeybindingsManager keys, boolean hasUi) {
+        var resolution = ExtensionShortcuts.resolve(keys, isWindowsPlatform(), shortcutsByExtension);
+        if (!hasUi) {
+            for (var diagnostic : resolution.diagnostics()) {
+                System.err.println(diagnostic); // pi console.warn 对位（runner.ts:683-686）
+            }
+        }
+        return resolution;
+    }
+
+    /** pi {@code useWindowsKeybindings} 对位（keybindings.ts:15-18）。 */
+    private static boolean isWindowsPlatform() {
+        return System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("win")
+            || System.getenv("WSL_DISTRO_NAME") != null
+            || System.getenv("WSL_INTEROP") != null;
+    }
+
+    /**
+     * pi {@code runtime.invalidate} 的 eventBus 半（loader.ts:193-196 逐字）：
+     * 会话失效（替换/reload）时统一退订全部通道订阅。
+     */
+    public void invalidateChannels() {
+        for (var subscription : channelSubscriptions) {
+            try {
+                subscription.close();
+            } catch (Exception e) {
+                // pi 的 unsubscribe 不抛；java 侧隔离（单个退订失败不挡其余）。
+                java.util.logging.Logger.getLogger(DefaultExtensionContext.class.getName())
+                    .warning("channel unsubscribe failed: " + e);
+            }
+        }
+        channelSubscriptions.clear();
     }
 }

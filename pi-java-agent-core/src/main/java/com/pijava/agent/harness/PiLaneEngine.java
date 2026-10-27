@@ -87,6 +87,18 @@ public final class PiLaneEngine {
      */
     public RunOutcome run(String laneName, String prompt,
                           List<PromptImage> images, PiLoop.Sink downstream) {
+        return run(laneName, prompt, images, List.of(), downstream);
+    }
+
+    /**
+     * 批 26（docs/37 T2）：带 nextTurn custom 消息的 prompt 运行——pi
+     * {@code agent-session.ts:2088-2092} 对位：custom 投影排在用户消息
+     * <b>之后</b>进待发列表（{@code messages.push(user)} 后逐个 push），循环为每条
+     * 发 message_start/end，sink 凭 {@code customOrigins} 把 custom 投影落成
+     * {@code Entry.CustomMessage}（用户 entry 仍由 startRun 起手写入）。
+     */
+    public RunOutcome run(String laneName, String prompt, List<PromptImage> images,
+                          List<LaneInfo.QueuedItem.Custom> customs, PiLoop.Sink downstream) {
         var lane = ctx.requireLane(laneName);
         // 起手前先判空闲，避免起手失败时留下一次多记的 turn 计数。
         if (lane.isRunning()) {
@@ -112,7 +124,14 @@ public final class PiLaneEngine {
         var run = lifecycle.startRun(laneName, promptMessage, firstLoadout);
         // 起手把用户 entry 交给 sink 在 `message_end` 上写；这里直接拿**同一个对象**当 PiLoop
         // 的 prompt，sink 按引用抑制重复写入（PiLoop 会为 prompt 发 message_start/end）。
-        return drive(laneName, run, List.of(promptMessage), downstream, firstLoadout);
+        var initial = new java.util.ArrayList<Message>();
+        initial.add(promptMessage);
+        for (var custom : customs) {
+            var projection = HarnessUtils.buildQueuedCustomMessage(custom);
+            lane.customOrigins.put(projection, custom);
+            initial.add(projection);
+        }
+        return drive(laneName, run, List.copyOf(initial), downstream, firstLoadout);
     }
 
     /**
