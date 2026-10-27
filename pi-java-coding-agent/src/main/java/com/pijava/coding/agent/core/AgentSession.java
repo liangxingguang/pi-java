@@ -154,14 +154,20 @@ public final class AgentSession implements AutoCloseable {
     // settled 时 flush（保 tool_use/tool_result 次序）。
     private final List<Entry.BashExecution> pendingBashMessages = new ArrayList<>();
     // ── 批 26（docs/37 T2）：pi sendCustomMessage 的三缓冲对位 ──
+    // （java 多线程方言：pi 单线程数组 ⇒ CopyOnWriteArrayList——写稀读快照，扩展
+    // 调用线程与 run 线程并发安全）
     /** pi {@code _pendingNextTurnMessages}（:397）：随下一条用户 prompt 注入的 custom 消息。 */
-    private final List<QueuedCustomMessage> pendingNextTurnMessages = new ArrayList<>();
+    private final List<QueuedCustomMessage> pendingNextTurnMessages =
+        new java.util.concurrent.CopyOnWriteArrayList<>();
     /** pi {@code _pendingCustomMessages}（:400）：流式中 triggerTurn=false 的延迟落盘缓冲。 */
-    private final List<QueuedCustomMessage> pendingCustomMessages = new ArrayList<>();
+    private final List<QueuedCustomMessage> pendingCustomMessages =
+        new java.util.concurrent.CopyOnWriteArrayList<>();
     /** pi {@code _deferredSettledActions}（:434）：settled 发射窗内 triggerTurn 的延迟动作。 */
-    private final List<Runnable> deferredSettledActions = new ArrayList<>();
-    /** pi {@code _isEmittingAgentSettled}（:433）。包内可见：SessionRunner 双发射点共享。 */
-    boolean emittingAgentSettled;
+    private final List<Runnable> deferredSettledActions =
+        new java.util.concurrent.CopyOnWriteArrayList<>();
+    /** pi {@code _isEmittingAgentSettled}（:433）。包内可见：SessionRunner 双发射点共享。
+     *  volatile：写在 run 线程（发射窗），读可在扩展调用线程（RPC/TUI 事件）。 */
+    volatile boolean emittingAgentSettled;
     // B137：--models/settings patterns 解析出的 scope（Ctrl+P / cycle_model 在其间轮转）。
     private List<com.pijava.ai.model.ScopedModel> scopedModels = List.of();
     // scope 解析与轮转都对全目录（assemble 构造的同一实例）。
@@ -2813,7 +2819,9 @@ public final class AgentSession implements AutoCloseable {
                                     Boolean triggerTurn, CustomMessageDelivery deliverAs) {
         var payload = new QueuedCustomMessage(customType, content, display, details);
         if (deliverAs == CustomMessageDelivery.NEXT_TURN) {
-            pendingNextTurnMessages.add(payload);
+            synchronized (pendingNextTurnMessages) {
+                pendingNextTurnMessages.add(payload);
+            }
             return null;
         }
         boolean streaming = harness.isRunning(laneName());
@@ -2827,7 +2835,9 @@ public final class AgentSession implements AutoCloseable {
         }
         if (Boolean.TRUE.equals(triggerTurn)) {
             if (emittingAgentSettled) {
-                deferredSettledActions.add(() -> driveCustomTurn(payload));
+                synchronized (deferredSettledActions) {
+                    deferredSettledActions.add(() -> driveCustomTurn(payload));
+                }
                 return null;
             }
             Thread.startVirtualThread(() -> {
@@ -2845,7 +2855,9 @@ public final class AgentSession implements AutoCloseable {
             return null;
         }
         if (streaming) {
-            pendingCustomMessages.add(payload);
+            synchronized (pendingCustomMessages) {
+                pendingCustomMessages.add(payload);
+            }
             return null;
         }
         return appendCustomMessageNow(payload);
@@ -2890,11 +2902,14 @@ public final class AgentSession implements AutoCloseable {
      * 边界（BoundaryBridge）、prompt 主路径起手（processPrompt）。
      */
     void flushPendingCustomMessages() {
-        if (pendingCustomMessages.isEmpty()) {
-            return;
+        final List<QueuedCustomMessage> pending;
+        synchronized (pendingCustomMessages) {
+            if (pendingCustomMessages.isEmpty()) {
+                return;
+            }
+            pending = List.copyOf(pendingCustomMessages);
+            pendingCustomMessages.clear();
         }
-        var pending = List.copyOf(pendingCustomMessages);
-        pendingCustomMessages.clear();
         for (var p : pending) {
             appendCustomMessageNow(p);
         }
@@ -2902,9 +2917,11 @@ public final class AgentSession implements AutoCloseable {
 
     /** pi :2088-2092 的取出半：清空并返回 nextTurn 缓冲（包内可见，processPrompt 用）。 */
     List<QueuedCustomMessage> drainPendingNextTurnMessages() {
-        var drained = List.copyOf(pendingNextTurnMessages);
-        pendingNextTurnMessages.clear();
-        return drained;
+        synchronized (pendingNextTurnMessages) {
+            var drained = List.copyOf(pendingNextTurnMessages);
+            pendingNextTurnMessages.clear();
+            return drained;
+        }
     }
 
     /**
@@ -2934,11 +2951,14 @@ public final class AgentSession implements AutoCloseable {
         } finally {
             emittingAgentSettled = false;
         }
-        if (deferredSettledActions.isEmpty()) {
-            return;
+        final List<Runnable> deferred;
+        synchronized (deferredSettledActions) {
+            if (deferredSettledActions.isEmpty()) {
+                return;
+            }
+            deferred = List.copyOf(deferredSettledActions);
+            deferredSettledActions.clear();
         }
-        var deferred = List.copyOf(deferredSettledActions);
-        deferredSettledActions.clear();
         for (var action : deferred) {
             action.run();
         }
