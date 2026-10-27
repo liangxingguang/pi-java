@@ -89,7 +89,7 @@
 | R3 | Markdown：删除线（严格 tokenizer） | ✓ `markdown.ts:9 StrictStrikethroughTokenizer` | ✓（批 25） | **对齐** | 1 | 批 25（docs/36）：`InlineMarkup.STRICT_STRIKETHROUGH`＝pi markdown.ts:7 正则逐字（`~~ a ~~` 不认） |
 | R4 | Markdown：链接（OSC 8 超链接） | ✓ `markdown.ts` + `tui/src/terminal.ts` hyperlinks | ✓（批 25） | **对齐** | 1 | 批 25（docs/36 裁决④ **实证通过**）：`[link=href]` 标签＋underline＋mdLink 色只显文本（pi :704-707 OSC 8 臂）；MarkupParser 携 `Style.hyperlink`、`AnsiCellWriter`（AbstractBackend 渲染路）吐 OSC 8 序列——双测试钉死 |
 | R5 | Markdown：流式未闭合围栏修剪 | ✓ `markdown.ts:146 trimPartialClosingFences` | ✓（批 25） | **对齐** | 2 | 批 25（docs/36 裁决⑨）：未闭合代码块尾行＝开栏符同字符真前缀 ⇒ 修剪（`MarkdownBlocks.trimPartialClosingFence`，`` ` ``/`` `` ``/完整闭合三臂测试钉死） |
-| R6 | Markdown：扩展 transformer 钩子 | ✓ `markdown-transform.ts` + `interactive-mode.ts:2234 getMarkdownTransformers` | ✗ | **缺失** | 1 | 扩展系统整体未落地 |
+| R6 | Markdown：扩展 transformer 钩子 | ✓ `markdown-transform.ts` + `interactive-mode.ts:2234 getMarkdownTransformers` | ✓（批 26 接线） | **对齐** | 1 | **批 26（docs/37 T11）落地**：`registerMarkdownTransformer` 注册面（单槽覆盖，loader.ts:361）＋`MarkdownTransformers` 链（异常吞/null 丢弃逐字）＋`MessageBubble` assistant/thinking 两臂缝；窄差 D150（isStreaming 恒 false／availableWidth 恒 -1）/D151（user 型无消费点，批 25 裁决⑤连带） |
 | R7 | Mermaid 图渲染 | ✓ `components/mermaid.ts:60 createMermaidMarkdownTransformer` + `grok-mermaid` 依赖 | ✗ | **缺失** | 1 | 批 25 起 mermaid 围栏按普通代码块渲染（pi 无 transformer 时同形——D57 注记更新；本体仍缺） |
 | R8 | LaTeX 数学（行内 `$…$` 与块级 `$$…$$`） | ✓ `tui/src/latex.ts`（**1506 行**）+ `test/latex.test.ts` | ✗ | **缺失** | 1 | java 全仓无 latex 命中 |
 | R9 | 代码块语法高亮（多语言、highlight.js 词法） | ✓ `utils/syntax-highlight.ts`（**219 行**）+ `loadAllHighlightLanguages`（`interactive-mode.ts:133` import、`:1122` 调用）、theme 里 10 个 `syntax*` token | ✓（批 25 接线，子集） | **对齐** | 2 | 批 25（docs/36）：`SyntaxHighlighter` 四色改主题令牌（syntaxKeyword/String/Number/Comment）＋代码块消费链接通（高亮门＝lang 非空）。窄差 D146：高亮器＝关键字/字符串/数字/注释子集（pi 是 highlight.js 全词法＋supportsLanguage 白名单门） |
@@ -500,7 +500,7 @@
 | 主题/样式（T1–T11，11 单元） | 18 | 6.5 | **36.1%** | 27.3% |
 | web 对齐面（W1–W16，16 单元） | 33 | 27.0 | **81.8%** | 56.3% |
 
-**模块合计**：Σ权重 **244**（R29 批 22 出分母） ／ Σ(w×c) **132.5** ／ **加权完成度 = 132.5/244 ≈ 54.3%**（未加权 **52/147 ≈ 35.4%**，**+18.9pp**）
+**模块合计**：Σ权重 **244**（R29 批 22 出分母） ／ Σ(w×c) **133.5** ／ **加权完成度 = 133.5/244 ≈ 54.7%**（未加权 **53/147 ≈ 36.1%**，**+18.6pp**）
 
 > 批 10（2026-10-22，docs/21）：S20 缺失→对齐（+1.0）、K11 缺失→对齐（+1.0）；R28 证据更新不翻（流式 bash/工具挂载仍缺）。
 > 批 13（2026-10-23，docs/24）：R24 存疑→对齐（+0.5，cache-warmer 子系统批随收——生产者/文案逐字/门//session 段/footer）。
@@ -510,6 +510,7 @@
 > 批 21（2026-10-25，docs/32）：**S9 theme 选择器 缺失→对齐（+1.0，ThemeSubmenuScreen＋设置页入口）**。Σ 120.5→**121.5/245 ≈ 49.6%**。
 > 批 22（2026-10-25，docs/33）：**W15 web 会话列表 onProgress 缺失→对齐（+1.0，sessionsProgress/cancelSessions＋代次闸＋前端渐进渲染）＋R29 终裁不做出分母（分母 245→244）**。Σ 121.5→**122.5/244 ≈ 50.2%**。
 > 批 25（2026-10-27，docs/36）：**Markdown 激活批——R1（w3）/R2/R3/R4/R5/R9 六行缺失→对齐（+10.0）**；S24 判定不动（注记更新：纯文本落差消除）。Σ 122.5→**132.5/244 ≈ 54.3%**。
+> 批 26（2026-10-28，docs/37）：R6 缺失→对齐（+1.0，扩展 markdown transformer 钩随 E5-9 落地）。Σ 132.5→**133.5/244 ≈ 54.7%**。
 
 > 较前锚点（144 单元：241 权 / 108.0 / **44.8%**）变化 **−0.5pp**，构成：① K20 对齐→存疑（w2）分子 −1.0；② R18/R24 缺失→存疑（w1×2）分子 +1.0；③ 新增 4 单元（R28 存疑 w1 +0.5；R29/K39/C20 缺失 w1×3）分母 +4、分子 +0.5。净效果：分子 +0.5、分母 +4。
 

@@ -525,6 +525,67 @@ TUI 消费（interactive-mode.ts:3889-3902 / :3846-3866 逐字已取）：
 2. 收口：全量 `mvn clean verify`（exit 0；checkstyle 写明错误/警告各几；spotbugs 零钉；
    测试计数记录）。verify 日志不落 target/（clean 会 wipe，批 6 教训）。
 
-## 9. 闭环记录
+## 9. 闭环记录（2026-10-28）
 
-（闭环时回填：实施细化、新窄差编号、verify 史、回填三处＝docs/04＋docs/05/map＋docs/06）
+**实施细化（超出设计稿的定形）**：
+
+1. **custom 消息的引擎通道**：`PiLaneEngine.run` 增 customs 重载——custom 投影经
+   initialMessages 进 loop（sink 按 customOrigins 身份在 message_end 落
+   `Entry.CustomMessage`），转录序＝pi（user 先于 customs）；nextTurn 注入点同缝。
+2. **triggerTurn 起轮＝续跑**：条目先落（idle 臂自带工作副本重建）⇒
+   `harness.continueRun`（尾部 user 投影 ⇒ runContinuation，pi `agent.continue`
+   同门）——`SessionRunner.drive` 抽 `RunStep` 共享体，新增 `driveContinuation`。
+3. **processPrompt 的 settled 延迟门**（pi :1968-1972）随 T3 一并落：deferral 的
+   SessionResult 经桥接 futures＋队列泵 stream；disposition 新值 `"deferred"`
+   （窄差 D158）。
+4. **保留键解析**：pi 18 条保留动作中 java 已知 11 条经 KeybindingsManager 解析；
+   其余 7 条（tui.* 四条＋app.suspend＋app.model.cycleBackward）硬编码等价键
+   （enter/esc/ctrl+c/ctrl+u/ctrl+z/shift+ctrl+p|alt+p）。
+5. **裁决⑦核实**：`SessionState.validateTarget` 已抛 `SessionError`——文案修真为
+   pi 逐字 `Entry <id> not found`（三操作点共享同一校验）。
+6. **裁决⑩异步面**：triggerTurn 臂 `Thread.startVirtualThread` 起轮，失败经
+   `bus.emitError`（`"<runtime>"`/`"send_message"`，pi :3389-3396 逐字）。
+7. **并发方言**（spotbugs 一钉撞出）：`emittingAgentSettled` ⇒ volatile；三缓冲
+   （nextTurn/pendingCustom/deferredSettled）读写全进 synchronized 临界区——
+   pi 单线程数组在 java 多线程下的对位纪律。
+8. **存量断言修形 2 处**：`DefaultExtensionContextSendMessageTest` 的 UOE 臂语义
+   移到回落路径（无宿主会话时 triggerTurn 仍 UOE）；`MessageBubbleTest` 的
+   `Entry.Custom` 投影断言改钉「无渲染器 ⇒ 不渲」（pi :3848-3850）。
+
+**窄差落号**：D150（transformer context 两臂恒值）／D151（user 型无消费点）／
+D152（renderer 文本级，D92 同族）／D153（unregisterProvider 无内置恢复面）／
+D154（exec 终止信号语义）／D155（EventBus 异常走 JUL）／D156（快捷键 ctx 共享）／
+D157（custom 的 message_start/end 以 entry_appended 载）／D158（disposition
+"deferred" 新值）／D159（pendingMessageCount 计 custom 项）。D12/D21 注记更新
+（各落半）；D117 部分修真（门落地，SDK 面仍无）。
+
+**行为变化（changelog 级）**：`sendMessage(triggerTurn=true)` 从 UOE 变起轮；
+流式 custom 默认臂＝steer；/hotkeys 增 Extensions 段；无渲染器 custom 条目不渲；
+processPrompt 在 agent_settled 发射窗内延迟执行；扩展 sendUserMessage 默认不展开
+模板/命令。
+
+**排障钉**：① 无 `-am` 拾旧 jar 再撞（NoClassDefFoundError QueuedItem$Custom——
+批 22/25 同族，本批三撞终记牢）；② verify 管道吞退出码再撞（grep 过滤后 `$?` 是
+grep 的——日志落盘＋单独 echo 才是真）；③ 两个 mvn 并发跑同模块互踩 target
+（收口只跑单实例）；④ spotbugs 跨线程可见性钉（⑦）。
+
+**测试**：新增/改写 6 件 43 用例——CustomQueuedMessageTest 3（agent-core）＋
+AgentSessionSendCustomMessageTest 6（五臂＋settled 延迟门）＋
+DefaultExtensionContextActionsTest 11（T3–T8 ctx 面）＋ExtensionChannelBusTest 5＋
+ExtensionShortcutsTest 6（三规则＋保留键＋KeyIdParser）＋CustomRendererProjectionTest
+6＋MarkdownTransformersTest 6（链语义＋两臂缝）。
+
+**账面（实算）**：模块 416.0→**438.0/485 ≈ 90.3%**（+22.0，全在 E5 域）；E5 域
+29.0→**51.0/58 ≈ 87.9%**（对齐 17→31/35）；map/05 132.5→**133.5/244 ≈ 54.7%**
+（R6 +1.0）；全仓 1,132.0→**1,155.0/1379 ≈ 83.8%**。E5-26/27 挂账收编 B162；
+E5-31 维持存疑；E5-33 维持 F 类。
+
+**verify 史**：定向（三模块 test＋checkstyle）全绿 → 全量 clean verify #1 撞
+spotbugs 一钉（`emittingAgentSettled` 跨线程；修真＝volatile＋三缓冲临界区）→
+全量 clean verify #2 收口：exit 0 BUILD SUCCESS（**5,327 测 0 失败**，checkstyle
+0 违规〔14 模块〕，spotbugs 零钉）。
+
+**回填三处**：docs/04（§4 批 26 段＋B162 注记＋E1/E6 行数实测＋§7 下一包号
+docs/38）＋docs/05（§1 总表/§2.4 批 26 条目/§2.5）＋docs/06（§1 四读数＋E5 行＋
+§2 批 26 行＋§3.3 变量 3 落地注记）＋map/04（E5 域 14 行＋汇总＋域表＋D12/D21
+注记＋扩展系统单独口径×2）＋map/05（R6 行＋合计＋批 26 注记）。

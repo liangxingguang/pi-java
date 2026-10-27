@@ -77,7 +77,7 @@ protocol/client/server 按 R1 整体排除（未加权数字见 map/01）。pi-j
 
 ---
 
-## 1 总表（coding-agent 批 25 后值，2026-10-27；agent-core 批 5 后值，2026-10-18；telemetry 批 1 后值，2026-10-17；ai 批 10 后 2026-10-16；批 3b/4/6/8 为台账行为项、加权不变；其余模块为 2026-10-12 重测值）
+## 1 总表（coding-agent 批 26 后值，2026-10-28；agent-core 批 5 后值，2026-10-18；telemetry 批 1 后值，2026-10-17；ai 批 10 后 2026-10-16；批 3b/4/6/8 为台账行为项、加权不变；其余模块为 2026-10-12 重测值）
 
 | 模块（地图） | Σ权重 | Σ(w×c) | **加权完成度** | 未加权 | 权重 3 层 |
 |---|---:|---:|---:|---:|---:|
@@ -86,9 +86,9 @@ protocol/client/server 按 R1 整体排除（未加权数字见 map/01）。pi-j
 | pi-java-agent-core（map/03，**批5后**） | 180 | 180.0 | **100%** | 100%（90/90） | **100%（27/27）** |
 | session-sqlite ＋ evals（map/06） | 87 | 44.5 | **51.1%** | 50.0%（20/40） | — |
 | pi-java-telemetry（map/01，**批1后**） | 34 | 34.0 | **100%** | 100%（16/16） | 100%（21/21） |
-| pi-java-tui/web（map/05，**批25后**） | 244 | 132.5 | **54.3%** | 35.4%（52/147） | 71.2% |
-| pi-java-coding-agent（map/04，剔 MCP 粗单元） | 485 | 416.0 | **85.8%** | 78.0%（225.5/289） | 87.0%（20/23） |
-| **合计（去重后，coding-agent 批25后）** | **1,379** | **1,132.0** | **82.1%** | — | — |
+| pi-java-tui/web（map/05，**批26后**） | 244 | 133.5 | **54.7%** | 36.1%（53/147） | 71.2% |
+| pi-java-coding-agent（map/04，剔 MCP 粗单元） | 485 | 438.0 | **90.3%** | 82.7%（239.0/289） | 87.0%（20/23） |
+| **合计（去重后，coding-agent 批26后）** | **1,379** | **1,155.0** | **83.8%** | — | — |
 
 > map/04 原始口径（含 G-1..G-5）：Σw 494 ／ Σwc 422.5 ／ **85.6%**（批 24：G-1/G-4 翻对齐 +2.0）；两处账都在，总表用去重值。
 > w3 注记（批 19）：包管理器 #18/#19/#23 清零（批 18 两翻当时漏入 w3 表，本批收平）⇒ 73.9%（17/23）→ 87.0%（20/23）。
@@ -99,7 +99,7 @@ protocol/client/server 按 R1 整体排除（未加权数字见 map/01）。pi-j
 
 - **ai 层权重 3 全齐**：每轮都走的请求/响应/计量主路无缺口。批 10 后计分母缺失仅 1 条（#8 namespace），无半成品——#90 图片缩放消费链已落 agent-core/coding-agent，#98 federation 批 10 闭环。分类器面已裁 R5。
 - **mcp 批 24 后 93.4%**：会话内接线全通（**G 组满分域**——批 24 内置 MCP 扩展本体 B221① 落地：六事件订阅＋提示段生产＋运行时注册三表＋`/mcp` 命令与管理器视图＋`--no-mcp`）；计分母缺失仅剩 #50（structuredContent 消费者，B202/codemode 族）；#92/#93（codemode 默认激活）仍 R5 出分母随 B161/B162 重裁。
-- **coding-agent 批 23 后 85.8%（去重）**：**D 扩展事件 100%（批 23，满分域第十三——#1 project_trust／#11 mcp_servers_change 两缺失清零）**、A CLI/E1/E3/E4/**E6/B/E7** 七域 100%、E2 settings 97.0%、C slash 90.7%；**E5 扩展 API 50.0%（批 23：MCP 三件＋getCommands＋SourceInfo）** 与 G 域新子系统（codemode 3,957 行＋tool-search/virtual-models/nested 766 行仍为 0，B161/B162）是主要余量。
+- **coding-agent 批 26 后 90.3%（去重）**：**D 扩展事件 100%（批 23，满分域第十三——#1 project_trust／#11 mcp_servers_change 两缺失清零）**、A CLI/E1/E3/E4/**E6/B/E7** 七域 100%、E2 settings 97.0%、C slash 90.7%；**E5 扩展 API 87.9%（批 26 收口：ctx 动作面 14 行）**；余量主在 G 域新子系统（codemode 3,957 行＋tool-search/virtual-models/nested 766 行仍为 0，B161/B162）与 E5-33 examples（F 类）。
 - **agent-core 批 5 后 180/180 = 100%**（第二个满分模块）：权重 3 层 27/27、工具表 21/21、确认缺失与存疑**双清零**（批 5 收编 22 条存疑：13 做、8 裁决、#60 R1 出分母），未得分池 = 0。
 
 ---
@@ -142,7 +142,7 @@ codemode-only 的 4 个单元（exposure/deferred/discovery）权重 0，B161/B1
 
 现状：**模块 100%**——加权 180/180、未加权 90/90、权重 3 层含工具 27/27、工具表 21/21、确认缺失与存疑**双清零**、未得分池 = 0。（批 4 登记的 B244/B245 已分别随 coding-agent 批 2/批 8 销号。）
 
-### 2.4 coding-agent — 85.8%（去重）｜ map/04
+### 2.4 coding-agent — 90.3%（去重）｜ map/04
 
 A CLI 参数 **100%**（批 21）、E1 配置文件 **100%**（批 21）、E3 会话管理 **100%**（批 21）、E4 资源发现 **100%**（批 21）、**E6 包管理器 100%（批 22，自更新终裁）、B 子命令 100%（批 22）、E7 RPC 面 100%（批 20）、D 扩展事件 100%（批 23，满分域第十三——缺失清零）**、C slash 90.7%（批 16 后）、E2 settings 97.0%（批 21 后，E2-9 翻）；**E5 扩展 API 50.0%（批 23 后）** 拉低整体。
 G 域新子系统：MCP 明细在 map/07；codemode 3,957 行＋tool-search/virtual-models/nested 766 行仍为 0（B161/B162）。
@@ -178,7 +178,9 @@ G 域新子系统：MCP 明细在 map/07；codemode 3,957 行＋tool-search/virt
 - 批 24（2026-10-27 闭环，docs/35，内置 MCP 扩展本体——B221① 收尾）：**T1 装配**（`McpExtension` PiExtension＋主源码集 ServiceLoader 注册〔`builtin:mcp` 身份〕）→ **T2 `--no-mcp`**（Args/Parser/HelpText＋装配按名过滤＋`-e builtin:mcp` 显式臂 `ExtensionManager.loadBuiltin`）→ **T3/T4 session_start**（两源配置＋注册表合并〔mcp.json 压同名注册、overridden 名单逐字〕＋虚拟线程后台连接＋reportProblems 聚合＋裁决⑥不可达一次性警告；B188 两段式壳＋B189 身份注入在连接创建处）→ **T5 before_agent_start**（direct 首提示有界 10s 等待〔超时通知文案逐字〕＋`mcp_servers` 提示段写删）→ **T6 运行时注册**（toolOwners/serverTools/definitions 三表＋Codex 序无关哈希后缀＋撤销重注 hidden＋资源工具最宽 exposure 同步＋getClient 三错文逐字）→ **T7 事件余臂**（tool_call 就绪等待〔codemode/tool_search 两臂 R5〕＋turn_start 凭证拾取＋mcp_servers_change 热插拔＋session_shutdown 收敛）→ **T8 D3/D4 销号**（defaultTools JsonNode 容忍读＋`_pendingToolNames` 五臂：lane 宿主/setActiveToolsByName 两臂/restore 播种/run 起点清/reload 回填/运行时合并缝）→ **T9 `/mcp` 命令**（manager/login/logout/reconnect＋formatStatus/pickServer 逐字＋写回 `McpConfig.update`）→ **T10 管理器视图**（B214 销号——ExtensionComponent 文本级复刻 SelectList〔光标/12 行窗口/订阅重建保选中〕＋status/redirect 屏）。map/07 **14 行翻动 +18.5**——**G 组 23.0/23＝100%（满分域）**、#24（B188 销）/#44（B189 会话臂销）翻正 ⇒ 102.0→**120.5/129 ≈ 93.4%**；模块去重账面不动（G 组属 map/07）；合计 80.0% → **81.4%**（1,103.5 → 1,122.0/1379）。窄差 D138–D142；**B221 全销/B188/B189/B195/B214 销号、docs(11) D3/D4 收编销号**。行为变化注记：**mcp.json 服务器会话内自连**、**MCP 工具按 exposure 进声明面**（direct 即激活；间接 exposure 一次性不可达警告）、**`mcp_servers` 提示段上线**（模型可见新段）、**`/mcp` 命令与 TUI 管理器上线**、**get_commands 自此含 /mcp**（pi 同形）、**defaultTools 容忍读**。排障钉：**无宿主装配路 sessionCwd 落 settings 存储面 projectDir**（落 process.cwd() 会把测试写进调用方工作区）／**显式 JSON null 进 JsonNode 字段变 NullNode 非 null**（D3 首版坑，真 home `defaultTools:null` 读成空选择）／pi 提示段条目名是命名空间形 `mcp__docs`。新文件 12＋测试 8 件 47 用例＋存量修形 7 件。E1 涨到 3,129。
 - 批 25（2026-10-27 闭环，docs/36，**tui Markdown 激活批**——B65 死代码接线）：**T1/T2 wrap 地基**（`MarkupTokens` 扫描器〔语义逐字镜像 TamboUI MarkupParser 0.4.0 javap 取证〕＋`TextLayout` markup 感知换行/硬断/截断——标签零宽、切词不切标签、跨行本行尾闭栈＋下行首重开；裁决⑧量宽修真〔`[[`/`]]`/`\\` 2 列⇒1 列〕；`toLine` 共享口行 style 作底 span 优先）→ **T3/T4/T5 渲染本体**（`MarkdownBlocks` 行级 parser〔ATX 1-6/段落合并/~~~ 围栏/有序连号＋任务标记＋缩进嵌套列表/引用合并/hr 三形/R5 局部围栏修剪〕＋`InlineMarkup`〔严格删除线 pi :7 正则逐字/codespan/strong/em/OSC 8 链接臂〕＋`toLogicalLines` 排放〔块后间距 space token 对位/代码围栏行可见＋codeBlockIndent＋高亮门/列表悬垂缩进/表格全边框自然宽 preformatted/hr 固定 80/tab→3 空格逐字〕）→ **T6 主题接线**（`MarkdownTheme` 十键＋`SyntaxHighlighter` 四色改主题令牌）→ **T7 两臂接线**（`MessageBubble` TextContent/ThinkingContent 走 Markdown〔pi assistant-message.ts:110-117/:146-162 对位〕＋E2-43 `getMarkdownCodeBlockIndent` 逐字回落＋`MarkdownTheme.installCodeBlockIndent` 现读缝）→ **T8 `/help` `/hotkeys`**（输出改产 markdown 源＋`ChatMessage.Markdown` 变体＋输入行路由）。**B65 销号**；map/05 **六行翻动 +10.0**（R1〔w3〕/R2/R3/R4/R5/R9 缺失→对齐；**裁决④ OSC 8 实证通过**＝MarkupParser 携 hyperlink＋`AnsiCellWriter` 吐 `]8;` 序列双用例钉死）122.5→**132.5/244 ≈ 54.3%**（未加权 46→52/147 ≈ 35.4%；w3 子集 67.3%→**71.2%**）；map/04 E2-43 维持存疑（注记更新：codeBlockIndent 落地、mermaid 半键挂 R7）；模块去重账面不动（85.8%）；合计 81.4% → **82.1%**（1,122.0 → 1,132.0/1379）。窄差 D143–D149；行为变化注记：**助手/thinking 文本经 Markdown 渲染**（标题/列表/代码块/表格/链接/高亮可见）、**`/help` `/hotkeys` 输出改 markdown 表格形**、编辑器与代码块高亮改主题令牌色。排障钉：`Line.patchStyle` 方向是参数覆盖 span（行 style 须逐 span 重建作底）／无 -am 拾旧 jar 再撞。新文件 4＋测试 5 件 53 用例＋存量修形 5 件；verify 收口 exit 0 BUILD SUCCESS（5,284 测 0 失败，checkstyle 0 违规，spotbugs 零钉）。E6 涨到 1,086、E7 涨到 1,040。
 
-### 2.5 tui/web — 54.3%（总表行；map/05 域表 54.3%）｜ map/05
+- 批 26（2026-10-28 闭环，docs/37，**E5 扩展 API 面第三批——ctx 动作面收口**）：**T1 队列地基**（agent-core：`QueuedItem` 密封两变体＋`customOrigins` 身份通道＋sink message_end 落 `Entry.CustomMessage`）→ **T2 `sendCustomMessage` 五臂＋三缓冲**（pi :2293-2329 逐字序；四 flush 点全对位）→ **T3 ctx 消息面**（`sendUserMessage`＋`expandPromptTemplates` 门〔D117 部分修真〕＋processPrompt settled 延迟门）→ **T4 会话四件**（setLabel 抛错文案修真逐字）→ **T5 模型三件**（auth 门 false 不抛）→ **T6 `ExtensionExec`** → **T7 `ExtensionChannelBus`＋失效退订三路径** → **T8 unregisterProvider** → **T9 快捷键**（KeyIdParser＋冲突三规则/保留表逐字＋TUI 派发缝＋/hotkeys Extensions 段）→ **T10 message/entry renderer**（文本级＋first-wins＋TUI 消费缝；无 entry renderer 不渲）→ **T11 markdown transformer**（单槽＋链式＋两臂缝；map/05 R6 翻对齐）。E5 域 29.0→**51.0/58 ≈ 87.9%**（对齐 17→31/35）；模块 416.0→**438.0/485 ≈ 90.3%**（未加权 78.0%→82.7%）；合计 82.1% → **83.8%**（1,132.0 → 1,155.0/1379）。E5-26/27 裁决①挂账收编 B162；窄差 D150–D159；行为变化注记：sendMessage(triggerTurn) UOE 退役起轮、流式 custom 默认 steer、/hotkeys 增 Extensions 段、无渲染器 custom 条目不渲、processPrompt settled 窗内延迟。排障钉：无 -am 拾旧 jar 再撞／verify 管道吞退出码再撞（落盘日志＋单独 echo）／并发两 mvn 互踩 target／spotbugs 一钉（emittingAgentSettled ⇒ volatile＋三缓冲临界区）。新文件 11＋测试 6 件 43 用例＋存量修形 2 件；E1 涨到 3,428、E6 涨到 1,137。
+
+### 2.5 tui/web — 54.7%（总表行；map/05 域表 54.7%）｜ map/05
 
 web 对齐面 81.8% 最高；主题/样式 36.1% 最低。**批 25（docs/36）Markdown 激活批落地**：B65 死代码接线销号——R1/R2/R3/R4/R5/R9 六行翻对齐（渲染特性 19.2% → 44.9%；w3 子集 67.3% → 71.2%）；逐工具渲染器缺（B47）。
 新锚点带来 4 条新行为缺口（B238）：Ctrl+Home/End 视口键、安装变更重启警告、OSC 7501 程序状态、APC 假光标。
