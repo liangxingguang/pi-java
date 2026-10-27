@@ -117,4 +117,66 @@ class TextLayoutTest {
             new LogicalLine(" ", 0, 0, false, Style.EMPTY)), 10))
             .hasSize(1);
     }
+
+    // ── 批 25（docs/36 T2）：markup 感知 wrap ────────────────────
+
+    @Test
+    void tagsOccupyNoWidthWhenWrapping() {
+        // 标签零宽：换行点只按可见字符算
+        var rows = TextLayout.wrap(List.of(
+            new LogicalLine("[#FF0000]aaaa bbbb[/] cccc", 0, 0, false, Style.EMPTY)), 10);
+        assertThat(rows).extracting(RenderRow::text)
+            .containsExactly("[#FF0000]aaaa bbbb[/]", "cccc");
+    }
+
+    @Test
+    void styleTagsCloseAndReopenAcrossRows() {
+        // 跨行：本行尾补 [/]×开栈深，下行首按原序重开
+        var rows = TextLayout.wrap(List.of(
+            new LogicalLine("[bold][#00FF00]aaaa bbbb[/][/]", 0, 0, false, Style.EMPTY)), 6);
+        assertThat(rows).extracting(RenderRow::text)
+            .containsExactly("[bold][#00FF00]aaaa[/][/]", "[bold][#00FF00]bbbb[/][/]");
+    }
+
+    @Test
+    void hardBreakDoesNotCutTags() {
+        // 词内硬断：标签不切，跨块同样闭/重开
+        var rows = TextLayout.wrap(List.of(
+            new LogicalLine("[#FF0000]aaaaaaaa[/]", 0, 0, false, Style.EMPTY)), 5);
+        assertThat(rows).extracting(RenderRow::text)
+            .containsExactly("[#FF0000]aaaaa[/]", "[#FF0000]aaa[/]");
+    }
+
+    @Test
+    void preformattedTruncateClosesTagsBeforeEllipsis() {
+        var rows = TextLayout.wrap(List.of(
+            new LogicalLine("[#FF0000]abcdefghij[/]", 0, 0, true, Style.EMPTY)), 5);
+        assertThat(rows).extracting(RenderRow::text)
+            .containsExactly("[#FF0000]abcd[/]…");
+    }
+
+    @Test
+    void preformattedFitsPassesThroughVerbatim() {
+        var rows = TextLayout.wrap(List.of(
+            new LogicalLine("[#FF0000]abc[/]", 0, 0, true, Style.EMPTY)), 10);
+        assertThat(rows).extracting(RenderRow::text)
+            .containsExactly("[#FF0000]abc[/]");
+    }
+
+    @Test
+    void escapedBracketsCountOneColumnAndRoundTrip() {
+        // 裁决⑧量宽修真：[[ ]] \\ 按解码后 1 列计
+        assertThat(TextLayout.displayWidthMarkup("[[a]]")).isEqualTo(3);
+        var rows = TextLayout.wrap(List.of(
+            new LogicalLine("[[a[[ b", 0, 0, false, Style.EMPTY)), 4);
+        assertThat(rows).extracting(RenderRow::text)
+            .containsExactly("[[a[[", "b");
+    }
+
+    @Test
+    void closingTagOnlyLineSurvives() {
+        var rows = TextLayout.wrap(List.of(
+            new LogicalLine("[/]", 0, 0, false, Style.EMPTY)), 10);
+        assertThat(rows).extracting(RenderRow::text).containsExactly("[/]");
+    }
 }
