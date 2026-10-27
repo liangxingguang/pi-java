@@ -77,7 +77,7 @@ protocol/client/server 按 R1 整体排除（未加权数字见 map/01）。pi-j
 
 ---
 
-## 1 总表（coding-agent 批 24 后值，2026-10-27；agent-core 批 5 后值，2026-10-18；telemetry 批 1 后值，2026-10-17；ai 批 10 后 2026-10-16；批 3b/4/6/8 为台账行为项、加权不变；其余模块为 2026-10-12 重测值）
+## 1 总表（coding-agent 批 25 后值，2026-10-27；agent-core 批 5 后值，2026-10-18；telemetry 批 1 后值，2026-10-17；ai 批 10 后 2026-10-16；批 3b/4/6/8 为台账行为项、加权不变；其余模块为 2026-10-12 重测值）
 
 | 模块（地图） | Σ权重 | Σ(w×c) | **加权完成度** | 未加权 | 权重 3 层 |
 |---|---:|---:|---:|---:|---:|
@@ -86,9 +86,9 @@ protocol/client/server 按 R1 整体排除（未加权数字见 map/01）。pi-j
 | pi-java-agent-core（map/03，**批5后**） | 180 | 180.0 | **100%** | 100%（90/90） | **100%（27/27）** |
 | session-sqlite ＋ evals（map/06） | 87 | 44.5 | **51.1%** | 50.0%（20/40） | — |
 | pi-java-telemetry（map/01，**批1后**） | 34 | 34.0 | **100%** | 100%（16/16） | 100%（21/21） |
-| pi-java-tui/web（map/05） | 244 | 122.5 | **50.2%** | 31.3%（46/147） | 67.3% |
+| pi-java-tui/web（map/05，**批25后**） | 244 | 132.5 | **54.3%** | 35.4%（52/147） | 71.2% |
 | pi-java-coding-agent（map/04，剔 MCP 粗单元） | 485 | 416.0 | **85.8%** | 78.0%（225.5/289） | 87.0%（20/23） |
-| **合计（去重后，coding-agent 批24后）** | **1,379** | **1,122.0** | **81.4%** | — | — |
+| **合计（去重后，coding-agent 批25后）** | **1,379** | **1,132.0** | **82.1%** | — | — |
 
 > map/04 原始口径（含 G-1..G-5）：Σw 494 ／ Σwc 422.5 ／ **85.6%**（批 24：G-1/G-4 翻对齐 +2.0）；两处账都在，总表用去重值。
 > w3 注记（批 19）：包管理器 #18/#19/#23 清零（批 18 两翻当时漏入 w3 表，本批收平）⇒ 73.9%（17/23）→ 87.0%（20/23）。
@@ -176,10 +176,11 @@ G 域新子系统：MCP 明细在 map/07；codemode 3,957 行＋tool-search/virt
 
 - 批 23（2026-10-25 闭环，docs/34，触发条件型欠账首批立项——B221⑥＋D 域余 2 缺失＋E5 扩展 MCP 三件）：**T1 扩展 MCP API 三件**（`registerMcpServer/unregisterMcpServer/getMcpServers`——loader.ts:471-498 三守卫逐字；注册表安家 `DefaultExtensionContext`；`forExtension(name,path)` 路径身份〔裁决⑥ `builtin:<name>`〕；**B218 销号**、map/07 #87 翻）→ **T2 `mcp_servers_change`**（D#11：事件变体＋firer 广播＋装配尾 changeListener 接线〔pi bindCore 相对序〕＋`UnhandledMcpServerReporter` 无处理器臂逐字错文按名去重）→ **T4 RPC `get_commands` 扩展臂**（登记目＋`:N` 撞名编号〔runner.ts:805-840 逐字——裸名撞名不可调〕＋buildCommands 第一臂〔**批 3 窄差 D5 销号**〕＋E5-20 getCommands 三源序＋`ExtensionSourceInfos` 四规则〔E5-34 翻〕；**B221 收编 ⑥，余 ①**）→ **T3 `project_trust` 全链**（D#1：first-wins firer＋`ProjectTrustStore`〔trust.json 最近祖先继承/null 删键/逐字节线格式/FileChannel 锁——**删 `TrustManager` 标记文件**，裁决②〕＋`ProjectTrustResources` 敏感资源门＋七级 `ProjectTrustResolver`＋预信任装配＋TUI `TrustPromptRunner` 启动壳；行为变化：**`defaultProjectTrust:"ask"` 从「当信任」变 pi 逐字语义**——有 `.pi-java/` 敏感资源的项目 TUI 弹窗、print/rpc 不信任）。map/04 **七行翻动 +9.5**——**D 域 79.0→83.0/83＝100%（满分域第十三，缺失清零）**、E5 域 23.5→**29.0/58＝50.0%**、E7-1 注记随收；map/07 **三行 +4.0**（#87 本批＋#81/#84 批 16 回填收平，G 组 2.0→6.0/23 ≈ 26.1%）98.0→**102.0/129 ≈ 79.1%**。83.8% → **85.8%**（未加权 75.8% → 78.0%；w3 87.0% 不动）。合计 79.0% → **80.0%**（1,090.0 → 1,103.5/1379）。窄差 D134–D137；新文件 13＋测试 11 件 59 用例＋存量修形 9 件；排障钉：信任判定 cwd 须取 settings 存储面项目目录（判定消费同根）／spotbugs 七钉全是 `Path.getParent()` 空路径／pi 撞名编号自增从 occurrence 起（`dup:2:2`）；verify 收口 exit 0 BUILD SUCCESS（5,179 测 0 失败，spotbugs 零钉）。E1 涨到 3,067、E2 767。
 - 批 24（2026-10-27 闭环，docs/35，内置 MCP 扩展本体——B221① 收尾）：**T1 装配**（`McpExtension` PiExtension＋主源码集 ServiceLoader 注册〔`builtin:mcp` 身份〕）→ **T2 `--no-mcp`**（Args/Parser/HelpText＋装配按名过滤＋`-e builtin:mcp` 显式臂 `ExtensionManager.loadBuiltin`）→ **T3/T4 session_start**（两源配置＋注册表合并〔mcp.json 压同名注册、overridden 名单逐字〕＋虚拟线程后台连接＋reportProblems 聚合＋裁决⑥不可达一次性警告；B188 两段式壳＋B189 身份注入在连接创建处）→ **T5 before_agent_start**（direct 首提示有界 10s 等待〔超时通知文案逐字〕＋`mcp_servers` 提示段写删）→ **T6 运行时注册**（toolOwners/serverTools/definitions 三表＋Codex 序无关哈希后缀＋撤销重注 hidden＋资源工具最宽 exposure 同步＋getClient 三错文逐字）→ **T7 事件余臂**（tool_call 就绪等待〔codemode/tool_search 两臂 R5〕＋turn_start 凭证拾取＋mcp_servers_change 热插拔＋session_shutdown 收敛）→ **T8 D3/D4 销号**（defaultTools JsonNode 容忍读＋`_pendingToolNames` 五臂：lane 宿主/setActiveToolsByName 两臂/restore 播种/run 起点清/reload 回填/运行时合并缝）→ **T9 `/mcp` 命令**（manager/login/logout/reconnect＋formatStatus/pickServer 逐字＋写回 `McpConfig.update`）→ **T10 管理器视图**（B214 销号——ExtensionComponent 文本级复刻 SelectList〔光标/12 行窗口/订阅重建保选中〕＋status/redirect 屏）。map/07 **14 行翻动 +18.5**——**G 组 23.0/23＝100%（满分域）**、#24（B188 销）/#44（B189 会话臂销）翻正 ⇒ 102.0→**120.5/129 ≈ 93.4%**；模块去重账面不动（G 组属 map/07）；合计 80.0% → **81.4%**（1,103.5 → 1,122.0/1379）。窄差 D138–D142；**B221 全销/B188/B189/B195/B214 销号、docs(11) D3/D4 收编销号**。行为变化注记：**mcp.json 服务器会话内自连**、**MCP 工具按 exposure 进声明面**（direct 即激活；间接 exposure 一次性不可达警告）、**`mcp_servers` 提示段上线**（模型可见新段）、**`/mcp` 命令与 TUI 管理器上线**、**get_commands 自此含 /mcp**（pi 同形）、**defaultTools 容忍读**。排障钉：**无宿主装配路 sessionCwd 落 settings 存储面 projectDir**（落 process.cwd() 会把测试写进调用方工作区）／**显式 JSON null 进 JsonNode 字段变 NullNode 非 null**（D3 首版坑，真 home `defaultTools:null` 读成空选择）／pi 提示段条目名是命名空间形 `mcp__docs`。新文件 12＋测试 8 件 47 用例＋存量修形 7 件。E1 涨到 3,129。
+- 批 25（2026-10-27 闭环，docs/36，**tui Markdown 激活批**——B65 死代码接线）：**T1/T2 wrap 地基**（`MarkupTokens` 扫描器〔语义逐字镜像 TamboUI MarkupParser 0.4.0 javap 取证〕＋`TextLayout` markup 感知换行/硬断/截断——标签零宽、切词不切标签、跨行本行尾闭栈＋下行首重开；裁决⑧量宽修真〔`[[`/`]]`/`\\` 2 列⇒1 列〕；`toLine` 共享口行 style 作底 span 优先）→ **T3/T4/T5 渲染本体**（`MarkdownBlocks` 行级 parser〔ATX 1-6/段落合并/~~~ 围栏/有序连号＋任务标记＋缩进嵌套列表/引用合并/hr 三形/R5 局部围栏修剪〕＋`InlineMarkup`〔严格删除线 pi :7 正则逐字/codespan/strong/em/OSC 8 链接臂〕＋`toLogicalLines` 排放〔块后间距 space token 对位/代码围栏行可见＋codeBlockIndent＋高亮门/列表悬垂缩进/表格全边框自然宽 preformatted/hr 固定 80/tab→3 空格逐字〕）→ **T6 主题接线**（`MarkdownTheme` 十键＋`SyntaxHighlighter` 四色改主题令牌）→ **T7 两臂接线**（`MessageBubble` TextContent/ThinkingContent 走 Markdown〔pi assistant-message.ts:110-117/:146-162 对位〕＋E2-43 `getMarkdownCodeBlockIndent` 逐字回落＋`MarkdownTheme.installCodeBlockIndent` 现读缝）→ **T8 `/help` `/hotkeys`**（输出改产 markdown 源＋`ChatMessage.Markdown` 变体＋输入行路由）。**B65 销号**；map/05 **六行翻动 +10.0**（R1〔w3〕/R2/R3/R4/R5/R9 缺失→对齐；**裁决④ OSC 8 实证通过**＝MarkupParser 携 hyperlink＋`AnsiCellWriter` 吐 `]8;` 序列双用例钉死）122.5→**132.5/244 ≈ 54.3%**（未加权 46→52/147 ≈ 35.4%；w3 子集 67.3%→**71.2%**）；map/04 E2-43 维持存疑（注记更新：codeBlockIndent 落地、mermaid 半键挂 R7）；模块去重账面不动（85.8%）；合计 81.4% → **82.1%**（1,122.0 → 1,132.0/1379）。窄差 D143–D149；行为变化注记：**助手/thinking 文本经 Markdown 渲染**（标题/列表/代码块/表格/链接/高亮可见）、**`/help` `/hotkeys` 输出改 markdown 表格形**、编辑器与代码块高亮改主题令牌色。排障钉：`Line.patchStyle` 方向是参数覆盖 span（行 style 须逐 span 重建作底）／无 -am 拾旧 jar 再撞。新文件 4＋测试 5 件 53 用例＋存量修形 5 件；verify 收口 exit 0 BUILD SUCCESS（5,284 测 0 失败，checkstyle 0 违规，spotbugs 零钉）。E6 涨到 1,086、E7 涨到 1,040。
 
-### 2.5 tui/web — 50.2%（总表行；map/05 域表 50.2%）｜ map/05
+### 2.5 tui/web — 54.3%（总表行；map/05 域表 54.3%）｜ map/05
 
-web 对齐面 78.8% 最高；**渲染特性 14.5%** 最低：MarkdownRenderer/SyntaxHighlighter 是生产死代码（B65）、4 键位空接（B66，批 10 核账 6→4：DEQUEUE/MODEL_CYCLE 已接）、逐工具渲染器缺（B47）。主题系统 pi 3,105 行 vs Java 74 行（B163）。
+web 对齐面 81.8% 最高；主题/样式 36.1% 最低。**批 25（docs/36）Markdown 激活批落地**：B65 死代码接线销号——R1/R2/R3/R4/R5/R9 六行翻对齐（渲染特性 19.2% → 44.9%；w3 子集 67.3% → 71.2%）；逐工具渲染器缺（B47）。
 新锚点带来 4 条新行为缺口（B238）：Ctrl+Home/End 视口键、安装变更重启警告、OSC 7501 程序状态、APC 假光标。
 
 ### 2.6 session ＋ evals — 51.1% ｜ map/06
@@ -200,7 +201,7 @@ protocol/client/server 按 R1 整体移出分母：protocol 是已删 pi 代码�
 - **ai：零条** ✅。
 - **agent-core：零条** ✅（批 5 后模块 100%——权重 3 层 27/27＋确认缺失清零＋存疑清零）。
 - **coding-agent（权重 3 层 73.9%）**：~~D 域扩展事件 provider 请求面~~（批 7 销，B248）；剩余：扩展示例库（map/04 w3 #17）、examples/ 可执行验收规格、包管理器三件（#18/#19/#23，E6 域）。
-- **tui（权重 3 层 67.3%）**：Markdown 渲染死路（B65）、逐工具渲染器（B47）、spinner/working 指示器、主题 token 覆盖（B163）等渲染长尾。
+- **tui（权重 3 层 71.2%——批 25 R1 翻对齐）**：逐工具渲染器（B47）、spinner/working 指示器、提示历史（K27）、主题 token 覆盖残余（~~B163~~ 批 21 销号）等渲染长尾。
 - **session**：JSONL 条目信封形状（map/06 #16，权重 3 存疑）。
 
 ---
@@ -209,10 +210,10 @@ protocol/client/server 按 R1 整体移出分母：protocol 是已删 pi 代码�
 
 | # | 死功能 | 用户感知 | 台账 |
 |---|---|---|---|
-| 1 | TUI 不渲染 Markdown（MarkdownRenderer 生产零调用，消息走纯文本 split） | 表格/代码高亮/mermaid/链接全不可见 | B65 |
+| ~~1~~ | ~~TUI 不渲染 Markdown~~ | ~~表格/代码高亮/链接全不可见~~ | ~~B65~~ **批 25 销号**（docs/36 接线落地） |
 | 2 | TUI 3 个声明键位空接（THINKING_CYCLE/TOOLS_EXPAND/THINKING_TOGGLE；~~MODEL_CYCLE~~ ai 批 3b 已接、~~DEQUEUE~~ 批 10 已接、~~EXTERNAL_EDITOR~~ 批 12 已接） | 按键无反应 | B66 |
-| 3 | 语法高亮代码块路径死（唯一调用点是输入编辑器当前行） | 代码块无高亮 | B65 族 |
-| 4 | 会话内 MCP 不激活（注册表/传输/OAuth/CLI 全落，但六个 on() 事件 0/6 等接线面缺） | `pi mcp` 进程外可用，对话中无 MCP 工具 | B221（余 ①；~~B218~~ 批 23 销号） |
+| ~~3~~ | ~~语法高亮代码块路径死~~ | ~~代码块无高亮~~ | ~~B65 族~~ **批 25 销号**（高亮门＝lang 非空，窄差 D146） |
+| ~~4~~ | ~~会话内 MCP 不激活~~ | ~~对话中无 MCP 工具~~ | ~~B221~~ **批 24 销号**（六事件接线＋/mcp——批 24 回填漏删本行，批 25 补收） |
 
 ---
 

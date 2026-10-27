@@ -67,7 +67,7 @@
 | S21 | show-images 选择器 | ✓ `components/show-images-selector.ts:13`（50 行） | ✗ | **缺失** | 1 | — |
 | S22 | 扩展 UI：选择器 / 输入框 / 确认框 / 编辑器 | ✓ `interactive-mode.ts:2690 showExtensionSelector`/`:2773 showExtensionInput`/`:2831 showExtensionEditor` | ✓ `ExtensionSelectorOverlay`/`ExtensionInputOverlay`/`ExtensionEditorOverlay`＋`TuiExtensionUI`（pi-java-tui） | **对齐** | 1 | **批 17（2026-10-24，docs/28 T4）**：ScreenOverlay 模态层落位（裁决④/窄差 D95）、k/j 别名＋空表不提交＋hint 行逐字、倒计时标题 ({N}s)＋到期取消、confirm＝selector 特化 Yes/No、ctrl+g 外部编辑器回落链逐字；窄差 D95–D98 |
 | S23 | 扩展 widget / footer / header / 状态槽 | ✓ `interactive-mode.ts:2398 setExtensionWidget`、`:2524 setExtensionFooter`、`:2551 setExtensionHeader` | ✓ `ChatScreen` 注入层（widgetsAbove/Below＋customFooter/customHeader＋extensionStatuses）＋`TuiExtensionUI` 四方法 | **对齐** | 1 | **批 17（2026-10-24，docs/28 T6）**：同 key 两区先清、MAX_WIDGET_LINES=10 截断＋逐字标记行、spacer 序逐字、footer/header dispose 序、状态段字典序＋sanitize 逐字＋截断 dim "..."；窄差 D100/D101 |
-| S24 | `/hotkeys` 与 `/help` 面板 | ✓ `interactive-mode.ts` + `core/slash-commands.ts:33 hotkeys`（Markdown 渲染） | ✓ `MiscCommands.java:34`、`:122` | **对齐** | 1 | 都是往聊天区追加纯文本；pi 走 Markdown 组件 |
+| S24 | `/hotkeys` 与 `/help` 面板 | ✓ `interactive-mode.ts` + `core/slash-commands.ts:33 hotkeys`（Markdown 渲染） | ✓ `MiscCommands.java:34`、`:122` | **对齐** | 1 | 批 25（docs/36 T8）：两命令输出改产 markdown 源（粗体标题＋管道表格），TUI 经 `ChatMessage.Markdown` 走 Markdown 渲染（pi Markdown 组件对位）——旧「纯文本落差」消除 |
 | S25 | 会话统计面（`/session`） | ✓ `core/slash-commands.ts:31 session` + `components/footer.ts:120-137` 用量（计入 `usage` 条目） | ✗（TUI） / ✓（web `panels/stats.ts:1`） | **缺失** | 2 | java TUI 无统计屏 |
 | S26 | `/changelog` 面板 | ✓ `core/slash-commands.ts:32` | ✓ `MiscCommands.java:120` | **对齐** | 1 | 均为文本输出 |
 | S27 | `/share`（会话分享） | ✓ `session-share.ts:217`（`shareSession:57`；Radius 网关 + `BorderedLoader`） | ✓ `MiscCommands.java:76`（GitHub gist） | **存疑** | 1 | 承诺相同、**后端不同**（pi=Radius，java=gist），且 java 无加载指示器 |
@@ -84,15 +84,15 @@
 
 | # | 特性 | pi 有 | java 有 | 判定 | 权重 | 证据（pi 侧均对 `ea448f454` 取数） |
 |---|---|---|---|---|---|---|
-| R1 | Markdown 渲染（标题/粗斜体/列表/引用/代码块） | ✓ `tui/src/components/markdown.ts:236 class Markdown`（1025 行） | ✗（**死代码**） | **缺失** | 3 | `MarkdownRenderer.java:21` 存在但**生产零调用点** —— 全仓 grep 只命中自身与 `MarkdownRendererTest.java`；助手消息实际走 `MessageBubble.java:78` 的 `TextLayout.split(escapeMarkup(text))`（纯文本） |
-| R2 | Markdown：管道表格 | ✓ markdown.ts token 渲染 | ✗（死代码） | **缺失** | 1 | `MarkdownRenderer.java:57 renderTable` 无调用者 |
-| R3 | Markdown：删除线（严格 tokenizer） | ✓ `markdown.ts:9 StrictStrikethroughTokenizer` | ✗ | **缺失** | 1 | — |
-| R4 | Markdown：链接（OSC 8 超链接） | ✓ `markdown.ts` + `tui/src/terminal.ts` hyperlinks | ✗ | **缺失** | 1 | java `MarkdownRenderer` 无链接分支（`Block` 只有 7 种，无 Link） |
-| R5 | Markdown：流式未闭合围栏修剪 | ✓ `markdown.ts:146 trimPartialClosingFences` | ✗ | **缺失** | 2 | 仅当流式期间有未闭合围栏时可见 |
+| R1 | Markdown 渲染（标题/粗斜体/列表/引用/代码块） | ✓ `tui/src/components/markdown.ts:236 class Markdown`（1025 行） | ✓（批 25 接线） | **对齐** | 3 | **批 25（docs/36）接线落地**：`MarkdownRenderer.toLogicalLines` 排放器＋`MarkdownBlocks` 行级 parser＋`InlineMarkup`＋`MarkdownTheme` 十键；`MessageBubble` 助手/thinking 两臂接入（pi assistant-message.ts:110-117/:146-162 对位）；**B65 销号**。子集窄差 D143/D147（行级 parser vs marked 全 CommonMark／行内不嵌套） |
+| R2 | Markdown：管道表格 | ✓ markdown.ts token 渲染 | ✓（批 25） | **对齐** | 1 | 批 25（docs/36）：全边框 `┌─┬─┐/├─┼─┤/└─┴─┘`＋表头 bold＋markup 感知列宽，接入聊天管线；自然宽不收缩不 wrap（窄差 D145） |
+| R3 | Markdown：删除线（严格 tokenizer） | ✓ `markdown.ts:9 StrictStrikethroughTokenizer` | ✓（批 25） | **对齐** | 1 | 批 25（docs/36）：`InlineMarkup.STRICT_STRIKETHROUGH`＝pi markdown.ts:7 正则逐字（`~~ a ~~` 不认） |
+| R4 | Markdown：链接（OSC 8 超链接） | ✓ `markdown.ts` + `tui/src/terminal.ts` hyperlinks | ✓（批 25） | **对齐** | 1 | 批 25（docs/36 裁决④ **实证通过**）：`[link=href]` 标签＋underline＋mdLink 色只显文本（pi :704-707 OSC 8 臂）；MarkupParser 携 `Style.hyperlink`、`AnsiCellWriter`（AbstractBackend 渲染路）吐 OSC 8 序列——双测试钉死 |
+| R5 | Markdown：流式未闭合围栏修剪 | ✓ `markdown.ts:146 trimPartialClosingFences` | ✓（批 25） | **对齐** | 2 | 批 25（docs/36 裁决⑨）：未闭合代码块尾行＝开栏符同字符真前缀 ⇒ 修剪（`MarkdownBlocks.trimPartialClosingFence`，`` ` ``/`` `` ``/完整闭合三臂测试钉死） |
 | R6 | Markdown：扩展 transformer 钩子 | ✓ `markdown-transform.ts` + `interactive-mode.ts:2234 getMarkdownTransformers` | ✗ | **缺失** | 1 | 扩展系统整体未落地 |
-| R7 | Mermaid 图渲染 | ✓ `components/mermaid.ts:60 createMermaidMarkdownTransformer` + `grok-mermaid` 依赖 | ✗ | **缺失** | 1 | java `MarkdownRenderer.java:39-42` 只画 `"[mermaid diagram]\n"+code` 占位框 |
+| R7 | Mermaid 图渲染 | ✓ `components/mermaid.ts:60 createMermaidMarkdownTransformer` + `grok-mermaid` 依赖 | ✗ | **缺失** | 1 | 批 25 起 mermaid 围栏按普通代码块渲染（pi 无 transformer 时同形——D57 注记更新；本体仍缺） |
 | R8 | LaTeX 数学（行内 `$…$` 与块级 `$$…$$`） | ✓ `tui/src/latex.ts`（**1506 行**）+ `test/latex.test.ts` | ✗ | **缺失** | 1 | java 全仓无 latex 命中 |
-| R9 | 代码块语法高亮（多语言、highlight.js 词法） | ✓ `utils/syntax-highlight.ts`（**219 行**）+ `loadAllHighlightLanguages`（`interactive-mode.ts:133` import、`:1122` 调用）、theme 里 10 个 `syntax*` token | ✗（**死代码**） | **缺失** | 2 | java `SyntaxHighlighter.java:16` 只有 3 色 + 40 个硬编码关键字；调用点只有 `EditorElement.java:123`（输入编辑器当前行），**代码块路径 `MarkdownRenderer.java:98` 无人调** |
+| R9 | 代码块语法高亮（多语言、highlight.js 词法） | ✓ `utils/syntax-highlight.ts`（**219 行**）+ `loadAllHighlightLanguages`（`interactive-mode.ts:133` import、`:1122` 调用）、theme 里 10 个 `syntax*` token | ✓（批 25 接线，子集） | **对齐** | 2 | 批 25（docs/36）：`SyntaxHighlighter` 四色改主题令牌（syntaxKeyword/String/Number/Comment）＋代码块消费链接通（高亮门＝lang 非空）。窄差 D146：高亮器＝关键字/字符串/数字/注释子集（pi 是 highlight.js 全词法＋supportsLanguage 白名单门） |
 | R10 | Diff 渲染（+/−/hunk 着色） | ✓ `components/diff.ts:79 renderDiff`（147 行）+ `toolDiffAdded/Removed/Context` token | ✓ `DiffView.java:18`（64 行） | **存疑** | 3 | java 按行首字符给色（`DiffView.java:52-63`），无 hunk 头/行号/词级 diff；pi 的 diff 走 `tool-execution.ts` 的富渲染 |
 | R11 | 逐工具渲染器（read/write/edit/bash/grep/find/ls 各自形状） | ✓ `core/tools/renderers/*.ts`（**1053 行 / 8 文件**；逻辑拆至 `core/tools/render-utils.ts` 112 行）。本锚点：bash 结果显示记录在事件上的单调 **`Took …`（durationMs，重载后仍准）**；edit 渲染吃 `outputPad` | ✗ | **缺失** | 3 | java 只有一张通用 `ToolCallCard.java:13`（39 行：`name`+`status`+截断 200 字的 args） |
 | R12 | 工具执行卡：可折叠 + `Ctrl+O` 展开 + `… (N more lines, ctrl+o to expand)` | ✓ `tool-execution.ts:47 expanded`、`:157` 折叠提示、`:202 setExpanded`（408 行） | ✗ | **缺失** | 2 | java 无折叠态，`TOOLS_EXPAND` 未接线（`PiTuiApp.java:450`） |
@@ -494,13 +494,13 @@
 | 域 | Σ权重 | Σ(w×系数) | 加权完成度 | 未加权完成度 |
 |---|---:|---:|---:|---:|
 | 屏幕/面板（35 单元） | 47 | 24.5 | **52.1%** | 40.0% |
-| 渲染特性（R1–R29，28 单元；R21 权重 0 已剔；R29 批 22 出分母） | 39 | 7.5 | **19.2%** | 11.1% |
+| 渲染特性（R1–R29，28 单元；R21 权重 0 已剔；R29 批 22 出分母） | 39 | 17.5 | **44.9%** | 33.3% |
 | 键绑定/交互（K1–K39，39 单元；K36 权重 0 已剔） | 66 | 33.5 | **50.8%** | 28.9% |
 | TUI 组件（C1–C20，20 单元） | 41 | 22.5 | **54.9%** | 35.0% |
 | 主题/样式（T1–T11，11 单元） | 18 | 6.5 | **36.1%** | 27.3% |
 | web 对齐面（W1–W16，16 单元） | 33 | 27.0 | **81.8%** | 56.3% |
 
-**模块合计**：Σ权重 **244**（R29 批 22 出分母） ／ Σ(w×c) **122.5** ／ **加权完成度 = 122.5/244 ≈ 50.2%**（未加权 **46/147 ≈ 31.3%**，**+18.9pp**）
+**模块合计**：Σ权重 **244**（R29 批 22 出分母） ／ Σ(w×c) **132.5** ／ **加权完成度 = 132.5/244 ≈ 54.3%**（未加权 **52/147 ≈ 35.4%**，**+18.9pp**）
 
 > 批 10（2026-10-22，docs/21）：S20 缺失→对齐（+1.0）、K11 缺失→对齐（+1.0）；R28 证据更新不翻（流式 bash/工具挂载仍缺）。
 > 批 13（2026-10-23，docs/24）：R24 存疑→对齐（+0.5，cache-warmer 子系统批随收——生产者/文案逐字/门//session 段/footer）。
@@ -509,6 +509,7 @@
 > 批 17（2026-10-24，docs/28）：**S22 扩展对话框四件套 缺失→对齐（+1.0）＋S23 扩展 widget/footer/header/状态槽 缺失→对齐（+1.0）**。Σ 118.5→**120.5/245 ≈ 49.2%**。
 > 批 21（2026-10-25，docs/32）：**S9 theme 选择器 缺失→对齐（+1.0，ThemeSubmenuScreen＋设置页入口）**。Σ 120.5→**121.5/245 ≈ 49.6%**。
 > 批 22（2026-10-25，docs/33）：**W15 web 会话列表 onProgress 缺失→对齐（+1.0，sessionsProgress/cancelSessions＋代次闸＋前端渐进渲染）＋R29 终裁不做出分母（分母 245→244）**。Σ 121.5→**122.5/244 ≈ 50.2%**。
+> 批 25（2026-10-27，docs/36）：**Markdown 激活批——R1（w3）/R2/R3/R4/R5/R9 六行缺失→对齐（+10.0）**；S24 判定不动（注记更新：纯文本落差消除）。Σ 122.5→**132.5/244 ≈ 54.3%**。
 
 > 较前锚点（144 单元：241 权 / 108.0 / **44.8%**）变化 **−0.5pp**，构成：① K20 对齐→存疑（w2）分子 −1.0；② R18/R24 缺失→存疑（w1×2）分子 +1.0；③ 新增 4 单元（R28 存疑 w1 +0.5；R29/K39/C20 缺失 w1×3）分母 +4、分子 +0.5。净效果：分子 +0.5、分母 +4。
 
@@ -516,7 +517,7 @@
 
 | 权重 | 单元数 | Σ权重 | Σ(w×c) | 加权完成度 |
 |---|---:|---:|---:|---:|
-| 3（每轮／默认路径） | 26 | 78 | 52.5 | **67.3%** |
+| 3（每轮／默认路径） | 26 | 78 | 55.5 | **71.2%** |
 | 2（每次会话／常用命令） | 45 | 90 | 46.0 | **51.1%** |
 | 1（低频／边缘／纯内部） | 77 | 77 | 12.5 | **16.2%** |
 | 0（非对齐项，已剔） | 2 | 0 | 0 | — |
@@ -529,7 +530,7 @@
 | # | 单元 | 判定 |
 |---|---|---|
 | S1 | 主聊天屏 | **对齐** |
-| R1 | Markdown 渲染 | **缺失**（死代码） |
+| R1 | Markdown 渲染 | **对齐**（批 25/docs/36 接线，B65 销号） |
 | R10 | Diff 渲染 | **存疑** |
 | R11 | 逐工具渲染器 | **缺失** |
 | K1 | `Esc` 中断 | **对齐** |
@@ -555,7 +556,7 @@
 | W7 | 终局 `usage` 非空 | **对齐** |
 | W10 | `agent_end.messages` 整表替换 | **存疑** |
 
-⇒ 权重 3 里 **15 对齐 / 6 缺失 / 5 存疑**（**67.3%**）。缺失的 6 条全部是 **TUI 的「每轮都看得见」的能力**：`R1` Markdown、`R11` 逐工具渲染器、`K27` 提示历史、`C5` spinner、`C6` working 指示器、`T2` 主题 token。**这 6 条是加权口径下的最高收益点**；本锚点新增/翻转的单元无一进入这个子集（最高权重 2）。
+⇒ 权重 3 里 **16 对齐 / 5 缺失 / 5 存疑**（**71.2%**——批 25 R1 翻对齐）。缺失的 5 条全部是 **TUI 的「每轮都看得见」的能力**：`R11` 逐工具渲染器、`K27` 提示历史、`C5` spinner、`C6` working 指示器、`T2` 主题 token。**这 5 条是加权口径下的最高收益点**；本锚点新增/翻转的单元无一进入这个子集（最高权重 2）。
 
 **未加权 vs 加权的差（+20.0pp）差在哪**
 
@@ -576,4 +577,4 @@
 | **6 个键位未接线** | K6/K7/K8/K9（w2×4）+ K10/K11（w1×2） | 10 | 118.5/245 | **48.4%** | **+4.0pp** | K 面 44.7% → **59.8%**（+15.2pp） |
 | 两项合计 | R1+R9+K6–K11 | 15 | 123.5/245 | **50.4%** | **+6.1pp** | — |
 
-口径提醒：**这两项加起来只值 +6.1pp**，但它们**在权重 3 子集里的分量远大于此** —— `R1` 仍是权重 3 的**单条最大缺失**（修好它把权重 3 子集从 67.3% 拉到 **71.2%**）。⇒ **加权完成度这个总量指标对「单条高频缺失」不敏感，看权重 3 子集才看得出。**
+口径提醒：**这两项加起来只值 +6.1pp**，但它们**在权重 3 子集里的分量远大于此**。⇒ **加权完成度这个总量指标对「单条高频缺失」不敏感，看权重 3 子集才看得出。**（批 25 落地注记：R1/R9 已翻对齐——R1 修好把权重 3 子集从 67.3% 拉到 **71.2%**，预言兑现；K6–K11 键位族在批 12–14 陆续接线。）

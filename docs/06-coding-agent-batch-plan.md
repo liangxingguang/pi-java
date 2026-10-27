@@ -20,20 +20,21 @@
 
 ---
 
-## §1 进度总览（2026-10-27 实算，批 24 闭环后）
+## §1 进度总览（2026-10-27 实算，批 25 闭环后）
 
 | 指标 | 读数 |
 |---|---|
-| 已闭环批次 | **24**（批 1–24，设计稿原 docs/11–35，历史在 git） |
-| 设计待审批次 | **0**（下一包号 docs/36） |
-| 计划批次（批 25 起） | **0 计划行**（§3 计划表清空；其余＝§3.3 未拍板变量） |
-| **总批次估计** | **24＋变量**（§3.3 三变量每个摆动 1–6 批） |
-| 模块账面（Σ 485，去重） | 416.0 ≈ **85.8%**（批 24 翻动全在 map/07） |
+| 已闭环批次 | **25**（批 1–25，设计稿原 docs/11–36，历史在 git〔docs/36 存活待清理〕） |
+| 设计待审批次 | **0**（下一包号 docs/37） |
+| 计划批次（批 26 起） | **0 计划行**（§3 计划表清空；其余＝§3.3 未拍板变量） |
+| **总批次估计** | **25＋变量**（§3.3 三变量每个摆动 1–6 批） |
+| 模块账面（Σ 485，去重） | 416.0 ≈ **85.8%**（批 25 翻动全在 map/05） |
 | 满分域 | **13 个**＋map/07 G 组满分（批 24） |
 | D 域（扩展事件，Σ 83） | 83.0 ＝ **100%**（批 23 满分） |
 | E2 域（settings 键，Σ 84） | 81.5 ≈ **97.0%**（余 5 存疑全是窄差登记项） |
 | map/07 mcp（Σ 129） | 120.5 ≈ **93.4%**（批 24 +18.5；计分母缺失仅剩 #50） |
-| 全仓账面（Σ 1379） | 1,122.0 ≈ **81.4%** |
+| map/05 tui/web（Σ 244） | 132.5 ≈ **54.3%**（批 25 +10.0：Markdown 激活批 R1/R2/R3/R4/R5/R9） |
+| 全仓账面（Σ 1379） | 1,132.0 ≈ **82.1%** |
 
 > ⚠️ 总批次是**估计值**，不是承诺。三个拍板变量（§3.3）每个能摆动 1–3 批。
 > 每批闭环时按当时真实欠账重排 §3，允许增删批次。
@@ -68,6 +69,7 @@
 | 22 | docs/33 | 2026-10-25 | 会话管理尾＋自更新终裁（序 21，收尾批）：T1 W15 web 渐进会话列表（`sessionsProgress`/`cancelSessions` 协议帧＋`AgentSession.listSessionsSummary` 进度/信号重载＋WebDispatcher 虚拟线程富列表＋代次闸〔裁决④〕＋前端渐进渲染/取消）→ T2 自更新终裁（裁决①：pi-java 无 npm/managed 分发形态 ⇒ pi 未知形态臂＝终局，E6-10/B#4 翻对齐，D115 保留，pruneManagedReleases 同覆盖）→ T3 R29 终裁不做（裁决②：C 类登记＋map/05 出分母 245→244）；**E6/B 两域同批满分**（满分域第十一、十二——存疑全清零）；**§3 计划表清空**；无新 B/窄差 | 406.5/485 ≈ **83.8%**（+2.0：E6/B 各 +1.0）；map/05 122.5/244 ≈ **50.2%**（W15 +1.0＋R29 出分母）；全仓 1,090.0/1379 ≈ **79.0%** |
 | 23 | docs/34 | 2026-10-25 | 触发条件型欠账首批立项（扩展 MCP API 面＋`project_trust`/`mcp_servers_change`＋RPC `get_commands` 扩展臂）：T1 扩展 MCP 三件（三守卫逐字；注册表安家 `DefaultExtensionContext`；`forExtension(name,path)`；**B218 销号**）→ T2 `mcp_servers_change`（装配尾 changeListener 接线＋无处理器臂逐字错文）→ T4 RPC 扩展臂（登记目＋`:N` 撞名编号＋buildCommands 第一臂〔**批 3 窄差 D5 销号**〕＋E5-20 三源序＋`ExtensionSourceInfos`〔E5-34 翻〕；**B221 收编 ⑥，余 ①＝批 24 候选**）→ T3 `project_trust` 全链（first-wins firer＋`ProjectTrustStore`〔trust.json 逐字节线格式/FileChannel 锁——删 `TrustManager`，裁决②〕＋敏感资源门＋七级解析＋预信任装配＋TUI 信任弹窗；**行为变化：ask 默认从「当信任」变 pi 逐字语义**）；窄差 D134–D137；评审无独立轮（用户指令直实施）；verify 收口 5,179 测 0 失败 spotbugs 零钉 | 416.0/485 ≈ **85.8%**（+9.5：**D 域 79.0→83.0/83＝100%**〔满分域第十三，缺失清零〕＋E5 域 23.5→29.0/58 ≈ **50.0%**）；map/07 +4.0（#87＋#81/#84 批 16 回填，79.1%）；全仓 1,103.5/1379 ≈ **80.0%** |
 | 24 | docs/35 | 2026-10-27 | 内置 MCP 扩展本体（B221① 收尾，批 23 裁决①立项）：T1 `McpExtension` ServiceLoader 装配（`builtin:mcp` 身份）→ T2 `--no-mcp`（过滤＋`-e builtin:mcp` 显式臂）→ T3–T7 六事件本体（session_start 两源装配＋后台连接／before_agent_start 有界等待＋提示段生产／tool_call 就绪等待／turn_start 凭证拾取／mcp_servers_change 热插拔／session_shutdown 收敛）→ T6 运行时注册三表＋hidden 重注＋资源工具同步 → T8 D3/D4 销号（defaultTools 容忍读＋`_pendingToolNames` 五臂）→ T9 `/mcp` 命令 → T10 管理器视图（**B214 销号**）；**B221 全销＋B188/B189/B195 销号**；窄差 D138–D142；行为变化：mcp.json 服务器会话内自连、MCP 工具按 exposure 进声明面、`mcp_servers` 提示段上线、get_commands 含 /mcp（pi 同形） | 模块账面不动（翻动全在 map/07）；map/07 102.0→**120.5/129 ≈ 93.4%**（+18.5：**G 组满分**＋#24/#44 翻）；全仓 1,122.0/1379 ≈ **81.4%** |
+| 25 | docs/36 | 2026-10-27 | **tui Markdown 激活批**（B65 死代码「接线不删声明」；§3.3 变量 3 拍板落地）：T1/T2 wrap 地基 markup 感知化（`MarkupTokens` 扫描器逐字镜像 TamboUI MarkupParser javap 取证＋`TextLayout` 原子流换行/闭栈重开＋`toLine` 行 style 作底 span 优先共享口）→ T3/T4/T5 渲染本体（`MarkdownBlocks` 行级 parser〔R5 修剪/嵌套列表/hr 三形〕＋`InlineMarkup`〔严格删除线 pi :7 逐字/OSC 8 链接臂〕＋`toLogicalLines` 排放〔块后间距/围栏行可见/悬垂缩进/全边框表格〕）→ T6 `MarkdownTheme` 十键＋SyntaxHighlighter 主题令牌化 → T7 助手/thinking 两臂接线（pi assistant-message.ts:110-117/:146-162）＋E2-43 codeBlockIndent 消费缝 → T8 `/help` `/hotkeys` markdown 源化＋`ChatMessage.Markdown`；**B65 销号**；**裁决④ OSC 8 实证通过**（R4 走 pi OSC 8 臂）；窄差 D143–D149；行为变化：助手/thinking 经 Markdown 渲染、/help /hotkeys 表格形、高亮改主题令牌色；verify 收口 5,284 测 0 失败 spotbugs 零钉 | 模块账面不动（翻动全在 map/05；E2-43 维持存疑注记更新）；map/05 122.5→**132.5/244 ≈ 54.3%**（+10.0：R1〔w3〕/R2/R3/R4/R5/R9 六行缺失→对齐；w3 子集 67.3%→**71.2%**）；全仓 1,132.0/1379 ≈ **82.1%** |
 
 > 口径注记：批 8 起模块分母按**去重** 487（原 496），读数以最新一批闭环回填为准。
 
@@ -115,6 +117,8 @@ docs/34 裁决①立项——面与本体分层，批 23 已把面全落）~~—
    S29/S30）。**批 12 补记（docs/23 裁决⑨）**：MarkdownRenderer 激活
    （map/05 R1，w3，pi 组件 1,025 行域＋R2–R6 联动，牵动 E2-43
    `markdown.codeBlockIndent` 与 D63 changelog 纯文本）计入本变量拍板。
+   **批 25 落地注记（docs/36）**：R1/R2/R3/R4/R5/R9＋E2-43 半键已落
+   （B65 销号）；S2a–d/S15–S19/S21/S24 余面与 R6/R7/R8 仍未拍板，变量保留。
 
 ---
 
