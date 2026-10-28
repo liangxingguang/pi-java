@@ -97,7 +97,7 @@ final class SessionReload {
         }
         var manager = session.extensionManager();
         if (manager != null) {
-            AgentSession.applySessionStartResources(session.harness(), session.services(),
+            ExtensionLoading.applySessionStartResources(session.harness(), session.services(),
                 manager.sessionStartResources(), session.sessionArgs(), session);
         }
         // 批 21（T8）：resources_discover 重放可能追加扩展 themePaths ⇒ 重装载

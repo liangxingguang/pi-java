@@ -163,7 +163,7 @@ class TreeNavigationMutexTest {
             new ToolContext(tmp.toString(), Map.of(),
                 new DefaultShellExecutor(), new DefaultFileSystem()),
             SettingsManager.load(args.projectTrustOverride()));
-        session.services().settings().accessors().setCompactionEnabled(false);
+        session.services().settings().compaction().setCompactionEnabled(false);
         session.processPrompt("first question").status();
         session.processPrompt("second question").status();
         return new Rig(session, provider);

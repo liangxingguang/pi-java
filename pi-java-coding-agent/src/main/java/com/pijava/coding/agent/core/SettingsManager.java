@@ -25,6 +25,8 @@ public final class SettingsManager {
     private final SettingsNetworkAccessors network = new SettingsNetworkAccessors(this);
     private final SettingsInstallAccessors install = new SettingsInstallAccessors(this);
     private final SettingsUiPrefsAccessors uiPrefs = new SettingsUiPrefsAccessors(this);
+    private final SettingsCompactionAccessors compaction =
+        new SettingsCompactionAccessors(this);
 
     private SettingsManager(SettingsStorage storage) {
         this.storage = storage;
@@ -149,6 +151,12 @@ public final class SettingsManager {
     /** UI 偏好面访问器（批 11 裁决⑧拆分：showCacheMissNotices/warnings/fullscreen 族）。 */
     public SettingsUiPrefsAccessors uiPrefs() {
         return uiPrefs;
+    }
+
+    /** compaction/branch-summary/images/markdown 面访问器（结构债拆分：B223 块自
+     *  {@link SettingsAccessors} 迁出，行为零变化）。 */
+    public SettingsCompactionAccessors compaction() {
+        return compaction;
     }
 
     /** Record a field as modified so {@link #flush()} persists it. */

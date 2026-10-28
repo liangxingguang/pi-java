@@ -7,6 +7,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import com.pijava.coding.agent.theme.ThemeCatalog;
 import com.pijava.coding.agent.theme.Themes;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -41,7 +42,8 @@ class HtmlExporterThemeTest {
         // 自定义主题带显式 export.pageBg ⇒ 优先于派生链。
         var themeFile = dir.resolve("my-theme.json");
         Files.writeString(themeFile, themeJson("#112233"));
-        Themes.setRegisteredThemes(java.util.List.of(Themes.loadThemeFromPath(themeFile)));
+        Themes.setRegisteredThemes(
+            java.util.List.of(ThemeCatalog.loadThemeFromPath(themeFile)));
         var out = exportWithTheme("my-theme");
         assertThat(out).contains("--page: #112233");
     }

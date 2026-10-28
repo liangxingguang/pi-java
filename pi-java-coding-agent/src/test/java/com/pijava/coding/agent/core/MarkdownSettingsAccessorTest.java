@@ -21,25 +21,25 @@ class MarkdownSettingsAccessorTest {
 
     @Test
     void codeBlockIndentDefaultsToTwoSpaces(@TempDir Path dir) {
-        assertThat(manager(dir).accessors().getMarkdownCodeBlockIndent()).isEqualTo("  ");
+        assertThat(manager(dir).compaction().getMarkdownCodeBlockIndent()).isEqualTo("  ");
     }
 
     @Test
     void codeBlockIndentReadsConfiguredValue(@TempDir Path dir) throws Exception {
         Files.writeString(dir.resolve("settings.json"),
             "{ \"markdown\": { \"codeBlockIndent\": \"\\t\" } }");
-        assertThat(manager(dir).accessors().getMarkdownCodeBlockIndent()).isEqualTo("\t");
+        assertThat(manager(dir).compaction().getMarkdownCodeBlockIndent()).isEqualTo("\t");
     }
 
     @Test
     void mermaidDefaultsToStreamingAndPassesOffFinal(@TempDir Path dir) throws Exception {
-        assertThat(manager(dir).accessors().getMarkdownMermaid()).isEqualTo("streaming");
+        assertThat(manager(dir).compaction().getMarkdownMermaid()).isEqualTo("streaming");
         Files.writeString(dir.resolve("settings.json"),
             "{ \"markdown\": { \"mermaid\": \"off\" } }");
-        assertThat(manager(dir).accessors().getMarkdownMermaid()).isEqualTo("off");
+        assertThat(manager(dir).compaction().getMarkdownMermaid()).isEqualTo("off");
         Files.writeString(dir.resolve("settings.json"),
             "{ \"markdown\": { \"mermaid\": \"bogus\" } }");
         // pi 逐字：非 off/final ⇒ streaming
-        assertThat(manager(dir).accessors().getMarkdownMermaid()).isEqualTo("streaming");
+        assertThat(manager(dir).compaction().getMarkdownMermaid()).isEqualTo("streaming");
     }
 }

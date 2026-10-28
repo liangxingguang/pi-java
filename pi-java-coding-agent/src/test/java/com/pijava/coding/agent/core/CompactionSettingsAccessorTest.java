@@ -15,7 +15,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * B223（{@code 原 docs/47}）：{@link SettingsAccessors} 的 compaction 三件套 ——
+ * B223（{@code 原 docs/47}）：{@link SettingsCompactionAccessors} 的 compaction 三件套 ——
  * enabled 的 {@code ?? true} 默认、预算三级回退（modelOverrides 精确键
  * {@code "provider/modelId"} → ordinary → 16384/20000）、负数逐字报错、
  * setter 写全局并即时落盘。
@@ -42,7 +42,7 @@ class CompactionSettingsAccessorTest {
     /** T1：无 compaction 块 ⇒ enabled 默认 true、预算 16384/20000；null model 不查 override。 */
     @Test
     void absentBlockDefaultsToEnabledAndStandardBudgets(@TempDir Path dir) {
-        var accessors = SettingsManager.withStorage(storage(dir)).accessors();
+        var accessors = SettingsManager.withStorage(storage(dir)).compaction();
 
         assertThat(accessors.getCompactionEnabled()).isTrue();
         var resolved = accessors.getCompactionSettings(SMALL);
@@ -59,7 +59,7 @@ class CompactionSettingsAccessorTest {
         writeGlobal(dir,
             "{\"compaction\":{\"reserveTokens\":100,\"keepRecentTokens\":9}}");
 
-        var resolved = SettingsManager.withStorage(storage(dir)).accessors()
+        var resolved = SettingsManager.withStorage(storage(dir)).compaction()
             .getCompactionSettings(SMALL);
 
         assertThat(resolved.enabled()).isTrue();
@@ -72,7 +72,7 @@ class CompactionSettingsAccessorTest {
     void disabledKeepsDefaultBudgets(@TempDir Path dir) throws Exception {
         writeGlobal(dir, "{\"compaction\":{\"enabled\":false}}");
 
-        var accessors = SettingsManager.withStorage(storage(dir)).accessors();
+        var accessors = SettingsManager.withStorage(storage(dir)).compaction();
 
         assertThat(accessors.getCompactionEnabled()).isFalse();
         var resolved = accessors.getCompactionSettings(SMALL);
@@ -88,7 +88,7 @@ class CompactionSettingsAccessorTest {
             {"compaction":{"modelOverrides":{"faux/small":{
               "reserveTokens":7,"keepRecentTokens":3}}}}""");
 
-        var accessors = SettingsManager.withStorage(storage(dir)).accessors();
+        var accessors = SettingsManager.withStorage(storage(dir)).compaction();
 
         assertThat(accessors.getCompactionSettings(SMALL))
             .as("精确命中 faux/small")
@@ -108,7 +108,7 @@ class CompactionSettingsAccessorTest {
             {"compaction":{"reserveTokens":100,"modelOverrides":{
               "faux/small":{"keepRecentTokens":9}}}}""");
 
-        var accessors = SettingsManager.withStorage(storage(dir)).accessors();
+        var accessors = SettingsManager.withStorage(storage(dir)).compaction();
 
         assertThat(accessors.getCompactionSettings(SMALL))
             .as("override 给 keepRecent；reserve 回退 ordinary")
@@ -128,7 +128,7 @@ class CompactionSettingsAccessorTest {
             {"compaction":{"reserveTokens":100,"keepRecentTokens":9,
               "modelOverrides":{"faux/small":{"reserveTokens":7,"keepRecentTokens":3}}}}""");
 
-        var accessors = SettingsManager.withStorage(storage(dir)).accessors();
+        var accessors = SettingsManager.withStorage(storage(dir)).compaction();
 
         assertThat(accessors.getCompactionSettings(SMALL))
             .as("命中模型：两个字段都取 override")
@@ -142,7 +142,7 @@ class CompactionSettingsAccessorTest {
     @Test
     void invalidNegativeValuesThrowVerbatimPiMessages(@TempDir Path dir) throws Exception {
         writeGlobal(dir, "{\"compaction\":{\"reserveTokens\":-1}}");
-        var ordinary = SettingsManager.withStorage(storage(dir)).accessors();
+        var ordinary = SettingsManager.withStorage(storage(dir)).compaction();
 
         assertThatThrownBy(() -> ordinary.getCompactionSettings(SMALL))
             .isInstanceOf(IllegalArgumentException.class)
@@ -152,7 +152,7 @@ class CompactionSettingsAccessorTest {
         writeGlobal(dir, """
             {"compaction":{"modelOverrides":{"faux/small":{
               "keepRecentTokens":-5}}}}""");
-        var override = SettingsManager.withStorage(storage(dir)).accessors();
+        var override = SettingsManager.withStorage(storage(dir)).compaction();
 
         assertThatThrownBy(() -> override.getCompactionSettings(SMALL))
             .isInstanceOf(IllegalArgumentException.class)
@@ -174,7 +174,7 @@ class CompactionSettingsAccessorTest {
         storage(dir).writeGlobal(initial);
 
         var manager = SettingsManager.withStorage(storage(dir));
-        manager.accessors().setCompactionEnabled(false);
+        manager.compaction().setCompactionEnabled(false);
 
         JsonNode root = MAPPER.readTree(dir.resolve("settings.json").toFile());
         var compaction = root.path("compaction");
@@ -184,13 +184,13 @@ class CompactionSettingsAccessorTest {
         assertThat(compaction.path("modelOverrides").path("faux/small")
             .path("reserveTokens").asInt()).isEqualTo(7);
         // 即时落盘 ⇒ 全新管理器（≈重启）读得到 false。
-        assertThat(SettingsManager.withStorage(storage(dir)).accessors()
+        assertThat(SettingsManager.withStorage(storage(dir)).compaction()
             .getCompactionEnabled()).isFalse();
 
-        manager.accessors().setCompactionEnabled(true);
+        manager.compaction().setCompactionEnabled(true);
         assertThat(MAPPER.readTree(dir.resolve("settings.json").toFile())
             .path("compaction").path("enabled").asBoolean()).isTrue();
-        assertThat(manager.accessors().getCompactionEnabled()).isTrue();
+        assertThat(manager.compaction().getCompactionEnabled()).isTrue();
     }
 
     /** T7b：写 global 不盖 project 层 —— project {@code enabled:false} 仍决定 effective。 */
@@ -200,9 +200,9 @@ class CompactionSettingsAccessorTest {
         Files.writeString(dir.resolve(".pi-java/settings.json"),
             "{\"compaction\":{\"enabled\":false}}");
         var manager = SettingsManager.withStorage(storage(dir));
-        assertThat(manager.accessors().getCompactionEnabled()).isFalse();
+        assertThat(manager.compaction().getCompactionEnabled()).isFalse();
 
-        manager.accessors().setCompactionEnabled(true);
+        manager.compaction().setCompactionEnabled(true);
 
         assertThat(manager.effective().compaction.enabled())
             .as("project 层 enabled:false 压过新写的 global（pi 合并语义）")

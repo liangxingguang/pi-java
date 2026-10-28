@@ -93,7 +93,7 @@ public final class ThemeLoader {
                                           List<ResourceDiagnostic> diagnostics,
                                           TerminalColorMode mode) {
         try {
-            themes.add(Themes.loadThemeFromPath(filePath, mode));
+            themes.add(ThemeCatalog.loadThemeFromPath(filePath, mode));
         } catch (RuntimeException e) {
             var message = e.getMessage() != null ? e.getMessage() : "failed to load theme";
             diagnostics.add(ResourceDiagnostic.warning(filePath.toString(), message));

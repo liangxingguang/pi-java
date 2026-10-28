@@ -412,7 +412,7 @@ class RpcDispatcherTest {
         // B223（原 docs/47）：自动压缩现在默认接通（修复前它从不发火）。未编目模型的
         // window=0，post-run 阈值门对任意正用量成立 ⇒ 本用例只测手动 compact，
         // 先关自动路，避免三轮 prompt 收尾时被自动压缩抢先（手动路不读 enabled）。
-        ctx.session().services().settings().accessors().setCompactionEnabled(false);
+        ctx.session().services().settings().compaction().setCompactionEnabled(false);
 
         // 三轮（第三轮 100k chars ⇒ 切点 split、历史非空；同
         // CompactSlashCommandTest 的夹具）。
@@ -446,7 +446,7 @@ class RpcDispatcherTest {
         var out = new ByteArrayOutputStream();
         var dispatcher = new RpcDispatcher(ctx.session(), new JsonlWriter(out), ctx.args());
         // B223（原 docs/47）：本用例只测手动 compact ⇒ 关掉默认接通的自动路。
-        ctx.session().services().settings().accessors().setCompactionEnabled(false);
+        ctx.session().services().settings().compaction().setCompactionEnabled(false);
 
         runPrompt(dispatcher, out, "p1", "hi");
         runPrompt(dispatcher, out, "p2", "hello");

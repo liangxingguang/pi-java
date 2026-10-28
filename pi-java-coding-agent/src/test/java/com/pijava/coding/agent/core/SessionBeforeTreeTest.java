@@ -134,7 +134,7 @@ class SessionBeforeTreeTest {
                 new DefaultShellExecutor(), new DefaultFileSystem()),
             SettingsManager.load(args.projectTrustOverride()));
         // 未编目模型 window=0，阈值门会在 prompt 收尾抢先自动压缩（CompactSlashCommandTest 先例）。
-        session.services().settings().accessors().setCompactionEnabled(false);
+        session.services().settings().compaction().setCompactionEnabled(false);
         return new Rig(session, recording);
     }
 

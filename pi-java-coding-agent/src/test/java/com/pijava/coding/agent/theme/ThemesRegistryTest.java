@@ -51,7 +51,7 @@ class ThemesRegistryTest {
     @Test
     void registeredThemesShadowBuiltinAndTakePriority() {
         // 与内建同名的注册主题遮蔽内建（pi loadTheme 序：registered 先于 builtin）。
-        var custom = Themes.loadThemeFromPath(writeTempTheme("dark", "#010203"));
+        var custom = ThemeCatalog.loadThemeFromPath(writeTempTheme("dark", "#010203"));
         Themes.setRegisteredThemes(java.util.List.of(custom));
         Themes.initTheme("dark", false);
         assertThat(ThemeColorMath.colorToHex(Themes.current().colors().get(ThemeToken.ACCENT)))
@@ -61,7 +61,7 @@ class ThemesRegistryTest {
     @Test
     void systemNameIsReserved() {
         // 注册同名主题也压不过 system（pi loadTheme 第一臂）。
-        var custom = Themes.loadThemeFromPath(writeTempTheme("system", "#010203"));
+        var custom = ThemeCatalog.loadThemeFromPath(writeTempTheme("system", "#010203"));
         Themes.setRegisteredThemes(java.util.List.of(custom));
         Themes.initTheme("system", false);
         assertThat(Themes.current().name()).isEqualTo("system");
@@ -72,7 +72,7 @@ class ThemesRegistryTest {
 
     @Test
     void availableThemesOrderSystemFirstThenAlphabetical() {
-        var names = Themes.getAvailableThemes();
+        var names = ThemeCatalog.getAvailableThemes();
         assertThat(names.get(0)).isEqualTo("system");
         assertThat(names).contains("dark", "light");
         var rest = names.subList(1, names.size());

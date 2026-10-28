@@ -118,11 +118,11 @@ class ImageBlockFilterTest {
     @Test
     void getBlockImagesDefaultsFalse(@TempDir Path dir) throws Exception {
         var storage = new FileSettingsStorage(dir, dir);
-        assertThat(SettingsManager.withStorage(storage).accessors().getBlockImages())
+        assertThat(SettingsManager.withStorage(storage).compaction().getBlockImages())
             .isFalse();
 
         Files.writeString(dir.resolve("settings.json"), "{\"images\":{\"blockImages\":true}}");
-        assertThat(SettingsManager.withStorage(storage).accessors().getBlockImages())
+        assertThat(SettingsManager.withStorage(storage).compaction().getBlockImages())
             .isTrue();
     }
 

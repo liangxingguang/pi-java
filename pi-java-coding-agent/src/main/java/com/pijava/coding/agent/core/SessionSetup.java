@@ -164,7 +164,7 @@ final class SessionSetup {
         }
         if (java.nio.file.Files.exists(Path.of(input))) {
             try {
-                return com.pijava.coding.agent.theme.Themes.stripBom(
+                return com.pijava.coding.agent.theme.ThemeCatalog.stripBom(
                     java.nio.file.Files.readString(Path.of(input)));
             } catch (java.io.IOException | RuntimeException e) {
                 // pi console.error(chalk.yellow(...)) 对位（DefaultProviders 先例）。

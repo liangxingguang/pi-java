@@ -147,11 +147,11 @@ class SystemThemeTest {
     @Test
     void builtinThemesParseAndResolve() {
         // 内建 dark/light 逐字拷贝的自洽性：全 56 令牌解析后齐全（fallback 填平）。
-        var dark = Themes.getThemeByName("dark");
+        var dark = ThemeCatalog.getThemeByName("dark");
         assertThat(dark).isNotNull();
         assertThat(dark.colors()).hasSize(ThemeToken.values().length);
         assertThat(dark.appearance()).isEqualTo(ThemeAppearance.DARK);
-        var light = Themes.getThemeByName("light");
+        var light = ThemeCatalog.getThemeByName("light");
         assertThat(light).isNotNull();
         assertThat(light.appearance()).isEqualTo(ThemeAppearance.LIGHT);
         // golden＝pi 锚点代码实跑值（tsx 直跑 colors.ts，批 21 取证）：
@@ -167,7 +167,7 @@ class SystemThemeTest {
 
     @Test
     void colorsCacheInvalidatesOnTerminalColorsIdentity() {
-        var theme = Themes.getThemeByName("dark");
+        var theme = ThemeCatalog.getThemeByName("dark");
         var before = theme.colors();
         Themes.setTerminalColors(new TerminalColors(
             new ThemeColor.Rgb(1, 2, 3), new ThemeColor.Rgb(4, 5, 6), null));
@@ -181,7 +181,7 @@ class SystemThemeTest {
 
     @Test
     void darkThemeFgAndDimSemantics() {
-        var theme = Themes.getThemeByName("dark");
+        var theme = ThemeCatalog.getThemeByName("dark");
         assertThat(theme.fg(ThemeToken.ERROR, "x"))
             .startsWith("\033[").endsWith("x\033[39m");
         // 非 dim 令牌不带 SGR 2。
