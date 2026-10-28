@@ -12,6 +12,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.catalog.MaxTokensField;
+import com.pijava.ai.catalog.ModelCompatFactories;
 import com.pijava.ai.catalog.ModelCompat;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.catalog.ThinkingTokenBudgetField;
@@ -146,7 +147,7 @@ class ThinkingTokenBudgetWireTest {
      * {@code ModelCompat.NONE} 同值，避免夹具顺带变更别的行为。
      */
     private static ModelCompat compat(ThinkingTokenBudgetField field, Boolean alias) {
-        return new ModelCompat(false, null, true, false, null, null, null, null, null,
+        return ModelCompatFactories.of(false, null, true, false, null, null, null, null, null,
             true, MaxTokensField.MAX_COMPLETION_TOKENS, null, null, null,
             null, null, field, alias);
     }

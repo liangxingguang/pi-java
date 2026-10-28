@@ -19,6 +19,7 @@ import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.api.ToolDefinition;
 import com.pijava.ai.api.ToolReference;
 import com.pijava.ai.catalog.ModelCompat;
+import com.pijava.ai.catalog.ModelCompatFactories;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
@@ -270,7 +271,7 @@ class AnthropicOAuthWireTest {
 
     private static ModelInfo nativeModel() {
         // 两 flag 都给（supportsMidConvoSystemMessages/supportsMidConvoToolChanges）。
-        var compat = new ModelCompat(false, null, true, false, true, null, true, null, null);
+        var compat = ModelCompatFactories.of(false, null, true, false, true, null, true, null, null);
         return new ModelInfo(ModelId.of("anthropic", "claude-opus-5"), "Claude Opus 5",
             Set.of(), 100_000, 1000, false, PricingInfo.UNKNOWN, ThinkingLevelMap.empty(),
             Map.of(), Map.of(), compat);

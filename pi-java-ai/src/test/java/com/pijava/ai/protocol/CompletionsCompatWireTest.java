@@ -10,6 +10,7 @@ import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.catalog.MaxTokensField;
 import com.pijava.ai.provider.BuiltinModelCatalogs;
 import com.pijava.ai.catalog.ModelCatalog;
+import com.pijava.ai.catalog.ModelCompatFactories;
 import com.pijava.ai.catalog.ModelCompat;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.ContentBlock;
@@ -76,7 +77,7 @@ class CompletionsCompatWireTest {
             detected.capabilities(), detected.maxInputTokens(), detected.maxOutputTokens(),
             detected.deprecated(), detected.pricing(), detected.thinkingLevelMap(),
             detected.headers(), detected.samplingParams(),
-            new ModelCompat(false, null, true, false, null, null, null, null,
+            ModelCompatFactories.of(false, null, true, false, null, null, null, null,
                 null, true, MaxTokensField.MAX_COMPLETION_TOKENS, null, null, null));
 
         assertThat(build(detected, "https://api.deepseek.com").maxTokens()).contains(512L);

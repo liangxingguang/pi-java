@@ -16,6 +16,7 @@ import com.pijava.ai.api.ToolDefinition;
 import com.pijava.ai.provider.BuiltinModelCatalogs;
 import com.pijava.ai.catalog.CacheRetention;
 import com.pijava.ai.catalog.MaxTokensField;
+import com.pijava.ai.catalog.ModelCompatFactories;
 import com.pijava.ai.catalog.ModelCompat;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.ContentBlock;
@@ -70,7 +71,7 @@ class AnthropicCacheControlWireTest {
 
     /** 旧形状：无 cache_control 的 compat（两个门走缺省 true）。 */
     private static final ModelCompat PLAIN =
-        new ModelCompat(false, null, true, false, null, null, null, null, null,
+        ModelCompatFactories.of(false, null, true, false, null, null, null, null, null,
             true, MaxTokensField.MAX_TOKENS, null, null, null);
 
     /**
@@ -201,7 +202,7 @@ class AnthropicCacheControlWireTest {
     void supportsCacheControlOnToolsFalseDropsOnlyTheToolBreakpoint() throws Exception {
         // P5：门为假 ⇒ **整表**不挂，但 system 与消息照挂。
         // 配对（下一条）保住「不是所有断点都消失」——只断工具的话，把三处一起关掉也会绿。
-        var gated = new ModelCompat(false, null, true, false, null, null, null, null, null,
+        var gated = ModelCompatFactories.of(false, null, true, false, null, null, null, null, null,
             true, MaxTokensField.MAX_TOKENS, null, null, null, null, Boolean.FALSE);
 
         var body = body(model(gated), List.of(user("hi")), List.of(tool("a"), tool("b")),
@@ -224,7 +225,7 @@ class AnthropicCacheControlWireTest {
     @Test
     void supportsLongCacheRetentionFalseDropsOnlyTheTtl() throws Exception {
         // P6：门为假 ⇒ 断点**仍在**，只是没有 ttl。
-        var gated = new ModelCompat(false, null, true, false, null, null, null, null, null,
+        var gated = ModelCompatFactories.of(false, null, true, false, null, null, null, null, null,
             true, MaxTokensField.MAX_TOKENS, null, null, null, Boolean.FALSE, null);
 
         var body = body(model(gated), List.of(user("hi")), List.of(tool("a")),
@@ -259,7 +260,7 @@ class AnthropicCacheControlWireTest {
         //（只用一个初始工具时它同时是「首个」与「末项」，分不清是哪个判据）。
         // ⚠️ 包 B165（原 docs/45）：顶层表**就此定死**，迟到工具不进这里（定义内联在
         // tool_addition 块里）⇒ 长度 3 而不是旧的 4。
-        var native_ = new ModelCompat(false, null, true, false, Boolean.TRUE, null,
+        var native_ = ModelCompatFactories.of(false, null, true, false, Boolean.TRUE, null,
             Boolean.TRUE, null, null, true, MaxTokensField.MAX_TOKENS, null, null, null);
         var baseA = tool("base_a");
         var baseB = tool("base_b");
@@ -320,7 +321,7 @@ class AnthropicCacheControlWireTest {
         // P10/P11：pi 的断点判定发生在 `flushPendingSystemMessages()` **之后** ⇒ 转录末尾
         // 刷出的 held 系统消息成为「最后一条」，断点落在它的末块（`tool_addition`）上。
         // ⚠️ 这是 `原 docs/51 §4.4 ⑥` 那个落点，也是「判定顺序」的唯一可观察后果。
-        var native_ = new ModelCompat(false, null, true, false, Boolean.TRUE, null,
+        var native_ = ModelCompatFactories.of(false, null, true, false, Boolean.TRUE, null,
             Boolean.TRUE, null, null, true, MaxTokensField.MAX_TOKENS, null, null, null);
         var base = tool("base_tool");
         var late = tool("late_tool");

@@ -20,6 +20,7 @@ import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.api.StreamIterator;
 import com.pijava.ai.catalog.ModelCompat;
+import com.pijava.ai.catalog.ModelCompatFactories;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
@@ -174,7 +175,7 @@ class OpenAICompletionsReasoningReplayTest {
         try (var server = new RecordingServer()) {
             var model = model("deepseek", "deepseek-v4-pro",
                 Set.of(ModelCapability.TEXT, ModelCapability.THINKING),
-                new ModelCompat(false, false, true));
+                ModelCompatFactories.of(false, false, true));
             var body = body(server, model,
                 assistant(model, new ContentBlock.TextContent("answer")));
 

@@ -12,6 +12,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.catalog.ChatTemplateKwargValue;
+import com.pijava.ai.catalog.ModelCompatFactories;
 import com.pijava.ai.catalog.ModelCompat;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.catalog.ThinkingFormat;
@@ -714,7 +715,7 @@ class ThinkingFormatWireTest {
     private static ModelCompat compat(ThinkingFormat format, Boolean supportsEffort,
                                       Map<String, ChatTemplateKwargValue> kwargs,
                                       Map<String, ChatTemplateKwargValue> args) {
-        return new ModelCompat(false, null, true, false, null, null, null, null, null,
+        return ModelCompatFactories.of(false, null, true, false, null, null, null, null, null,
             true, null, null, null, null, null, null, null, null, null,
             format, kwargs, args, supportsEffort);
     }

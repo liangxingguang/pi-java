@@ -10,6 +10,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.StreamRequest;
+import com.pijava.ai.catalog.ModelCompatFactories;
 import com.pijava.ai.catalog.ModelCompat;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.catalog.SessionAffinityFormat;
@@ -42,7 +43,7 @@ class SessionAffinityWireTest {
 
     private static ModelCompat compat(Boolean send, SessionAffinityFormat format,
                                       Boolean longRetention) {
-        return new ModelCompat(false, null, true, false, null, null, null, null, null,
+        return ModelCompatFactories.of(false, null, true, false, null, null, null, null, null,
             true, null, null, null, null, longRetention, null, null, null, null,
             null, Map.of(), Map.of(), null, null, null, send, format);
     }

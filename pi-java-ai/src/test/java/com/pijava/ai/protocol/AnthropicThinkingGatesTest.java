@@ -11,6 +11,7 @@ import com.anthropic.models.messages.MessageCreateParams;
 
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.StreamRequest;
+import com.pijava.ai.catalog.ModelCompatFactories;
 import com.pijava.ai.catalog.ModelCompat;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.ContentBlock;
@@ -96,7 +97,7 @@ class AnthropicThinkingGatesTest {
     @Test
     void temperatureIsSuppressedForAdaptiveModelsToo() throws Exception {
         var params = buildParams(request(
-            model(new ModelCompat(false, null, true, true)),
+            model(ModelCompatFactories.of(false, null, true, true)),
             Optional.of(new ThinkingLevel.High()), 0.5));
 
         assertThat(params.temperature()).isEmpty();
@@ -120,7 +121,7 @@ class AnthropicThinkingGatesTest {
     @Test
     void interleavedBetaIsNotSentForAdaptiveModels() throws Exception {
         var params = buildParams(request(
-            model(new ModelCompat(false, null, true, true)),
+            model(ModelCompatFactories.of(false, null, true, true)),
             Optional.of(new ThinkingLevel.High()), -1));
 
         assertThat(betaHeader(params)).doesNotContain("interleaved-thinking-2025-05-14");

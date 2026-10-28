@@ -11,6 +11,7 @@ import com.anthropic.models.messages.MessageCreateParams;
 
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.StreamRequest;
+import com.pijava.ai.catalog.ModelCompatFactories;
 import com.pijava.ai.catalog.ModelCompat;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.ContentBlock;
@@ -185,7 +186,7 @@ class AnthropicThinkingWireTest {
     @Test
     void adaptiveModelEmitsAdaptiveThinkingWithEffort() throws Exception {
         var model = roomyModel(ThinkingLevelMap.empty(),
-            new ModelCompat(false, null, true, true));
+            ModelCompatFactories.of(false, null, true, true));
 
         var params = buildParams(request(model, Optional.of(new ThinkingLevel.High()), -1));
 
@@ -201,7 +202,7 @@ class AnthropicThinkingWireTest {
     @Test
     void adaptiveXhighFallsBackToHighEffort() throws Exception {
         var model = roomyModel(ThinkingLevelMap.empty(),
-            new ModelCompat(false, null, true, true));
+            ModelCompatFactories.of(false, null, true, true));
 
         var params = buildParams(request(model, Optional.of(new ThinkingLevel.XHigh()), -1));
 
@@ -214,7 +215,7 @@ class AnthropicThinkingWireTest {
     void catalogMappingOverridesTheAdaptiveEffort() throws Exception {
         var map = ThinkingLevelMap.of(Map.of(
             ModelThinkingLevel.of(new ThinkingLevel.High()), Optional.of("max")));
-        var model = roomyModel(map, new ModelCompat(false, null, true, true));
+        var model = roomyModel(map, ModelCompatFactories.of(false, null, true, true));
 
         var params = buildParams(request(model, Optional.of(new ThinkingLevel.High()), -1));
 
@@ -226,7 +227,7 @@ class AnthropicThinkingWireTest {
     @Test
     void adaptiveLeavesMaxTokensAlone() throws Exception {
         var model = roomyModel(ThinkingLevelMap.empty(),
-            new ModelCompat(false, null, true, true));
+            ModelCompatFactories.of(false, null, true, true));
 
         var params = buildParams(request(model, Optional.of(new ThinkingLevel.High()), 1234));
 

@@ -16,6 +16,7 @@ import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.catalog.MaxTokensField;
 import com.pijava.ai.catalog.ModelCompat;
+import com.pijava.ai.catalog.ModelCompatFactories;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.catalog.ThinkingTokenBudgetField;
 import com.pijava.ai.message.ContentBlock;
@@ -195,7 +196,7 @@ class ThinkingBudgetsChannelTest {
     private static JsonNode completionsBody(Optional<ThinkingLevel> reasoning,
                                              ThinkingBudgets budgets,
                                              int maxOutput) throws Exception {
-        var compat = new ModelCompat(false, null, true, false, null, null, null, null, null,
+        var compat = ModelCompatFactories.of(false, null, true, false, null, null, null, null, null,
             true, MaxTokensField.MAX_COMPLETION_TOKENS, null, null, null,
             null, null, ThinkingTokenBudgetField.THINKING_BUDGET, null);
         var model = new ModelInfo(ModelId.of("test", "reasoner"), "reasoner",

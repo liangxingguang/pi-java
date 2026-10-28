@@ -11,6 +11,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.StreamRequest;
+import com.pijava.ai.catalog.ModelCompatFactories;
 import com.pijava.ai.catalog.ModelCompat;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.ContentBlock;
@@ -142,7 +143,7 @@ class ResponsesMaxOutputTokensWireTest {
      * {@code ModelCompat.NONE} 同值，避免夹具顺带变更别的行为（例如 strict 门）。
      */
     private static ModelCompat gated(Boolean flag) {
-        return new ModelCompat(false, null, true, false, null, null, null, null, null,
+        return ModelCompatFactories.of(false, null, true, false, null, null, null, null, null,
             true, null, null, null, null, null, null, null, null, flag);
     }
 

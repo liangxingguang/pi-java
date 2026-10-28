@@ -13,6 +13,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.catalog.ModelCompat;
+import com.pijava.ai.catalog.ModelCompatFactories;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
@@ -133,7 +134,7 @@ class ResponsesDeveloperRoleWireTest {
 
     /** 只改 supportsDeveloperRole 一位（25 参便捷构造，其余同 {@link ModelCompat#NONE}）。 */
     private static ModelCompat compatDeveloper(Boolean flag) {
-        return new ModelCompat(
+        return ModelCompatFactories.of(
             false, null, true, false,
             null, null, null, null, null,
             true,
@@ -144,7 +145,7 @@ class ResponsesDeveloperRoleWireTest {
 
     /** 开 supportsMidConvoSystemMessages（保留中途系统项）＋supportsDeveloperRole 缺省 true。 */
     private static ModelCompat compatMidConvoAndDeveloper() {
-        return new ModelCompat(
+        return ModelCompatFactories.of(
             false, null, true, false,
             Boolean.TRUE, null, null, null, null,
             true,

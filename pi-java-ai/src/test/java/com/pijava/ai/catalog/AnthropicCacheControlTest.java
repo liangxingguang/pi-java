@@ -115,7 +115,7 @@ class AnthropicCacheControlTest {
     void supportsLongCacheRetentionFalseDropsOnlyTheTtl() {
         // P6：门为假时断点**仍在**（不是消失），只是没有 ttl。这条与下一条构成配对 ——
         // 只断「ttl 缺席」而不断「断点在场」的话，把门写成「断点也消失」也会绿。
-        var compat = new ModelCompat(false, null, true, false, null, null, null, null, null,
+        var compat = ModelCompatFactories.of(false, null, true, false, null, null, null, null, null,
             true, null, null, null, null, Boolean.FALSE, null);
 
         var spec = resolve(model(compat), CacheRetention.LONG, null).orElseThrow();
@@ -165,7 +165,7 @@ class AnthropicCacheControlTest {
     @Test
     void anExplicitOverrideBeatsTheAnthropicCacheDefaults() {
         // 覆盖源优先（pi 的 `explicit ?? detected`）：models.json 写了 false 就是 false。
-        var compat = new ModelCompat(false, null, true, false, null, null, null, null, null,
+        var compat = ModelCompatFactories.of(false, null, true, false, null, null, null, null, null,
             true, null, null, null, null, Boolean.FALSE, Boolean.FALSE);
 
         var resolved = CompatResolver.forAnthropic(model(compat));

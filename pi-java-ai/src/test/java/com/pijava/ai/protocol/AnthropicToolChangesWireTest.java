@@ -19,6 +19,7 @@ import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.api.ToolDefinition;
 import com.pijava.ai.api.ToolReference;
+import com.pijava.ai.catalog.ModelCompatFactories;
 import com.pijava.ai.catalog.ModelCompat;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.ContentBlock;
@@ -303,7 +304,7 @@ class AnthropicToolChangesWireTest {
     /** pi oracle 用例 3 —— **只给 {@code supportsMidConvoToolChanges}** ⇒ 退回折叠。 */
     @Test
     void requiresBothCapabilitiesForNativeToolChanges() throws Exception {
-        var compat = new ModelCompat(false, null, true, false, null, null, true, null, null);
+        var compat = ModelCompatFactories.of(false, null, true, false, null, null, true, null, null);
         var body = capture(model(compat), removalTranscript());
 
         assertThat(betas()).doesNotContain(BETA);
@@ -408,7 +409,7 @@ class AnthropicToolChangesWireTest {
 
     /** 两个标志都给（Anthropic 的原生支需要**都**在场）。 */
     private static ModelInfo nativeModel() {
-        return model(new ModelCompat(false, null, true, false, true, null, true, null, null));
+        return model(ModelCompatFactories.of(false, null, true, false, true, null, true, null, null));
     }
 
     private static ModelInfo model(ModelCompat compat) {

@@ -18,6 +18,7 @@ import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.api.ToolDefinition;
 import com.pijava.ai.catalog.ModelCompat;
+import com.pijava.ai.catalog.ModelCompatFactories;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
@@ -226,7 +227,7 @@ class ResponsesToolChangesWireTest {
         return new ModelInfo(ModelId.of("openai", "gpt-5.4"), "GPT-5.4", Set.of(),
             100_000, 16_384, false, PricingInfo.UNKNOWN, ThinkingLevelMap.empty(),
             Map.of(), Map.of(),
-            new ModelCompat(false, null, true, false, midConversation, null, null,
+            ModelCompatFactories.of(false, null, true, false, midConversation, null, null,
                 additionalTools, toolSearch));
     }
 

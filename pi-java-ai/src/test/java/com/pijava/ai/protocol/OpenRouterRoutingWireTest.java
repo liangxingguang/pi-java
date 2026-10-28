@@ -12,6 +12,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.StreamRequest;
+import com.pijava.ai.catalog.ModelCompatFactories;
 import com.pijava.ai.catalog.ModelCompat;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.ContentBlock;
@@ -49,7 +50,7 @@ class OpenRouterRoutingWireTest {
 
     /** 25 参规范构造的便捷包装：只有第 25 位（openRouterRouting）有值。 */
     private static ModelCompat routing(Map<String, Object> routing) {
-        return new ModelCompat(false, null, true, false, null, null, null, null, null,
+        return ModelCompatFactories.of(false, null, true, false, null, null, null, null, null,
             true, null, null, null, null, null, null, null, null, null, null,
             Map.of(), Map.of(), null, null, routing);
     }

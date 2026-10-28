@@ -16,6 +16,7 @@ import com.pijava.ai.api.ToolDefinition;
 import com.pijava.ai.catalog.CacheRetention;
 import com.pijava.ai.catalog.CacheControlFormat;
 import com.pijava.ai.catalog.ModelCompat;
+import com.pijava.ai.catalog.ModelCompatFactories;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
@@ -237,7 +238,7 @@ class CompletionsCacheControlWireTest {
     void explicitLongCacheRetentionFalseSuppressesBothTtlAndPromptKey() throws Exception {
         // 显式 supportsLongCacheRetention:false 压过探测（getCompat:1720）⇒ 断点照发、
         // 无 ttl、无 prompt_cache_retention。
-        var explicit = new ModelCompat(false, null, true, false, null, null, null, null, null,
+        var explicit = ModelCompatFactories.of(false, null, true, false, null, null, null, null, null,
             true, null, null, null, null, Boolean.FALSE, null, null, null, null, null,
             Map.of(), Map.of(), null, CacheControlFormat.ANTHROPIC, null);
         var model = new ModelInfo(ModelId.of("relay", "anthropic/claude-x"), "X",

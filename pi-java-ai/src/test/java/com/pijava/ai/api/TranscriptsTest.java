@@ -9,6 +9,7 @@ import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
+import com.pijava.ai.catalog.ModelCompatFactories;
 import com.pijava.ai.catalog.ModelCompat;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
@@ -149,8 +150,8 @@ class TranscriptsTest {
         assertThat(ModelCompat.NONE.supportsMidConvoSystemMessages()).isNull();
         assertThat(ModelCompat.of(true).supportsMidConvoSystemMessages()).isNull();
         // 4 参形态（包 A2 之前的形状）同样缺席该标志
-        assertThat(new ModelCompat(false, null, true, true).supportsMidConvoSystemMessages()).isNull();
-        assertThat(new ModelCompat(false, null, true, false, true).supportsMidConvoSystemMessages())
+        assertThat(ModelCompatFactories.of(false, null, true, true).supportsMidConvoSystemMessages()).isNull();
+        assertThat(ModelCompatFactories.of(false, null, true, false, true).supportsMidConvoSystemMessages())
             .isTrue();
     }
 
@@ -175,7 +176,7 @@ class TranscriptsTest {
      * {@link ModelCompat}（不再是 {@code ModelInfo}），故这里直接给 compat。
      */
     private static ModelCompat compat(Boolean supportsMidConversationSystemMessages) {
-        return new ModelCompat(false, null, true, false, supportsMidConversationSystemMessages);
+        return ModelCompatFactories.of(false, null, true, false, supportsMidConversationSystemMessages);
     }
 
     private static Map<String, String> sections(String... keyValues) {

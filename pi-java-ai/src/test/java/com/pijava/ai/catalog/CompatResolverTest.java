@@ -99,7 +99,7 @@ class CompatResolverTest {
     @Test
     void explicitCompatWinsOverTheDetection() {
         // pi getCompat 的 `explicit ?? detected`（原 docs/53 §2 P3）。
-        var explicit = new ModelCompat(false, false, true, false, null, null, null, null, null,
+        var explicit = ModelCompatFactories.of(false, false, true, false, null, null, null, null, null,
             true, MaxTokensField.MAX_COMPLETION_TOKENS, true, true, null);
         var compat = CompatResolver.forCompletions(
             model("deepseek", "deepseek-v4-pro", explicit), "https://api.deepseek.com");
@@ -126,7 +126,7 @@ class CompatResolverTest {
 
     @Test
     void completionsKeepsTheExplicitMidConvoTrue() {
-        var explicit = new ModelCompat(false, null, true, false, true, true, null, null, null);
+        var explicit = ModelCompatFactories.of(false, null, true, false, true, true, null, null, null);
         var compat = CompatResolver.forCompletions(
             model("openai", "gpt-5", explicit), "https://api.openai.com/v1");
 
@@ -148,7 +148,7 @@ class CompatResolverTest {
     @Test
     void anthropicKeepsTheCatalogueFlags() {
         // 内置目录标的那两个（claude-fable-5 / claude-opus-4-8，原 docs/53 §4.2）。
-        var catalogue = new ModelCompat(false, null, true, true, true, null, true, null, null);
+        var catalogue = ModelCompatFactories.of(false, null, true, true, true, null, true, null, null);
         var compat = CompatResolver.forAnthropic(
             model("anthropic", "claude-fable-5", catalogue));
 
@@ -188,7 +188,7 @@ class CompatResolverTest {
 
     @Test
     void completionsKeepsExplicitAffinityOverDetection() {
-        var explicit = new ModelCompat(false, null, true, false, null, null, null, null, null,
+        var explicit = ModelCompatFactories.of(false, null, true, false, null, null, null, null, null,
             true, null, null, null, null, null, null, null, null, null,
             null, Map.of(), Map.of(), null, null, null,
             Boolean.TRUE, SessionAffinityFormat.OPENROUTER);
@@ -223,7 +223,7 @@ class CompatResolverTest {
     void responsesExplicitAffinityFormatSurvivesResolution() {
         // 回归 B156 型事故：resolved() 曾把两亲和位硬编码 null（docs/52 前连 responses
         // 车道的显式 models.json format 都被静默丢掉）。
-        var explicit = new ModelCompat(false, null, true, false, null, null, null, null, null,
+        var explicit = ModelCompatFactories.of(false, null, true, false, null, null, null, null, null,
             true, null, null, null, null, null, null, null, null, null,
             null, Map.of(), Map.of(), null, null, null,
             null, SessionAffinityFormat.OPENAI_NOSESSION);
@@ -246,7 +246,7 @@ class CompatResolverTest {
 
     @Test
     void responsesLetsTheExplicitStrictModeBeatTheLaneDefault() {
-        var explicit = new ModelCompat(false, null, true, false, null, null, null, null, null,
+        var explicit = ModelCompatFactories.of(false, null, true, false, null, null, null, null, null,
             true, null, null, null, false);
         var compat = CompatResolver.forResponses(model("openai", "gpt-5", explicit), true);
 
@@ -277,7 +277,7 @@ class CompatResolverTest {
 
         assertThat(compat.supportsMaxOutputTokens()).isTrue();
 
-        var off = new ModelCompat(false, null, true, false, null, null, null, null, null,
+        var off = ModelCompatFactories.of(false, null, true, false, null, null, null, null, null,
             true, null, null, null, null, null, null, null, null, Boolean.FALSE);
         assertThat(CompatResolver.forResponses(model("openai", "gpt-5", off), false)
             .supportsMaxOutputTokens()).isFalse();
@@ -317,7 +317,7 @@ class CompatResolverTest {
 
     @Test
     void thePreA7NineArgumentConstructorLeavesTheNewFlagsAtTheirDefaults() {
-        var legacy = new ModelCompat(false, null, true, false, null, null, null, null, null);
+        var legacy = ModelCompatFactories.of(false, null, true, false, null, null, null, null, null);
 
         assertThat(legacy.supportsTemperature()).isTrue();
         assertThat(legacy.maxTokensField()).isNull();
@@ -381,7 +381,7 @@ class CompatResolverTest {
     void anExplicitThinkingFormatWinsOverTheDetection() {
         // pi getCompat:1712 —— explicit ?? detected。⚠️ 这正是 R7「目录值不许进探测」
         // 要保住的格子：deepseek 端点上用户显式写 openai 必须真的是 openai。
-        var explicit = new ModelCompat(false, null, true, false, null, null, null, null, null,
+        var explicit = ModelCompatFactories.of(false, null, true, false, null, null, null, null, null,
             true, null, null, null, null, null, null, null, null, null,
             ThinkingFormat.OPENAI, Map.of(), Map.of(), Boolean.FALSE);
         var compat = CompatResolver.forCompletions(
@@ -396,7 +396,7 @@ class CompatResolverTest {
         // 两个 map 不走 pick：探测面恒空 ⇒ 显式值直接活下来（pi 的 `?? {}`）。
         var kwargs = Map.<String, ChatTemplateKwargValue>of("enable_thinking",
             new ChatTemplateKwargValue.Var(ChatTemplateKwargValue.ThinkingVar.ENABLED, true));
-        var explicit = new ModelCompat(false, null, true, false, null, null, null, null, null,
+        var explicit = ModelCompatFactories.of(false, null, true, false, null, null, null, null, null,
             true, null, null, null, null, null, null, null, null, null,
             ThinkingFormat.CHAT_TEMPLATE, kwargs, Map.of(), null);
         var compat = CompatResolver.forCompletions(
@@ -465,7 +465,7 @@ class CompatResolverTest {
             model("ant-ling", "ling-1t"), "https://api.ant-ling.com")
             .supportsLongCacheRetention()).isFalse();
         // 显式值赢（getCompat:1720）。
-        var explicit = new ModelCompat(false, null, true, false, null, null, null, null, null,
+        var explicit = ModelCompatFactories.of(false, null, true, false, null, null, null, null, null,
             true, null, null, null, null, Boolean.FALSE, null);
         assertThat(CompatResolver.forCompletions(
             model("openrouter", "openai/gpt-5.1", explicit), "https://openrouter.ai/api/v1")
@@ -494,7 +494,7 @@ class CompatResolverTest {
     @Test
     void explicitCacheControlFormatWinsOverTheDetection() {
         // getCompat:1716 的 `explicit ?? detected`：显式键可以给非 openrouter 端点开这扇门。
-        var explicit = new ModelCompat(false, null, true, false, null, null, null, null, null,
+        var explicit = ModelCompatFactories.of(false, null, true, false, null, null, null, null, null,
             true, null, null, null, null, null, null, null, null, null, null,
             Map.of(), Map.of(), null, CacheControlFormat.ANTHROPIC, null);
         assertThat(CompatResolver.forCompletions(
@@ -509,7 +509,7 @@ class CompatResolverTest {
         assertThat(CompatResolver.forCompletions(
             model("openrouter", "openai/gpt-5.1"), "https://openrouter.ai/api/v1")
             .openRouterRouting()).isNull();
-        var explicit = new ModelCompat(false, null, true, false, null, null, null, null, null,
+        var explicit = ModelCompatFactories.of(false, null, true, false, null, null, null, null, null,
             true, null, null, null, null, null, null, null, null, null, null,
             Map.of(), Map.of(), null, null, Map.of("zdr", true));
         assertThat(CompatResolver.forCompletions(
