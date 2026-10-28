@@ -166,7 +166,7 @@ public final class TreeNavigationFlow {
             return;
         }
         // pi :5590：skipPrompt 门（branchSummary.skipPrompt 默认 false）。
-        if (session.services().settings().accessors().getBranchSummarySkipPrompt()) {
+        if (session.services().settings().compaction().getBranchSummarySkipPrompt()) {
             startNavigation(entryId, false, null);
             return;
         }

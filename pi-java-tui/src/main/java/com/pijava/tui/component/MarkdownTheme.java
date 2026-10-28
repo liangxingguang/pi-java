@@ -18,7 +18,8 @@ import dev.tamboui.style.Color;
  *
  * <p>{@link #current()} 现读活跃主题（主题切换即时生效，同 SemanticColors 先例）。
  * {@code codeBlockIndent} 经静态注入缝（装配层装 settings 现读供应器，
- * {@link SettingsAccessors#getMarkdownCodeBlockIndent()} 在 coding-agent 侧）。</p>
+ * {@link com.pijava.coding.agent.core.SettingsCompactionAccessors#getMarkdownCodeBlockIndent()}
+ * 在 coding-agent 侧）。</p>
  */
 public record MarkdownTheme(
     Color heading,

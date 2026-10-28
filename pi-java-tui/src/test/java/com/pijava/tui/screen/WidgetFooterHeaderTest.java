@@ -69,9 +69,9 @@ class WidgetFooterHeaderTest {
             many.add("line-" + i);
         }
         chat.setExtensionWidget("w", new ExtensionWidgetContent.Lines(many), null, ENV);
-        var entry = (ChatScreen.WidgetEntry.Lines) chat.widgetsForProbe(true).get("w");
+        var entry = (ExtensionInjectionLayer.WidgetEntry.Lines) chat.widgetsForProbe(true).get("w");
         // pi :2422-2426：slice(0, 10)＋截断行（文案逐字【模型不可见】）。
-        assertThat(entry.lines()).hasSize(ChatScreen.MAX_WIDGET_LINES + 1);
+        assertThat(entry.lines()).hasSize(ExtensionInjectionLayer.MAX_WIDGET_LINES + 1);
         assertThat(entry.lines().get(9)).isEqualTo("line-10");
         assertThat(entry.lines().get(10)).isEqualTo("... (widget truncated)");
     }
@@ -111,7 +111,7 @@ class WidgetFooterHeaderTest {
             new ExtensionWidgetContent.Factory(
                 env -> new CountingComponent(env.colorize().apply("accent", "hi"))),
             null, ENV);
-        var entry = (ChatScreen.WidgetEntry.Comp) chat.widgetsForProbe(true).get("w");
+        var entry = (ExtensionInjectionLayer.WidgetEntry.Comp) chat.widgetsForProbe(true).get("w");
         assertThat(entry.component().render(80)).containsExactly("[accent]hi[/]");
     }
 

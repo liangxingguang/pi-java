@@ -7,6 +7,7 @@ import java.util.function.Consumer;
 import com.pijava.coding.agent.core.AgentSession;
 import com.pijava.coding.agent.theme.ThemeController;
 import com.pijava.coding.agent.theme.ThemeSettings;
+import com.pijava.coding.agent.theme.ThemeCatalog;
 import com.pijava.coding.agent.theme.Themes;
 import com.pijava.tui.component.SelectList;
 
@@ -58,7 +59,7 @@ public final class ThemeSubmenuScreen implements ScreenOverlay {
     public ThemeSubmenuScreen(AgentSession session, ThemeController controller) {
         this.session = session;
         this.controller = controller;
-        this.availableThemes = Themes.getAvailableThemes();
+        this.availableThemes = ThemeCatalog.getAvailableThemes();
         // pi：currentValue = config.currentTheme = controller.getThemeSelection()。
         this.originalThemeSetting = controller != null
             ? controller.getThemeSelection()

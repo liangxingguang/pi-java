@@ -100,7 +100,7 @@ class ForkSelectorFlowTest {
         } finally {
             System.setProperty("user.home", savedHome);
         }
-        session.services().settings().accessors().setCompactionEnabled(false);
+        session.services().settings().compaction().setCompactionEnabled(false);
         provider = ScriptedChatProvider.Factory.lastInstance();
         mode = new InteractiveMode(session);
         chatScreen = new ChatScreen();

@@ -236,7 +236,7 @@ public final class TuiExtensionUI implements ExtensionUI {
     /** pi {@code getAllThemes}（:2678）。 */
     @Override
     public List<ThemeEntry> getAllThemes() {
-        return com.pijava.coding.agent.theme.Themes.getAvailableThemesWithPaths().stream()
+        return com.pijava.coding.agent.theme.ThemeCatalog.getAvailableThemesWithPaths().stream()
             .map(info -> new ThemeEntry(info.name(),
                 info.path() != null ? info.path().toString() : null))
             .toList();
@@ -245,7 +245,7 @@ public final class TuiExtensionUI implements ExtensionUI {
     /** pi {@code getTheme}（:2679）：按名加载（不切换）；未找到 ⇒ null。 */
     @Override
     public @Nullable ThemeEntry getTheme(String name) {
-        var theme = com.pijava.coding.agent.theme.Themes.getThemeByName(name);
+        var theme = com.pijava.coding.agent.theme.ThemeCatalog.getThemeByName(name);
         return theme == null ? null : new ThemeEntry(theme.name(), theme.sourcePath());
     }
 

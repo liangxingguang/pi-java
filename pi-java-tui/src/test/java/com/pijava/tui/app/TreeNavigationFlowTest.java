@@ -144,7 +144,7 @@ class TreeNavigationFlowTest {
             System.setProperty("user.home", savedHome);
         }
         // 未编目模型 window=0，阈值门会在 prompt 收尾抢先自动压缩（既有夹具先例）。
-        session.services().settings().accessors().setCompactionEnabled(false);
+        session.services().settings().compaction().setCompactionEnabled(false);
         provider = ScriptedChatProvider.Factory.lastInstance();
         mode = new com.pijava.coding.agent.modes.InteractiveMode(session);
         chatScreen = new ChatScreen();
