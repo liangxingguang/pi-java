@@ -77,7 +77,7 @@ protocol/client/server 按 R1 整体排除（未加权数字见 map/01）。pi-j
 
 ---
 
-## 1 总表（coding-agent 批 26 后值，2026-10-28；agent-core 批 5 后值，2026-10-18；telemetry 批 1 后值，2026-10-17；ai 批 10 后 2026-10-16；批 3b/4/6/8 为台账行为项、加权不变；其余模块为 2026-10-12 重测值）
+## 1 总表（coding-agent 批 27 后值，2026-10-28；agent-core 批 5 后值，2026-10-18；telemetry 批 1 后值，2026-10-17；ai 批 10 后 2026-10-16；批 3b/4/6/8 为台账行为项、加权不变；其余模块为 2026-10-12 重测值）
 
 | 模块（地图） | Σ权重 | Σ(w×c) | **加权完成度** | 未加权 | 权重 3 层 |
 |---|---:|---:|---:|---:|---:|
@@ -87,8 +87,8 @@ protocol/client/server 按 R1 整体排除（未加权数字见 map/01）。pi-j
 | session-sqlite ＋ evals（map/06） | 87 | 44.5 | **51.1%** | 50.0%（20/40） | — |
 | pi-java-telemetry（map/01，**批1后**） | 34 | 34.0 | **100%** | 100%（16/16） | 100%（21/21） |
 | pi-java-tui/web（map/05，**批26后**） | 244 | 133.5 | **54.7%** | 36.1%（53/147） | 71.2% |
-| pi-java-coding-agent（map/04，剔 MCP 粗单元） | 485 | 438.0 | **90.3%** | 82.7%（239.0/289） | 87.0%（20/23） |
-| **合计（去重后，coding-agent 批26后）** | **1,379** | **1,155.0** | **83.8%** | — | — |
+| pi-java-coding-agent（map/04，剔 MCP 粗单元） | 485 | 446.0 | **92.0%** | 84.1%（243.0/289） | 87.0%（20/23） |
+| **合计（去重后，coding-agent 批27后）** | **1,379** | **1,163.0** | **84.3%** | — | — |
 
 > map/04 原始口径（含 G-1..G-5）：Σw 494 ／ Σwc 422.5 ／ **85.6%**（批 24：G-1/G-4 翻对齐 +2.0）；两处账都在，总表用去重值。
 > w3 注记（批 19）：包管理器 #18/#19/#23 清零（批 18 两翻当时漏入 w3 表，本批收平）⇒ 73.9%（17/23）→ 87.0%（20/23）。
@@ -99,7 +99,7 @@ protocol/client/server 按 R1 整体排除（未加权数字见 map/01）。pi-j
 
 - **ai 层权重 3 全齐**：每轮都走的请求/响应/计量主路无缺口。批 10 后计分母缺失仅 1 条（#8 namespace），无半成品——#90 图片缩放消费链已落 agent-core/coding-agent，#98 federation 批 10 闭环。分类器面已裁 R5。
 - **mcp 批 24 后 93.4%**：会话内接线全通（**G 组满分域**——批 24 内置 MCP 扩展本体 B221① 落地：六事件订阅＋提示段生产＋运行时注册三表＋`/mcp` 命令与管理器视图＋`--no-mcp`）；计分母缺失仅剩 #50（structuredContent 消费者，B202/codemode 族）；#92/#93（codemode 默认激活）仍 R5 出分母随 B161/B162 重裁。
-- **coding-agent 批 26 后 90.3%（去重）**：**D 扩展事件 100%（批 23，满分域第十三——#1 project_trust／#11 mcp_servers_change 两缺失清零）**、A CLI/E1/E3/E4/**E6/B/E7** 七域 100%、E2 settings 97.0%、C slash 90.7%；**E5 扩展 API 87.9%（批 26 收口：ctx 动作面 14 行）**；余量主在 G 域新子系统（codemode 3,957 行＋tool-search/virtual-models/nested 766 行仍为 0，B161/B162）与 E5-33 examples（F 类）。
+- **coding-agent 批 27 后 92.0%（去重）**：**D 扩展事件 100%（批 23，满分域第十三）**、A CLI/E1/E3/E4/**E6/B/E7** 七域 100%、E2 settings 97.0%、C slash 90.7%；**E5 扩展 API 93.1%（批 27：E5-26/27 翻——B162 销号）**；**G 域 66.7%（批 27：tool-search/virtual-models/nested 三块落地，余 codemode 3,957 行挂 B161）**；余量主在 E5-31（TUI 臂挂账）、E5-33 examples（F 类）与 codemode。
 - **agent-core 批 5 后 180/180 = 100%**（第二个满分模块）：权重 3 层 27/27、工具表 21/21、确认缺失与存疑**双清零**（批 5 收编 22 条存疑：13 做、8 裁决、#60 R1 出分母），未得分池 = 0。
 
 ---
@@ -142,7 +142,7 @@ codemode-only 的 4 个单元（exposure/deferred/discovery）权重 0，B161/B1
 
 现状：**模块 100%**——加权 180/180、未加权 90/90、权重 3 层含工具 27/27、工具表 21/21、确认缺失与存疑**双清零**、未得分池 = 0。（批 4 登记的 B244/B245 已分别随 coding-agent 批 2/批 8 销号。）
 
-### 2.4 coding-agent — 90.3%（去重）｜ map/04
+### 2.4 coding-agent — 92.0%（去重）｜ map/04
 
 A CLI 参数 **100%**（批 21）、E1 配置文件 **100%**（批 21）、E3 会话管理 **100%**（批 21）、E4 资源发现 **100%**（批 21）、**E6 包管理器 100%（批 22，自更新终裁）、B 子命令 100%（批 22）、E7 RPC 面 100%（批 20）、D 扩展事件 100%（批 23，满分域第十三——缺失清零）**、C slash 90.7%（批 16 后）、E2 settings 97.0%（批 21 后，E2-9 翻）；**E5 扩展 API 50.0%（批 23 后）** 拉低整体。
 G 域新子系统：MCP 明细在 map/07；codemode 3,957 行＋tool-search/virtual-models/nested 766 行仍为 0（B161/B162）。
@@ -179,6 +179,7 @@ G 域新子系统：MCP 明细在 map/07；codemode 3,957 行＋tool-search/virt
 - 批 25（2026-10-27 闭环，docs/36，**tui Markdown 激活批**——B65 死代码接线）：**T1/T2 wrap 地基**（`MarkupTokens` 扫描器〔语义逐字镜像 TamboUI MarkupParser 0.4.0 javap 取证〕＋`TextLayout` markup 感知换行/硬断/截断——标签零宽、切词不切标签、跨行本行尾闭栈＋下行首重开；裁决⑧量宽修真〔`[[`/`]]`/`\\` 2 列⇒1 列〕；`toLine` 共享口行 style 作底 span 优先）→ **T3/T4/T5 渲染本体**（`MarkdownBlocks` 行级 parser〔ATX 1-6/段落合并/~~~ 围栏/有序连号＋任务标记＋缩进嵌套列表/引用合并/hr 三形/R5 局部围栏修剪〕＋`InlineMarkup`〔严格删除线 pi :7 正则逐字/codespan/strong/em/OSC 8 链接臂〕＋`toLogicalLines` 排放〔块后间距 space token 对位/代码围栏行可见＋codeBlockIndent＋高亮门/列表悬垂缩进/表格全边框自然宽 preformatted/hr 固定 80/tab→3 空格逐字〕）→ **T6 主题接线**（`MarkdownTheme` 十键＋`SyntaxHighlighter` 四色改主题令牌）→ **T7 两臂接线**（`MessageBubble` TextContent/ThinkingContent 走 Markdown〔pi assistant-message.ts:110-117/:146-162 对位〕＋E2-43 `getMarkdownCodeBlockIndent` 逐字回落＋`MarkdownTheme.installCodeBlockIndent` 现读缝）→ **T8 `/help` `/hotkeys`**（输出改产 markdown 源＋`ChatMessage.Markdown` 变体＋输入行路由）。**B65 销号**；map/05 **六行翻动 +10.0**（R1〔w3〕/R2/R3/R4/R5/R9 缺失→对齐；**裁决④ OSC 8 实证通过**＝MarkupParser 携 hyperlink＋`AnsiCellWriter` 吐 `]8;` 序列双用例钉死）122.5→**132.5/244 ≈ 54.3%**（未加权 46→52/147 ≈ 35.4%；w3 子集 67.3%→**71.2%**）；map/04 E2-43 维持存疑（注记更新：codeBlockIndent 落地、mermaid 半键挂 R7）；模块去重账面不动（85.8%）；合计 81.4% → **82.1%**（1,122.0 → 1,132.0/1379）。窄差 D143–D149；行为变化注记：**助手/thinking 文本经 Markdown 渲染**（标题/列表/代码块/表格/链接/高亮可见）、**`/help` `/hotkeys` 输出改 markdown 表格形**、编辑器与代码块高亮改主题令牌色。排障钉：`Line.patchStyle` 方向是参数覆盖 span（行 style 须逐 span 重建作底）／无 -am 拾旧 jar 再撞。新文件 4＋测试 5 件 53 用例＋存量修形 5 件；verify 收口 exit 0 BUILD SUCCESS（5,284 测 0 失败，checkstyle 0 违规，spotbugs 零钉）。E6 涨到 1,086、E7 涨到 1,040。
 
 - 批 26（2026-10-28 闭环，docs/37，**E5 扩展 API 面第三批——ctx 动作面收口**）：**T1 队列地基**（agent-core：`QueuedItem` 密封两变体＋`customOrigins` 身份通道＋sink message_end 落 `Entry.CustomMessage`）→ **T2 `sendCustomMessage` 五臂＋三缓冲**（pi :2293-2329 逐字序；四 flush 点全对位）→ **T3 ctx 消息面**（`sendUserMessage`＋`expandPromptTemplates` 门〔D117 部分修真〕＋processPrompt settled 延迟门）→ **T4 会话四件**（setLabel 抛错文案修真逐字）→ **T5 模型三件**（auth 门 false 不抛）→ **T6 `ExtensionExec`** → **T7 `ExtensionChannelBus`＋失效退订三路径** → **T8 unregisterProvider** → **T9 快捷键**（KeyIdParser＋冲突三规则/保留表逐字＋TUI 派发缝＋/hotkeys Extensions 段）→ **T10 message/entry renderer**（文本级＋first-wins＋TUI 消费缝；无 entry renderer 不渲）→ **T11 markdown transformer**（单槽＋链式＋两臂缝；map/05 R6 翻对齐）。E5 域 29.0→**51.0/58 ≈ 87.9%**（对齐 17→31/35）；模块 416.0→**438.0/485 ≈ 90.3%**（未加权 78.0%→82.7%）；合计 82.1% → **83.8%**（1,132.0 → 1,155.0/1379）。E5-26/27 裁决①挂账收编 B162；窄差 D150–D159；行为变化注记：sendMessage(triggerTurn) UOE 退役起轮、流式 custom 默认 steer、/hotkeys 增 Extensions 段、无渲染器 custom 条目不渲、processPrompt settled 窗内延迟。排障钉：无 -am 拾旧 jar 再撞／verify 管道吞退出码再撞（落盘日志＋单独 echo）／并发两 mvn 互踩 target／spotbugs 一钉（emittingAgentSettled ⇒ volatile＋三缓冲临界区）。新文件 11＋测试 6 件 43 用例＋存量修形 2 件；E1 涨到 3,428、E6 涨到 1,137。
+- 批 27（2026-10-28 闭环，docs/38，**B162 虚拟模型整域——tool-search／virtual-models／nested-tool-calls**）：**T1 ai 地基**（`NestedToolCallRecord`/`NestedToolCalls`＋`ToolResultMessage.nestedCalls` 第十组件）→ **T2 嵌套内核**（`NestedCallRecorder` 四有界规则逐字＋`NestedToolCallRunner`〔`<caller>/<n>` id／scope 树共享 recorder／独占队列〕＋事件与钩全链 parentToolCallId——**D7 销号**）→ **T3/T4 宿主缝＋扩展面**（`executeNestedToolCall`＋message_end 挂载钩〔先于落盘〕＋`ExtensionContext.executeTool/callableTools`＋无宿主降级错文逐字）→ **T5/T7 tool-search**（BM25/tokenize/文档构建逐字＋`builtin:tool-search` 内置装配〔defaultActive:false〕）→ **T6 exposure 面**（`ToolExposure` 五档＋`ToolDefinitions` 定义表＋四门逐字＋装配 defaultActive 闸〔D89 收窄〕＋投影三字段〔D91 收窄〕）→ **T8 MCP 真化**（deferred ⇒ session_start 自动激活 tool_search〔行为变化〕＋警告文案改 pi 逐字＋tool_call 等待臂）→ **T9–T11 虚拟模型**（注册表〔五错文逐字〕＋每请求路由钩〔`onPrepareRequestRouted` 新钩级〕＋路由态分支持久化＋direct 臂摘要接线＋E5-26/27 扩展面）→ **T12 下游**（compaction 文件清单＋HTML 导出＋RPC/web 透传）。map/04 **5 行翻动 +8.0**（E5-26/27＋G-8/9/10）——E5 域 51.0→**54.0/58 ≈ 93.1%**、G 域 7.0→**12.0/18 ≈ 66.7%**（余 codemode 挂 B161）；模块 438.0→**446.0/485 ≈ 92.0%**（未加权 82.7%→84.1%；w3 87.0% 不动）。合计 83.8% → **84.3%**（1,155.0 → 1,163.0/1379）。**B162 销号**；窄差 D160–D171；行为变化注记：deferred MCP 服务器自动激活 tool_search、内置 tool_search 注册不激活、MCP 不可达警告改 pi 文案、allowlist 未点名 MCP 非 direct 工具可经 tool_search 声明、tool result 可带 nestedCalls 键、defaultActive:false 不再全量激活、扩展可注册虚拟模型与嵌套调用。排障钉：无 -am 拾旧 jar 两撞／ServiceLoader 夹具两钉（classpath 根＝META-INF 祖父目录、扩展类须顶层 public）／ai 模块 AssistantMessage 顶层/嵌套两名／spotbugs 一钉（UL_UNRELEASED_LOCK⇒独占臂独立 try/finally＋executeHeld 抽出）。新文件 17＋测试新增/改写 46 用例；E1 涨到 3,797（虚拟/嵌套簇约 230 行是下一可拆块）。
 
 ### 2.5 tui/web — 54.7%（总表行；map/05 域表 54.7%）｜ map/05
 

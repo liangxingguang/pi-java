@@ -240,7 +240,7 @@ D：38/40/41/43/46（B193/B198/B212/B192/B217）· E：53（B203）· F：71（B
 |---|---|---|---|
 | `on("session_start")` | `index.ts:1111` | **批 24 已落**（`McpExtension.onSessionStart`） | 对齐 |
 | `on("before_agent_start")` | `index.ts:1175` | **批 24 已落**（提示段生产＋首提示有界等待） | 对齐 |
-| `on("tool_call")` | `index.ts:1187` | **批 24 已落**（资源三工具全等/属主等待；codemode/tool_search 两臂 R5） | 对齐 |
+| `on("tool_call")` | `index.ts:1187` | **批 24 已落**（资源三工具全等/属主等待）；**批 27** tool_search 等待臂落地（codemode 臂维持 R5） | 对齐 |
 | `on("turn_start")` | `index.ts:1209` | **批 24 已落**（SessionEventBridge 转发＋凭证拾取） | 对齐 |
 | `on("mcp_servers_change")` | `index.ts:1214` | **批 24 已落**（批 23 广播面＋批 24 热插拔本体） | 对齐 |
 | `on("session_shutdown")` | `index.ts:1249` | **批 24 已落**（closeWith 链发射＋收敛） | 对齐 |
@@ -252,7 +252,7 @@ D：38/40/41/43/46（B193/B198/B212/B192/B217）· E：53（B203）· F：71（B
 
 **结论**（批 24 后）：MCP 全面对齐——SDK/配置/OAuth/工具适配/进程外 CLI（A–F）＋会话内接线（G 组满分）；
 计分母缺失仅剩 #50（structuredContent 消费者，随 B202/codemode 族）；台账 B221 六臂全收（②③④⑤⑥ 批 16/17/23、① 批 24），B214/B188/B189/B195 同批销号。
-codemode 默认 exposure 的运行时激活（#92/#93）仍 R5 出分母——B161/B162 闭环时重裁。
+codemode 默认 exposure 的运行时激活（#92/#93）曾 R5 出分母——**批 27（docs/38）重裁**：#93（deferred ⇒ `tool_search` 自动激活与可达链）已落地对齐（ensureDiscoveryActive 真化＋tool_call 等待臂；权重 0 不动账面）；#92（codemode 激活）维持 R5 出分母，随 B161 重裁。
 
 ## 不确定项
 

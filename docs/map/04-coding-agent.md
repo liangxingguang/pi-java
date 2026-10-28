@@ -229,7 +229,7 @@ pi-java 的**引擎钩子** = `pi-java-agent-core/.../agent/hook/HookSystem.java
 | D4 | `session_compact` 无 `compactionEntry` 载荷（CompactionResult 无条目本体） ⇒ D-8 判存疑，挂 B249 | [模型可见：扩展读不到该字段] |
 | D5 | `extension_error` TUI 暂不展示（RPC 线已逐字）；TUI 通知面归 D′ 域 | [用户可见，边缘] |
 | D6 | `fromExtension` 恒 false——java 无扩展触发压缩的路径（`sendMessage(triggerTurn)` 未实现），与当前全部可达行为一致 | 无影响 |
-| D7 | pi 的 `parentToolCallId` 不带（嵌套工具调用 G-10 零对应，落地时补） | 存量约束，非本批范围 |
+| ~~D7~~ | ~~pi 的 `parentToolCallId` 不带~~ | **销号**（批 27/docs/38）：嵌套工具调用落地——钩子上下文/会话三事件/扩展五事件/RPC/web 全链携带 |
 | ~~D8~~ | ~~宿主 `ToolExecutionEnd` 不带 `args`~~ | **作废**（闭环评审发现）：设计 §1.5 的「上＋」系误读——pi `ToolExecutionEndEvent`（types.ts:1086-1097）是独立 interface、**本就没有 `args`**；扩展事件的 `args` 组件已删除，事件载荷与 pi 逐字段一致，无差可登记 |
 
 **新登记**：**B248**（provider 请求面三件套＋流事件，D-17/18/19/20 挂此）、**B249**（结果臂事件族）、**B250**（`session_start`/`session_shutdown` 发射点）——明细在 docs/04。~~B249/B250~~ **批 5 已销号**（docs/15，2026-10-20 闭环）。
@@ -465,7 +465,7 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 | E5-15 | `setSessionName` / `getSessionName` | `:1726` / `:1729` | ✅ ctx → `AgentSession.setSessionName`/`storedSessionName` | 1 | **对齐** | **批 26（docs/37 T4）**；裁决⑪ |
 | E5-16 | `setLabel` | `:1732` | ✅ ctx → `AgentSession.setLabel`＋未寻抛错文案修真 | 1 | **对齐** | **批 26（docs/37 T4）**；裁决⑦ |
 | E5-17 | `exec` | `:1735` | ✅ `ExtensionExec`（pi exec.ts 逐字语义） | 2 | **对齐** | **批 26（docs/37 T6）**；窄差 D154 |
-| E5-18 | `getActiveTools`/`getAllTools`/`setActiveTools` | `:1738`/`:1741`/`:1750` | ✅ `AgentSession` 三件套＋`ExtensionContext` 面 | 2 | **对齐** | 批 16 T2（agent-session.ts:1483-1531 对位；未知名静默忽略/注册即激活臂/执行查找面接活跃集修真）；窄差 D89（无 defaultActive 闸）/D91（ToolInfo 窄化投影） |
+| E5-18 | `getActiveTools`/`getAllTools`/`setActiveTools` | `:1738`/`:1741`/`:1750` | ✅ `AgentSession` 三件套＋`ExtensionContext` 面 | 2 | **对齐** | 批 16 T2（agent-session.ts:1483-1531 对位；未知名静默忽略/注册即激活臂/执行查找面接活跃集修真）；**批 27**：defaultActive 闸落地（D89 收窄）＋投影三字段（D91 收窄）；窄差 D164 |
 | E5-19 | `getSettings` | `:1744` | `ExtensionContext.java:32` `settings()` | 2 | 对齐 | — |
 | E5-20 | `getCommands` | `:1753` | ✅ `ExtensionContext.getCommands()` 三源 listing | 1 | **对齐** | **批 23（docs/34 T4）**：扩展编号名＋模板＋`skill:` 前缀（agent-session.ts:3361-3381 序） |
 | E5-21 | `setModel` | `:1763` | ✅ ctx → `AgentSession.setModel`＋auth 门（false 不抛） | 2 | **对齐** | **批 26（docs/37 T5）**：pi :3429-3432 逐字；auth 判据读活凭证链（裁决注记） |
@@ -473,8 +473,8 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 | E5-23 | `registerMcpServer` | `:1866` | ✅ `ExtensionContext.registerMcpServer`（`PerExtensionContext` 覆盖，三守卫逐字） | 2 | **对齐** | **批 23（docs/34 T1，B218 销号）**：校验失败/他扩展同名/namespace 撞名三抛（loader.ts:471-489 逐字）；注册表安家 `DefaultExtensionContext`；MCP 面见 map/07 #87 |
 | E5-24 | `unregisterMcpServer` | `:1869` | ✅ `ExtensionContext.unregisterMcpServer`（所有权门） | 1 | **对齐** | **批 23（docs/34 T1）**：`registry.unregister(name, extensionPath)` 对位 |
 | E5-25 | `getMcpServers` | `:1872` | ✅ `ExtensionContext.getMcpServers`（深拷贝 list） | 1 | **对齐** | **批 23（docs/34 T1）**：`registry.list()` 对位 |
-| E5-26 | `registerVirtualModel` | `:1883` | ❌ | 2 | **缺失** | 批 26 裁决①：挂账——虚拟模型整域随 B162 批（注册面无消费者＝死代码，B65 先例） |
-| E5-27 | `unregisterVirtualModel` | `:1886` | ❌ | 1 | **缺失** | 批 26 裁决①：同 E5-26 挂账 |
+| E5-26 | `registerVirtualModel` | `:1883` | ✅ `ExtensionContext.registerVirtualModel`＋`VirtualModelRegistry`＋路由钩全链 | 2 | **对齐** | **批 27（docs/38 T9–T11，B162 销号）**：loader.ts:500-514 对位（route(request,ctx) 适配）；pending 两阶段不移植（同线程先例）；判别式外在化（裁决①） |
+| E5-27 | `unregisterVirtualModel` | `:1886` | ✅ `ExtensionContext.unregisterVirtualModel` → 注册表删除（豁免集连动） | 1 | **对齐** | **批 27（docs/38 T11）**；窄差 D169（注销后判别失效直发——外在判别式固有代价） |
 | E5-28 | `events`（扩展间 EventBus） | `:1890` | ✅ `ExtensionChannelBus`＋失效退订三路径 | 1 | **对齐** | **批 26（docs/37 T7）**；窄差 D155 |
 | E5-29 | 热重载（`/reload` 重载 extensions/skills/prompts/themes + 激活新 defaultTools） | `agent-session.ts:3660`（modifier 合并 `:3662-3680`） | ✅ `SessionReload` 七步序 | 2 | **对齐** | 批 16 T5（:3660-3701 对位；窄差 D90 不重建扩展运行时/D93 可见面收窄/D94 provider 重置烘焙臂；themes 重扫随批 20） |
 | E5-30 | 扩展注册 CLI flag | `:1664` + `args.ts:186` | ✅ `ExtensionFlagBinder`＋`--help` 段 | 1 | **对齐** | 批 16 T1c–T1e（args.ts:247-271 三态＋agent-session-services.ts:82-128 绑定＋args.ts:273-283 help 面对位） |
@@ -484,10 +484,11 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 | E5-34 | 扩展来源追踪（`SourceInfo`） | `types.ts:1543/2055/2098` | ✅ `ExtensionSourceInfos` 四规则＋注册即盖 sourceInfo 章 | 1 | **对齐** | **批 23（docs/34 T4）**：getDefaultSourceInfoForPath 逐字（builtin:/`<inline:`⇒temporary、`<agentDir>/extensions`⇒user、`<cwd>/.pi-java/extensions`⇒project、包源经元数据携带 origin=package）；`CommandRegistry` 登记目注册即盖章（loader.ts:317 对位） |
 | E5-35 | `on()` 返回退订函数 | `types.ts:1569-1636`（41 条 `() => void`） | ✅ `ExtensionContext.on(spec, handler)`（批 4，docs/14 §3.2）→ `AutoCloseable` 退订：按实例移除、空表删键（loader.ts:272-288 逐字语义） | 2 | **对齐** | — |
 
-**E5 汇总（批 26 后）：对齐 31 / 缺失 3 / 存疑 1 / 合计 35 = 88.6%**；**Σ权重 58 / Σ(w×c) 51.0 / 加权 87.9%**
+**E5 汇总（批 27 后）：对齐 33 / 缺失 1 / 存疑 1 / 合计 35 = 94.3%**；**Σ权重 58 / Σ(w×c) 54.0 / 加权 93.1%**
 > 批 16（2026-10-23，docs/27）：**5 行翻动**——E5-7/E5-30 缺失→对齐（T1 flag 面）、E5-18 缺失→对齐（T2 激活门三件套）、E5-11 缺失→对齐（T4 registerToolRenderer，B204 销号）、E5-29 存疑→对齐（T5 /reload 七步序，B246 销号）；E8-7 注记行随翻（不计入分母）。
 > 批 23（2026-10-25，docs/34）：**5 行翻动 +5.5**——E5-23（+2.0）/E5-24/E5-25（+1.0×2）缺失→对齐（T1 扩展 MCP 三件，B218 销号）、E5-20 缺失→对齐（+1.0，T4 getCommands 三源序）、E5-34 存疑→对齐（+0.5，T4 `ExtensionSourceInfos` 四规则）。未加权计数逐行实算收平：批 17 两翻（E5-31 缺失→存疑、E5-32 存疑→对齐）当时未入汇总行（基数 11/21/3 滞后，实为 12/20/3），本批按行实算 17/16/2。
 > **批 26（2026-10-28，docs/37）：14 行翻动 +22.0**——E5-5/6/8/9/10/13/14/15/16/17/21/22/28 十三行缺失→对齐、E5-12 存疑→对齐（T1–T11 全落）；E5-26/27 裁决①挂账（收编 B162）；新窄差 D150–D159（docs/04 §4 批 26 段）；E5-31 维持存疑挂账、E5-33 维持 F 类。
+> **批 27（2026-10-28，docs/38）：2 行翻动 +3.0**——E5-26（+2.0）/E5-27（+1.0）缺失→对齐（B162 整域：tool-search＋virtual-models＋nested-tool-calls，B162 销号、D7 销号、D89/D91 收窄）；新窄差 D160–D171（docs/04 §4 批 27 段）；E5-31 维持存疑挂账、E5-33 维持 F 类。
 
 ### E6 包管理器（16）
 
@@ -542,11 +543,11 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 | G-5 | MCP 工具暴露（`codemode`/`deferred`/`direct`/`hidden`）+ 工具/资源接入模型 | `core/mcp-servers.ts`（346）、`extensions/mcp/tools.ts`、`resources.ts` | 2 | **对齐** | **明细见 map/07**：exposure ADT 与 `AgentTool` 适配全落；激活路径依赖 B161/B162（B203） |
 | G-6 | codemode 沙箱运行时（quickjs-wasi host/worker/protocol/prelude） | `packages/codemode`（2,597）＋ `extensions/codemode/execute.ts`（733） | 2 | **缺失** | builtin 扩展；R5 面外增量不展开 |
 | G-7 | codemode 工具（执行 JS、描述/inlineBudget、`mode: on\|only`、renderer） | `extensions/codemode/tool.ts`（420）、`renderer.ts`（150）；`settings-schema.ts:154-167` | 2 | **缺失** | |
-| G-8 | `tool_search` 工具（BM25 排序 + 按需加载 deferred 工具） | `extensions/tool-search/`（265 行） | 2 | **缺失** | builtin 扩展 |
-| G-9 | 虚拟模型（registry + route + 状态条目） | `core/virtual-models.ts`（238 行）＋ `ExtensionAPI.registerVirtualModel:1883` | 2 | **缺失** | 配置后走 |
-| G-10 | 嵌套工具调用（`ctx.executeTool()`、`nestedCalls`、大小上限） | `core/nested-tool-calls.ts`（263 行） | 1 | **缺失** | 内部支撑 |
+| G-8 | `tool_search` 工具（BM25 排序 + 按需加载 deferred 工具） | `extensions/tool-search/`（265 行） | 2 | **对齐** | **批 27（docs/38，B162 销号）**：`toolsearch` 包逐字（tokenizer/BM25/文档构建/工具定义）＋`builtin:tool-search` 装配＋MCP ensureDiscoveryActive deferred 臂 |
+| G-9 | 虚拟模型（registry + route + 状态条目） | `core/virtual-models.ts`（238 行）＋ `ExtensionAPI.registerVirtualModel:1883` | 2 | **对齐** | **批 27（docs/38）**：`core/virtual/` 包（注册表/路由/分支态条目）＋扩展面两件；窄差 D160/D163/D169–D171 |
+| G-10 | 嵌套工具调用（`ctx.executeTool()`、`nestedCalls`、大小上限） | `core/nested-tool-calls.ts`（263 行） | 1 | **对齐** | **批 27（docs/38）**：`NestedCallRecorder`＋`NestedToolCallRunner`＋宿主缝＋扩展面；窄差 D161/D162/D166–D168 |
 
-**G 汇总：对齐 3 / 缺失 5 / 存疑 2 / 合计 10 = 30.0%**；**Σ权重 18 / Σ(w×c) 7.0 / 加权 38.9%**
+**G 汇总（批 27 后）：对齐 6 / 缺失 2 / 存疑 2 / 合计 10 = 60.0%**；**Σ权重 18 / Σ(w×c) 12.0 / 加权 66.7%**
 
 > **模块归属**：MCP 面的 Java 代码主在**新模块 `pi-java-mcp`**（主源 10,853 行）；工具与资源的 `AgentTool` 适配在本模块 `extension/mcp`（1,762 行）—— `AgentTool` 在 agent-core，而 `pi-java-mcp` 看不见它（`ai ← mcp`）。映射裁决与 B205 见 map/07。
 > 部分落地的行记「存疑」（形状/一半存在），**不拆行**（拆行会改权重层归属）。
@@ -625,7 +626,7 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 | ├ E5 扩展 API | 31 | 3 | 1 | 35 | 88.6% |
 | ├ E6 包管理器 | 15 | 0 | 1 | 16 | 93.8% |
 | └ E7 RPC 面 | 6 | 0 | 0 | 6 | **100%**（批 20） |
-| G. 主流新增子系统（MCP/codemode/…） | 3 | 5 | 2 | 10 | 30.0% |
+| G. 主流新增子系统（MCP/codemode/…） | 6 | 2 | 2 | 10 | 60.0% |
 | F. 整块缺失（子系统） | 0 | 6 | 0 | 6 | 0% |
 | **合计（模块，不含 E8）** | **185** | **66** | **37** | **288** | **64.2%**（批 20：E7 域 4 行翻对齐） |
 | E8. 边缘/面外子系统（**与 E3/C/G 重叠，不计入**） | 4 | 2 | 0 | 6 | 66.7% |
@@ -637,7 +638,7 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 
 **java 独有（不计入分母）**：`--base-url`、`--port`、`--debug`、`--trace-payloads`（CLI）；`/help`、`/create-skill`（slash）；`auth oauth-login`、`auth profile…`（子命令）。
 
-**最大三处差距**（批 18 后）：① ~~E6 包管理器~~（批 18 后 resolve 内核已对齐 54.8%，余 CLI/持久化面随批 19）；② **扩展系统长尾**——MCP 面主体已落（明细见 map/07），但 **codemode（3,957 行）＋ tool-search/virtual-models/nested（766 行）共 4,723 行仍为 0**，且 MCP 的 builtin 工厂接线卡在 D/E5 扩展面（B221）；③ **D 域剩余 24 个未对齐事件**（provider 请求面 B248、结果臂族 B249、生命周期 B250、tree 两事件 B245、D′ UI 注入面）。
+**最大三处差距**（批 27 后）：① ~~E6 包管理器~~（批 19 闭环，满分域）；② **扩展系统长尾**——MCP 面已落（map/07 93.4%），tool-search/virtual-models/nested 批 27 落地，余 **codemode（3,957 行，B161）** 与 D′ UI 注入面余量；③ ~~D 域剩余~~（批 23 满分）；当前余量主在 E5-31（扩展 UI TUI 臂挂账）／E5-33（examples，F 类）／E2 窄差登记项。
 **其余长期缺口**：④ `cache_warming` 设置＋`/bug`＋RPC `"handled"` disposition（已分别计入 E2/C/E7；`defaultTools` 与 `--tools` pattern/modifier 批 1 已对齐）。
 
 ---
@@ -661,14 +662,14 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 | E5. 扩展 API 面 | 58 | 51.0 | 87.9% | 88.6% |
 | E6. 包管理器 | 31 | 31.0 | 100% | 100% |
 | E7. RPC 面 | 12 | 12.0 | 100% | 100% |
-| G. 主流新增子系统 | 18 | 7.0 | 38.9% | 30.0% |
+| G. 主流新增子系统 | 18 | 12.0 | 66.7% | 60.0% |
 | F. 整块缺失（子系统） | 13 | 0.0 | 0% | 0% |
-| **模块合计（不含 E8）** | **494** | **442.5** | **89.6%** | **82.7%** |
+| **模块合计（不含 E8）** | **494** | **450.5** | **91.2%** | **84.4%** |
 | E8. 边缘/面外子系统（与 E3/C/G 重叠，不计入） | 7 | 5.0 | 71.4% | 66.7% |
 
-**模块合计**：Σ权重 494 ／ Σ(w×c) 442.5 ／ **加权完成度 = 442.5/494 ≈ 89.6%**（未加权 239.0/289 ≈ 82.7%；批 26 后值——按 Δ 续列：批 23 的 420.5＋本批 22.0）。
+**模块合计**：Σ权重 494 ／ Σ(w×c) 450.5 ／ **加权完成度 = 450.5/494 ≈ 91.2%**（未加权 244.0/289 ≈ 84.4%；批 27 后值——按 Δ 续列：批 26 的 442.5＋本批 8.0〔E5-26/27 +3.0、G-8/9/10 +5.0〕）。
 
-**去重口径**（F 域有 2 行与 E4/E6 重叠＋G-1..G-5 归 map/07）：Σ权重 **485** ／ Σ(w×c) **438.0** ／ **加权完成度 = 438.0/485 ≈ 90.3%**（未加权 239.0/289 ≈ 82.7%）。
+**去重口径**（F 域有 2 行与 E4/E6 重叠＋G-1..G-5 归 map/07）：Σ权重 **485** ／ Σ(w×c) **446.0** ／ **加权完成度 = 446.0/485 ≈ 92.0%**（未加权 243.0/289 ≈ 84.1%）。
 > 口径注记（批 14）：A/E3 域行与未加权汇总表已逐行实算（含往批滞后收平：E2 对齐 44→46、E3 段汇总 27.5→28.5 的批 10 滞后）；模块加权合计按 Δ 续列，与逐行域和的 ±1.5 存量口径差随下次全量重测一并收平（批 4 同例）。
 > 批 15（2026-10-23，docs/26）：C 域 7 行翻动（+7.0：#2/#4/#6/#9/#12/#13/#21——T8–T12＋B79 销号）；E8-2/E8-3 注记行随翻（不计入分母）；E8-1 旧汇总漏算一并更正。
 > 批 16（2026-10-23，docs/27）：**9.5 点翻动**——E5-7/E5-30（+1.0×2）＋E5-11（+1.0）＋E5-18（+2.0）＋E5-29（存疑→对齐 +1.0）＋A-43（+1.0）＋C-23（存疑→对齐 +0.5）＋D#36（+2.0）；D#11 不动（裁决⑤随 E5-23 批）；E8-7 注记行随翻（不计入分母）。B204/B246 销号；B221 收编 ②④⑤。
@@ -680,6 +681,7 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 > 批 22（2026-10-25，docs/33）：**2 行翻动**——E6-10/B#4 存疑→对齐（+1.0×2，自更新终裁裁决①：恒不可用臂＝pi 未知形态臂终局）；**E6/B 两域同批满分**（满分域第十一、十二）。map/05 W15 缺失→对齐（+1.0，web 渐进会话列表）＋R29 出分母（终裁不做，分母 245→244）。
 > 批 23（2026-10-25，docs/34）：**7 行翻动 +9.5**——D#1（+2.0，T3 project_trust 全链）＋D#11（+2.0，T2 mcp_servers_change）＋E5-23（+2.0）/E5-24/E5-25（+1.0×2）/E5-20（+1.0）缺失→对齐（T1/T4）＋E5-34 存疑→对齐（+0.5）；**D 域 79.0→83.0/83＝100%（满分域第十三，缺失清零）**、E5 域 23.5→**29.0/58＝50.0%**；**B218 销号**＋B221 收编 ⑥（余 ① 挂批 24 候选）＋批 3 窄差 D5 销号；窄差 D134–D137。map/07 #87（+1.0）＋#81/#84（批 16 已落本批回填 +3.0——账面滞后收平）。
 > **批 26（2026-10-28，docs/37）：14 行翻动 +22.0**（全在 E5 域——E5-5/6/8/9/10/13/14/15/16/17/21/22/28 缺失→对齐、E5-12 存疑→对齐）；E5 域 29.0→**51.0/58 ≈ 87.9%**；E5-26/27 裁决①挂账收编 B162；D12/D21 注记更新（部分落地）；窄差 D150–D159。map/05 R6 缺失→对齐（+1.0，markdown transformer 消费缝随 E5-9 落地）。
+> **批 27（2026-10-28，docs/38）：5 行翻动 +8.0**——E5-26（+2.0）/E5-27（+1.0）缺失→对齐＋G-8/G-9（+2.0×2）/G-10（+1.0）缺失→对齐（B162 整域三块的 E5 面与 G 面同批收）；G 域 7.0→**12.0/18 ≈ 66.7%**（余 G-6/G-7 codemode 缺失挂 B161）；**B162 销号、D7 销号、D89/D91 收窄**；新窄差 D160–D171（docs/04 §4 批 27 段）。
 
 **扩展系统单独口径**（D + D′ + E5）：Σ权重 157 ／ Σ(w×c) 135.0 ／ **加权 86.0%**（未加权 72/85 ≈ 84.7%）。
 
