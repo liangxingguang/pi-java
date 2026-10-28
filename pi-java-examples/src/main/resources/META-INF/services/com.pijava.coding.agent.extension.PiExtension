@@ -1,0 +1,16 @@
+com.pijava.examples.HelloExtension
+com.pijava.examples.StructuredOutputExtension
+com.pijava.examples.DynamicToolsExtension
+com.pijava.examples.PermissionGateExtension
+com.pijava.examples.ProtectedPathsExtension
+com.pijava.examples.ConfirmDestructiveExtension
+com.pijava.examples.DirtyRepoGuardExtension
+com.pijava.examples.ProjectTrustExtension
+com.pijava.examples.InputTransformExtension
+com.pijava.examples.InputTransformStreamingExtension
+com.pijava.examples.InlineBashExtension
+com.pijava.examples.PirateExtension
+com.pijava.examples.ClaudeRulesExtension
+com.pijava.examples.PromptCustomizerExtension
+com.pijava.examples.EventBusExtension
+com.pijava.examples.ProviderPayloadExtension
