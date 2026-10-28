@@ -112,12 +112,31 @@ public final class NestedToolCallRunner {
         boolean exclusive = !scope.holdsQueue()
             && (host.isSequential()
                 || (tool != null && tool.executionMode() instanceof ExecutionMode.Sequential));
+        // spotbugs UL 钉：条件 lock＋finally 条件 unlock 的形会被钉——独占臂走
+        // 独立的 lock→try→finally（无条件 unlock）路径，两路径共享 executeHeld。
         if (exclusive) {
             queueLock.lock();
+            try {
+                return executeHeld(toolCall, scope, true, callerId, name, args, options,
+                    record);
+            } finally {
+                queueLock.unlock();
+            }
         }
-        // :214-218：子 scope 共享 recorder
+        return executeHeld(toolCall, scope, scope.holdsQueue(), callerId, name, args,
+            options, record);
+    }
+
+    /**
+     * pi :214-249 的持锁段：子 scope 登记（共享 recorder；holdsQueue 逐字
+     * {@code scope.holdsQueue || exclusive}）→ runToolCall → finally 摘子 scope →
+     * finish/usage/end 事件。
+     */
+    private PiLoop.ToolOutcome executeHeld(PiLoop.ToolCall toolCall, CallScope scope,
+            boolean holdsQueue, String callerId, String name, Map<String, Object> args,
+            Options options, com.pijava.ai.message.NestedToolCallRecord record) {
         scopes.put(toolCall.toolCallId(), new CallScope(scope.recorder(),
-            new AtomicInteger(1), scope.holdsQueue() || exclusive));
+            new AtomicInteger(1), holdsQueue));
         PiLoop.ToolOutcome outcome;
         try {
             // :221-231
@@ -132,9 +151,6 @@ public final class NestedToolCallRunner {
         } finally {
             // :232-235
             scopes.remove(toolCall.toolCallId());
-            if (exclusive) {
-                queueLock.unlock();
-            }
         }
         // :237
         scope.recorder().finish(record, outcome.isError(), textOf(outcome.result()));
