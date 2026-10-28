@@ -388,6 +388,30 @@ public interface ExtensionContext {
     }
 
     /**
+     * 批 28（docs/40 T2，裁决③）：pi {@code ExtensionContext.cwd}（types.ts:333-334）
+     * ——当前工作目录（宿主会话的 cwd）。无宿主（--help 轻量道）⇒ 抛
+     * {@link IllegalStateException}（requireToolControl 同文先例——<b>不</b>落
+     * {@code process.cwd()}，批 24 教训：污染源仓）。
+     */
+    default String cwd() {
+        throw new IllegalStateException(
+            "tool control requires a bound session; none is available yet");
+    }
+
+    /**
+     * 批 28（docs/40 T2，裁决③）：pi {@code ExtensionContext.sessionManager}
+     * （types.ts:335）——会话只读面（{@link ExtensionSessionView} ≙ pi
+     * {@code ReadonlySessionManager}）。视图恒在；无宿主时其成员调用抛
+     * {@link IllegalStateException}（同 {@link #cwd()} 纪律）。
+     */
+    default ExtensionSessionView sessionManager() {
+        return () -> {
+            throw new IllegalStateException(
+                "tool control requires a bound session; none is available yet");
+        };
+    }
+
+    /**
      * 批 27（B162/T4）：pi {@code ExtensionToolContext.executeTool}
      * （types.ts:383-395；runner.ts:957-988）对位——工具执行中调别的工具
      * （嵌套调用）。java 无逐调用上下文：调用方把<b>自己这次执行的</b>

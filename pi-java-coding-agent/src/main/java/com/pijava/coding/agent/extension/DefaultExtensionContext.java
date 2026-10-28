@@ -103,6 +103,13 @@ public final class DefaultExtensionContext implements ExtensionContext {
     /** 批 27（B162 裁决④）：pi {@code _toolDefinitions} 对位——每会话一份随上下文生死。 */
     private final com.pijava.coding.agent.core.ToolDefinitions toolDefinitions =
         new com.pijava.coding.agent.core.ToolDefinitions();
+    /**
+     * 批 28（docs/40 T2，裁决③）：pi {@code ReadonlySessionManager} 对位视图——
+     * 惰性委托宿主会话（无宿主 ⇒ requireToolControl 同文抛错；--no-session 走
+     * harness 转录兜底，F1 取证）。
+     */
+    private final ExtensionSessionView sessionView =
+        () -> java.util.List.copyOf(requireToolControl().accumulatedEntries());
 
     /** @param services 会话服务（工具/命令/Provider/settings）
      *  @param skills   技能注册表（harness 的 skillManager）
@@ -337,6 +344,18 @@ public final class DefaultExtensionContext implements ExtensionContext {
     @Override
     public com.pijava.coding.agent.core.ToolDefinitions toolDefinitions() {
         return toolDefinitions;
+    }
+
+    /** 批 28（docs/40 T2）：pi {@code ExtensionContext.cwd}——宿主会话 cwd。 */
+    @Override
+    public String cwd() {
+        return requireToolControl().cwd();
+    }
+
+    /** 批 28（docs/40 T2）：pi {@code ExtensionContext.sessionManager}——惰性只读视图。 */
+    @Override
+    public ExtensionSessionView sessionManager() {
+        return sessionView;
     }
 
     /**
@@ -630,6 +649,16 @@ public final class DefaultExtensionContext implements ExtensionContext {
         @Override
         public com.pijava.coding.agent.core.ToolDefinitions toolDefinitions() {
             return DefaultExtensionContext.this.toolDefinitions();
+        }
+
+        @Override
+        public String cwd() {
+            return DefaultExtensionContext.this.cwd();
+        }
+
+        @Override
+        public ExtensionSessionView sessionManager() {
+            return DefaultExtensionContext.this.sessionManager();
         }
 
         @Override
