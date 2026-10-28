@@ -105,7 +105,7 @@ final class McpExtensionState {
         return configuredExposures(entry).contains(McpExposure.DIRECT);
     }
 
-    /** 有工具经 codemode/tool_search 到达（java：只进提示段，永不可达——裁决⑥）。 */
+    /** 有工具经 codemode/tool_search 到达（批 27：deferred 经 tool_search 可达）。 */
     static boolean hasIndirectTools(McpServerEntry entry) {
         var exposures = configuredExposures(entry);
         return exposures.contains(McpExposure.CODEMODE) || exposures.contains(McpExposure.DEFERRED);

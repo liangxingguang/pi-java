@@ -256,27 +256,61 @@ final class McpLifecycle {
         ctx.ui().notify(body.toString(), NotifyType.WARNING);
     }
 
-    // ── 不可达警告（裁决⑥：pi ensureDiscoveryActive :500-534 的 java 替身） ──
+    // ── ensureDiscoveryActive（批 27 真化：pi :499-529 的 deferred 臂逐字） ──
 
     /**
-     * java 无 codemode/tool_search ⇒ 间接 exposure 的工具永不可达（pi 的
-     * 「neither is active」警告在 java 是必然态）。检测到即一次性警告
-     * （每 session_start 复位）；文案 java 化（窄差 D-new4）。
+     * pi {@code ensureDiscoveryActive}（index.ts:499-529）：任一启用服务器配置含
+     * {@code deferred} ⇒ 自动激活 tool_search（不受 autoEnableCodemode 约束——该开关
+     * 只管 codemode 臂；java 无 codemode 工具〔B161 R5 面外〕，pi 的
+     * {@code hasCodemode} 恒 false 对位）。从<b>配置</b>判断而非等连接（:501-502
+     * 注释逐字）；同名第三方工具不顶替（{@code isToolSearchTool} 的 schema 引用
+     * 判等，经注册表 {@code inputSchema()} 同锚）。仍不可达才一次性警告
+     * （pi :521-528；文案逐字，[模型可见]）。
      */
-    void warnUnreachableOnce(ExtensionContext ctx) {
+    void ensureDiscoveryActive(ExtensionContext ctx) {
+        var exposures = new java.util.LinkedHashSet<McpExposure>();
+        for (var server : state.servers) {
+            if (McpExtensionState.isEnabled(server)) {
+                exposures.addAll(McpExtensionState.configuredExposures(server.entry));
+            }
+        }
+        var needsToolSearch = exposures.contains(McpExposure.DEFERRED);
+        if (!exposures.contains(McpExposure.CODEMODE) && !needsToolSearch) {
+            return;
+        }
+        // pi :507-508：Other extensions' tools of the same names cannot reach MCP tools
+        var registered = ctx.tools().get(
+            com.pijava.coding.agent.extension.toolsearch.ToolSearchTool.NAME);
+        var hasToolSearch = registered != null && registered.inputSchema()
+            == com.pijava.coding.agent.extension.toolsearch.ToolSearchTool.SCHEMA;
+        // 无宿主会话的轻量路径（测试 rig／--help 轻量道）激活面不可得——跳过激活臂，
+        // 按「不可达」落警告（pi 恒在会话内，无此臂；java 方言，内部）。
+        java.util.List<String> active;
+        try {
+            active = ctx.getActiveTools();
+        } catch (IllegalStateException | UnsupportedOperationException noHost) {
+            active = null;
+        }
+        var reachable = active == null
+            ? new java.util.ArrayList<String>()
+            : new java.util.ArrayList<>(active);
+        if (active != null && needsToolSearch && hasToolSearch
+                && !active.contains(com.pijava.coding.agent.extension.toolsearch.ToolSearchTool.NAME)) {
+            reachable.add(com.pijava.coding.agent.extension.toolsearch.ToolSearchTool.NAME);
+            ctx.setActiveTools(reachable);
+        }
+        // pi :521-524：可达即返（codemode 臂恒 false——无 codemode 工具）
+        if (hasToolSearch && reachable.contains(
+                com.pijava.coding.agent.extension.toolsearch.ToolSearchTool.NAME)) {
+            return;
+        }
         if (state.warnedUnreachable) {
             return;
         }
-        var indirect = state.servers.stream().anyMatch(server ->
-            McpExtensionState.isEnabled(server)
-                && McpExtensionState.hasIndirectTools(server.entry));
-        if (!indirect) {
-            return;
-        }
         state.warnedUnreachable = true;
-        ctx.ui().notify("MCP servers with \"codemode\"/\"deferred\" exposure are unreachable:"
-            + " pi-java has no codemode or tool_search tool; set \"exposure\": \"direct\""
-            + " (per server or per tool) to declare their tools to the model.", NotifyType.WARNING);
+        // pi :525-528 逐字（reason 段只盖 codemode/autoEnableCodemode 臂 ⇒ java 恒空）
+        ctx.ui().notify("MCP tools are only reachable from the codemode or tool_search tool,"
+            + " but neither is active; they cannot be called.", NotifyType.WARNING);
     }
 
     // ── 进程外登录拾取（pi :536-560） ──
@@ -326,7 +360,7 @@ final class McpLifecycle {
                 // pi Promise.allSettled——单服务器失败不挡其余
             }
         }
-        warnUnreachableOnce(ctx);
+        ensureDiscoveryActive(ctx);
     }
 
     boolean hasPendingSignIns() {

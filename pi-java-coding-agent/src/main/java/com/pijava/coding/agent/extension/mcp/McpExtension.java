@@ -39,9 +39,10 @@ import com.pijava.mcp.runtime.ConfigValueResolver;
  * {@code mcp_servers} 提示段；tool_call 就绪等待；turn_start 拾取进程外登录；
  * mcp_servers_change 热插拔；session_shutdown 收敛。</p>
  *
- * <p>R5 面外（不做）：codemode/tool_search 两臂（tool_call 等待的
- * scriptNeedsServer 臂、ensureDiscoveryActive 本体——#93 权重 0；不可达一次性
- * 警告由 {@link McpLifecycle#warnUnreachableOnce} 替身，裁决⑥）。</p>
+ * <p>批 27（docs/38 T8）：tool_search 臂落地——ensureDiscoveryActive 真化
+ * （deferred 服务器 ⇒ 自动激活 tool_search）＋tool_call 等待的 tool_search 臂。
+ * R5 面外（仍不做）：codemode 臂（tool_call 等待的 scriptNeedsServer 臂、
+ * ensureDiscoveryActive 的 codemode 激活臂——B161，java 无 codemode 工具）。</p>
  */
 public final class McpExtension implements PiExtension {
 
@@ -193,8 +194,10 @@ public final class McpExtension implements PiExtension {
         }
         state.servers.addAll(registered.servers);
         state.emitChange();
-        // 裁决⑥：pi ensureDiscoveryActive 的 java 替身（codemode/tool_search R5 不做）
-        lifecycle.warnUnreachableOnce(fired);
+        // 批 27（docs/38 T8 裁决⑥）：pi ensureDiscoveryActive 的 deferred 臂真化
+        //（:499-529 逐字——配置含 deferred ⇒ 激活 tool_search；codemode 臂维持
+        // R5 面外替身：无 codemode 工具，只余不可达警告）。
+        lifecycle.ensureDiscoveryActive(fired);
         var enabled = state.servers.stream().filter(McpExtensionState::isEnabled).toList();
         if (enabled.isEmpty()) {
             lifecycle.reportProblems(fired);
@@ -277,13 +280,14 @@ public final class McpExtension implements PiExtension {
         return null;
     }
 
-    // ── tool_call（pi :1187-1207；codemode/tool_search 两臂 R5 不移植） ──
+    // ── tool_call（pi :1187-1207；批 27：tool_search 臂落地，codemode 臂 R5 面外） ──
 
     private com.pijava.coding.agent.extension.event.ExtensionResults.ToolCallEventResult
             onToolCall(ToolCallEvent event, ExtensionContext fired) {
         // pi 用 pi.getAllTools().find(name)（注册表存在性）——java 直查注册表
         //（同效；getAllTools 的会话缝在 --help 轻量道等无宿主路径会抛）
-        if (ctx.tools().get(event.toolName()) == null) {
+        var called = ctx.tools().get(event.toolName());
+        if (called == null) {
             return null;
         }
         var readyServers = state.servers.stream()
@@ -293,7 +297,14 @@ public final class McpExtension implements PiExtension {
             return null;
         }
         List<McpServerHandle> waiting;
-        if (RESOURCE_TOOL_NAMES.contains(event.toolName())) {
+        // 批 27（docs/38 T8）：pi :1199 的 tool_search 臂——搜索前等全部 enabled
+        // 服务器就绪（工具注册完整再搜）。同名第三方不算（schema 引用判等，
+        // pi isToolSearchTool :168-171 对位——经注册表的 inputSchema() 同锚）。
+        if (RESOURCE_TOOL_NAMES.contains(event.toolName())
+                || (com.pijava.coding.agent.extension.toolsearch.ToolSearchTool.NAME
+                        .equals(event.toolName())
+                    && called.inputSchema()
+                        == com.pijava.coding.agent.extension.toolsearch.ToolSearchTool.SCHEMA)) {
             waiting = readyServers;
         } else {
             var owner = registrar.ownerServerOf(event.toolName());
@@ -346,7 +357,7 @@ public final class McpExtension implements PiExtension {
             .toList();
         state.servers.addAll(added);
         state.emitChange();
-        lifecycle.warnUnreachableOnce(fired);
+        lifecycle.ensureDiscoveryActive(fired);
         for (var server : removed) {
             if (server.connection != null) {
                 server.connection.close().join();

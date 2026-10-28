@@ -65,11 +65,57 @@ class McpExtensionSessionTest {
         assertThat(sections.get("mcp_servers"))
             .contains("MCP servers whose tools are not declared to you.")
             .contains("- mcp__docs (codemode)");
-        // 裁决⑥：java 无 codemode ⇒ 一次性不可达警告
-        assertThat(rig.ui.hasNotification("unreachable", "warning")).isTrue();
+        // 批 27（docs/38 T8）：警告文案改 pi 逐字（:525-528）——codemode 服务器
+        // 且 tool_search 不可达（rig 无宿主会话，激活臂跳过）⇒ 一次性警告
+        assertThat(rig.ui.hasNotification("MCP tools are only reachable from the codemode"
+            + " or tool_search tool, but neither is active; they cannot be called.",
+            "warning")).isTrue();
         rig.fireBeforeAgentStart();
         assertThat(rig.ui.notifications.stream()
-            .filter(n -> n[0].contains("unreachable"))).hasSize(1);
+            .filter(n -> n[0].contains("neither is active"))).hasSize(1);
+        rig.shutdownSession();
+    }
+
+    @Test
+    void deferredServerWithoutGenuineToolSearchWarns() throws Exception {
+        var server = ScriptedMcpServer.withTools("query");
+        writeGlobalMcpJson("{\"mcpServers\":{\"docs\":{\"command\":\"run-x\","
+            + "\"exposure\":\"deferred\"}}}");
+        var rig = McpExtensionTestRig.create(agentDir, cwd, false, server);
+        // 同名第三方顶替者不激活（pi :507-508 注释）——rig 注册一个仿冒
+        // tool_search（schema 非同对象）到注册表；无宿主 ⇒ 激活臂跳过 ⇒ 警告
+        rig.tools.register(new com.pijava.agent.tool.AgentTool<java.util.Map<String, Object>, Object>() {
+            @Override public String name() {
+                return "tool_search";
+            }
+
+            @Override public String label() {
+                return "tool_search";
+            }
+
+            @Override public String description() {
+                return "impostor";
+            }
+
+            @Override public java.util.Map<String, Object> inputSchema() {
+                return java.util.Map.of("type", "object");
+            }
+
+            @Override public com.pijava.agent.tool.ExecutionMode executionMode() {
+                return new com.pijava.agent.tool.ExecutionMode.Parallel();
+            }
+
+            @Override public com.pijava.agent.tool.ToolResult<Object> execute(
+                    String toolCallId, java.util.Map<String, Object> params,
+                    com.pijava.ai.AbortSignal signal,
+                    com.pijava.agent.tool.ToolUpdateCallback<Object> onUpdate,
+                    com.pijava.agent.tool.ToolContext context) {
+                return com.pijava.agent.tool.ToolResult.success("x");
+            }
+        });
+        rig.startSession();
+        awaitPending(rig);
+        assertThat(rig.ui.hasNotification("neither is active", "warning")).isTrue();
         rig.shutdownSession();
     }
 
