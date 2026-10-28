@@ -339,6 +339,32 @@ public final class DefaultExtensionContext implements ExtensionContext {
         return toolDefinitions;
     }
 
+    /**
+     * 批 27（B162/T4）：嵌套调用——路由到宿主会话（pi 的 executeToolFn 对位）；
+     * 无会话 ⇒ 接口默认臂（不可用错文）。
+     */
+    @Override
+    public com.pijava.agent.harness.PiLoop.ToolOutcome executeTool(
+            String callerToolCallId, com.pijava.ai.AbortSignal signal, String name,
+            Map<String, Object> args, java.util.function.Consumer<Object> onUpdate) {
+        var supplier = toolControl;
+        var session = supplier == null ? null : supplier.get();
+        if (session == null) {
+            return ExtensionContext.super.executeTool(callerToolCallId, signal, name, args,
+                onUpdate);
+        }
+        return session.executeNestedToolCall(callerToolCallId, name, args,
+            new com.pijava.coding.agent.core.NestedToolCallRunner.Options(
+                signal, onUpdate));
+    }
+
+    @Override
+    public java.util.List<com.pijava.agent.tool.AgentTool<?, ?>> callableTools() {
+        var supplier = toolControl;
+        var session = supplier == null ? null : supplier.get();
+        return session == null ? java.util.List.of() : session.callableTools();
+    }
+
     @Override
     public void registerToolRenderer(ToolRendererResolver resolver) {
         toolRenderers.register(resolver);
@@ -573,6 +599,19 @@ public final class DefaultExtensionContext implements ExtensionContext {
         @Override
         public com.pijava.coding.agent.core.ToolDefinitions toolDefinitions() {
             return DefaultExtensionContext.this.toolDefinitions();
+        }
+
+        @Override
+        public com.pijava.agent.harness.PiLoop.ToolOutcome executeTool(
+                String callerToolCallId, com.pijava.ai.AbortSignal signal, String name,
+                Map<String, Object> args, java.util.function.Consumer<Object> onUpdate) {
+            return DefaultExtensionContext.this.executeTool(callerToolCallId, signal, name,
+                args, onUpdate);
+        }
+
+        @Override
+        public java.util.List<com.pijava.agent.tool.AgentTool<?, ?>> callableTools() {
+            return DefaultExtensionContext.this.callableTools();
         }
 
         @Override

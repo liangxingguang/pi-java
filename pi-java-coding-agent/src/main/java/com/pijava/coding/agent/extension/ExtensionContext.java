@@ -360,4 +360,43 @@ public interface ExtensionContext {
     default com.pijava.coding.agent.core.ToolDefinitions toolDefinitions() {
         throw new UnsupportedOperationException("toolDefinitions not available in this context");
     }
+
+    /**
+     * 批 27（B162/T4）：pi {@code ExtensionToolContext.tools}（types.ts:383-395）
+     * 对位——{@code ctx.executeTool()} 的可调用工具集（活跃的 direct 工具＋全部
+     * 已注册 codemode/deferred 工具）。java 无逐调用上下文对象，本方法挂在会话
+     * 级上下文上、路由到宿主会话。
+     */
+    default java.util.List<com.pijava.agent.tool.AgentTool<?, ?>> callableTools() {
+        return java.util.List.of();
+    }
+
+    /**
+     * 批 27（B162/T4）：pi {@code ExtensionToolContext.executeTool}
+     * （types.ts:383-395；runner.ts:957-988）对位——工具执行中调别的工具
+     * （嵌套调用）。java 无逐调用上下文：调用方把<b>自己这次执行的</b>
+     * {@code toolCallId} 与 {@code signal}（{@code AgentTool.execute} 的入参）
+     * 显式传入；嵌套 id 为 {@code <callerToolCallId>/<n>}，事件带
+     * {@code parentToolCallId}，结果不进 transcript，有界记录落在父调用的
+     * tool result 的 {@code nestedCalls} 上。
+     *
+     * <p><b>永不因工具失败抛异常</b>——失败以 {@code isError=true} 的结果返回。
+     * 无宿主会话时返回 isError 结果（文案逐字 "Nested tool calls are not
+     * available in this context"，id 为 {@code <callerToolCallId>/0}，
+     * pi runner.ts:971-976 对位）。</p>
+     *
+     * @param onUpdate 部分结果回调（可为 null）
+     */
+    default com.pijava.agent.harness.PiLoop.ToolOutcome executeTool(
+            String callerToolCallId, com.pijava.ai.AbortSignal signal, String name,
+            Map<String, Object> args, java.util.function.Consumer<Object> onUpdate) {
+        var result = new com.pijava.agent.tool.ToolResult<>(
+            java.util.List.of(new com.pijava.ai.message.ContentBlock.TextContent(
+                "Nested tool calls are not available in this context")),
+            Map.of(), null, false, java.util.List.of());
+        return new com.pijava.agent.harness.PiLoop.ToolOutcome(
+            new com.pijava.ai.message.Message.ToolResultMessage(
+                callerToolCallId + "/0", name, result.content(), true),
+            result, true);
+    }
 }

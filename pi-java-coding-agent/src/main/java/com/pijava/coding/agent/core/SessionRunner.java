@@ -319,6 +319,9 @@ final class SessionRunner {
                         e.durationMs()));
                 case PiLoop.Event.AgentEnd end -> {
                     flush(owner, laneName);
+                    // 批 27（docs/38 T3）：pi :1113-1115——agent_end 清空嵌套调用
+                    // 记录器（防跨 run 泄漏）。
+                    owner.clearNestedToolCalls();
                     var willRetry = willRetryAfter(owner, end.messages());
                     LOG.info("[session] AgentEnd emit (pass): newMessages={} willRetry={}",
                         end.messages().size(), willRetry);

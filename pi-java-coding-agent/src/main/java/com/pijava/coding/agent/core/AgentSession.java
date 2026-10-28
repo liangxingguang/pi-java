@@ -58,6 +58,7 @@ import org.slf4j.LoggerFactory;
 import com.pijava.agent.tool.ShellResult;
 import com.pijava.ai.AbortSignal;
 import com.pijava.ai.message.ContentBlock;
+import com.pijava.ai.message.Message;
 import com.pijava.ai.model.DefaultModelResolver;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.provider.ProviderRegistry;
@@ -1367,6 +1368,137 @@ public final class AgentSession implements AutoCloseable {
                         && active.contains(tool.name()));
             })
             .toList();
+    }
+
+    // ── 批 27（docs/38 T3）：嵌套工具调用宿主（pi :726-764/:1102-1116 对位）──
+
+    /** pi :473-474 逐字注释："Created on the first ctx.executeTool() call." */
+    private NestedToolCallRunner nestedToolCalls;
+
+    /**
+     * pi {@code _executeNestedToolCall}（agent-session.ts:726-764）：扩展工具经
+     * {@code ctx.executeTool()} 发起嵌套调用——走与模型调用完全相同的校验/钩子/
+     * 权限管线，事件带 {@code parentToolCallId}，记录挂在父调用的 tool result 上。
+     */
+    public com.pijava.agent.harness.PiLoop.ToolOutcome executeNestedToolCall(
+            String parentToolCallId, String name, java.util.Map<String, Object> args,
+            NestedToolCallRunner.Options options) {
+        if (nestedToolCalls == null) {
+            nestedToolCalls = new NestedToolCallRunner(new NestedToolCallRunner.Host() {
+                @Override
+                public java.util.List<AgentTool<?, ?>> getTools() {
+                    return callableTools();
+                }
+
+                @Override
+                public boolean isSequential() {
+                    return harness.toolExecution()
+                        instanceof com.pijava.agent.harness.ToolExecution.Sequential;
+                }
+
+                @Override
+                public com.pijava.agent.harness.PiLoop.ToolOutcome runToolCall(
+                        com.pijava.agent.harness.PiLoop.ToolCall toolCall, String parentId,
+                        com.pijava.ai.AbortSignal signal,
+                        java.util.function.Consumer<Object> onUpdate) {
+                    return runNestedToolCall(toolCall, parentId, signal, onUpdate);
+                }
+
+                @Override
+                public void emit(AgentSessionEvent event) {
+                    // pi :758-761 是「先扩展 runner 再会话订阅者」两跳；java 经
+                    // 会话事件单通道广播，SessionEventBridge 在订阅链内转发扩展总线
+                    // ——两通道都同步到达，扩展/TUI 的相对次序与 pi 异（窄差 D167）。
+                    emitSessionEvent(event);
+                }
+            });
+        }
+        return nestedToolCalls.execute(parentToolCallId, name, args, options);
+    }
+
+    /**
+     * 嵌套调用的管线跑法（pi {@code host.runToolCall}，:739-757 对位）：无 assistant
+     * 消息立即错误（文案逐字）；否则以<b>可调用集</b>为查找面跑同一条
+     * {@code PiToolRunner} 管线（钩子上下文带父 id）。
+     */
+    private com.pijava.agent.harness.PiLoop.ToolOutcome runNestedToolCall(
+            com.pijava.agent.harness.PiLoop.ToolCall toolCall, String parentId,
+            com.pijava.ai.AbortSignal signal, java.util.function.Consumer<Object> onUpdate) {
+        if (findLastAssistantMessage() == null) {
+            // pi :741-745 逐字错文
+            var result = new com.pijava.agent.tool.ToolResult<>(
+                java.util.List.of(new com.pijava.ai.message.ContentBlock.TextContent(
+                    "No assistant message issued this call")),
+                java.util.Map.of(), null, false, java.util.List.of());
+            return new com.pijava.agent.harness.PiLoop.ToolOutcome(
+                new Message.ToolResultMessage(toolCall.toolCallId(), toolCall.toolName(),
+                    result.content(), null, null, java.util.List.of(), true,
+                    java.time.Instant.now(), null),
+                result, true);
+        }
+        var runner = new com.pijava.agent.harness.PiToolRunner(laneName(), services.tools(),
+            harness.hookSystem(), baseToolContext,
+            signal, null, () -> new java.util.LinkedHashSet<>(callableTools()), parentId);
+        var preparation = runner.prepare(toolCall);
+        if (preparation instanceof com.pijava.agent.harness.PiLoop.ImmediateOutcome immediate) {
+            return immediate.outcome();
+        }
+        return runner.execute((com.pijava.agent.harness.PiLoop.Prepared) preparation, event -> {
+            if (event instanceof com.pijava.agent.harness.PiLoop.Event.ToolExecutionUpdate u) {
+                onUpdate.accept(u.partialResult());
+            }
+        });
+    }
+
+    /** pi {@code _findLastAssistantMessage} 的 transcript 扫描对位。 */
+    private Message.AssistantMessage findLastAssistantMessage() {
+        var transcript = harness.snapshot(laneName()).transcript();
+        for (int i = transcript.size() - 1; i >= 0; i--) {
+            if (transcript.get(i) instanceof Entry.Message entry
+                    && entry.message() instanceof Message.AssistantMessage assistant) {
+                return assistant;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * pi :1102-1116 的挂载钩（message_end 替换臂——sink 在钩子后追加条目，
+     * 挂载先于落盘；扩展 message_end 处理器看到已挂载消息，因为本钩先于
+     * 扩展桥注册〔loadExtensions 序〕）。pi 在 message_start 挂载；java 的
+     * message_start 事件不武装消息体（窄差 D168：MessageStart 事件的订阅者
+     * 看到未挂载的消息——记录/落盘/上下文均不受影响）。
+     */
+    private Message mountNestedCalls(Message message) {
+        var runner = nestedToolCalls;
+        if (runner == null || !(message instanceof Message.ToolResultMessage result)) {
+            return null;
+        }
+        var summary = runner.takeRecord(result.toolUseId());
+        if (summary == null) {
+            return null;
+        }
+        var mounted = result;
+        if (summary.calls() != null) {
+            mounted = mounted.withNestedCalls(summary.calls());
+        }
+        if (summary.usage() != null) {
+            mounted = mounted.withUsage(
+                mounted.usage() instanceof com.pijava.agent.tool.ToolResult.UsageInfo existing
+                    ? new com.pijava.agent.tool.ToolResult.UsageInfo(
+                        existing.inputTokens() + summary.usage().inputTokens(),
+                        existing.outputTokens() + summary.usage().outputTokens())
+                    : summary.usage());
+        }
+        return mounted;
+    }
+
+    /** pi :1113-1115 的 {@code agent_end} 清空（防泄漏）。 */
+    void clearNestedToolCalls() {
+        var runner = nestedToolCalls;
+        if (runner != null) {
+            runner.clear();
+        }
     }
 
     /** 批 16（T1d，裁决⑧）：启动期扩展 flag 绑定诊断（只读面）。 */
@@ -3425,6 +3557,11 @@ public final class AgentSession implements AutoCloseable {
             .map(com.pijava.ai.provider.Provider::name)
             .filter(name -> !baselineProviderNames.contains(name))
             .collect(java.util.stream.Collectors.toSet());
+        // 批 27（docs/38 T3）：嵌套调用记录挂载钩——先于扩展桥注册（pi 在
+        // message_start 挂载、扩展 message_end 处理器看到已挂载消息的次序对位；
+        // sink 在 message_end 钩链后追加条目 ⇒ 挂载先于落盘）。
+        harness.hookSystem().onMessageEnd(owner.laneName(),
+            ctx -> owner.mountNestedCalls(ctx.message()));
         com.pijava.coding.agent.extension.bridge.EngineHookBridge.install(
             harness.hookSystem(), owner.laneName(), bus, context,
             // 批 11 T6：blockImages 晚读口（pi 注释：mid-session changes take effect）。
