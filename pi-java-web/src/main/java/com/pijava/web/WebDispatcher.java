@@ -1,6 +1,5 @@
 package com.pijava.web;
 
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -11,8 +10,6 @@ import java.util.function.Consumer;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-
-import com.pijava.coding.agent.export.HtmlExporter;
 
 import com.pijava.agent.entry.Entry;
 import com.pijava.agent.session.SessionJson;
@@ -38,7 +35,6 @@ final class WebDispatcher {
 
 
 
-    private final Args args;
     private final Consumer<WebServerMessage> send;
     private final AgentEventTranslator translator;
     private static final ObjectMapper JSON = new ObjectMapper();
@@ -47,22 +43,40 @@ final class WebDispatcher {
     private final GitService git = new GitService();
     private AgentSession session;
     private AutoCloseable eventSubscription;
-    private long bashSeq;
+    private final WebSessionCommands commands;
 
     WebDispatcher(AgentSession session, Args args, Consumer<WebServerMessage> send) {
         this.session = session;
-        this.args = args;
         this.send = send;
         // 批 2：agent_end 帧的 messages 由全量转录源供（会话面载荷自 #52 起是本 pass
         // 新增）。lambda 迟读字段 —— newSession/loadSession 会换 session 实例，
         // 方法引用会把旧实例钉死。
         this.translator = new AgentEventTranslator(() -> this.session.accumulatedMessages());
         this.files = new FileBrowserService(Path.of(System.getProperty("user.dir")));
+        this.commands = new WebSessionCommands(this, args, send, translator);
+    }
+
+    // ── WebSessionCommands 钩子（包私有）─────────────────────────────────
+
+    AgentSession session() {
+        return session;
+    }
+
+    void session(AgentSession newSession) {
+        this.session = newSession;
+    }
+
+    AutoCloseable eventSubscription() {
+        return eventSubscription;
+    }
+
+    void eventSubscription(AutoCloseable subscription) {
+        this.eventSubscription = subscription;
     }
 
     /** 建立事件订阅并推送初始 {@code ready}。 */
     void start() {
-        resubscribe();
+        commands.resubscribe();
         send.accept(new WebServerMessage.Ready());
     }
 
@@ -91,21 +105,21 @@ final class WebDispatcher {
                         currentModelInfo(), thinkingWire(session.harness().getThinkingLevel())));
                 }
                 case WebClientMessage.GetState ignored -> send.accept(stateSync());
-                case WebClientMessage.NewSession ignored -> newSession();
+                case WebClientMessage.NewSession ignored -> commands.newSession();
                 case WebClientMessage.GetSessions ignored -> startSessionsListing();
                 case WebClientMessage.CancelSessions ignored -> cancelSessionsListing();
-                case WebClientMessage.LoadSession l -> loadSession(l.sessionPath());
+                case WebClientMessage.LoadSession l -> commands.loadSession(l.sessionPath());
                 case WebClientMessage.ListDir l -> send.accept(dirListing(l.path()));
                 case WebClientMessage.ReadFile f -> send.accept(fileContent(f.path()));
                 case WebClientMessage.GitStatus ignored -> send.accept(gitStatus());
                 case WebClientMessage.GitDiff d -> send.accept(gitDiff(d.file(), d.staged()));
                 case WebClientMessage.GitHistory h -> send.accept(gitHistory(h.file(), h.limit()));
-                case WebClientMessage.Bash b -> bash(b.command());
+                case WebClientMessage.Bash b -> commands.bash(b.command());
                 case WebClientMessage.AbortBash ignored -> session.abortBash();
                 case WebClientMessage.GetTree ignored -> send.accept(buildTree());
-                case WebClientMessage.Fork f -> forkFrom(f.entryId());
-                case WebClientMessage.Clone ignored -> cloneSession();
-                case WebClientMessage.ExportHtml ignored -> exportHtml();
+                case WebClientMessage.Fork f -> commands.forkFrom(f.entryId());
+                case WebClientMessage.Clone ignored -> commands.cloneSession();
+                case WebClientMessage.ExportHtml ignored -> commands.exportHtml();
                 case WebClientMessage.ListSkills ignored -> send.accept(listSkills());
                 case WebClientMessage.SetSessionName n -> {
                     session.setSessionName(n.name());
@@ -127,7 +141,7 @@ final class WebDispatcher {
 
     /** 关闭当前事件订阅与会话。 */
     void close() {
-        closeSubscription();
+        commands.closeSubscription();
         try {
             session.close();
         } catch (Exception ignored) {
@@ -143,66 +157,9 @@ final class WebDispatcher {
         session.processPrompt(text, PromptConfig.defaults());
     }
 
-    private void newSession() {
-        closeSubscription();
-        var previous = session;
-        var previousId = previous.sessionId();
-        // docs/15（B250）：替换式新建＋替换式关闭（shutdown{new, 新 id}）。
-        session = AgentSession.createReplacing(args, previousId);
-        try {
-            previous.closeForReplacement("new", session.sessionId());
-        } catch (Exception ignored) {
-            // 忽略旧会话关闭失败
-        }
-        resubscribe();
-        send.accept(new WebServerMessage.SessionChanged(session.sessionId()));
-        send.accept(stateSync());
-    }
-
-    private void loadSession(String sessionPath) {
-        if (sessionPath == null || sessionPath.isBlank()) {
-            send.accept(new WebServerMessage.Error("Session path required"));
-            return;
-        }
-        // docs/15（B250）：switchTo 集中 before_switch/shutdown/start 序列。
-        var result = session.switchTo(idFromPath(sessionPath));
-        if (result.outcome() == AgentSession.SwitchOutcome.NOT_FOUND) {
-            send.accept(new WebServerMessage.Error("Session not found: " + sessionPath));
-            return;
-        }
-        if (result.outcome() == AgentSession.SwitchOutcome.CANCELLED) {
-            send.accept(new WebServerMessage.Error("Session switch cancelled by extension"));
-            return;
-        }
-        closeSubscription();
-        resubscribe();
-        send.accept(new WebServerMessage.SessionChanged(session.sessionId()));
-        send.accept(stateSync());
-    }
-
-    private void resubscribe() {
-        closeSubscription();
-        eventSubscription = session.subscribe(ev -> {
-            for (var msg : translator.translate(ev)) {
-                send.accept(msg);
-            }
-        });
-    }
-
-    private void closeSubscription() {
-        if (eventSubscription != null) {
-            try {
-                eventSubscription.close();
-            } catch (Exception ignored) {
-                // 忽略退订失败
-            }
-            eventSubscription = null;
-        }
-    }
-
     // ── 状态 / 载荷 ──────────────────────────────────────────────────────
 
-    private WebServerMessage.StateSync stateSync() {
+    WebServerMessage.StateSync stateSync() {
         var harness = session.harness();
         var model = harness.getModel();
         var messages = session.accumulatedEntries().stream()
@@ -381,76 +338,7 @@ final class WebDispatcher {
         return Path.of(System.getProperty("user.dir"));
     }
 
-    // ── Stage C：终端 / fork / 导出 / skills ─────────────────────────────
-
-    private void bash(String command) {
-        if (command == null || command.isBlank()) {
-            send.accept(new WebServerMessage.Error("Command required"));
-            return;
-        }
-        String id = "web-bash-" + (bashSeq++);
-        Thread.startVirtualThread(() -> {
-            try {
-                var result = session.executeBash(id, command, false);
-                send.accept(new WebServerMessage.BashResult(
-                    command, result.exitCode(), result.output(),
-                    result.truncated(), session.bashAborted()));
-            } catch (Exception e) {
-                send.accept(new WebServerMessage.BashResult(
-                    command, -1,
-                    e.getMessage() == null ? String.valueOf(e) : e.getMessage(),
-                    false, false));
-            }
-        });
-    }
-
-    /** fork：{@code entryId} 之后的会话拷贝为新会话（docs/16：旧会话关闭收进 fork 内部）。 */
-    private void forkFrom(String entryId) {
-        if (entryId == null || entryId.isBlank()) {
-            send.accept(new WebServerMessage.Error("Entry id required"));
-            return;
-        }
-        var forked = session.forkFromEntry(entryId);
-        if (forked.isEmpty()) {
-            // docs/15：session_before_fork cancel。
-            send.accept(new WebServerMessage.Error("Fork cancelled by extension"));
-            return;
-        }
-        closeSubscription();
-        session = forked.get();
-        resubscribe();
-        send.accept(new WebServerMessage.SessionChanged(session.sessionId()));
-        send.accept(stateSync());
-    }
-
-    /** clone：整会话拷贝（无 leaf 时用当前会话名 clone）。 */
-    private void cloneSession() {
-        var entries = session.harness().snapshot(session.laneName()).transcript();
-        String leaf = entries.isEmpty() ? null : entries.get(entries.size() - 1).id();
-        var forked = leaf == null
-            ? session.forkCopy(session.sessionName() + "-clone")
-            : session.forkFromEntry(leaf);
-        if (forked.isEmpty()) {
-            send.accept(new WebServerMessage.Error("Clone cancelled by extension"));
-            return;
-        }
-        closeSubscription();
-        session = forked.get();
-        resubscribe();
-        send.accept(new WebServerMessage.SessionChanged(session.sessionId()));
-        send.accept(stateSync());
-    }
-
-    private void exportHtml() {
-        try {
-            var tmp = Files.createTempFile("pi-java-web-export", ".jsonl");
-            session.exportJsonl(tmp);
-            var html = new HtmlExporter().export(tmp);
-            send.accept(new WebServerMessage.ExportPath(html.toString()));
-        } catch (Exception e) {
-            throw new IllegalArgumentException("Export failed: " + e.getMessage());
-        }
-    }
+    // ── Stage C：skills（终端 / fork / 导出迁 WebSessionCommands）─────────
 
     private WebServerMessage.Skills listSkills() {
         var skills = session.harness().skillManager().all().stream()
