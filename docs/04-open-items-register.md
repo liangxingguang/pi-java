@@ -510,6 +510,12 @@
 - 【风险/代价】窄差新登：**D160** 路由态写回值判等（pi 引用判等）[内部·边缘]；**D161** 嵌套独占队列 ReentrantLock（pi Promise 链）[内部]；**D162** 嵌套计时 nanoTime [内部]；**D163** footer `→ routed` 显示与 /model 选择器列虚拟条目挂账（map/05 变量③）[用户可见·展示]；**D164** tool_search replaceable 经同名替换（无 pi 元数据面）[内部·边缘]；**D165** BM25 浮点同 IEEE754、同分靠稳定排序（注记级）[内部]；**D166** 嵌套 usage 合并只覆盖 input/output（java UsageInfo 方言；`Usage.combine` 落地后随批内 revert 撤回——无消费者）[内部·边缘]；**D167** 嵌套事件经会话单通道广播（pi 两跳序异）[内部·边缘]；**D168** nestedCalls 挂载在 message_end 钩（pi message_start——MessageStart 订阅者见未挂载消息）[内部·边缘]；**D169** 已注销虚拟选型判别失效直发（外在判别式固有代价）[内部·边缘]；**D170** 无 `_recordSelection`/`getBranchSelection` 恢复链（存量方言，裁决⑪）[存量约束]；**D171** 虚拟选型两边缘（路由后阈值检查不做／未路由直发被未知 provider 兜底接住，pi unroutedStream 抛错）[内部·边缘]。**D7 销号**（parentToolCallId 全链）；**D89/D91 收窄**。行为变化注记（changelog 级）：**deferred 配置的 MCP 服务器在 session_start 自动激活 tool_search**（pi 同形）；**内置 `tool_search` 工具注册**（注册面多一件、默认不激活——经 `--tools`/`defaultTools`/`setActiveTools` 激活）；**MCP 不可达警告文案改 pi 逐字**；**allowlist 未点名的 MCP 非 direct 工具可经 tool_search 声明**（`_isActivatable` 臂）；工具结果消息可带 `nestedCalls` 键（持久化形状新增，不发给模型）；**装配期 defaultActive:false 工具不再自动激活**（修真 D89 偏差）；扩展可 `registerVirtualModel`/`unregisterVirtualModel`/`executeTool`。账面：模块 438.0→**446.0/485 ≈ 92.0%**（E5 域 51.0→**54.0/58 ≈ 93.1%**，对齐 31→33/35；G 域 7.0→**12.0/18 ≈ 66.7%**——G-8/9/10 三行缺失→对齐，初稿预算漏列、闭环实算撞出收平）；map/07 注记重裁（#93 deferred 臂落地对齐〔权重 0 不动账面〕、#92 codemode 维持 R5 出分母）；全仓 1,155.0→**1,163.0/1379 ≈ 84.3%**。排障注记：无 -am 拾旧 jar 再撞两回（测试编译也受影响）；**ServiceLoader 夹具两钉**——classpath 根必须是 META-INF 的祖父目录、扩展类必须顶层 public（嵌套类实例化 IllegalAccess 被静默吞）；ai 模块 `AssistantMessage` 有顶层/嵌套两同名录（路由面用 `Message.AssistantMessage`）；perl 双引号串里 `\$1` 不插值（落字面量险酿错——脚本化改写后须读回）。新文件 17（主 11〔virtual 包 7＋ExtensionVirtualModel＋ToolExposure＋ToolDefinitions＋toolsearch 包 4〕＋测试 6）＋测试用例新增/改写 46（NestedToolCallRunnerTest 11＋ToolSearchTest 11＋VirtualModelRegistryTest 7＋NestedToolCallE2eTest 2＋VirtualModelRoutingE2eTest 2＋ToolSearchMcpActivationTest 3＋NestedCallsRoundTripTest 3＋NestedCallsFileOpsTest 2＋HtmlExporterTest +1＋McpExtensionSessionTest 改写 1＋DefaultToolsSelectionTest 修真 12〔注册面全带 tool_search——pi 生产同构〕＋ExtensionManagerTest/CrossExtensionOrderTest 排除名更新）。
 - 触发条件：E5-31 余面随 TUI 注入批；E5-33 随 F 类变量 1 拍板；D163/D170 随 map/05 屏域批与「resume 分支选型」批重裁；#92（codemode 激活）随 B161；B177（MCP codemode 不可达）部分缓解——deferred 臂已可达，codemode 臂仍依赖 B161。出处：docs/38 §1–§8＋§9 闭环回填。
 
+### docs/39 拍板（2026-10-28 审核通过）— examples/ 可执行验收规格：全做＋Java 移植＋验收测试
+
+- 【场景】docs/06 §3.3 变量①：pi `examples/`（105 个 `.ts`、16,033 行）是扩展 API 的行为规格，pi-java 零对应物（map/04 E5-33 与 F#22 两行缺失）。拍板三选项（全做／代表子集／不做）之外，同场裁决落地形态与 TS 兼容问题。
+- 【决定】① 变量① **全做**（盘点后处置口径 102 件，重估 8–10 批〔批 28–37，docs/39 §7〕；原估 +2 批系盘点前数字）；② **不做 TS 扩展运行时**——维持纯 Java 扩展（ServiceLoader＋`loadJar`），排除 GraalJS polyglot 路线（再造一个 E5 域规模的 JS 桥＋放大 native image〔已判不现实〕＋第二轮对齐工作）；③ 落地形态＝**新第 12 模块 `pi-java-examples`**（依赖 coding-agent 与 tui；示例扩展进 main 源码集，验收测试进 test；CLI 发行不携带；`-e` 参数路径形态差异〔.ts/目录 ⇒ JAR〕登记窄差）。
+- 【风险/代价】模块数 11→12；§5 外部依赖处置随批拍板（gondolin QEMU／sandbox OS 沙箱／doom WASM 引擎降级为假帧源均登记窄差候选）；组 10 `plugins/pi-example-plugin`（Chord facet 3 件）列**不做候选**（pi 第三代实验机制，pi-java 无 chord 模块）——待拍板，见 §6 F 类。每批另写设计稿（docs/40 起），流程同批 1–27。出处：docs/39 全文（§1 拍板记录／§4 API 面压力并表／§6 分组总表／§7 分批方案）。
+
 ---
 
 
@@ -533,6 +539,7 @@
 | # | 面 | 条目 | 要定的事 |
 |---|---|---|---|
 | B58 | 协议面 | openai provider 默认 wire 与 pi 不同 | pi 默认 openai-responses，Java 默认 openai-completions；「跟随 pi」还是「记为刻意偏差」 |
+| docs/39-组10 | 扩展机制 | `plugins/pi-example-plugin`（Chord facet，3 件 .ts）不做候选 | pi 第三代实验机制（chord），pi-java 无 chord 模块、机制未复刻；拍板「不做」（105 件分母 −3）还是「移植」 |
 
 > ~~B54~~（`--no-session` 在 web 路径被完全忽略）：**2026-10-23 拍板销号**——`--no-session` 赢（ephemeral 是更安全一侧），批 coding-agent-14 落地（docs/25 裁决⑤，见 §4 批 14 段）。
 
@@ -545,7 +552,7 @@
 3. 结案/作废：从本台账移除该行，commit message 写明结论；历史在 git 可查。存活条目**永不改号**（代码注释引用编号）。
 4. 「不做」类进 §4，按【场景/决定/风险】三段式写清裁决与触发条件；分类变动在包文档记录。
 5. §1 计数由命令实测，不手记。
-6. 包设计稿闭环后随过程文档清理删除（历史在 git），**编号不复用**；下一包号 `docs/39`。**2026-10-18 连续重编**：coding-agent 对齐清单 → `docs/08`、批 agent-core-4 → `docs/09`、批 agent-core-5 → `docs/10`、B236 coding-agent 批 1 → `docs/11`（重编前为 24/25/26，git 历史可查）。新号 08–11 与第五次清理删掉的旧稿（ai 批等）撞号：文中带「原」前缀的 `docs/NN` 引用一律指已删旧稿，不指现行文档。**2026-10-26 第六次清理＋重编**：删除全部已闭环批次设计稿（docs/09–19、21–34）与两份已完成/过时的清单（docs/07 agent-core〔模块 100%〕、docs/08 coding-agent〔一次性快照，权威在 map/04＋本台账〕）；批次总账 `docs/20` → `docs/07`；同日续删 ai 未对齐清单（docs/06，开放项全量在 §3.2 与 `map/02`），批次总账再编 `docs/07` → **`docs/06`**。本文件与 docs/05 中指向批次总账的引用已改 `docs/06`；`原 docs/20–22` 仍指已删的 agent-core 批 1–3 设计稿；`map/ANCHOR.md` 的 docs/06 引文指换锚时代的旧总表（已加「原」前缀），不指现行批次总账。
+6. 包设计稿闭环后随过程文档清理删除（历史在 git），**编号不复用**；下一包号 `docs/40`（docs/39＝examples 盘点与分批方案，2026-10-28 审核通过，非批次设计稿）。**2026-10-18 连续重编**：coding-agent 对齐清单 → `docs/08`、批 agent-core-4 → `docs/09`、批 agent-core-5 → `docs/10`、B236 coding-agent 批 1 → `docs/11`（重编前为 24/25/26，git 历史可查）。新号 08–11 与第五次清理删掉的旧稿（ai 批等）撞号：文中带「原」前缀的 `docs/NN` 引用一律指已删旧稿，不指现行文档。**2026-10-26 第六次清理＋重编**：删除全部已闭环批次设计稿（docs/09–19、21–34）与两份已完成/过时的清单（docs/07 agent-core〔模块 100%〕、docs/08 coding-agent〔一次性快照，权威在 map/04＋本台账〕）；批次总账 `docs/20` → `docs/07`；同日续删 ai 未对齐清单（docs/06，开放项全量在 §3.2 与 `map/02`），批次总账再编 `docs/07` → **`docs/06`**。本文件与 docs/05 中指向批次总账的引用已改 `docs/06`；`原 docs/20–22` 仍指已删的 agent-core 批 1–3 设计稿；`map/ANCHOR.md` 的 docs/06 引文指换锚时代的旧总表（已加「原」前缀），不指现行批次总账。
 7. 闭环口径的三条教训（来自 B186/B187/B200，已销号行的原文在 git 历史）：
    - 包闭环验证必须含 `mvn verify`（spotbugs 绑在 verify 阶段，只跑 test＋checkstyle 会漏）。
    - checkstyle 结果须写明错误、警告各几个，不接受一句「checkstyle 0」。

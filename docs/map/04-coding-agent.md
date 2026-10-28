@@ -480,7 +480,7 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 | E5-30 | 扩展注册 CLI flag | `:1664` + `args.ts:186` | ✅ `ExtensionFlagBinder`＋`--help` 段 | 1 | **对齐** | 批 16 T1c–T1e（args.ts:247-271 三态＋agent-session-services.ts:82-128 绑定＋args.ts:273-283 help 面对位） |
 | E5-31 | 扩展 UI 注入（TUI） | `types.ts:149-323` | ⚠️ `TuiExtensionUI`（13 方法：对话四件套＋custom＋notify/setStatus/setWidget/setFooter/setHeader/setEditorText/getEditorText）＋widget/footer/header/状态段注入层；余 15 成员 default＝pi noOp 语义、TUI 臂挂账（docs/28 §4） | 2 | **存疑** | 批 17（docs/28 T1/T4–T6；窄差 D95–D101；余面：working 指示器/主题四面/补全/编辑器替换等随后续批） |
 | E5-32 | 扩展 UI 通道（RPC，9 method） | `rpc-types.ts:253-297` | ✅ `RpcExtensionUI` 九方法 typed 实现＋`RpcDispatcher` 注入（晚绑定修真——context 现读会话字段） | 1 | **对齐** | 批 17（docs/28 T3）：参数键平铺顶层（pi spread 逐字）＋signal/timeout 本地解除（裁决⑦）＋setWidget 工厂臂静默忽略（pi 同缺） |
-| E5-33 | 扩展示例库（可执行验收规格） | `examples/extensions/`（105 个 `.ts`，16,033 行） | ❌ 只有 5 个测试夹具 | **3** | **缺失** | — |
+| E5-33 | 扩展示例库（可执行验收规格） | `examples/extensions/`（105 个 `.ts`，16,033 行） | ❌ 只有 5 个测试夹具 | **3** | **缺失** | **全做已拍板（2026-10-28，docs/39）**：处置口径 102 件、重估 8–10 批（批 28–37）、新模块 `pi-java-examples`；翻对齐以「102 件处置完毕」为条件 |
 | E5-34 | 扩展来源追踪（`SourceInfo`） | `types.ts:1543/2055/2098` | ✅ `ExtensionSourceInfos` 四规则＋注册即盖 sourceInfo 章 | 1 | **对齐** | **批 23（docs/34 T4）**：getDefaultSourceInfoForPath 逐字（builtin:/`<inline:`⇒temporary、`<agentDir>/extensions`⇒user、`<cwd>/.pi-java/extensions`⇒project、包源经元数据携带 origin=package）；`CommandRegistry` 登记目注册即盖章（loader.ts:317 对位） |
 | E5-35 | `on()` 返回退订函数 | `types.ts:1569-1636`（41 条 `() => void`） | ✅ `ExtensionContext.on(spec, handler)`（批 4，docs/14 §3.2）→ `AutoCloseable` 退订：按实例移除、空表删键（loader.ts:272-288 逐字语义） | 2 | **对齐** | — |
 
@@ -573,7 +573,7 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 
 | 子系统 | pi LOC | 权重 | 说明 |
 |---|---:|---:|---|
-| **扩展示例库 `examples/`（可执行验收规格）** | **16,033** | **3** | 105 个 `.ts`。**pi-java 零对应物**（只有 5 个测试夹具）。这些示例同时是 pi 扩展 API 的**行为规格** |
+| **扩展示例库 `examples/`（可执行验收规格）** | **16,033** | **3** | 105 个 `.ts`。**pi-java 零对应物**（只有 5 个测试夹具）。这些示例同时是 pi 扩展 API 的**行为规格**。**全做已拍板（2026-10-28，docs/39）**：处置口径 102 件（Chord plugin 3 件列不做候选待拍板）、分批批 28–37 |
 | **JSON 主题系统** | **2,417**（`.ts` 2,261 + JSON 156） | 2 | `theme.ts` + `theme-controller.ts` + `system-theme.ts` + typebox `theme-schema.ts` + `theme-tokens.ts` + dark/light.json；pi-java 只有 113 行 `PiTheme.java`（pi-java-tui）+ 2 个内建 `.tcss` |
 | **npm / git 包源 + 资源优先级 + 忽略文件** | 2,760（`package-manager.ts`） | **3** | pi 是完整包生态层；pi-java 是「下 JAR 到目录」 |
 | **自更新（self-update）** | ~300 | 1 | pi `update self` 换二进制（含 managed release 清理）；pi-java 只打印「走 Maven Central」 |
@@ -638,7 +638,7 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 
 **java 独有（不计入分母）**：`--base-url`、`--port`、`--debug`、`--trace-payloads`（CLI）；`/help`、`/create-skill`（slash）；`auth oauth-login`、`auth profile…`（子命令）。
 
-**最大三处差距**（批 27 后）：① ~~E6 包管理器~~（批 19 闭环，满分域）；② **扩展系统长尾**——MCP 面已落（map/07 93.4%），tool-search/virtual-models/nested 批 27 落地，余 **codemode（3,957 行，B161）** 与 D′ UI 注入面余量；③ ~~D 域剩余~~（批 23 满分）；当前余量主在 E5-31（扩展 UI TUI 臂挂账）／E5-33（examples，F 类）／E2 窄差登记项。
+**最大三处差距**（批 27 后）：① ~~E6 包管理器~~（批 19 闭环，满分域）；② **扩展系统长尾**——MCP 面已落（map/07 93.4%），tool-search/virtual-models/nested 批 27 落地，余 **codemode（3,957 行，B161）** 与 D′ UI 注入面余量；③ ~~D 域剩余~~（批 23 满分）；当前余量主在 E5-31（扩展 UI TUI 臂挂账）／E5-33（examples，F 类——全做已拍板 2026-10-28 docs/39，批 28–37 处置）／E2 窄差登记项。
 **其余长期缺口**：④ `cache_warming` 设置＋`/bug`＋RPC `"handled"` disposition（已分别计入 E2/C/E7；`defaultTools` 与 `--tools` pattern/modifier 批 1 已对齐）。
 
 ---
@@ -724,7 +724,7 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 | 19 | E6 | 持久化到 `settings.packages` | 3 | 对齐（批 19） |
 | 20 | E7 | RPC 命令集（33/33） | 3 | 对齐 |
 | 21 | E7 | RPC 事件线格式 | 3 | **存疑** |
-| 22 | F | `examples/` 可执行验收规格 | 3 | **缺失** |
+| 22 | F | `examples/` 可执行验收规格 | 3 | **缺失**（全做已拍板 2026-10-28 docs/39；102 件处置完毕翻对齐） |
 | 23 | F | npm/git 包源 + 优先级 + 忽略文件 | 3 | 对齐（批 18） |
 
 > 权重 3 层 23 个单元中（批 19 后实算）：**对齐 20 / 存疑 1 / 缺失 2**（Σ(w×c) 61.5 / 69 = 89.1%）。
