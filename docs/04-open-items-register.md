@@ -514,7 +514,7 @@
 
 - 【场景】docs/06 §3.3 变量①：pi `examples/`（105 个 `.ts`、16,033 行）是扩展 API 的行为规格，pi-java 零对应物（map/04 E5-33 与 F#22 两行缺失）。拍板三选项（全做／代表子集／不做）之外，同场裁决落地形态与 TS 兼容问题。
 - 【决定】① 变量① **全做**（盘点后处置口径 102 件，重估 8–10 批〔批 28–37，docs/39 §7〕；原估 +2 批系盘点前数字）；② **不做 TS 扩展运行时**——维持纯 Java 扩展（ServiceLoader＋`loadJar`），排除 GraalJS polyglot 路线（再造一个 E5 域规模的 JS 桥＋放大 native image〔已判不现实〕＋第二轮对齐工作）；③ 落地形态＝**新第 12 模块 `pi-java-examples`**（依赖 coding-agent 与 tui；示例扩展进 main 源码集，验收测试进 test；CLI 发行不携带；`-e` 参数路径形态差异〔.ts/目录 ⇒ JAR〕登记窄差）。
-- 【风险/代价】模块数 11→12；§5 外部依赖处置随批拍板（gondolin QEMU／sandbox OS 沙箱／doom WASM 引擎降级为假帧源均登记窄差候选）；组 10 `plugins/pi-example-plugin`（Chord facet 3 件）列**不做候选**（pi 第三代实验机制，pi-java 无 chord 模块）——待拍板，见 §6 F 类。每批另写设计稿（docs/40 起），流程同批 1–27。出处：docs/39 全文（§1 拍板记录／§4 API 面压力并表／§6 分组总表／§7 分批方案）。
+- 【风险/代价】模块数 11→12；§5 外部依赖处置随批拍板（gondolin QEMU／sandbox OS 沙箱／doom WASM 引擎降级为假帧源均登记窄差候选）；组 10 `plugins/pi-example-plugin`（Chord facet 3 件）列**不做候选**（pi 第三代实验机制，pi-java 无 chord 模块）——待拍板，见 §6 F 类。每批另写设计稿（docs/40 起），流程同批 1–27。出处：docs/39 全文（§1 拍板记录／§4 API 面压力并表／§6 分组总表／§7 分批方案）。**2026-10-28 修订（批 28 闭环后拍板）**：批 29–37 合并至 6 批（批 29–34；29＝组 2＋组 7、30＝Operations＋组 6、31＝组 3＋组 4、32＝组 5、33＝组 8、34＝组 9＋组 10——docs/39 §7 修订段映射表）。
 
 ### 批 coding-agent-28（docs/40，2026-10-28 闭环）：examples 移植批 1——组 1「事件守卫与输入改写」16 件全落
 
