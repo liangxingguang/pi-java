@@ -111,7 +111,7 @@ final class McpManagerActions {
                 if (failure != null) {
                     ctx.ui().notify(failure, NotifyType.ERROR);
                 } else {
-                    lifecycle.warnUnreachableOnce(ctx);
+                    lifecycle.ensureDiscoveryActive(ctx);
                     ctx.ui().notify("Reconnected to MCP server \"" + server.entry.name()
                         + "\" (" + McpExtensionState.describeState(server) + ").",
                         NotifyType.INFO);
@@ -249,7 +249,7 @@ final class McpManagerActions {
                 "Sign-in cancelled.".equals(failure) ? NotifyType.INFO : NotifyType.ERROR);
             return;
         }
-        lifecycle.warnUnreachableOnce(ctx);
+        lifecycle.ensureDiscoveryActive(ctx);
         ctx.ui().notify("Signed in to MCP server \"" + name + "\" ("
             + (server.connection != null ? server.connection.tools().size() : 0)
             + " tools).", NotifyType.INFO);
@@ -334,7 +334,7 @@ final class McpManagerActions {
                 return;
             }
             server.message = message;
-            lifecycle.warnUnreachableOnce(ctx);
+            lifecycle.ensureDiscoveryActive(ctx);
             state.emitChange();
         };
         currentScope.track(ready.thenApply(message -> {
@@ -376,7 +376,7 @@ final class McpManagerActions {
             return;
         }
         server.message = message;
-        lifecycle.warnUnreachableOnce(ctx);
+        lifecycle.ensureDiscoveryActive(ctx);
         state.emitChange();
     }
 
