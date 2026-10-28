@@ -886,9 +886,15 @@ B161）；全仓 1,155.0 + 8.0 ⇒ **1,163.0/1379 ≈ 84.3%**。
 4. 记忆文件：coding-agent-batch27-closed。
 5. 全量 `mvn clean verify` 收口：日志落盘 /tmp（不放 target/），结果见下。
 
-**verify 结果**：（闭环时填实测——首轮：spotbugs UL_UNRELEASED_LOCK 一钉
-〔NestedToolCallRunner 条件 lock 形〕⇒ 回补〔独占臂独立 try/finally＋
-executeHeld 抽出〕；次轮：____）
+**verify 结果**：三轮收口——#1 spotbugs 一钉（UL_UNRELEASED_LOCK：
+NestedToolCallRunner 条件 lock＋finally 条件 unlock 形不认 ⇒ 回补：独占臂
+独立 lock→try→finally 无条件 unlock＋持锁段抽 `executeHeld`，顺带修真
+holdsQueue 传递初版缺陷）；#2 tui 套件 1 红（`PiTuiAppDequeueTest.
+escWhileStreamingRestoresQueuedThenAborts` 时序 flake——单跑 3/3 绿；按台账
+规则 7 修真为确定性断言：steer 落队〔pendingMessageCount==1〕后再按 Esc）；
+**#3 全绿**：exit 0／BUILD SUCCESS／5,370 测 0 失败 0 错误（批 26 基线
+5,327 → +43）／checkstyle 0 违规（14 模块）／spotbugs BugInstance size 0。
+日志 /tmp/batch27-verify3.log（17:13 min）。
 
 **实施偏差自白**（相对 §3/§4 初稿）：裁决③缝形改为新增路由级钩
 （`onPrepareRequestRouted`，沙箱外、异常传出）；裁决⑧ `Usage.combine` 撤回
