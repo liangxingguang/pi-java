@@ -48,6 +48,17 @@ public final class FileOperationLists {
          * **非空字符串**（pi 的 {@code if (!path) continue} 把空串也跳过）。
          */
         public void addFromMessage(Message message) {
+            // 批 27（B162/T12）：pi {@code extractFileOpsFromMessage} 的 toolResult
+            // 分支（utils.ts:33-35）——嵌套调用（codemode 脚本等）触过的文件进清单；
+            // arguments 被省略（超限）的调用自然跳过。
+            if (message instanceof Message.ToolResultMessage result) {
+                if (result.nestedCalls() != null) {
+                    for (var call : result.nestedCalls().calls()) {
+                        addFromNestedCall(call.name(), call.arguments());
+                    }
+                }
+                return;
+            }
             if (!"assistant".equals(message.role())) {
                 return;
             }
@@ -78,6 +89,26 @@ public final class FileOperationLists {
             }
             addPaths(details.get(READ_FILES), read);
             addPaths(details.get(MODIFIED_FILES), edited);
+        }
+
+        /** pi {@code addFileOp}（utils.ts:47-60）的嵌套调用形（参数是 JsonNode）。 */
+        private void addFromNestedCall(String toolName,
+                                       com.fasterxml.jackson.databind.JsonNode arguments) {
+            if (arguments == null
+                    || !(arguments.get("path") instanceof com.fasterxml.jackson.databind.JsonNode pathNode)
+                    || !pathNode.isTextual()) {
+                return;
+            }
+            var path = pathNode.asText();
+            if (path.isEmpty()) {
+                return; // pi 的 if (!path) 同形
+            }
+            switch (toolName) {
+                case "read" -> read.add(path);
+                case "write" -> written.add(path);
+                case "edit" -> edited.add(path);
+                default -> { /* pi 同：其它工具名不入账 */ }
+            }
         }
 
         private static void addPaths(Object value, Set<String> target) {

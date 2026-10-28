@@ -206,6 +206,10 @@ public final class JsonEventMapper {
                 node.put("toolCallId", s.toolCallId());
                 node.put("toolName", s.toolName());
                 node.set("args", MAPPER.valueToTree(s.args()));
+                // 批 27（B162）：嵌套调用的父 id（pi 条件字段——顶层调用键省略）。
+                if (s.parentToolCallId() != null) {
+                    node.put("parentToolCallId", s.parentToolCallId());
+                }
             }
             case AgentSessionEvent.ToolExecutionUpdate u -> {
                 node.put("type", "tool_execution_update");
@@ -213,6 +217,9 @@ public final class JsonEventMapper {
                 node.put("toolName", u.toolName());
                 node.set("args", MAPPER.valueToTree(u.args()));
                 node.set("partialResult", toolPayload(u.partialResult()));
+                if (u.parentToolCallId() != null) {
+                    node.put("parentToolCallId", u.parentToolCallId());
+                }
             }
             case AgentSessionEvent.ToolExecutionEnd e -> {
                 node.put("type", "tool_execution_end");
@@ -224,6 +231,10 @@ public final class JsonEventMapper {
                 // B234（pi json.md:107）：execute() 本体耗时；未执行 ⇒ 键省略。
                 if (e.durationMs() != null) {
                     node.put("durationMs", e.durationMs());
+                }
+                // 批 27（B162）：嵌套调用的父 id（顶层 ⇒ 键省略）。
+                if (e.parentToolCallId() != null) {
+                    node.put("parentToolCallId", e.parentToolCallId());
                 }
             }
             default -> node.put("type", "unsupported_event");

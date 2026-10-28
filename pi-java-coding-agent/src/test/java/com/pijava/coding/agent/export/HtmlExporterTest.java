@@ -55,6 +55,33 @@ class HtmlExporterTest {
             .contains("model → anthropic/claude-sonnet-4-5");
     }
 
+    /**
+     * 批 27（B162/T12）：tool result 的 {@code nestedCalls} 渲染（pi
+     * export-html/template.js:933-946 对位——icons/省略文案/标题逐字）。
+     */
+    @Test
+    void rendersNestedCallsOfToolResults() throws Exception {
+        var jsonl = tmp.resolve("session.jsonl");
+        Files.write(jsonl, List.of(
+            "{\"kind\":\"header\",\"version\":4,\"id\":\"sess-n\"}",
+            "{\"type\":\"message\",\"id\":\"e1\",\"seq\":1,\"parentId\":null,"
+                + "\"timestamp\":\"2026-08-20T10:00:00Z\",\"message\":{\"role\":\"tool\","
+                + "\"toolUseId\":\"t1\",\"toolName\":\"run_tools\","
+                + "\"content\":[{\"type\":\"text\",\"text\":\"done\"}],\"isError\":false,"
+                + "\"nestedCalls\":{\"complete\":false,\"calls\":["
+                + "{\"id\":\"t1/1\",\"name\":\"read\",\"arguments\":{\"path\":\"a.ts\"},"
+                + "\"status\":\"ok\",\"durationMs\":42},"
+                + "{\"id\":\"t1/2\",\"name\":\"write\",\"argumentsBytes\":9000,"
+                + "\"status\":\"error\",\"error\":\"boom\"}]}}}"));
+
+        var html = Files.readString(new HtmlExporter().export(jsonl, tmp.resolve("out.html")));
+
+        assertThat(html).contains("Nested calls: 2 (incomplete record)")
+            .contains("✓ read {&quot;path&quot;:&quot;a.ts&quot;} 42ms")
+            .contains("✗ write [arguments omitted, 9000 bytes]")
+            .contains("boom");
+    }
+
     @Test
     void exportsUrlImageBlock() throws Exception {
         var jsonl = tmp.resolve("session.jsonl");

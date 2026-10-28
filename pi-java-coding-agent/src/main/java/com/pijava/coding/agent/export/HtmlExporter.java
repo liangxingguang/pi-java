@@ -268,7 +268,51 @@ public final class HtmlExporter {
         } else if (content != null && content.isTextual()) {
             out.append("        <pre>").append(escape(content.asText())).append("</pre>\n");
         }
+        renderNestedCalls(out, block.get("nestedCalls"));
         out.append("      </details>\n");
+    }
+
+    /**
+     * 批 27（B162/T12）：pi {@code renderNestedCalls}（export-html/template.js:933-946）
+     * 对位——工具经 {@code ctx.executeTool()} 发起的嵌套调用记录（无结果）。
+     * 文案逐字：icons {ok:✓, error:✗, unfinished:…}、{@code [arguments omitted, N bytes]}、
+     * 标题 {@code Nested calls: N}＋incomplete 时 {@code  (incomplete record)}。
+     */
+    private void renderNestedCalls(StringBuilder out, JsonNode nested) {
+        if (nested == null || !(nested.get("calls") instanceof JsonNode callsNode)
+                || !callsNode.isArray() || callsNode.isEmpty()) {
+            return;
+        }
+        var lines = new StringBuilder();
+        var complete = nested.has("complete") && nested.get("complete").asBoolean(false);
+        lines.append("Nested calls: ").append(callsNode.size())
+            .append(complete ? "" : " (incomplete record)");
+        for (var call : callsNode) {
+            var icon = switch (text(call, "status")) {
+                case "ok" -> "✓";
+                case "error" -> "✗";
+                case "unfinished" -> "…";
+                case null, default -> "?";
+            };
+            lines.append('\n').append(icon).append(' ').append(text(call, "name")).append(' ');
+            if (call.has("arguments")) {
+                lines.append(call.get("arguments").toString());
+            } else {
+                lines.append("[arguments omitted, ")
+                    .append(call.has("argumentsBytes") ? call.get("argumentsBytes").asLong() : 0)
+                    .append(" bytes]");
+            }
+            if (call.has("durationMs")) {
+                lines.append(' ').append(call.get("durationMs").asLong()).append("ms");
+            }
+            var error = text(call, "error");
+            if (error != null && !error.isEmpty()) {
+                lines.append('\n').append("    ")
+                    .append(error.replace("\n", "\n    "));
+            }
+        }
+        out.append("        <pre class=\"nested-calls\">").append(escape(lines.toString()))
+            .append("</pre>\n");
     }
 
     private void meta(StringBuilder out, String message) {
