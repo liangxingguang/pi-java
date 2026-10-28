@@ -181,6 +181,9 @@ class PiTuiAppDequeueTest {
         newRig();
         startHangingRun();
         mode.submit("queued under esc");
+        // 批 27 排障（docs/04 规则 7 同族）：提交与 run 起跑竞虚拟线程调度——
+        // 等 steer 真入队再按 Esc（否则 Esc 赶在入队前，恢复臂无货 ⇒ 编辑器空）
+        awaitTrue(() -> session.pendingMessageCount() == 1, "steer 已排队");
 
         app.onInlineEvent(dev.tamboui.tui.event.KeyEvent.ofKey(
             dev.tamboui.tui.event.KeyCode.ESCAPE));
