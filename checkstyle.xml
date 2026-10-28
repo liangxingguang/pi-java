@@ -14,9 +14,12 @@
         <property name="ignorePattern" value="^package.*|^import.*"/>
     </module>
 
-    <!-- File length 500 lines (matches CLAUDE.md convention) -->
+    <!-- File length 500 lines (matches CLAUDE.md convention).
+         批 29（docs/41 裁决④）：severity 提 error——全局 warning 级从不 fail
+         构建（check 默认只认 error），500 行规则因此形同虚设两年（E 类 5→21 件）。 -->
     <module name="FileLength">
         <property name="max" value="500"/>
+        <property name="severity" value="error"/>
     </module>
 
     <!-- File must end with a newline -->

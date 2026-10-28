@@ -24,10 +24,10 @@
 
 | 指标 | 读数 |
 |---|---|
-| 已闭环批次 | **28**（批 1–28，设计稿原 docs/11–40，历史在 git〔docs/36/37/38/40 存活待清理〕） |
-| 设计待审批次 | **0**（下一包号 docs/41＝批 29 设计稿〔结构债清空批，序 22〕） |
-| 计划批次（批 29 起） | **2026-10-29 用户裁决重排**：examples/TUI 降为队尾（理由：pi-java 以 web 为主要交互方式、examples 是验收规格非功能流程；examples 全做裁决不变），且**结构债清空插队在所有功能批之前**——批 29＝结构债清空（E1/E2/E5/E6/E7）、批 30＝模型可见面收口、批 31＝C 域 slash 尾、批 32＝evals、批 33＝session 余量（§3 序 22–26）→ TUI 队尾批组（序 27，变量③ 屏域＋长尾，4–6 批）→ **examples 六批最尾**（序 28；组 2–10 合并映射维持 docs/39 §7 修订段，原批 29–34 编号让位，启动时按实重排） |
-| **总批次估计** | **28＋5（新主线序 22–26）＋4–6（TUI 队尾）＋6（examples 队尾）**（每批闭环时按真实欠账重排，允许增删） |
+| 已闭环批次 | **29**（批 1–29，设计稿原 docs/11–41，历史在 git〔docs/36/37/38/40/41 存活待清理〕） |
+| 设计待审批次 | **0**（下一包号 docs/42＝批 30 设计稿〔模型可见面收口批，序 23〕） |
+| 计划批次（批 30 起） | **2026-10-29 用户裁决重排**：examples/TUI 降为队尾（理由：pi-java 以 web 为主要交互方式、examples 是验收规格非功能流程；examples 全做裁决不变），结构债清空已插队闭环（批 29）——批 30＝模型可见面收口、批 31＝C 域 slash 尾、批 32＝evals、批 33＝session 余量（§3 序 23–26）→ TUI 队尾批组（序 27，变量③ 屏域＋长尾，4–6 批）→ **examples 六批最尾**（序 28；组 2–10 合并映射维持 docs/39 §7 修订段，原批 29–34 编号让位，启动时按实重排） |
+| **总批次估计** | **29＋4（新主线序 23–26）＋4–6（TUI 队尾）＋6（examples 队尾）**（每批闭环时按真实欠账重排，允许增删） |
 | 模块账面（Σ 485，去重） | 446.0 ≈ **92.0%**（批 27 +8.0：E5-26/27＋G-8/9/10） |
 | 满分域 | **13 个**＋map/07 G 组满分（批 24） |
 | D 域（扩展事件，Σ 83） | 83.0 ＝ **100%**（批 23 满分） |
@@ -77,6 +77,7 @@
 | 27 | docs/38 | 2026-10-28 | **B162 虚拟模型整域**（用户拍板选题＋授权定稿直接实施；裁决①–⑫）：T1 ai 地基（NestedToolCallRecord/s＋ToolResultMessage.nestedCalls 第十组件）→ T2 嵌套内核（四有界规则逐字＋`<caller>/<n>` id＋共享 recorder＋独占队列；**D7 销号**）→ T3/T4 宿主缝＋扩展 executeTool 面（message_end 挂载钩先于落盘）→ T5/T7 tool-search（BM25 逐字＋builtin:tool-search defaultActive:false）→ T6 exposure 面（ToolExposure 五档＋ToolDefinitions＋四门逐字；D89/D91 收窄）→ T8 MCP ensureDiscoveryActive deferred 臂真化（自动激活 tool_search——行为变化）→ T9–T11 虚拟模型（注册表五错文逐字＋每请求路由钩＋路由态分支持久化＋direct 臂＋E5-26/27 翻行；裁决①判别式外在化、裁决⑪恢复链挂账）→ T12 下游（compaction/HTML 导出/RPC/web 透传）；窄差 D160–D171；排障：ServiceLoader 夹具两钉（classpath 根/顶层 public）＋AssistantMessage 两名录＋spotbugs 一钉（UL_UNRELEASED_LOCK⇒独占臂独立 try/finally） | +8.0（E5-26/27 +3.0＋G-8/9/10 +5.0）⇒ **446.0/485 ≈ 92.0%**；E5 域 **54.0/58 ≈ 93.1%**；G 域 7.0→**12.0/18 ≈ 66.7%**；全仓 **1,163.0/1379 ≈ 84.3%** |
 | 28 | docs/40 | 2026-10-28 | **examples 移植批 1（组 1：事件守卫与输入改写，16 件）**：T1 模块地基（pi-java-examples 第 12 模块，不进 dist）→ T2 宿主面补缺（`ExtensionContext.cwd()`＋`ExtensionSessionView.getEntries()`〔pi ReadonlySessionManager 对位，余 14 成员挂账〕）→ T3 工具族 3 件（hello／structured-output〔terminate＋责任链渲染器 D173〕／dynamic-tools；F3 取证 TypeBox 键序）→ T4 tool_call 守卫 2 件 → T5 会话守卫 3 件（confirm-destructive／dirty-repo-guard〔Boolean→boolean 避 NP_BOOLEAN_RETURN_NULL〕／project-trust）→ T6 input 3 件（?quick/steer 臂/inline-bash D174）→ T7 systemPrompt 3 件（pirate 逐字段／claude-rules／prompt-customizer〔D11 范畴〕）→ T8 event-bus＋provider-payload（JsJson 手写 JSON.stringify 语义臂——F2 取证 Jackson pretty 字节差）；窄差 D172–D175；**examples 处置 16/102**；排障：TCCL 夹具第三钉（过滤父链主名单）＋Map.of 不保单序＋ScriptedUi null 哨兵 | 账面不变（examples 批 1/8–10）——模块 446.0/485 ≈ **92.0%**；全仓 1,163.0/1379 ≈ **84.3%** |
 
+| 29 | docs/41 | 2026-10-29 | **结构债清空批**（2026-10-29 用户裁决插队首站＋E 类全量实测 5→21 件扩容）：E1–E23 全拆至 ≤500（行为零变化纯移动；AgentSession 3,797→496＋10 协作者、DefaultExtensionContext 1,118→499＋306＋494、PiTuiApp 1,137→481＋6 卫星、ChatScreen 1,040→468＋6 卫星，余 17 件各拆一协作者；ModelCompat 12 档便捷构造器→静态工厂＝全批唯一 public 形状变化〔57 调用点改签〕）＋**闸门修真**（checkstyle FileLength severity warning→error——两年无闸门根因，裁决④）＋docs/04 §7 教训第四条；排障钉：构造器链式委托改工厂链／CRLF 破 perl `$` 锚／blank final 初始化器引用／两起套件 flake 隔离即绿／嵌套 record 搬出实现类须显式 import | 账面不变（结构债不进地图行）——模块 446.0/485 ≈ **92.0%**；全仓 1,163.0/1379 ≈ **84.3%**；**E 类清零** |
 > 口径注记：批 8 起模块分母按**去重** 487（原 496），读数以最新一批闭环回填为准。
 
 ---
@@ -95,7 +96,6 @@
 | ~~20~~ | ~~E1/E3/E4 尾＋JSON 主题系统（2,417 行）~~ | — | **批 21 已闭环**（docs/32）：序 20 全落＋主题运行期重载（/reload 臂＋文件监视）＋A-29＋S9；**E1/E3/E4/A 四域同批满分**；B163 销号；窄差 D123–D133 |
 | ~~21~~ | ~~会话管理尾（E3：listSessions onProgress、B54）＋自更新~~ | — | **批 22 已闭环**（docs/33）：W15 web 渐进会话列表（sessionsProgress/cancelSessions＋代次闸＋前端渐进渲染）＋自更新终裁（裁决①：恒不可用臂＝pi 未知形态臂终局——E6-10/B#4 翻对齐，E6/B 两域满分）＋R29 终裁不做（裁决②，C 类＋出分母）。**§3 计划表清空** |
 
-| 22 | **结构债清空批**（E 类全量 **21 件**——2026-10-29 全量实测：台账原 5 件 E1/E2/E5/E6/E7＋漏登记 16 件 E8–E23〔含 AgentHarness/PiLaneSink 两件拆后回长〕；全拆至 ≤450 行，行为零变化纯移动，先例批 agent-core-5；收尾 FileLength 提 error 级闸门修真） | 无账面（结构债，E 类清零） | **2026-10-29 用户裁决插队在所有功能批之前**；批 29＝docs/41；E1 既定可拆块＝虚拟模型/嵌套簇（~230 行）＋评审挂起 M-1 扩展命令簇；E6/E7 原「搭下一 TUI 批」注记作废（TUI 已降队尾，独立成批不依赖 TUI 功能批）；体量超线按裁剪阀拆 29a/29b |
 | 23 | 模型可见面收口批（B94 八内置工具 promptSnippet/promptGuidelines 逐字〔pi system-prompt.ts:128-166〕＋B95 docs 段裁决＋生产者＋B203/ai #8 MCP exposure/namespace/outputSchema/annotations 接 AgentTool） | 小（模型可见 3 工单＋ai 唯一计分母缺失） | 批 30；B95 路径裁决随设计稿重开（批 28 后 pi-java-examples 已存，原「无 examples/」论据弱化） |
 | 24 | C 域 slash 尾（余 6 行：设置/scoped-models 选择器、Radius 分享/登录族，以 map/04 实算为准） | ~4.0 | C 域 90.7%→满分域候选 |
 | 25 | evals 域收口（map/06 评测 29.1%，20 行多缺失） | 中 | 需先盘点立项（无独立台账项） |

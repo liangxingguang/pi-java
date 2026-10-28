@@ -114,6 +114,11 @@
 4. **并发编辑撞车**：SettingsAccessors 代理会改 RpcSessionPayloads 的 getCompactionEnabled 调用点——串行构建时发现即收。
 5. CRLF 行尾：perl/sed 锚定 `$` 须带 `\r?`（本批已踩）。
 
-## §9 闭环回填
+## §9 闭环回填（2026-10-29 闭环）
 
-（闭环时填：实际行数表、verify 实测、checkstyle 错误/警告数、台账三处。）
+- **实施序**：T1 E5（c7c22443）→ T2 ai 五件 → T3 agent-core 六件 → T4 coding-agent 四件＋E17 → T5 tui 两件 → T6 E2（随 T4 commit）→ T7 E1 → T8 闸门修真。并行代理只改文件，构建主会话串行（模块序：ai→agent-core→coding-agent/web→tui）。
+- **实际行数**：全 21 件拆后 ≤500（最大 DefaultExtensionContext 499、AgentSession 壳 496、SessionDiscoveryFork 496、SessionWiring 492——四件贴线，后续净增须先腾挪）。
+- **偏离设计的实落点**：PiTuiApp 5→6 件（追加 SlashFlowRouter）、ChatScreen 5→7 件（追加 TranscriptProjector＋ChatScreenLayout）、AgentSession 10→11 件（追加 SessionDataViews）——三起同一根因：委托桩自重把留存顶过 500，500 闸门倒逼加拆；ThemeCatalog 判 public（跨模块调用方）；JsonlCodec 取零波及备选；E10 删死代码四件（全仓零引用取证）。
+- **verify 实测**：`mvn clean verify` exit 0，13:44 min，**5,441 测 0 失败 0 错 21 跳过**；checkstyle **0 错误 0 警告**（FileLength 已在 error 级，全仓无超 500）；spotbugs 13 模块零钉。
+- **排障钉**（回填 docs/04 E 类闭环段与 §7）：① 构造器链式委托迁工厂后须改 `of(...)` 链（中间档不再存在于 record）；② CRLF 行尾使 perl `$` 锚失效（import 插入第一次全落空）；③ blank final 字段不可在另一字段的初始化器里引用（DU 分析，移构造器赋值）；④ 嵌套 record 搬出实现类后须显式 import（实现接口的类才天然可见成员类型）；⑤ 两起套件 flake（RichSessionListTest、InteractiveModeRestoreTest）隔离复跑即绿——§7 教训 3 同族；⑥ 无 `-am` 拾旧 jar 再撞（tui 编译打 coding-agent 旧构件缺 ThemeCatalog）。
+- **台账回填三处**：docs/04 E 类 21 件清零（含根因记录与闸门修真注记）＋§7 教训四条化；docs/06 §1/§2/§3（批 29 行＋序 22 行移除＋总批次估计 29＋4＋4–6＋6）；docs/05 LOC 审计列不动（拆分不改信号值）。

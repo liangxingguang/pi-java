@@ -527,35 +527,8 @@
 
 
 
-| # | 文件 | 行数 |
-|---|---|---:|---:|
-| E1 | coding-agent …/core/AgentSession.java | **3,797**（2026-10-28 批 coding-agent-27 实测——批 27 +369：嵌套宿主缝＋虚拟模型路由钩/注册表接线＋exposure 四门；评审 M-1 挂起项〔扩展命令簇拆出〕继续挂，虚拟模型/嵌套两簇〔约 230 行〕是下一个可拆块，拆分压力临界） |
-| E2 | coding-agent …/rpc/RpcDispatcher.java | 767（2026-10-25 批 coding-agent-23 实测——批 23 −13：get_commands 扩展臂抽取净减） |
-| E5 | ai …/catalog/ModelCompat.java | **775**（2026-10-29 全量实测更正，原记 762 为 2026-10-11 值） |
-| E8 | coding-agent …/extension/DefaultExtensionContext.java | **1,118**（批 28 有「拆分压力」注记但未入本表——2026-10-29 全量实测补登） |
-| E9 | coding-agent …/theme/SystemTheme.java | 663（2026-10-29 全量实测补登，批 21 主题批产物） |
-| E10 | ai …/protocol/ResponsesMessageConverter.java | 631（2026-10-29 补登） |
-| E11 | ai …/stream/StreamPartialBuilder.java | 605（2026-10-29 补登） |
-| E12 | agent-core …/harness/PiLaneEngine.java | 588（2026-10-29 补登） |
-| E13 | ai …/provider/ModelsJsonCompat.java | 565（2026-10-29 补登） |
-| E14 | agent-core …/session/jsonl/JsonlCodec.java | 545（2026-10-29 补登） |
-| E15 | agent-core …/harness/CompactionExecutor.java | 545（2026-10-29 补登） |
-| E16 | agent-core …/harness/AgentHarness.java | 545（2026-10-29 补登——**回长**：批 agent-core-5 拆到 438，批 26/27 宿主缝又长回） |
-| E17 | web …/WebDispatcher.java | 537（2026-10-29 补登） |
-| E18 | agent-core …/hook/HookSystem.java | 526（2026-10-29 补登） |
-| E19 | coding-agent …/theme/Themes.java | 523（2026-10-29 补登） |
-| E20 | ai …/protocol/MistralConversationsApi.java | 521（2026-10-29 补登） |
-| E21 | coding-agent …/core/SettingsAccessors.java | 515（2026-10-29 补登） |
-| E22 | ai …/protocol/AnthropicMessagesApi.java | 512（2026-10-29 补登） |
-| E23 | agent-core …/harness/PiLaneSink.java | 505（2026-10-29 补登——**回长**：批 agent-core-5 拆到 470 后长回） |
-| E6 | tui …/app/PiTuiApp.java | **1,137**（2026-10-28 批 coding-agent-26 实测——批 26 +51：快捷键派发缝＋三渲染/变换缝装配＋resolveExtensionShortcuts；拆分宜搭下一 TUI 批） |
-| E7 | tui …/screen/ChatScreen.java | **1,040**（2026-10-27 批 coding-agent-25 实测——批 25 +9：appendMarkdownText；拆分宜搭下一 TUI 批，同 E6 一并发） |
+**✅ 已清零（2026-10-29 批 coding-agent-29，设计稿 docs/41）**：E 类 21 件全拆（E1–E23，行为零变化纯移动；用户裁决插队在所有功能批之前；「搭车拆」策略作废）。拆分全貌：E1 AgentSession 3,797→壳 496＋10 协作者（AgentSessionFactory 359／SessionWiring 492／ExtensionLoading 481／ModelToolControl 330／VirtualModelRouting 289〔批 27 既定块〕／PromptPipeline 471〔批 20 死锁包装逐字〕／TreeCompaction 375／SessionDiscoveryFork 496／SessionMessagingLifecycle 480／SessionDataViews 239）；E2 RpcDispatcher 767→448＋228＋96＋92；E5 ModelCompat 775→402＋382（12 档便捷构造器→静态工厂，57 调用点改签——全批唯一 public 形状变化）；E6 PiTuiApp 1,137→481＋6 卫星；E7 ChatScreen 1,040→468＋6 卫星；E8 DefaultExtensionContext 1,118→499＋306＋494；E9/E19 663/523→389＋292／325＋214（ThemeCatalog 跨模块调用故 public）；E17 537→425＋162；E21 515→393＋137（compaction() 口）；ai 五件 631/605/565/521/512→281/474/360/331/344＋各一协作者；agent-core 六件 588/545/545/545/526/505→375/420/435/417/443/308＋各一协作者。**闸门修真**：FileLength severity 提 error（裁决④）。排障钉：构造器链式委托须改工厂链／CRLF 使 perl `$` 锚失效／blank final 不可在字段初始化器引用／两起套件 flake（RichSessionListTest、InteractiveModeRestoreTest，隔离复跑即绿——§7 教训 3 同族）。全量 verify 5,441 测 0 失败、checkstyle 0 错 0 警告、spotbugs 13 模块零钉。
 
-（E3/E4 已销号——2026-10-18 批 agent-core-5 拆分：`PiLaneSink` 470＋`PiLaneRequestTelemetry` 131、`AgentHarness` 438＋`HarnessBootstrap` 231，行为零变化纯移动。）
-
-均不与功能耦合，可随时拆，与功能包搭车推进。[全部内部，模型不可见]
-
-**2026-10-29 用户裁决：E 类立项批 29「结构债清空批」（docs/41），插队在所有功能批之前**——「搭车拆」策略作废（E6/E7 原「宜搭下一 TUI 批」注记随 TUI 降队尾一并作废）。**同日全量实测把本表从 5 件扩到 21 件**（E8–E23 补登，含两件「拆后回长」——又一次印证无机械闸门：台账只记得到「被注意到的」文件）。根因记录：checkstyle.xml 有 `FileLength max=500` 但全局 `severity=warning`，而 `checkstyle:check` 默认只对 error 级违规失败 ⇒ 500 行规则自始至终没有机械闸门；批次闭环口径只问「0 违规」（＝error 数），警告从未问责（§7 教训 2 要求写明警告数，实际未落到 FileLength 上）；评审只在**新建**文件超限时拦过（批 13 CacheWarmer 571⇒拆），存量文件的渐进增长靠本表注记常态化。批 29 设计稿须含闸门修真（FileLength 提 error 级＋闭环模板补警告数）。
 
 ---
 
@@ -578,7 +551,8 @@
 4. 「不做」类进 §4，按【场景/决定/风险】三段式写清裁决与触发条件；分类变动在包文档记录。
 5. §1 计数由命令实测，不手记。
 6. 包设计稿闭环后随过程文档清理删除（历史在 git），**编号不复用**；下一包号 `docs/41`（docs/40＝批 28 设计稿，2026-10-28 闭环）。**2026-10-18 连续重编**：coding-agent 对齐清单 → `docs/08`、批 agent-core-4 → `docs/09`、批 agent-core-5 → `docs/10`、B236 coding-agent 批 1 → `docs/11`（重编前为 24/25/26，git 历史可查）。新号 08–11 与第五次清理删掉的旧稿（ai 批等）撞号：文中带「原」前缀的 `docs/NN` 引用一律指已删旧稿，不指现行文档。**2026-10-26 第六次清理＋重编**：删除全部已闭环批次设计稿（docs/09–19、21–34）与两份已完成/过时的清单（docs/07 agent-core〔模块 100%〕、docs/08 coding-agent〔一次性快照，权威在 map/04＋本台账〕）；批次总账 `docs/20` → `docs/07`；同日续删 ai 未对齐清单（docs/06，开放项全量在 §3.2 与 `map/02`），批次总账再编 `docs/07` → **`docs/06`**。本文件与 docs/05 中指向批次总账的引用已改 `docs/06`；`原 docs/20–22` 仍指已删的 agent-core 批 1–3 设计稿；`map/ANCHOR.md` 的 docs/06 引文指换锚时代的旧总表（已加「原」前缀），不指现行批次总账。
-7. 闭环口径的三条教训（来自 B186/B187/B200，已销号行的原文在 git 历史）：
+7. 闭环口径的教训（来自 B186/B187/B200 与批 29，已销号行的原文在 git 历史）：
    - 包闭环验证必须含 `mvn verify`（spotbugs 绑在 verify 阶段，只跑 test＋checkstyle 会漏）。
    - checkstyle 结果须写明错误、警告各几个，不接受一句「checkstyle 0」。
    - 「某时刻还没发生」的时序断言是运气（跟虚拟线程抢调度），要改确定性断言（如「监听器线程 ≠ 发送线程」）。
+   - **规则必须挂在会 fail 的闸门级别上**（批 29）：checkstyle.xml 全局 `severity=warning` ⇒ FileLength max=500 配了两年没拦过任何一次构建；E 类从 5 件实测扩到 21 件（含两件拆后回长）。批 29 已把 FileLength 单独提 error 级——新规矩：凡是「必须遵守」的编码规范，要么有 error 级机械闸门，要么默认它不存在。
