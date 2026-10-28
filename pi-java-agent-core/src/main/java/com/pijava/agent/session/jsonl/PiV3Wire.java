@@ -230,7 +230,7 @@ public final class PiV3Wire {
         target.set("data", SessionJson.mapper().valueToTree(record));
     }
 
-    /** 读一行 pi 形状的**非** entry 行；真 entry 转 {@link JsonlCodec#parsePiEntry}。 */
+    /** 读一行 pi 形状的**非** entry 行；真 entry 转 {@link LegacyMutationParser#parsePiEntry}。 */
     static SessionMutation parseFlatLine(JsonNode node, long seq) {
         String type = JsonlCodec.requireString(node, "type");
         return switch (type) {
@@ -240,7 +240,7 @@ public final class PiV3Wire {
                 parseTimestamp(node, "timestamp"), JsonlCodec.requireString(node, "targetId"),
                 JsonlCodec.optionalString(node, "label"));
             case "custom" -> parseCustom(node, seq);
-            default -> JsonlCodec.parsePiEntry(node, seq);
+            default -> LegacyMutationParser.parsePiEntry(node, seq);
         };
     }
 
@@ -256,7 +256,7 @@ public final class PiV3Wire {
             if ("usage".equals(JsonlCodec.requireString(data, "type"))) {
                 // D6：旧文件把 usage 落在 record 族（→ custom），现在它是一等 entry。
                 // 同上：不带 lane，免得撞车道的叶链校验。
-                return new SessionMutation.Entry(null, JsonlCodec.legacyUsageEntry(data,
+                return new SessionMutation.Entry(null, LegacyMutationParser.legacyUsageEntry(data,
                     JsonlCodec.requireString(data, "id"), parentId(node),
                     parseTimestamp(node, "timestamp")));
             }
@@ -266,7 +266,7 @@ public final class PiV3Wire {
             return new SessionMutation.Record(parentId(node), record);
         }
         // 不是本仓的扩展 ⇒ 是一条真正的 custom 条目。
-        return JsonlCodec.parsePiEntry(node, seq);
+        return LegacyMutationParser.parsePiEntry(node, seq);
     }
 
     private static String parentId(JsonNode node) {

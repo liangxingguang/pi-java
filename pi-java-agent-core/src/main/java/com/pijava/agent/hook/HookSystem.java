@@ -30,10 +30,13 @@ public final class HookSystem {
 
     private final HookRegistry registry = new HookRegistry();
     private final LaneState lane;
+    /** 链式合并簇（结构债拆分，纯移动）—— 本体在 {@link HookChains}。 */
+    private final HookChains chains;
 
     /** Create a hook system bound to the harness's lane. */
     public HookSystem(LaneState lane) {
         this.lane = lane;
+        this.chains = new HookChains(registry, this);
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -140,84 +143,23 @@ public final class HookSystem {
     }
 
     /**
-     * Fire {@code before_request} hooks（pi 的 {@code prepareRequest}，
-     * {@code agent-loop.ts:219-239}），链式合并：按注册序逐钩调用，<b>后钩看到前钩的
-     * 替换结果</b>；任一钩抛异常记账并弃权（与 {@link #fireFinishTurn} 同纪律）；
-     * 全弃权 ⇒ {@code null}。
+     * Fire {@code before_request} hooks（pi 的 {@code prepareRequest}）—— 链式合并体在
+     * {@link HookChains}（结构债拆分，纯移动）。
      *
      * @return 合并后的 update；{@code null} 表示没有钩子发言
      */
     public PiLoop.RequestUpdate firePrepareRequest(String laneName,
                                                    PiLoop.PrepareRequestContext request) {
-        PiLoop.RequestUpdate accumulated = null;
-        for (var hook : registry.get(laneName, "before_request")) {
-            try {
-                // 后钩看到前钩的替换结果：已积累的组件覆盖入参快照。
-                var visible = accumulated == null ? request
-                    : new PiLoop.PrepareRequestContext(
-                        accumulated.context() != null ? accumulated.context() : request.context(),
-                        accumulated.model() != null ? accumulated.model() : request.model(),
-                        accumulated.thinking() != null ? accumulated.thinking() : request.thinking(),
-                        request.failedResponse());
-                var u = ((PrepareRequestHook) hook).prepareRequest(visible);
-                if (u != null) {
-                    accumulated = new PiLoop.RequestUpdate(
-                        u.context() != null ? u.context()
-                            : accumulated != null ? accumulated.context() : null,
-                        u.model() != null ? u.model()
-                            : accumulated != null ? accumulated.model() : null,
-                        u.thinking() != null ? u.thinking()
-                            : accumulated != null ? accumulated.thinking() : null);
-                }
-            } catch (Exception e) {
-                recordHookError(laneName, "before_request", e);
-            }
-        }
-        // 批 27（B162）：路由级钩在沙箱链<b>之后</b>跑（pi 的 projection 先调
-        // previousPrepareRequest 再路由，agent-session.ts:800-810 的序）；异常
-        // 不隔离（pi 路由失败 reject ⇒ run 错误收场）。
-        var routed = registry.get(laneName, "before_request_routed");
-        if (!routed.isEmpty()) {
-            var visible = accumulated == null ? request
-                : new PiLoop.PrepareRequestContext(
-                    accumulated.context() != null ? accumulated.context() : request.context(),
-                    accumulated.model() != null ? accumulated.model() : request.model(),
-                    accumulated.thinking() != null ? accumulated.thinking() : request.thinking(),
-                    request.failedResponse());
-            for (var hook : routed) {
-                var u = ((PrepareRequestHook) hook).prepareRequest(visible);
-                if (u != null) {
-                    visible = new PiLoop.PrepareRequestContext(
-                        u.context() != null ? u.context() : visible.context(),
-                        u.model() != null ? u.model() : visible.model(),
-                        u.thinking() != null ? u.thinking() : visible.thinking(),
-                        visible.failedResponse());
-                    accumulated = new PiLoop.RequestUpdate(
-                        visible.context() != request.context() ? visible.context()
-                            : accumulated != null ? accumulated.context() : null,
-                        visible.model(), visible.thinking());
-                }
-            }
-        }
-        return accumulated;
+        return chains.firePrepareRequest(laneName, request);
     }
 
     /**
-     * Fire {@code before_payload} hooks, chaining modifications.
-     * Each hook receives the payload from the previous hook (or the original).
+     * Fire {@code before_payload} hooks, chaining modifications —— 链式合并体在
+     * {@link HookChains}（结构债拆分，纯移动）。
      * @return the final (possibly modified) payload
      */
     public Map<String, Object> fireBeforePayload(String laneName, Map<String, Object> payload) {
-        Map<String, Object> result = payload;
-        for (var hook : registry.get(laneName, "before_payload")) {
-            try {
-                var modified = ((BeforePayloadHook) hook).beforePayload(result);
-                if (modified != null) result = modified;
-            } catch (Exception e) {
-                recordHookError(laneName, "before_payload", e);
-            }
-        }
-        return result;
+        return chains.fireBeforePayload(laneName, payload);
     }
 
     /** Fire all {@code after_response} hooks for the lane. */
@@ -324,22 +266,13 @@ public final class HookSystem {
     }
 
     /**
-     * Fire {@code transform_context} hooks, chaining message transformations.
+     * Fire {@code transform_context} hooks, chaining message transformations ——
+     * 链式合并体在 {@link HookChains}（结构债拆分，纯移动）。
      * @return the final (possibly modified) message list
      */
     public List<com.pijava.ai.message.Message> fireTransformContext(
             String laneName, List<com.pijava.ai.message.Message> messages) {
-        List<com.pijava.ai.message.Message> result = messages;
-        for (var hook : registry.get(laneName, "transform_context")) {
-            try {
-                var transformed = ((TransformContextHook) hook).transformContext(
-                    List.copyOf(result));
-                if (transformed != null) result = transformed;
-            } catch (Exception e) {
-                recordHookError(laneName, "transform_context", e);
-            }
-        }
-        return result;
+        return chains.fireTransformContext(laneName, messages);
     }
 
     /**
@@ -369,29 +302,13 @@ public final class HookSystem {
     }
 
     /**
-     * Fire {@code prepare_next_turn} hooks, chaining updates. Each non-null
-     * return merges over the accumulated result; a throwing hook is recorded
-     * and abstains.
+     * Fire {@code prepare_next_turn} hooks, chaining updates —— 链式合并体在
+     * {@link HookChains}（结构债拆分，纯移动）。
      *
      * @return the merged update, or null when no hook produced one
      */
     public TurnUpdate firePrepareNextTurn(String laneName, PrepareNextTurnContext ctx) {
-        TurnUpdate result = null;
-        for (var hook : registry.get(laneName, "prepare_next_turn")) {
-            try {
-                var u = ((PrepareNextTurnHook) hook).prepareNextTurn(ctx);
-                if (u != null) {
-                    result = new TurnUpdate(
-                        u.model() != null ? u.model()
-                            : result != null ? result.model() : null,
-                        u.thinkingLevel() != null ? u.thinkingLevel()
-                            : result != null ? result.thinkingLevel() : null);
-                }
-            } catch (Exception e) {
-                recordHookError(laneName, "prepare_next_turn", e);
-            }
-        }
-        return result;
+        return chains.firePrepareNextTurn(laneName, ctx);
     }
 
     /**
@@ -478,7 +395,7 @@ public final class HookSystem {
      * {@link com.pijava.agent.harness.LaneState#appendDeferredEntry}：
      * 与宿主线程共享车道监视器，否则两边会读到同一个叶、生成两条同父的 entry。</p>
      */
-    private void recordHookError(String laneName, String hookName, Exception e) {
+    void recordHookError(String laneName, String hookName, Exception e) {
         if (lane.laneName().equals(laneName)) {
             lane.appendDeferredEntry((seq, parentId) -> new com.pijava.agent.entry.Entry.Usage(
                 java.util.UUID.randomUUID().toString(), seq, parentId, java.time.Instant.now(),
@@ -500,7 +417,7 @@ public final class HookSystem {
      * responsible for casting to the correct type based on the hook name key —
      * the registration path guarantees type safety through the string key convention.</p>
      */
-    private static final class HookRegistry {
+    static final class HookRegistry {
         // key = laneName + "/" + hookName
         private final ConcurrentMap<String, List<Object>> store = new ConcurrentHashMap<>();
 

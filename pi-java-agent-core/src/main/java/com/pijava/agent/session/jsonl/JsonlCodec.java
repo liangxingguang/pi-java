@@ -18,13 +18,6 @@ import com.pijava.agent.session.SessionMutation;
  */
 public final class JsonlCodec {
 
-    private static final List<String> ENTRY_TYPES = List.of(
-        Entry.TYPE_MESSAGE, Entry.TYPE_MODEL_CHANGE, Entry.TYPE_THINKING_LEVEL_CHANGE,
-        // 仅 legacy 接收：无对应 Entry 变体（active_tools_change 已删，docs/15 实施期记）。
-        "active_tools_change",
-        Entry.TYPE_COMPACTION, Entry.TYPE_BRANCH_SUMMARY, Entry.TYPE_CUSTOM,
-        Entry.TYPE_CUSTOM_MESSAGE, Entry.TYPE_USAGE, Entry.TYPE_CONTEXT_EDIT);
-
     /**
      * 本仓**旧行**的 {@code kind} 取值（{@code kind:"entry"/"record"/"lane"/"fact"}）。
      *
@@ -33,13 +26,6 @@ public final class JsonlCodec {
      */
     private static final List<String> LEGACY_MUTATION_KINDS =
         List.of("entry", "record", "lane", "fact");
-
-    private static final List<String> RECORD_TYPES = List.of(
-        "operation_started", "abort_requested", "operation_finished", "step_attempt",
-        "tool_started", "tool_finished", "queue_enqueued", "queue_cancelled",
-        "queue_consumed", "write_deferred");
-
-    private static final List<String> OPERATION_KINDS = List.of("run", "compaction", "navigation");
 
     private JsonlCodec() {}
 
@@ -201,10 +187,10 @@ public final class JsonlCodec {
                 throw DecodeError.schema("has invalid seq");
             }
             return switch (legacyKind) {
-                case "entry" -> ParseResult.ok(parseEntryMutation(node, seq));
-                case "record" -> ParseResult.ok(parseRecordMutation(node, seq));
-                case "lane" -> ParseResult.ok(parseLaneMutation(node, seq));
-                case "fact" -> ParseResult.ok(parseFactMutation(node, seq));
+                case "entry" -> ParseResult.ok(LegacyMutationParser.parseEntryMutation(node, seq));
+                case "record" -> ParseResult.ok(LegacyMutationParser.parseRecordMutation(node, seq));
+                case "lane" -> ParseResult.ok(LegacyMutationParser.parseLaneMutation(node, seq));
+                case "fact" -> ParseResult.ok(LegacyMutationParser.parseFactMutation(node, seq));
                 default -> ParseResult.err(DecodeError.schema("has unknown mutation kind"));
             };
         } catch (DecodeError e) {
@@ -230,117 +216,6 @@ public final class JsonlCodec {
         }
         String value = kind.textValue();
         return LEGACY_MUTATION_KINDS.contains(value) ? value : null;
-    }
-
-    private static SessionMutation parseEntryMutation(JsonNode node, long seq) {
-        return parseEntryMutation(node, seq, instant(node, "timestamp"));
-    }
-
-    /** 读一行 **pi 形状**的 entry（判别键 {@code type}）。供 {@link PiV3Wire#parseFlatLine} 的分派复用。 */
-    static SessionMutation parsePiEntry(JsonNode node, long seq) {
-        return parseEntryMutation(node, seq, PiV3Wire.parseTimestamp(node, "timestamp"));
-    }
-
-    /**
-     * 读一条 entry。{@code timestamp} 由调用方给 —— 两种线形状的**时间戳型不同**：
-     * 旧行是 epoch 毫秒、pi 的行是 ISO 串（{@code PiV3Wire.parseTimestamp}）。
-     */
-    private static SessionMutation parseEntryMutation(JsonNode node, long seq, Instant timestamp) {
-        String lane = node.has("lane") ? requireString(node, "lane") : null;
-        String id = requireString(node, "id");
-        String type = requireString(node, "type");
-        if (!ENTRY_TYPES.contains(type)) {
-            throw DecodeError.schema("has unknown entry type " + type);
-        }
-        if ("custom".equals(type) || "custom_message".equals(type)) {
-            requireString(node, "customType");
-        }
-        String parentId = nullableString(node, "parentId");
-        Entry entry = EntryJsonCodec.decode(node, id, seq, parentId, timestamp);
-        return lane == null
-            ? new SessionMutation.Entry(null, entry)
-            : new SessionMutation.Entry(lane, entry);
-    }
-
-    /**
-     * 读**旧的** usage 记录行 ⇒ 转成一等 entry（D6 之后记录族里不再有这一型）。
-     *
-     * <p>两个来源共用它：{@code kind:"record"} 的旧行，以及已迁移文件里的
-     * {@code custom} ＋ {@code pi-java.record.usage} 行。</p>
-     *
-     * <p>{@code parentId} 取调用方给的那个（旧行没有就是 {@code null}）。</p>
-     */
-    static Entry.Usage legacyUsageEntry(JsonNode node, String id, String parentId,
-                                        Instant timestamp) {
-        return new Entry.Usage(id, 0, parentId, timestamp,
-            optionalString(node, "cause"),
-            optionalString(node, "provider"),
-            optionalString(node, "model"),
-            EntryJsonCodec.decodeUsage(node.get("usage")),
-            optionalString(node, "note"),
-            optionalString(node, "runId"),
-            optionalString(node, "entryId"),
-            optionalString(node, "toolCallId"),
-            optionalInteger(node, "attempt"),
-            readStopReason(node));
-    }
-
-    private static SessionMutation parseRecordMutation(JsonNode node, long seq) {
-        String id = requireString(node, "id");
-        String lane = requireString(node, "lane");
-        String type = requireString(node, "type");
-        if ("usage".equals(type)) {
-            // D6：usage 已提为一等 entry，旧文件里的这一型在**装载时**转换。
-            // 车道传 null：记录族本来不参与车道的叶链（记录不推进叶），硬按 entry 的
-            // 「does not chain to the lane leaf」校验会把整份旧文件读崩。
-            requireString(node, "cause");
-            return new SessionMutation.Entry(null, legacyUsageEntry(node, id,
-                nullableString(node, "parentId"), instant(node, "timestamp")));
-        }
-        if (!RECORD_TYPES.contains(type)) {
-            throw DecodeError.schema("has unknown record type " + type);
-        }
-        if ("operation_started".equals(type)) {
-            JsonNode intent = node.get("intent");
-            if (intent == null || !intent.isObject()) {
-                throw DecodeError.schema("has invalid intent");
-            }
-            String operationKind = requireString(intent, "kind");
-            if (!OPERATION_KINDS.contains(operationKind)) {
-                throw DecodeError.schema("has unknown operation kind " + operationKind);
-            }
-        }
-        if ("operation_finished".equals(type)) {
-            requireString(node, "runId");
-        }
-        Instant timestamp = instant(node, "timestamp");
-        LaneRecord record = RecordJsonCodec.decode(node, id, seq, lane, timestamp);
-        // 旧行没有 parentId（docs/12 §6 D2 才补的）。
-        return new SessionMutation.Record(null, record);
-    }
-
-    /**
-     * 读**旧形状**的 lane 行（{@code kind:"lane"}）。
-     *
-     * <p>⚠️ 旧行里**没有** {@code parentId}／{@code timestamp} —— 那两个字段是本包为 pi 的线形状
-     * 才补的（{@code docs/12 §6 D2}）。历史文件里没有就是没有：父级给 {@code null}、
-     * 时间戳给 {@link Instant#EPOCH}，由惰性迁移重写成 pi 形状。</p>
-     */
-    private static SessionMutation parseLaneMutation(JsonNode node, long seq) {
-        return new SessionMutation.Lane(seq, null, Instant.EPOCH,
-            requireString(node, "lane"), nullableString(node, "leafId"));
-    }
-
-    /** 读**旧形状**的 fact 行（{@code kind:"fact"}）。身份字段的缺省处理同 {@link #parseLaneMutation}。 */
-    private static SessionMutation parseFactMutation(JsonNode node, long seq) {
-        String fact = requireString(node, "fact");
-        return switch (fact) {
-            case "name" -> new SessionMutation.FactName(seq, null, Instant.EPOCH,
-                optionalString(node, "name"));
-            case "label" -> new SessionMutation.FactLabel(seq, null, Instant.EPOCH,
-                requireString(node, "targetId"), optionalString(node, "label"));
-            default -> throw DecodeError.schema("has unknown fact type");
-        };
     }
 
     // ── Shared validation helpers (also used by the SQLite payload codec) ──
