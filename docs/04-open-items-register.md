@@ -531,7 +531,23 @@
 |---|---|---:|---:|
 | E1 | coding-agent …/core/AgentSession.java | **3,797**（2026-10-28 批 coding-agent-27 实测——批 27 +369：嵌套宿主缝＋虚拟模型路由钩/注册表接线＋exposure 四门；评审 M-1 挂起项〔扩展命令簇拆出〕继续挂，虚拟模型/嵌套两簇〔约 230 行〕是下一个可拆块，拆分压力临界） |
 | E2 | coding-agent …/rpc/RpcDispatcher.java | 767（2026-10-25 批 coding-agent-23 实测——批 23 −13：get_commands 扩展臂抽取净减） |
-| E5 | ai …/catalog/ModelCompat.java | **762**（2026-10-11 B98 加 8 组件；converter 侧已拆出 CompletionAssistantMessage 保 500 内） |
+| E5 | ai …/catalog/ModelCompat.java | **775**（2026-10-29 全量实测更正，原记 762 为 2026-10-11 值） |
+| E8 | coding-agent …/extension/DefaultExtensionContext.java | **1,118**（批 28 有「拆分压力」注记但未入本表——2026-10-29 全量实测补登） |
+| E9 | coding-agent …/theme/SystemTheme.java | 663（2026-10-29 全量实测补登，批 21 主题批产物） |
+| E10 | ai …/protocol/ResponsesMessageConverter.java | 631（2026-10-29 补登） |
+| E11 | ai …/stream/StreamPartialBuilder.java | 605（2026-10-29 补登） |
+| E12 | agent-core …/harness/PiLaneEngine.java | 588（2026-10-29 补登） |
+| E13 | ai …/provider/ModelsJsonCompat.java | 565（2026-10-29 补登） |
+| E14 | agent-core …/session/jsonl/JsonlCodec.java | 545（2026-10-29 补登） |
+| E15 | agent-core …/harness/CompactionExecutor.java | 545（2026-10-29 补登） |
+| E16 | agent-core …/harness/AgentHarness.java | 545（2026-10-29 补登——**回长**：批 agent-core-5 拆到 438，批 26/27 宿主缝又长回） |
+| E17 | web …/WebDispatcher.java | 537（2026-10-29 补登） |
+| E18 | agent-core …/hook/HookSystem.java | 526（2026-10-29 补登） |
+| E19 | coding-agent …/theme/Themes.java | 523（2026-10-29 补登） |
+| E20 | ai …/protocol/MistralConversationsApi.java | 521（2026-10-29 补登） |
+| E21 | coding-agent …/core/SettingsAccessors.java | 515（2026-10-29 补登） |
+| E22 | ai …/protocol/AnthropicMessagesApi.java | 512（2026-10-29 补登） |
+| E23 | agent-core …/harness/PiLaneSink.java | 505（2026-10-29 补登——**回长**：批 agent-core-5 拆到 470 后长回） |
 | E6 | tui …/app/PiTuiApp.java | **1,137**（2026-10-28 批 coding-agent-26 实测——批 26 +51：快捷键派发缝＋三渲染/变换缝装配＋resolveExtensionShortcuts；拆分宜搭下一 TUI 批） |
 | E7 | tui …/screen/ChatScreen.java | **1,040**（2026-10-27 批 coding-agent-25 实测——批 25 +9：appendMarkdownText；拆分宜搭下一 TUI 批，同 E6 一并发） |
 
@@ -539,7 +555,7 @@
 
 均不与功能耦合，可随时拆，与功能包搭车推进。[全部内部，模型不可见]
 
-**2026-10-29 用户裁决：E 类五件立项批 29「结构债清空批」（docs/41），插队在所有功能批之前**——「搭车拆」策略作废（E6/E7 原「宜搭下一 TUI 批」注记随 TUI 降队尾一并作废）。根因记录：checkstyle.xml 有 `FileLength max=500` 但全局 `severity=warning`，而 `checkstyle:check` 默认只对 error 级违规失败 ⇒ 500 行规则自始至终没有机械闸门；批次闭环口径只问「0 违规」（＝error 数），警告从未问责（§7 教训 2 要求写明警告数，实际未落到 FileLength 上）；评审只在**新建**文件超限时拦过（批 13 CacheWarmer 571⇒拆），存量文件的渐进增长靠本表注记常态化。批 29 设计稿须含闸门修真（FileLength 提 error 级）。
+**2026-10-29 用户裁决：E 类立项批 29「结构债清空批」（docs/41），插队在所有功能批之前**——「搭车拆」策略作废（E6/E7 原「宜搭下一 TUI 批」注记随 TUI 降队尾一并作废）。**同日全量实测把本表从 5 件扩到 21 件**（E8–E23 补登，含两件「拆后回长」——又一次印证无机械闸门：台账只记得到「被注意到的」文件）。根因记录：checkstyle.xml 有 `FileLength max=500` 但全局 `severity=warning`，而 `checkstyle:check` 默认只对 error 级违规失败 ⇒ 500 行规则自始至终没有机械闸门；批次闭环口径只问「0 违规」（＝error 数），警告从未问责（§7 教训 2 要求写明警告数，实际未落到 FileLength 上）；评审只在**新建**文件超限时拦过（批 13 CacheWarmer 571⇒拆），存量文件的渐进增长靠本表注记常态化。批 29 设计稿须含闸门修真（FileLength 提 error 级＋闭环模板补警告数）。
 
 ---
 

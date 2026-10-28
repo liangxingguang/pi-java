@@ -95,7 +95,7 @@
 | ~~20~~ | ~~E1/E3/E4 尾＋JSON 主题系统（2,417 行）~~ | — | **批 21 已闭环**（docs/32）：序 20 全落＋主题运行期重载（/reload 臂＋文件监视）＋A-29＋S9；**E1/E3/E4/A 四域同批满分**；B163 销号；窄差 D123–D133 |
 | ~~21~~ | ~~会话管理尾（E3：listSessions onProgress、B54）＋自更新~~ | — | **批 22 已闭环**（docs/33）：W15 web 渐进会话列表（sessionsProgress/cancelSessions＋代次闸＋前端渐进渲染）＋自更新终裁（裁决①：恒不可用臂＝pi 未知形态臂终局——E6-10/B#4 翻对齐，E6/B 两域满分）＋R29 终裁不做（裁决②，C 类＋出分母）。**§3 计划表清空** |
 
-| 22 | **结构债清空批**（E1 AgentSession 3,797／E2 RpcDispatcher 767／E5 ModelCompat 762／E6 PiTuiApp 1,137／E7 ChatScreen 1,040——五件全拆至 ≤500 行，行为零变化纯移动，先例批 agent-core-5） | 无账面（结构债，E 类清零） | **2026-10-29 用户裁决插队在所有功能批之前**；批 29＝docs/41；E1 既定可拆块＝虚拟模型/嵌套簇（~230 行）＋评审挂起 M-1 扩展命令簇；E6/E7 原「搭下一 TUI 批」注记作废（TUI 已降队尾，独立成批不依赖 TUI 功能批） |
+| 22 | **结构债清空批**（E 类全量 **21 件**——2026-10-29 全量实测：台账原 5 件 E1/E2/E5/E6/E7＋漏登记 16 件 E8–E23〔含 AgentHarness/PiLaneSink 两件拆后回长〕；全拆至 ≤450 行，行为零变化纯移动，先例批 agent-core-5；收尾 FileLength 提 error 级闸门修真） | 无账面（结构债，E 类清零） | **2026-10-29 用户裁决插队在所有功能批之前**；批 29＝docs/41；E1 既定可拆块＝虚拟模型/嵌套簇（~230 行）＋评审挂起 M-1 扩展命令簇；E6/E7 原「搭下一 TUI 批」注记作废（TUI 已降队尾，独立成批不依赖 TUI 功能批）；体量超线按裁剪阀拆 29a/29b |
 | 23 | 模型可见面收口批（B94 八内置工具 promptSnippet/promptGuidelines 逐字〔pi system-prompt.ts:128-166〕＋B95 docs 段裁决＋生产者＋B203/ai #8 MCP exposure/namespace/outputSchema/annotations 接 AgentTool） | 小（模型可见 3 工单＋ai 唯一计分母缺失） | 批 30；B95 路径裁决随设计稿重开（批 28 后 pi-java-examples 已存，原「无 examples/」论据弱化） |
 | 24 | C 域 slash 尾（余 6 行：设置/scoped-models 选择器、Radius 分享/登录族，以 map/04 实算为准） | ~4.0 | C 域 90.7%→满分域候选 |
 | 25 | evals 域收口（map/06 评测 29.1%，20 行多缺失） | 中 | 需先盘点立项（无独立台账项） |
