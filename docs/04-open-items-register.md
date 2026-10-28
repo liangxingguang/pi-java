@@ -83,7 +83,7 @@
 | B94 | 模型可见 | 8 个内置工具的 `promptSnippet`/`promptGuidelines` 声明 |
 | B95 | 模型可见 | `docs` 段没有生产者（ContextAssembler 不传 DocumentationPaths） |
 
-> B94/B95 落点：agent-core 的 `ContextAssembler`/`SystemPrompts`＋coding-agent 工具声明（pi `system-prompt.ts:128-166`，消费者 `agent-session.ts:3533-3541`）。**2026-10-29 立项**：随 docs/06 §3 序 22「模型可见面收口批」（批 29＝docs/41），B95 的路径裁决随设计稿重开（批 28 后 pi-java-examples 已存，原「无 examples/」论据弱化）。ai 层其余欠账＝`map/02-ai.md` 的存疑形状差（15 条计半分）与 #8 `ToolUseContent.namespace`（随 MCP 包 B203）——原 docs/06 ai 未对齐清单 2026-10-26 删除（其「跨模块另案」指针已过时：CacheWarmer 批 13 闭环、B148 消费侧批 15 闭环、Kitty/剪贴板在 map/05 R14/R15/K34、Took 卡在 map/05 R11、structuredContent 消费侧即 B202），索引职能并入本表与 map/02。
+> B94/B95 落点：agent-core 的 `ContextAssembler`/`SystemPrompts`＋coding-agent 工具声明（pi `system-prompt.ts:128-166`，消费者 `agent-session.ts:3533-3541`）。**2026-10-29 立项**：随 docs/06 §3 序 23「模型可见面收口批」（批 30），B95 的路径裁决随设计稿重开（批 28 后 pi-java-examples 已存，原「无 examples/」论据弱化）。ai 层其余欠账＝`map/02-ai.md` 的存疑形状差（15 条计半分）与 #8 `ToolUseContent.namespace`（随 MCP 包 B203）——原 docs/06 ai 未对齐清单 2026-10-26 删除（其「跨模块另案」指针已过时：CacheWarmer 批 13 闭环、B148 消费侧批 15 闭环、Kitty/剪贴板在 map/05 R14/R15/K34、Took 卡在 map/05 R11、structuredContent 消费侧即 B202），索引职能并入本表与 map/02。
 
 ### 3.3 功能整块
 
@@ -116,7 +116,7 @@
 | B197 | 内部 | `URI.create` 接受相对引用，而 pi 的 `new URL` 会抛异常 | `responseFromRedirectUrl` 已显式挡 scheme；其余 URL 入口未逐个复核 |
 | B198 | 内部 | `OAuthPage` 的 CSS 折行 | 字节差仅在 `<style>` 内空白，计算值相同（受 checkstyle 120 列限制） |
 | B202 | 内部 | MCP 结果的 `structuredContent` 没有消费者 | `ToolResult.structuredContent` 形状已落（包⑩）；消费者是 codemode（B161）与 `after_tool` 钩子改写（pi `types.ts:1439`），均未落 |
-| B203 | 模型可见 | MCP 的 exposure/namespace/outputSchema/annotations 未接到 `AgentTool` | pi 的 `ToolDefinition` 有这四项；Java 的 `AgentTool` 没有，包⑩让 `McpToolDefinition` 承载；激活路径是第⑫包与 B161/B162。**2026-10-29 立项**：随 docs/06 §3 序 22（含 ai 层 #8 namespace） |
+| B203 | 模型可见 | MCP 的 exposure/namespace/outputSchema/annotations 未接到 `AgentTool` | pi 的 `ToolDefinition` 有这四项；Java 的 `AgentTool` 没有，包⑩让 `McpToolDefinition` 承载；激活路径是第⑫包与 B161/B162。**2026-10-29 立项**：随 docs/06 §3 序 23（含 ai 层 #8 namespace） |
 | ~~B204~~ | 用户可见 | ~~MCP 工具与资源的 TUI 渲染器未移植~~ | **批 coding-agent-16 已销号**（docs/27 T4，2026-10-23 闭环）：`registerToolRenderer` 责任链（`ToolCallRenderer`/`ToolRendererResolver`/`ToolRendererRegistry`，pi types.ts:1695＋runner.ts:789-795 对位）＋内置 MCP resolver（`McpToolCallRenderer`，正则 label/折叠 5 行＋提示行）＋TUI 消费缝（`ToolRenderers` holder＋MessageBubble 两臂）。文本级接口（裁决⑦，窄差 D92） |
 | B205 | 内部 | MCP 工具适配器在 `pi-java-coding-agent`，不在 `pi-java-mcp` | `AgentTool` 在 agent-core 模块，`pi-java-mcp` 看不见它（依赖方向 `ai ← mcp`），所以模块分道。原 docs/28 §2 的模块图早画了 `coding-agent ← mcp`，pom 直到包⑩才接上那条依赖 |
 | B206 | 内部 | `ToolResult.isError` 是新增的语义通道 | pi 的 `isError` 来自结果对象（`AgentToolResult.isError`），pi-java 此前只由「抛没抛异常」派生。`PiToolRunner` 已改读结果字段，`after_tool` 钩子仍可改写 |
@@ -131,7 +131,7 @@
 | B217 | 内部 | MCP `login` 的端到端（真授权服务器）没有测试夹具 | 夹具覆盖到「连不上 / 非 OAuth / 缺参数 / 超时校验」为止；`--timeout` 秒数文案与 `reconnect` 后的成功路径需要真授权服务器（包⑨的 `McpSignIn` 另有夹具） |
 | ~~B163~~ | 用户可见 | ~~主题/色彩系统差距大~~ | **批 coding-agent-21 已销号**（docs/32，2026-10-25 闭环）：pi 2,417 行域（theme.ts/theme-controller/system-theme/theme-schema/theme-tokens＋dark/light.json）＋pi-tui 色数学（colors.ts/oklab.ts）整体移植——`com.pijava.coding.agent.theme` 14 件＋tui 适配层 3 件；OKHSL golden 经 pi 锚点 tsx 实跑钉死（okhsl(295 50% 67%)⇒#a798d7 等） |
 | ~~B246~~ | 混合 | ~~**工具选择的 reload 臂＋SDK `tools` 选项抛错面**~~（批 coding-agent-1 新登记，docs/11 裁决④） | **批 coding-agent-16 已销号**（docs/27 T5，2026-10-23 闭环）：`AgentSession.reload()` 落地（`SessionReload` 七步序，`agent-session.ts:3660-3701` 对位）＋`ToolSelection.Resolved` 增 `usesDefaultTools`/`defaultToolModifiers`（sdk.ts:472-473 对位）＋defaultTools diff 三分支（新增激活/移除保持激活/`-name` 保持移除）＋`/reload` 双门与文案逐字。SDK 抛错面维持批 1 口径（java 无 SDK 面，CLI 等价物已落） |
-### 3.4 TUI（优先级最低，web UI 为主——2026-10-29 用户裁决：降为队尾不取消，统归 docs/06 §3 序 26 TUI 队尾批组）
+### 3.4 TUI（优先级最低，web UI 为主——2026-10-29 用户裁决：降为队尾不取消，统归 docs/06 §3 序 27 TUI 队尾批组）
 
 | # | 面 | 条目 | 现状与出处 |
 |---|---|---|---|
@@ -514,7 +514,7 @@
 
 - 【场景】docs/06 §3.3 变量①：pi `examples/`（105 个 `.ts`、16,033 行）是扩展 API 的行为规格，pi-java 零对应物（map/04 E5-33 与 F#22 两行缺失）。拍板三选项（全做／代表子集／不做）之外，同场裁决落地形态与 TS 兼容问题。
 - 【决定】① 变量① **全做**（盘点后处置口径 102 件，重估 8–10 批〔批 28–37，docs/39 §7〕；原估 +2 批系盘点前数字）；② **不做 TS 扩展运行时**——维持纯 Java 扩展（ServiceLoader＋`loadJar`），排除 GraalJS polyglot 路线（再造一个 E5 域规模的 JS 桥＋放大 native image〔已判不现实〕＋第二轮对齐工作）；③ 落地形态＝**新第 12 模块 `pi-java-examples`**（依赖 coding-agent 与 tui；示例扩展进 main 源码集，验收测试进 test；CLI 发行不携带；`-e` 参数路径形态差异〔.ts/目录 ⇒ JAR〕登记窄差）。
-- 【风险/代价】模块数 11→12；§5 外部依赖处置随批拍板（gondolin QEMU／sandbox OS 沙箱／doom WASM 引擎降级为假帧源均登记窄差候选）；组 10 `plugins/pi-example-plugin`（Chord facet 3 件）列**不做候选**（pi 第三代实验机制，pi-java 无 chord 模块）——待拍板，见 §6 F 类。每批另写设计稿（docs/40 起），流程同批 1–27。出处：docs/39 全文（§1 拍板记录／§4 API 面压力并表／§6 分组总表／§7 分批方案）。**2026-10-28 修订（批 28 闭环后拍板）**：批 29–37 合并至 6 批（批 29–34；29＝组 2＋组 7、30＝Operations＋组 6、31＝组 3＋组 4、32＝组 5、33＝组 8、34＝组 9＋组 10——docs/39 §7 修订段映射表）。**2026-10-29 再修订（用户裁决）**：全做裁决不变，**排期降为最尾**——理由：① pi-java 以 web 为主要交互方式；② examples 是扩展 API 的验收规格而非用户功能流程，有无不影响实际功能。启动条件＝其余欠账清零；原批 29–34 编号让位给新主线批（docs/06 §3 序 22–26），examples 六批启动时按当时包号重排，组 2–10 内容与合并映射不变。
+- 【风险/代价】模块数 11→12；§5 外部依赖处置随批拍板（gondolin QEMU／sandbox OS 沙箱／doom WASM 引擎降级为假帧源均登记窄差候选）；组 10 `plugins/pi-example-plugin`（Chord facet 3 件）列**不做候选**（pi 第三代实验机制，pi-java 无 chord 模块）——待拍板，见 §6 F 类。每批另写设计稿（docs/40 起），流程同批 1–27。出处：docs/39 全文（§1 拍板记录／§4 API 面压力并表／§6 分组总表／§7 分批方案）。**2026-10-28 修订（批 28 闭环后拍板）**：批 29–37 合并至 6 批（批 29–34；29＝组 2＋组 7、30＝Operations＋组 6、31＝组 3＋组 4、32＝组 5、33＝组 8、34＝组 9＋组 10——docs/39 §7 修订段映射表）。**2026-10-29 再修订（用户裁决）**：全做裁决不变，**排期降为最尾**——理由：① pi-java 以 web 为主要交互方式；② examples 是扩展 API 的验收规格而非用户功能流程，有无不影响实际功能。启动条件＝其余欠账清零；原批 29–34 编号让位给新主线批（docs/06 §3 序 23–27），examples 六批启动时按当时包号重排，组 2–10 内容与合并映射不变。
 
 ### 批 coding-agent-28（docs/40，2026-10-28 闭环）：examples 移植批 1——组 1「事件守卫与输入改写」16 件全落
 
@@ -538,6 +538,8 @@
 （E3/E4 已销号——2026-10-18 批 agent-core-5 拆分：`PiLaneSink` 470＋`PiLaneRequestTelemetry` 131、`AgentHarness` 438＋`HarnessBootstrap` 231，行为零变化纯移动。）
 
 均不与功能耦合，可随时拆，与功能包搭车推进。[全部内部，模型不可见]
+
+**2026-10-29 用户裁决：E 类五件立项批 29「结构债清空批」（docs/41），插队在所有功能批之前**——「搭车拆」策略作废（E6/E7 原「宜搭下一 TUI 批」注记随 TUI 降队尾一并作废）。根因记录：checkstyle.xml 有 `FileLength max=500` 但全局 `severity=warning`，而 `checkstyle:check` 默认只对 error 级违规失败 ⇒ 500 行规则自始至终没有机械闸门；批次闭环口径只问「0 违规」（＝error 数），警告从未问责（§7 教训 2 要求写明警告数，实际未落到 FileLength 上）；评审只在**新建**文件超限时拦过（批 13 CacheWarmer 571⇒拆），存量文件的渐进增长靠本表注记常态化。批 29 设计稿须含闸门修真（FileLength 提 error 级）。
 
 ---
 
