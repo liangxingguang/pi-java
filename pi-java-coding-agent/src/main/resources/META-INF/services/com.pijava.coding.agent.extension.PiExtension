@@ -1,3 +1,7 @@
 # 批 24（docs/35）：内置 MCP 扩展（pi extensions/index.ts 的 builtInExtensions 对位；
 # builtin:mcp 身份由 ExtensionManager 合成；--no-mcp 按名摘除）。
 com.pijava.coding.agent.extension.mcp.McpExtension
+# 批 27（docs/38 T7）：内置 tool-search 扩展（pi extensions/index.ts:11 对位；
+# builtin:tool-search；defaultActive:false ⇒ 注册不激活，经 --tools/defaultTools/
+# setActiveTools/MCP ensureDiscoveryActive 激活）。
+com.pijava.coding.agent.extension.toolsearch.ToolSearchExtension
