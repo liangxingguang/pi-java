@@ -66,7 +66,7 @@ public final class ImageBlockFilter {
             case Message.UserMessage u -> new Message.UserMessage(filtered, u.timestamp());
             case Message.ToolResultMessage t -> new Message.ToolResultMessage(
                 t.toolUseId(), t.toolName(), filtered, t.details(), t.usage(),
-                t.addedToolNames(), t.isError(), t.timestamp(), t.durationMs());
+                t.addedToolNames(), t.isError(), t.timestamp(), t.durationMs(), t.nestedCalls());
             default -> throw new IllegalStateException("unreachable");
         };
     }

@@ -41,6 +41,28 @@ final class McpToolRegistrar {
     private final Map<String, McpToolDefinition> definitions = new HashMap<>();
     /** 工具名 → 当前 exposure（裁决③外挂表；资源三工具同驻）。 */
     private final Map<String, McpExposure> exposures = new HashMap<>();
+
+    /**
+     * 批 27（B162 裁决④）：把 exposure/namespace 镜像进会话级定义表
+     * （pi {@code _toolDefinitions} 单一事实源的对位——java 侧本表管 MCP 内部
+     * 簿记，共享表管四门与 tool_search 候选）。
+     */
+    private void mirrorDefinition(String name, McpExposure exposure, String namespace,
+                                  String description, String instructions) {
+        try {
+            ctx.toolDefinitions().register(name,
+                new com.pijava.coding.agent.core.ToolDefinitions.Entry(
+                    // 批 24 映射保留：MCP codemode 在工具层记 DEFERRED（java 无
+                    // codemode 引擎；tool_search 对两档同等可搜，pi isSearchable 同）。
+                    com.pijava.coding.agent.extension.ToolExposure.valueOf(
+                        McpToolExposure.of(exposure).name()), true,
+                    namespace == null ? null
+                        : new com.pijava.coding.agent.core.ToolDefinitions.Namespace(
+                            namespace, description, instructions)));
+        } catch (UnsupportedOperationException e) {
+            // 无会话的上下文（flag 绑定等）——表不可得则跳过（四门走默认臂）。
+        }
+    }
     /** 资源工具最近一次注册的 exposure；null = 尚无服务器有资源。 */
     private @Nullable McpExposure resourceToolsExposure;
 
@@ -80,6 +102,8 @@ final class McpToolRegistrar {
                 () -> resourceServers().stream().anyMatch(c -> c.name().equals(server))));
             definitions.put(name, definition);
             exposures.put(name, exposure);
+            mirrorDefinition(name, exposure, namespace, description,
+                connection.instructions());
             ctx.tools().register(definition.agent());
             if (exposure == McpExposure.DIRECT) {
                 toActivate.add(name);
@@ -93,6 +117,7 @@ final class McpToolRegistrar {
             if (!current.contains(name) && definition != null) {
                 ctx.tools().register(definition.agent());
                 exposures.put(name, McpExposure.HIDDEN);
+                mirrorDefinition(name, McpExposure.HIDDEN, null, null, null);
                 withdrawn.add(name);
             }
         }
@@ -109,6 +134,7 @@ final class McpToolRegistrar {
             if (definition != null) {
                 ctx.tools().register(definition.agent());
                 exposures.put(name, McpExposure.HIDDEN);
+                mirrorDefinition(name, McpExposure.HIDDEN, null, null, null);
                 withdrawn.add(name);
             }
         }
@@ -193,6 +219,7 @@ final class McpToolRegistrar {
         for (var definition : resourceDefinitions) {
             definitions.put(definition.name(), definition);
             exposures.put(definition.name(), next);
+            mirrorDefinition(definition.name(), next, null, null, null);
             ctx.tools().register(definition.agent());
             names.add(definition.name());
         }

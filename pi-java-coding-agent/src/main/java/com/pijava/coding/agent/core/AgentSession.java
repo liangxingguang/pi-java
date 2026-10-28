@@ -1220,7 +1220,13 @@ public final class AgentSession implements AutoCloseable {
         var tools = new java.util.LinkedHashSet<AgentTool<?, ?>>();
         for (var name : deduped) {
             var tool = services.tools().get(name);
-            if (tool != null) {
+            // 批 27（docs/38 T6）：pi _applyToolLoadout 的过滤臂（:1578-1580
+            // 逐字）——hidden 与不可激活（allowlist 保留 MCP 且无 tool_search）
+            // 不进活跃集。
+            if (tool != null
+                    && toolExposureOf(name)
+                        != com.pijava.coding.agent.extension.ToolExposure.HIDDEN
+                    && isActivatableTool(name)) {
                 tools.add(tool);
             }
         }
@@ -1273,15 +1279,93 @@ public final class AgentSession implements AutoCloseable {
     }
 
     /**
-     * pi {@code getAllTools}（agent-session.ts:1495-1506）的窄化投影（裁决⑥，
-     * 窄差 D91：parameters/exposure/namespace/annotations/sourceInfo 无对位）。
+     * pi {@code getAllTools}（agent-session.ts:1495-1506）的投影。批 27（B162
+     * 裁决④）：{@code exposure}/{@code parameters}/{@code namespace} 三字段落地
+     * （D91 收窄；余 annotations/sourceInfo 无对位）。
      */
     public java.util.List<com.pijava.coding.agent.extension.ExtensionToolInfo> getAllTools() {
+        var definitions = toolDefinitionsOrNull();
         return services.tools().all().stream()
-            .map(t -> new com.pijava.coding.agent.extension.ExtensionToolInfo(
-                t.name(), t.description(),
-                t.promptGuidelines() == null ? java.util.List.of()
-                    : java.util.List.copyOf(t.promptGuidelines())))
+            .map(t -> {
+                var entry = definitions == null ? null : definitions.get(t.name());
+                return new com.pijava.coding.agent.extension.ExtensionToolInfo(
+                    t.name(), t.description(),
+                    t.promptGuidelines() == null ? java.util.List.of()
+                        : java.util.List.copyOf(t.promptGuidelines()),
+                    entry == null
+                        ? com.pijava.coding.agent.extension.ToolExposure.DIRECT
+                        : entry.exposure(),
+                    t.inputSchema() == null ? java.util.Map.of() : t.inputSchema(),
+                    entry == null ? null : entry.namespace());
+            })
+            .toList();
+    }
+
+    // ── 批 27（docs/38 T6）：exposure 四门（pi :1543-1567/:3595-3604 对位）──
+
+    /** 定义表（无扩展装配 ⇒ {@code null}，四门全走 pi 默认臂）。 */
+    private ToolDefinitions toolDefinitionsOrNull() {
+        var context = extensionContext;
+        return context == null ? null : context.toolDefinitions();
+    }
+
+    /** pi {@code _getToolExposure}（agent-session.ts:1554-1556）：查无 ⇒ {@code direct}。 */
+    public com.pijava.coding.agent.extension.ToolExposure toolExposureOf(String name) {
+        var definitions = toolDefinitionsOrNull();
+        return definitions == null
+            ? com.pijava.coding.agent.extension.ToolExposure.DIRECT
+            : definitions.exposureOf(name);
+    }
+
+    /** pi {@code _isDeclarable}（:3595-3599）：激活即声明给模型。 */
+    public boolean isDeclarableTool(String name) {
+        var exposure = toolExposureOf(name);
+        return exposure == com.pijava.coding.agent.extension.ToolExposure.DIRECT
+            || exposure == com.pijava.coding.agent.extension.ToolExposure.MODEL_ONLY;
+    }
+
+    /**
+     * pi {@code _isActivatedOnRegistration}（:3601-3604，types.ts:612-617 的默认
+     * 规则）：declarable 且 defaultActive ≠ false。查无条目 ⇒ pi 默认 true。
+     */
+    public boolean isActivatedOnRegistration(String name) {
+        if (!isDeclarableTool(name)) {
+            return false;
+        }
+        var definitions = toolDefinitionsOrNull();
+        var entry = definitions == null ? null : definitions.get(name);
+        return entry == null || entry.defaultActive();
+    }
+
+    /**
+     * pi {@code _isActivatable}（:1543-1552 逐字）：allowlist 保留的 MCP 工具只供
+     * codemode/tool_search——仅当「非 direct 且 tool_search 已注册」才可被声明。
+     */
+    public boolean isActivatableTool(String name) {
+        var selection = toolSelection;
+        if (selection == null || !selection.hasAllowlist() || selection.isRawAllowed(name)
+                || !ToolNameMatcher.isMcpToolName(name)) {
+            return true;
+        }
+        return toolExposureOf(name) != com.pijava.coding.agent.extension.ToolExposure.DIRECT
+            && services.tools().get(
+                com.pijava.coding.agent.extension.toolsearch.ToolSearchTool.NAME) != null;
+    }
+
+    /**
+     * pi {@code _getCallableTools}（:1558-1567 逐字）：{@code ctx.executeTool()} 的
+     * 可调用集——活跃的 direct 工具＋全部已注册 codemode/deferred 工具。
+     */
+    public java.util.List<AgentTool<?, ?>> callableTools() {
+        var active = new java.util.HashSet<>(getActiveToolNames());
+        return services.tools().all().stream()
+            .filter(tool -> {
+                var exposure = toolExposureOf(tool.name());
+                return exposure == com.pijava.coding.agent.extension.ToolExposure.CODEMODE
+                    || exposure == com.pijava.coding.agent.extension.ToolExposure.DEFERRED
+                    || (exposure == com.pijava.coding.agent.extension.ToolExposure.DIRECT
+                        && active.contains(tool.name()));
+            })
             .toList();
     }
 
@@ -3324,11 +3408,14 @@ public final class AgentSession implements AutoCloseable {
                 args.unmatched(), context));
         // 批 16（T2d，pi「注册即激活」臂 agent-session.ts:3603 对位）：装配后新注册的
         // 扩展工具经注册面门（isAllowed，含 mcp__ 保留臂）并入 activeTools。
-        // pi 的 defaultActive:false 闸 java 无字段 ⇒ 全量激活（窄差 D89，裁决②）。
+        // 批 27（docs/38 T6）：defaultActive:false 闸落地（pi _isActivatedOnRegistration
+        // :3601-3604——declarable 且 defaultActive≠false 才激活；tool_search 因此
+        // 注册不激活），D89 收窄（余：无元数据的通用扩展工具仍按默认全量激活）。
         var selection = owner.toolSelection;
         var newToolNames = services.tools().toolNames().stream()
             .filter(name -> !baselineToolNames.contains(name))
             .filter(name -> selection == null || selection.isAllowed(name))
+            .filter(owner::isActivatedOnRegistration)
             .toList();
         if (!newToolNames.isEmpty()) {
             harness.activateTools(newToolNames);

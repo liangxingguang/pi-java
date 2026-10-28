@@ -143,6 +143,20 @@ public final class ToolSelection {
             return defaultToolModifiers;
         }
 
+        /**
+         * 批 27（B162）：pi {@code _isActivatable}（agent-session.ts:1544）用的
+         * <b>原始</b> allowlist 判定——{@code _allowedTools(name)} 不带 mcp__ 保留臂。
+         * 无 allowlist 时本判定无处可用（调用方先查 {@link #hasAllowlist()}）。
+         */
+        public boolean isRawAllowed(String name) {
+            return allowed != null && allowed.test(name);
+        }
+
+        /** pi 的 {@code _allowedTools} 在册（{@code !this._allowedTools} 的反面）。 */
+        public boolean hasAllowlist() {
+            return allowed != null;
+        }
+
         /** pi {@code _isAllowedTool}（agent-session.ts:1537-1541）——<b>注册面</b>门。 */
         public boolean isAllowed(String name) {
             if (excluded != null && excluded.test(name)) {

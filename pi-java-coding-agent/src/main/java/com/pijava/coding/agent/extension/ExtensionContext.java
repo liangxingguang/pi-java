@@ -351,4 +351,13 @@ public interface ExtensionContext {
      * 赋值语义）；跨扩展按加载序链式串行。需经 per-extension 上下文调用。
      */
     void registerMarkdownTransformer(MarkdownTransformer transformer);
+
+    /**
+     * 批 27（B162 裁决④）：工具定义元数据表（pi {@code _toolDefinitions} 对位）。
+     * <b>内部面</b>——生产方是内置扩展（tool-search／MCP registrar）；一般扩展经
+     * {@link #getAllTools()} 读投影即可，无需碰本表。
+     */
+    default com.pijava.coding.agent.core.ToolDefinitions toolDefinitions() {
+        throw new UnsupportedOperationException("toolDefinitions not available in this context");
+    }
 }

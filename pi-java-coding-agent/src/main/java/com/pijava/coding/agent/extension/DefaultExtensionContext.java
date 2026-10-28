@@ -100,6 +100,9 @@ public final class DefaultExtensionContext implements ExtensionContext {
      */
     private final java.util.LinkedHashMap<String, MarkdownTransformer> markdownTransformers =
         new java.util.LinkedHashMap<>();
+    /** 批 27（B162 裁决④）：pi {@code _toolDefinitions} 对位——每会话一份随上下文生死。 */
+    private final com.pijava.coding.agent.core.ToolDefinitions toolDefinitions =
+        new com.pijava.coding.agent.core.ToolDefinitions();
 
     /** @param services 会话服务（工具/命令/Provider/settings）
      *  @param skills   技能注册表（harness 的 skillManager）
@@ -332,6 +335,11 @@ public final class DefaultExtensionContext implements ExtensionContext {
     }
 
     @Override
+    public com.pijava.coding.agent.core.ToolDefinitions toolDefinitions() {
+        return toolDefinitions;
+    }
+
+    @Override
     public void registerToolRenderer(ToolRendererResolver resolver) {
         toolRenderers.register(resolver);
     }
@@ -560,6 +568,11 @@ public final class DefaultExtensionContext implements ExtensionContext {
         @Override
         public void setActiveTools(java.util.List<String> toolNames) {
             DefaultExtensionContext.this.setActiveTools(toolNames);
+        }
+
+        @Override
+        public com.pijava.coding.agent.core.ToolDefinitions toolDefinitions() {
+            return DefaultExtensionContext.this.toolDefinitions();
         }
 
         @Override
