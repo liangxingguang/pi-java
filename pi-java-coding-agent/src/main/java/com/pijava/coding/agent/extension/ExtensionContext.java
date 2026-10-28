@@ -362,6 +362,22 @@ public interface ExtensionContext {
     }
 
     /**
+     * 批 27（B162/T11，E5-26）：pi {@code registerVirtualModel}（types.ts:1874-1884；
+     * loader.ts:500-510 对位）——注册虚拟模型（路由每请求择物理模型）。重复注册
+     * 同 provider+id 即替换。路由的 {@code ctx} 是<b>本</b>扩展上下文（pi 的
+     * {@code runtime.createContext()} 每请求现造的对位——java 的委托上下文无状态，
+     * 复用注册时捕获者）。需经 per-extension 上下文调用。
+     */
+    void registerVirtualModel(ExtensionVirtualModel model);
+
+    /**
+     * 批 27（B162/T11，E5-27）：pi {@code unregisterVirtualModel}（types.ts:1885-1886）
+     * ——移除 {@code registerVirtualModel} 注册的虚拟模型。已注销的虚拟选型在分支
+     * 解析中不再「压住」物理响应（pi getBranchSelection 的回落臂）。
+     */
+    void unregisterVirtualModel(String provider, String id);
+
+    /**
      * 批 27（B162/T4）：pi {@code ExtensionToolContext.tools}（types.ts:383-395）
      * 对位——{@code ctx.executeTool()} 的可调用工具集（活跃的 direct 工具＋全部
      * 已注册 codemode/deferred 工具）。java 无逐调用上下文对象，本方法挂在会话

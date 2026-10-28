@@ -813,12 +813,15 @@ public final class AgentSession implements AutoCloseable {
             .maxOutputTokens(models::maxOutputTokens)
             // 3d 环 B：摘要调用包在 retryAssistantCall 同形环里 —— 与环 A
             // 同一份 retry 预算、同一个中止旗观察口、同一个 observer（§8.22.3）。
-            .summaryGenerator(new LlmSummaryGenerator(recordingStreamFn, () -> model,
+            // 批 27（B162/T10，pi :583-589 对位）：虚拟选型 ⇒ 摘要请求先路由
+            // （reason "direct"，不写态）；sessionRef 摘要期必非空（压缩发生在 run 内）。
+            .summaryGenerator(new LlmSummaryGenerator(recordingStreamFn,
+                () -> summaryRoutedModel(sessionRef.get(), model),
                 // B171（docs/18）：pi model.maxTokens 从目录取值 —— turn-prefix
                 // 摘要的输出上限被当前模型的 maxOutputTokens 封顶（cap 在调用点
                 // 读当前 model，故经零参 lambda 传入，不直传一参方法引用）。
                 retrySettings, retryAborted, retryObserver,
-                () -> models.maxOutputTokens(model),
+                () -> models.maxOutputTokens(summaryRoutedModel(sessionRef.get(), model)),
                 () -> harnessRef.get().getThinkingLevel(),
                 models::supportsThinking))
             .thinkingLevel(carryThinking != null ? carryThinking
@@ -883,19 +886,21 @@ public final class AgentSession implements AutoCloseable {
         agentSession.modelResolver = models;
         agentSession.branchSummarization = new BranchSummarization(
             new LlmSummaryGenerator(recordingStreamFn,
-					agentSession.harness::getModel,
-                retrySettings, retryAborted, retryObserver,
-                () -> models.maxOutputTokens(agentSession.harness.getModel()),
-					agentSession.harness::getThinkingLevel,
+					() -> summaryRoutedModel(agentSession, agentSession.harness.getModel()),
+				retrySettings, retryAborted, retryObserver,
+                () -> models.maxOutputTokens(
+                    summaryRoutedModel(agentSession, agentSession.harness.getModel())),
+				agentSession.harness::getThinkingLevel,
                 models::supportsThinking));
         // 批 15（T3b）：bug 摘要生成器——与分支摘要同源的 StreamFn/retry 环
         //（pi agent-session.ts:4322 的 _getSummarizationRequestAuth 对位：
         // auth 参在 java 由 streamFn 车道自取）。
         agentSession.bugReportSummarizer = new com.pijava.coding.agent.core.bugreport
             .BugReportSummarizer(new LlmSummaryGenerator(recordingStreamFn,
-				agentSession.harness::getModel,
-                retrySettings, retryAborted, retryObserver,
-                () -> models.maxOutputTokens(agentSession.harness.getModel()),
+					() -> summaryRoutedModel(agentSession, agentSession.harness.getModel()),
+				retrySettings, retryAborted, retryObserver,
+                () -> models.maxOutputTokens(
+                    summaryRoutedModel(agentSession, agentSession.harness.getModel())),
 				agentSession.harness::getThinkingLevel,
                 models::supportsThinking));
         agentSession.baseToolContext = toolContext;
@@ -1368,6 +1373,141 @@ public final class AgentSession implements AutoCloseable {
                         && active.contains(tool.name()));
             })
             .toList();
+    }
+
+    // ── 批 27（docs/38 T9/T10）：虚拟模型（B162；pi core/virtual-models.ts＋
+    //     model-runtime.ts:952-1033＋agent-session.ts:787-844 对位）──
+
+    /**
+     * 虚拟模型注册表（裁决①：判别式外在化——注册表查找）。目录查物理模型的
+     * 晚读口：{@code modelCatalog} 字段在 assemble 期回填（:880），lambda 调用时
+     * 现读。
+     */
+    private final com.pijava.coding.agent.core.virtual.VirtualModelRegistry virtualModels =
+        new com.pijava.coding.agent.core.virtual.VirtualModelRegistry(this::physicalModelKnown);
+
+    /**
+     * pi {@code getPhysicalModel} 的目录臂（model-runtime.ts:1029-1033）——java 的
+     * 运行池＝会话目录 ∪ 已注册 provider 的 {@code getModels()}（pi 的 ModelRuntime
+     * 注册表同构：provider 供给的模型也在册）。
+     */
+    private boolean physicalModelKnown(String provider, String id) {
+        if (modelCatalog.find(com.pijava.ai.model.ModelId.of(provider, id)).isPresent()) {
+            return true;
+        }
+        var registered = services.providers().get(provider);
+        return registered.isPresent() && registered.get().getModels().stream()
+            .anyMatch(m -> m.id().modelName().equals(id));
+    }
+
+    /** 虚拟模型注册表（扩展面与路由钩共享）。 */
+    public com.pijava.coding.agent.core.virtual.VirtualModelRegistry virtualModels() {
+        return virtualModels;
+    }
+
+    /** pi {@code isVirtualModel} 的会话面（注册表判别式，裁决①）。 */
+    public boolean isVirtualModel(com.pijava.ai.model.ModelId<?> model) {
+        return virtualModels.isVirtual(model);
+    }
+
+    /**
+     * pi {@code _installAgentRequestProjection} 的路由段（agent-session.ts:807-842
+     * 逐字序）：每次 provider 请求前，虚拟选型 ⇒ 路由到物理模型。
+     *
+     * <p>对位要点：</p>
+     * <ul>
+     *   <li>:814 物理直通 ⇒ 非虚拟选型返回 null（弃权）</li>
+     *   <li>:819-820 用户回合判定逐字（最后一条 assistant 之后有 user 消息；
+     *       无 assistant 时 findLastIndex=-1 ⇒ 全列表扫 ⇒ 首 prompt 恒 user）</li>
+     *   <li>:821 路由态读分支；:822-828 reason 三臂；:829-835 态写回（值判等，
+     *       裁决②/D160）＋entry_appended＋落盘（appendCustomEntry 既有全链）</li>
+     *   <li>:842 选型留在 agent state，只有本请求用路由模型（RequestUpdate 的
+     *       per-request 语义同形）</li>
+     *   <li>路由失败 ⇒ 异常传出（onPrepareRequestRouted 不隔离）⇒ run 错误收场
+     *       （pi :808-809 的 reject 对位）</li>
+     *   <li>:838-841 路由后压缩阈值检查不做（窄差 D171：阈值门对虚拟选型按
+     *       未知窗口跳过〔目录无虚拟条目〕；溢出恢复兜底）</li>
+     * </ul>
+     */
+    private com.pijava.agent.harness.PiLoop.RequestUpdate routeVirtualRequest(
+            com.pijava.agent.harness.PiLoop.PrepareRequestContext request) {
+        var model = request.model();
+        if (model == null || !virtualModels.isVirtual(model)) {
+            return null;
+        }
+        var messages = request.context().messages();
+        // pi :819-820（逐字语义）：最后一条 assistant（含 error）之后有 user ⇒ user 回合
+        int lastAssistant = -1;
+        for (int i = messages.size() - 1; i >= 0; i--) {
+            if (messages.get(i) instanceof Message.AssistantMessage) {
+                lastAssistant = i;
+                break;
+            }
+        }
+        boolean userTurn = false;
+        for (int i = lastAssistant + 1; i < messages.size(); i++) {
+            if (messages.get(i) instanceof Message.UserMessage) {
+                userTurn = true;
+                break;
+            }
+        }
+        // pi :790-791 的 failed（缝已消费清零；java 方言注记：重试时工作副本经持久
+        // 省略重建，失败消息不在 messages 里——与 pi 同形）
+        var failedMessage = request.failedResponse();
+        var failed = failedMessage == null
+            || failedMessage.provider() == null || failedMessage.model() == null
+            ? null
+            : new com.pijava.coding.agent.core.virtual.ModelRouteRequest.RouteFailure(
+                com.pijava.ai.model.ModelId.of(failedMessage.provider(),
+                    failedMessage.model()),
+                failedMessage.thinkingLevel(), failedMessage);
+        var reason = failed != null
+            ? com.pijava.coding.agent.core.virtual.ModelRouteReason.RETRY
+            : userTurn
+                ? com.pijava.coding.agent.core.virtual.ModelRouteReason.USER
+                : com.pijava.coding.agent.core.virtual.ModelRouteReason.CONTINUATION;
+        var branch = ContextEntries.pathToLeaf(accumulatedEntries(), currentLeafId());
+        var state = com.pijava.coding.agent.core.virtual.VirtualModelSelections
+            .getVirtualModelState(branch, model.provider(), model.modelName());
+        var route = virtualModels.resolve(model, messages, request.thinking(), reason,
+            state, failed, null);
+        // pi :829-835：新态（且值不等）才写 custom 条目（裁决② 值判等对位引用判等）
+        if (route.state() != null && !route.state().equals(state)) {
+            appendCustomEntry(
+                com.pijava.coding.agent.core.virtual.VirtualModelRegistry.STATE_ENTRY,
+                com.pijava.coding.agent.core.virtual.VirtualModelSelections.stateData(
+                    model.provider(), model.modelName(), route.state()));
+        }
+        return new com.pijava.agent.harness.PiLoop.RequestUpdate(null, route.model(),
+            route.thinkingLevel());
+    }
+
+    /**
+     * pi :583-589 的 direct 臂（摘要/压缩请求先路由——"summaries size their input
+     * and output from the model they get"）：loop 外请求的选型解析。direct 不写态、
+     * 不带 previous/failed（pi :716-742 的 streamSimple 臂同语义）。
+     */
+    public com.pijava.ai.model.ModelId<?> routeDirectIfVirtual(
+            com.pijava.ai.model.ModelId<?> model, java.util.List<Message> messages) {
+        if (model == null || !virtualModels.isVirtual(model)) {
+            return model;
+        }
+        var route = virtualModels.resolve(model, messages, harness.getThinkingLevel(),
+            com.pijava.coding.agent.core.virtual.ModelRouteReason.DIRECT, null, null, null);
+        return route.model();
+    }
+
+    /** 摘要接线的路由包装：会话未回填（装配期）⇒ 原样；否则虚拟选型先路由。 */
+    private static com.pijava.ai.model.ModelId<?> summaryRoutedModel(
+            AgentSession session, com.pijava.ai.model.ModelId<?> model) {
+        return session == null ? model : session.routeDirectIfVirtual(model,
+            session.currentBranchMessages());
+    }
+
+    /** 当前分支的消息投影（路由器的 messages 入参）。 */
+    private java.util.List<Message> currentBranchMessages() {
+        return ContextEntries.toMessages(
+            ContextEntries.pathToLeaf(accumulatedEntries(), currentLeafId()));
     }
 
     // ── 批 27（docs/38 T3）：嵌套工具调用宿主（pi :726-764/:1102-1116 对位）──
@@ -3446,6 +3586,11 @@ public final class AgentSession implements AutoCloseable {
         // 是模式层装配而非扩展加载（runner.ts:580；早退臂曾把它跳过 ⇒
         // --no-extensions 下 TUI/RPC 注入落空）。
         owner.extensionUI = ui == null ? ExtensionUI.noop() : ui;
+        // 批 27（docs/38 T10）：虚拟模型路由钩——pi 的 _installAgentRequestProjection
+        // 在会话建立时恒装（agent-session.ts:787 与扩展加载无关；虚拟模型只能经
+        // 扩展注册，但装钩不依赖扩展面——-ne 早退臂之前挂上）。
+        harness.hookSystem().onPrepareRequestRouted(owner.laneName(),
+            owner::routeVirtualRequest);
         // 批 18（T6）：CLI 显式源 temporary resolve＋主题候选基线（pi
         // resource-loader.ts:530-585 合并臂：themes 独立于 noExtensions，
         // noThemes 只裁 resolve 臂）。在 -ne 早退臂之前，主题不被扩展开关误裁。

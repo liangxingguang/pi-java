@@ -365,6 +365,37 @@ public final class DefaultExtensionContext implements ExtensionContext {
         return session == null ? java.util.List.of() : session.callableTools();
     }
 
+    /**
+     * 批 27（B162/T11）：pi loader.ts:500-514 对位——把扩展的
+     * {@code route(request, ctx)} 适配成核心 {@code route(request)}（ctx 用注册时
+     * 捕获的调用方上下文）。java 的装载/绑定同线程顺序执行（flagValues 先例），
+     * pi 的 pending/commit 两阶段不移植——注册直进会话注册表；冲突/空 id 的
+     * {@code IllegalArgumentException} 由 {@code ExtensionManager} 的装载隔离
+     * 收成扩展错误（pi 的冲刷诊断臂对位）。
+     */
+    /** 基础上下文直调（无扩展名归属）时路由上下文即本上下文。 */
+    @Override
+    public void registerVirtualModel(ExtensionVirtualModel model) {
+        registerVirtualModel(model, this);
+    }
+
+    void registerVirtualModel(ExtensionVirtualModel model, ExtensionContext routeContext) {
+        var session = requireToolControl();
+        var definition = new com.pijava.coding.agent.core.virtual.VirtualModelDefinition(
+            model.provider(), model.id(), model.name(), model.thinkingLevels(),
+            model.contextWindow(), model.maxTokens(), model.input(),
+            request -> model.route().apply(request, routeContext));
+        session.virtualModels().register(definition);
+        // pi 的 _refreshCurrentModelFromRegistry（:3483-3490）不移植：java 的
+        // ModelId 是值对象，注册表重建无引用可刷（方言，内部）。
+    }
+
+    /** 批 27（B162/T11，E5-27）：pi loader.ts:511-513 对位。 */
+    @Override
+    public void unregisterVirtualModel(String provider, String id) {
+        requireToolControl().virtualModels().unregister(provider, id);
+    }
+
     @Override
     public void registerToolRenderer(ToolRendererResolver resolver) {
         toolRenderers.register(resolver);
@@ -615,6 +646,17 @@ public final class DefaultExtensionContext implements ExtensionContext {
         }
 
         @Override
+        public void registerVirtualModel(ExtensionVirtualModel model) {
+            // 路由上下文是<b>本委托</b>（pi createContext() 的 per-extension 形）
+            DefaultExtensionContext.this.registerVirtualModel(model, this);
+        }
+
+        @Override
+        public void unregisterVirtualModel(String provider, String id) {
+            DefaultExtensionContext.this.unregisterVirtualModel(provider, id);
+        }
+
+        @Override
         public void registerToolRenderer(ToolRendererResolver resolver) {
             DefaultExtensionContext.this.registerToolRenderer(resolver);
         }
@@ -859,7 +901,10 @@ public final class DefaultExtensionContext implements ExtensionContext {
     @Override
     public boolean setModel(com.pijava.ai.model.ModelId<?> model) {
         var host = requireToolControl();
-        if (com.pijava.ai.auth.Credentials.resolveCredential(model.provider()).isEmpty()) {
+        // 批 27（B162 裁决⑩）：注册过虚拟模型的 provider 视为已配置（pi
+        // model-runtime.ts:967-973 的 snapshot 标记对位——provider 级豁免）。
+        if (!host.virtualModels().isAuthExempt(model.provider())
+                && com.pijava.ai.auth.Credentials.resolveCredential(model.provider()).isEmpty()) {
             return false;
         }
         host.setModel(model);
