@@ -36,6 +36,8 @@ final class RecoveryOmissions {
 
     /** Persist omission edits for the failed assistant and this turn's tool results, then rebuild the copy. */
     static void persist(LaneState lane, Message.AssistantMessage failed) {
+        // 批 27（B162）：pi :3045——溢出压缩后重试同样暂存失败响应。
+        lane.failedResponse = failed;
         String assistantId = resolveEntryId(lane, failed);
         if (assistantId == null && inWorkingCopy(lane, failed)) {
             // pi :1216-1218：投影中的消息没有源条目 ⇒ 无法安全持久省略。
@@ -59,6 +61,9 @@ final class RecoveryOmissions {
      * {@link #persist}，随后刷新工作副本。
      */
     static void persistRetryOmission(LaneState lane, Message.AssistantMessage failed) {
+        // 批 27（B162）：pi :1866——重试准备时暂存失败响应（虚拟模型路由的
+        // reason:"retry"/failed 载荷源；prepareRequest 缝读取即清）。
+        lane.failedResponse = failed;
         String assistantId = resolveEntryId(lane, failed);
         if (assistantId == null && inWorkingCopy(lane, failed)) {
             // pi :1216-1218：投影中的消息没有源条目 ⇒ 无法安全持久省略。

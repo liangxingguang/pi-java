@@ -368,7 +368,15 @@ public final class PiLaneEngine {
             // ⚠️ 留痕（批 2 §2.5）：llm.request 跨度的 model/thinking 标签读车道 supplier
             // （ctx.model().get()），prepareRequest 的 run 内替换不反映到跨度标签 ——
             // 与 pi 的遥测口径未核，记窄差。
-            request -> ctx.hookSystem().firePrepareRequest(laneName, request),
+            // 批 27（B162）：pi :790-791——failedResponse 读取即消费（每次请求都清，
+            // 不只虚拟选型；pi 的包装器在判 isVirtualModel 之前就清）。
+            request -> {
+                var failed = lane.failedResponse;
+                lane.failedResponse = null;
+                return ctx.hookSystem().firePrepareRequest(laneName,
+                    new PiLoop.PrepareRequestContext(request.context(), request.model(),
+                        request.thinking(), failed));
+            },
             next -> prepareNextTurn(laneName, lane),
             // docs/15：修真 —— 旧接线丢掉 next，给钩子喂 lane.partial + 空工具结果；
             // pi 的 FinishTurn 拿的是定案消息与本轮真工具结果（types.ts:149-158）。

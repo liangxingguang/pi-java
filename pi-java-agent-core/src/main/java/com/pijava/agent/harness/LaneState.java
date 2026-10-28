@@ -138,6 +138,14 @@ public final class LaneState {
     boolean overflowRecoveryAttempted;
 
     /**
+     * 批 27（B162）：pi {@code _failedResponse}（agent-session.ts:417）对位——
+     * 可重试失败/溢出恢复时暂存的失败助手消息（pi :1866/:3045 赋值），下一次
+     * 请求准备（prepareRequest 缝）读取即清（pi :790-791 消费语义）。虚拟模型
+     * 路由的 {@code reason:"retry"} 与 {@code failed} 载荷由此供给。
+     */
+    com.pijava.ai.message.Message.AssistantMessage failedResponse;
+
+    /**
      * 自动重试的当前尝试计数（pi {@code _retryAttempt}，
      * {@code agent-session.ts:339}；package 3d，{@code 原 docs/31 §8.22}）。
      *

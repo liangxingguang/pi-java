@@ -60,6 +60,19 @@ public final class HookSystem {
         return registry.register(laneName, "before_request", hook);
     }
 
+    /**
+     * 批 27（B162）：路由级 prepareRequest——pi {@code _installAgentRequestProjection}
+     * （agent-session.ts:787-844）的对位。与 {@link #onPrepareRequest} 的差别：
+     * 异常<b>不被隔离</b>——pi 的路由失败 reject 会以错误响应结束本次 run
+     * （:808-809 注释），java 让异常传出循环、由 {@code PiLaneEngine} 的
+     * {@code catch (Throwable)}（runWithLifecycle 对位）收成运行失败。
+     * 发射序：沙箱扩展钩先跑（pi 的 previousPrepareRequest），路由钩最后看
+     * 到累积结果（pi :800-810 的序）。
+     */
+    public AutoCloseable onPrepareRequestRouted(String laneName, PrepareRequestHook hook) {
+        return registry.register(laneName, "before_request_routed", hook);
+    }
+
     /** Register a {@code before_payload} hook for the lane. */
     public AutoCloseable onBeforePayload(String laneName, BeforePayloadHook hook) {
         return registry.register(laneName, "before_payload", hook);
@@ -144,7 +157,8 @@ public final class HookSystem {
                     : new PiLoop.PrepareRequestContext(
                         accumulated.context() != null ? accumulated.context() : request.context(),
                         accumulated.model() != null ? accumulated.model() : request.model(),
-                        accumulated.thinking() != null ? accumulated.thinking() : request.thinking());
+                        accumulated.thinking() != null ? accumulated.thinking() : request.thinking(),
+                        request.failedResponse());
                 var u = ((PrepareRequestHook) hook).prepareRequest(visible);
                 if (u != null) {
                     accumulated = new PiLoop.RequestUpdate(
@@ -157,6 +171,32 @@ public final class HookSystem {
                 }
             } catch (Exception e) {
                 recordHookError(laneName, "before_request", e);
+            }
+        }
+        // 批 27（B162）：路由级钩在沙箱链<b>之后</b>跑（pi 的 projection 先调
+        // previousPrepareRequest 再路由，agent-session.ts:800-810 的序）；异常
+        // 不隔离（pi 路由失败 reject ⇒ run 错误收场）。
+        var routed = registry.get(laneName, "before_request_routed");
+        if (!routed.isEmpty()) {
+            var visible = accumulated == null ? request
+                : new PiLoop.PrepareRequestContext(
+                    accumulated.context() != null ? accumulated.context() : request.context(),
+                    accumulated.model() != null ? accumulated.model() : request.model(),
+                    accumulated.thinking() != null ? accumulated.thinking() : request.thinking(),
+                    request.failedResponse());
+            for (var hook : routed) {
+                var u = ((PrepareRequestHook) hook).prepareRequest(visible);
+                if (u != null) {
+                    visible = new PiLoop.PrepareRequestContext(
+                        u.context() != null ? u.context() : visible.context(),
+                        u.model() != null ? u.model() : visible.model(),
+                        u.thinking() != null ? u.thinking() : visible.thinking(),
+                        visible.failedResponse());
+                    accumulated = new PiLoop.RequestUpdate(
+                        visible.context() != request.context() ? visible.context()
+                            : accumulated != null ? accumulated.context() : null,
+                        visible.model(), visible.thinking());
+                }
             }
         }
         return accumulated;

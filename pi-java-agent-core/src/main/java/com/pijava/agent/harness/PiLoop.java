@@ -253,7 +253,21 @@ public final class PiLoop {
 
     /** pi {@code PrepareRequestContext}（{@code types.ts:171-175}）：每次 provider 请求前的运行时快照。 */
     public record PrepareRequestContext(Context context, ModelId<?> model,
-                                        ModelThinkingLevel thinking) {}
+                                        ModelThinkingLevel thinking,
+                                        /**
+                                         * 批 27（B162）：pi {@code _failedResponse} 经缝传递——
+                                         * 重试/溢出恢复后下一次请求的失败响应（读取即消费）。
+                                         * 非重试请求为 {@code null}。pi 的请求对象本无此字段
+                                         * （pi 走闭包读 session 字段），java 经上下文显式传
+                                         * （方言，内部）。
+                                         */
+                                        Message.AssistantMessage failedResponse) {
+        /** 批 27 之前的三参形状（无失败响应；存量构造点零改签）。 */
+        public PrepareRequestContext(Context context, ModelId<?> model,
+                                     ModelThinkingLevel thinking) {
+            this(context, model, thinking, null);
+        }
+    }
 
     /**
      * pi {@code AgentRequestUpdate}（{@code types.ts:176}，＝ {@code Omit<AgentLoopTurnUpdate,"messages">}）。
