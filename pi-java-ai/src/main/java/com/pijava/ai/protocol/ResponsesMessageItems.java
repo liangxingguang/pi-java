@@ -251,11 +251,13 @@ final class ResponsesMessageItems {
                     && java.util.Objects.equals(assistant.api(), apiName);
                 boolean differentModel = sameProviderAndApi
                     && !java.util.Objects.equals(assistant.model(), target.modelName());
+                // 批 30（ai#8，pi shared :259）：namespace 回放的同模型闸门。
+                boolean sameModel = sameProviderAndApi && !differentModel;
                 boolean dropItemId =
                     (differentModel && itemId != null && itemId.startsWith("fc_"))
                     || (itemId != null && !itemId.startsWith("fc_"));
                 toolCalls.add(ResponseToolWire.historyItem(toolUse, callId, itemId,
-                    dropItemId, grammarProperties));
+                    dropItemId, grammarProperties, sameModel));
             }
         }
         // Reasoning items precede the output messages; tool calls follow them.

@@ -285,7 +285,8 @@ public final class TransformMessages {
             // P5（pi :136-142）：同模型或无归一器 ⇒ id 不动，但剥离仍要跑。
             if (same || normalize == null) {
                 return stripSignature
-                    ? new ContentBlock.ToolUseContent(tu.id(), tu.name(), tu.arguments(), null)
+                    ? new ContentBlock.ToolUseContent(tu.id(), tu.name(), tu.arguments(), null,
+                        tu.namespace())
                     : block;
             }
             var normalizedId = normalize.normalize(tu.id(), target, msg);
@@ -298,8 +299,10 @@ public final class TransformMessages {
                 toolCallIdMap.put(tu.id(), normalizedId);
             }
             String signature = stripSignature ? null : tu.thoughtSignature();
+            // pi 的 `{ ...toolCall }` 展开保留 namespace（transform-messages.ts:129-144：
+            // 只 delete thoughtSignature）；批 30/ai#8 同。
             return new ContentBlock.ToolUseContent(
-                normalizedId, tu.name(), tu.arguments(), signature);
+                normalizedId, tu.name(), tu.arguments(), signature, tu.namespace());
         }
         if (!(block instanceof ContentBlock.ThinkingContent th)) {
             return block;

@@ -55,8 +55,10 @@ final class ResponseItemHandlers {
             ctx.toolCalls.put(outputIndex,
                 new ResponsesStreamProcessor.FunctionCallState(
                     compositeId, fc.name(), initialArguments(fc)));
-            // 包⑥：起点即带身份。
-            ctx.publisher.submit(ctx.builder.emitToolCallStart(compositeId, fc.name()));
+            // 包⑥：起点即带身份。批 30（ai#8，pi shared :492）：起点 item 的
+            // namespace 直接写进块。
+            ctx.publisher.submit(ctx.builder.emitToolCallStart(compositeId, fc.name(),
+                fc.namespace().orElse(null)));
         } else if (item.customToolCall().isPresent()) {
             // 原 docs/69（pi shared :504-527）。
             ctx.slotTypes.put(outputIndex, ResponsesCustomCalls.CUSTOM);
@@ -65,7 +67,7 @@ final class ResponseItemHandlers {
                 custom, ctx.grammarProperties);
             ctx.customCalls.put(outputIndex, state);
             ctx.publisher.submit(ctx.builder.emitToolCallStart(
-                state.compositeId, state.name));
+                state.compositeId, state.name, custom.namespace().orElse(null)));
         }
     }
 
@@ -148,8 +150,10 @@ final class ResponseItemHandlers {
                 // 流式 delta 只是草稿（可能更短，也可能一个都没有）。
                 ctx.builder.replaceToolArguments(authoritativeArguments(
                     item.functionCall().get(), state.args));
+                // 批 30（ai#8，pi :717）：收尾 item 的 namespace 回填（缺席保留起点值）。
                 ctx.publisher.submit(ctx.builder.emitToolCallEnd(
-                    state.callId, state.name));
+                    state.callId, state.name, null,
+                    item.functionCall().get().namespace().orElse(null)));
             }
         } else if (item.customToolCall().isPresent()
                 && ResponsesStreamProcessor.isSlot(
@@ -159,8 +163,10 @@ final class ResponseItemHandlers {
                 ResponsesCustomCalls.itemDone(state,
                     item.customToolCall().get().input(),
                     ctx.publisher::submit, ctx.builder);
+                // 批 30（ai#8，pi :733）：custom 收尾同形回填。
                 ctx.publisher.submit(ctx.builder.emitToolCallEnd(
-                    state.compositeId, state.name));
+                    state.compositeId, state.name, null,
+                    item.customToolCall().get().namespace().orElse(null)));
             }
         }
         ctx.slotTypes.remove(outputIndex);

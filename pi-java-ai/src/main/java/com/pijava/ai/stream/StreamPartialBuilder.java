@@ -70,19 +70,12 @@ public final class StreamPartialBuilder {
      */
     private List<AssistantMessageDiagnostic> diagnostics;
 
-    // Text/thinking 两簇的缓冲与块下标已随实现迁往 TextThinkingBlockAccumulator。
+    // Per-block accumulators（text/thinking 在 TextThinkingBlockAccumulator；
+    // tool 簇在 ToolCallBlockAccumulator——批 30 拆分）。
     private final TextThinkingBlockAccumulator textThinking = new TextThinkingBlockAccumulator(this);
-
-    // Per-block accumulators
-    private final StringBuilder toolArgBuf = new StringBuilder();
-    private String toolCallId = "";
-    private String toolCallName = "";
+    private final ToolCallBlockAccumulator toolCalls = new ToolCallBlockAccumulator(this);
 
     int nextContentIndex;
-    // Each stream owns its block index so interleaved text/thinking/tool
-    // deltas never overwrite each other's block (they used to target
-    // blocks.size()-1, which corrupted the snapshot when streams alternated).
-    private int toolBlockIndex = -1;
 
     /**
      * Create a builder for a message with the given ID.
@@ -306,70 +299,35 @@ public final class StreamPartialBuilder {
     }
 
     // ═══════════════════════════════════════════════════════════
-    // Tool call block
+    // Tool call block（实现见 ToolCallBlockAccumulator）
     // ═══════════════════════════════════════════════════════════
 
-    /**
-     * Emit tool-call-start carrying the call's identity.
-     *
-     * <p>pi 的五条车道都在发出 {@code toolcall_start} <b>之前</b>先把块建好、塞进
-     * {@code output.content}，再 push 起点事件（{@code anthropic-messages.ts:648-660}、
-     * {@code openai-completions.ts:497-536}）⇒ pi 的起点 {@code partial} 里那个位置
-     * <b>已经是</b>带 {@code id}/{@code name} 的 toolCall 块。本方法同序：<b>先入
-     * {@code blocks} 再取快照</b>。</p>
-     *
-     * <p><b>签名不留无参重载</b>：六个调用点在起点都拿得到 id/name（至少其一），
-     * 留一条无参的路就是留一条「空身份」的路。</p>
-     *
-     * <p>⚠️ 顺带修好一条隐性偏差：{@link #emitToolCallDelta} 从
-     * {@link #toolCallId}/{@link #toolCallName} 重建块，而 {@code toolCallName}
-     * 此前<b>只有 {@link #emitToolCallEnd} 才写</b> ⇒ 整个参数流期间块上的 name
-     * 恒为空串。此处 seed 之后，参数流全程携带工具名。</p>
-     *
-     * @param id   provider 的调用 ID；null 视作空串
-     * @param name 工具名；null 视作空串（起点 name 为空是 pi 自己也有的形状，
-     *             见 {@code openai-completions.ts:534-536} 的「稍后就地补」）
-     */
+    /** Emit tool-call-start carrying the call's identity（javadoc 逐字随迁，见卫星类）。 */
     public StreamEvent.ToolCallStart emitToolCallStart(String id, String name) {
-        toolArgBuf.setLength(0);
-        toolCallId = id == null ? "" : id;
-        toolCallName = name == null ? "" : name;
-        toolBlockIndex = blocks.size();
-        blocks.add(new ContentBlock.ToolUseContent(toolCallId, toolCallName, Map.of()));
-        int idx = nextContentIndex++;
-        return new StreamEvent.ToolCallStart(idx, snapshot());
+        return toolCalls.emitToolCallStart(id, name);
+    }
+
+    /** 批 30（ai#8）：namespace 形起点（javadoc 见卫星类）。 */
+    public StreamEvent.ToolCallStart emitToolCallStart(String id, String name, String namespace) {
+        return toolCalls.emitToolCallStart(id, name, namespace);
     }
 
     /**
-     * pi {@code openai-responses-shared.ts:710} 的
-     * {@code item.arguments || partialJson || "{}"}：用**收尾项里的权威参数**替换流式累积的
-     * 草稿 —— delta 可能比它短，也可能整个没有（兼容端点只在 {@code output_item.done} 给）。
-     *
-     * <p>只改缓冲：紧随其后的 {@link #emitToolCallEnd} 会用新缓冲解析并落块。</p>
+     * 用**收尾项里的权威参数**替换流式累积的草稿
+     * （javadoc 逐字随迁，见 {@link ToolCallBlockAccumulator#replaceToolArguments}）。
      */
     public void replaceToolArguments(String argumentsJson) {
-        toolArgBuf.setLength(0);
-        toolArgBuf.append(argumentsJson);
+        toolCalls.replaceToolArguments(argumentsJson);
     }
 
     /** Emit a tool-call argument delta. */
     public StreamEvent.ToolCallDelta emitToolCallDelta(String id, String jsonDelta) {
-        this.toolCallId = id;
-        toolArgBuf.append(jsonDelta);
-        if (toolBlockIndex < 0) {
-            toolBlockIndex = blocks.size();
-            blocks.add(new ContentBlock.ToolUseContent("", "", Map.of()));
-            nextContentIndex++;
-        }
-        int idx = toolBlockIndex;
-        blocks.set(idx, new ContentBlock.ToolUseContent(
-            toolCallId, toolCallName, ToolArgumentParser.parse(toolArgBuf.toString())));
-        return new StreamEvent.ToolCallDelta(idx, id, jsonDelta, snapshot());
+        return toolCalls.emitToolCallDelta(id, jsonDelta);
     }
 
     /** Emit tool-call-end with the full tool name, ID, and parsed arguments. */
     public StreamEvent.ToolCallEnd emitToolCallEnd(String id, String name) {
-        return emitToolCallEnd(id, name, null);
+        return toolCalls.emitToolCallEnd(id, name);
     }
 
     /**
@@ -382,12 +340,13 @@ public final class StreamPartialBuilder {
      */
     public StreamEvent.ToolCallEnd emitToolCallEnd(
             String id, String name, String thoughtSignature) {
-        this.toolCallId = id;
-        this.toolCallName = name;
-        int idx = Math.max(0, toolBlockIndex);
-        Map<String, Object> args = ToolArgumentParser.parse(toolArgBuf.toString());
-        blocks.set(idx, new ContentBlock.ToolUseContent(id, name, args, thoughtSignature));
-        return new StreamEvent.ToolCallEnd(idx, id, name, args, snapshot());
+        return toolCalls.emitToolCallEnd(id, name, thoughtSignature);
+    }
+
+    /** 批 30（ai#8）：namespace 形收尾（javadoc 见卫星类）。 */
+    public StreamEvent.ToolCallEnd emitToolCallEnd(
+            String id, String name, String thoughtSignature, String namespace) {
+        return toolCalls.emitToolCallEnd(id, name, thoughtSignature, namespace);
     }
 
     // ═══════════════════════════════════════════════════════════

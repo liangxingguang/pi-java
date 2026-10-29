@@ -391,11 +391,13 @@ final class MessageJsonCodec {
             case "image_url" -> new ContentBlock.UrlImageContent(
                 JsonlCodec.requireString(node, "url"));
             // pi 主流 "toolCall"；本仓 legacy "tool_use"（2026-10-05 前写入），两拼写并读。
+            // 批 30（ai#8）：namespace 可选键（旧档无 ⇒ null，pi 缺省同形）。
             case "toolCall", "tool_use" -> new ContentBlock.ToolUseContent(
                 JsonlCodec.requireString(node, "id"),
                 JsonlCodec.requireString(node, "name"),
                 JsonlCodec.optionalObject(node, "arguments"),
-                JsonlCodec.optionalString(node, "thoughtSignature"));
+                JsonlCodec.optionalString(node, "thoughtSignature"),
+                JsonlCodec.optionalString(node, "namespace"));
             case "tool_result" -> new ContentBlock.ToolResultContent(
                 JsonlCodec.requireString(node, "toolUseId"),
                 JsonlCodec.requireString(node, "toolName"),

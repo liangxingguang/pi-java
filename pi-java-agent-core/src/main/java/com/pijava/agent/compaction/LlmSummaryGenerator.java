@@ -381,7 +381,9 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
                 if (event instanceof StreamEvent.TextDelta td) {
                     text.append(td.delta());
                 } else if (event instanceof StreamEvent.ToolCallEnd tc) {
-                    toolCalls.add(new ContentBlock.ToolUseContent(tc.id(), tc.name(), tc.arguments()));
+                    // 批 30（ai#8）：namespace 随块携带（pi frame 终局写回对位）。
+                    toolCalls.add(new ContentBlock.ToolUseContent(tc.id(), tc.name(),
+                        tc.arguments(), null, tc.namespace()));
                 } else if (event instanceof StreamEvent.UsageInfo ui) {
                     usage[0] = ui.usage() != null ? ui.usage() : synthesizeUsage(ui);
                 } else if (event instanceof StreamEvent.StreamDone done) {

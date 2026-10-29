@@ -249,6 +249,10 @@ public final class SessionJson {
                 if (t.thoughtSignature() != null) {
                     node.put("thoughtSignature", t.thoughtSignature());
                 }
+                // 批 30（ai#8）：pi namespace?: string（types.ts:442-443）——同形缺席省略。
+                if (t.namespace() != null) {
+                    node.put("namespace", t.namespace());
+                }
             }
             case ContentBlock.ToolResultContent t -> {
                 node.put("type", "tool_result");

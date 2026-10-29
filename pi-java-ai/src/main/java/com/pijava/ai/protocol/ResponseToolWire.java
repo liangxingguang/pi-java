@@ -91,14 +91,18 @@ final class ResponseToolWire {
     /**
      * Build the replay item for one assistant ToolUseContent：custom_tool_call
      * （grammar 工具）或 function_call（pi shared :288-326）。
+     *
+     * <p>批 30（ai#8）：{@code namespace} 回放带<b>同模型闸门</b>（pi shared
+     * :316/:325 的 {@code ...(isSameModel && toolCall.namespace !== undefined
+     * ? { namespace } : {})}）。</p>
      */
     static ResponseInputItem historyItem(
             ContentBlock.ToolUseContent toolUse,
             String callId, String itemId, boolean dropItemId,
-            Map<String, String> grammarProperties) {
+            Map<String, String> grammarProperties, boolean sameModel) {
         var property = grammarProperties.get(toolUse.name());
         if (property != null) {
-            return customHistoryItem(toolUse, callId, itemId, dropItemId, property);
+            return customHistoryItem(toolUse, callId, itemId, dropItemId, property, sameModel);
         }
         var callBuilder = com.openai.models.responses.ResponseFunctionToolCall.builder()
             .callId(callId)
@@ -107,13 +111,17 @@ final class ResponseToolWire {
         if (itemId != null && !dropItemId) {
             callBuilder.id(itemId);
         }
+        if (sameModel && toolUse.namespace() != null) {
+            callBuilder.namespace(toolUse.namespace());
+        }
         return ResponseInputItem.ofFunctionCall(callBuilder.build());
     }
 
     /** pi replay 的 custom_tool_call 分支（shared:306-316）：输入串净化。 */
     private static ResponseInputItem customHistoryItem(
             ContentBlock.ToolUseContent toolUse,
-            String callId, String itemId, boolean dropItemId, String property) {
+            String callId, String itemId, boolean dropItemId, String property,
+            boolean sameModel) {
         var input = toolUse.arguments().get(property);
         if (!(input instanceof String inputString)) {
             // pi getGrammarToolInput:145-155 的逐字文案。
@@ -126,6 +134,9 @@ final class ResponseToolWire {
             .input(com.pijava.ai.utils.SanitizeUnicode.surrogates(inputString));
         if (itemId != null && !dropItemId) {
             builder.id(itemId);
+        }
+        if (sameModel && toolUse.namespace() != null) {
+            builder.namespace(toolUse.namespace());
         }
         return ResponseInputItem.ofCustomToolCall(builder.build());
     }

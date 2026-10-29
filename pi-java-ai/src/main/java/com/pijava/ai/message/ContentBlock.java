@@ -106,17 +106,29 @@ public sealed interface ContentBlock {
      *        ({@code ToolCall.thoughtSignature?}, {@code types.ts:391}); Google
      *        attaches it to {@code functionCall} parts, and the completions
      *        legacy encrypted-reasoning path reads it back from history
+     * @param namespace        OpenAI Responses namespace for calls to dynamically
+     *        loaded or namespaced tools（pi {@code ToolCall.namespace?}，
+     *        {@code types.ts:442-443}；批 30/ai#8）。仅 OpenAI Responses API 族
+     *        读/写该字段；{@code null} 缺席不序列化（NON_NULL 惯例，同
+     *        {@code thoughtSignature}），旧盘无此键 ⇒ 反序列化为 {@code null}。
      */
     record ToolUseContent(String id, String name, Map<String, Object> arguments,
-                          String thoughtSignature) implements ContentBlock {
+                          String thoughtSignature,
+                          @org.jspecify.annotations.Nullable String namespace) implements ContentBlock {
         /** Compact constructor that defensively copies the arguments map. */
         public ToolUseContent {
             arguments = Map.copyOf(arguments);
         }
 
+        /** Backwards-compatible constructor for pre-namespace call sites. */
+        public ToolUseContent(String id, String name, Map<String, Object> arguments,
+                              String thoughtSignature) {
+            this(id, name, arguments, thoughtSignature, null);
+        }
+
         /** Backwards-compatible constructor for pre-signature call sites. */
         public ToolUseContent(String id, String name, Map<String, Object> arguments) {
-            this(id, name, arguments, null);
+            this(id, name, arguments, null, null);
         }
     }
 

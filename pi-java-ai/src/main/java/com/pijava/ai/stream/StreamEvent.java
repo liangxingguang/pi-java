@@ -123,7 +123,7 @@ public sealed interface StreamEvent {
             case ToolCallDelta s -> new ToolCallDelta(
                 s.contentIndex(), s.id(), s.jsonDelta(), newPartial);
             case ToolCallEnd s -> new ToolCallEnd(
-                s.contentIndex(), s.id(), s.name(), s.arguments(), newPartial);
+                s.contentIndex(), s.id(), s.name(), s.arguments(), s.namespace(), newPartial);
             case UsageInfo s -> s.partial() == null ? s
                 : new UsageInfo(s.inputTokens(), s.outputTokens(), newPartial, s.usage());
             case StreamDone s -> new StreamDone(s.reason(), s.usage(), newPartial);
@@ -214,12 +214,22 @@ public sealed interface StreamEvent {
      * @param id the tool call ID
      * @param name the tool name
      * @param arguments parsed JSON arguments (defensive copy)
+     * @param namespace Responses namespace（pi {@code toolcall_end} 帧的
+     *        {@code namespace?}，assistant-message-frame.ts:32；批 30/ai#8）；
+     *        null ≙ 缺席
      */
     record ToolCallEnd(int contentIndex, String id, String name,
-                       Map<String, Object> arguments, AssistantMessage partial) implements StreamEvent {
+                       Map<String, Object> arguments, String namespace,
+                       AssistantMessage partial) implements StreamEvent {
         /** Compact constructor that defensively copies the arguments map. */
         public ToolCallEnd {
             arguments = Map.copyOf(arguments);
+        }
+
+        /** Backwards-compatible constructor for pre-namespace call sites. */
+        public ToolCallEnd(int contentIndex, String id, String name,
+                           Map<String, Object> arguments, AssistantMessage partial) {
+            this(contentIndex, id, name, arguments, null, partial);
         }
     }
 
