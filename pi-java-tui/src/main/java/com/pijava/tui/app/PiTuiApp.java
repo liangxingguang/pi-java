@@ -129,6 +129,9 @@ public final class PiTuiApp {
         // ⇒ switchSession 后新会话的设置面自然生效；E2-43 消费点）。
         com.pijava.tui.component.MarkdownTheme.installCodeBlockIndent(
             () -> session.services().settings().compaction().getMarkdownCodeBlockIndent());
+        // hideThinkingBlock 现读：设置页切换后当前转录也立即隐藏/恢复 thinking。
+        com.pijava.tui.component.MessageBubbleVisibility.install(() ->
+            Boolean.TRUE.equals(session.services().settings().accessors().getHideThinkingBlock()));
         this.sessionEvents = new SessionEventChannel(dispatcher, chatScreen::onSessionEvent);
         // 批 12（docs/23）：settings 消费键 live-read 注入——先于补全目录装配
         // （completer 重建带上 maxVisible 源）；现读 this.session ⇒ switchSession

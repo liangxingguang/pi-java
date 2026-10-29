@@ -126,14 +126,17 @@ public final class MessageBubble {
                 // `signature`/`redacted` ride along for replay only; the visible text is
                 // already the right thing to draw (a redacted block's text is pi's
                 // "[Reasoning redacted]" placeholder — anthropic-messages.ts:641).
-                case ContentBlock.ThinkingContent(var text, _, _) ->
-                    // 批 26（docs/37 T11）："assistant-thinking" 型变换缝
-                    //（pi assistant-message.ts:146-162 对位）。
-                    MarkdownRenderer.toLogicalLines(
+                case ContentBlock.ThinkingContent(var text, _, _) -> {
+                    if (MessageBubbleVisibility.hiddenThinking()) {
+                        yield List.<LogicalLine>of();
+                    }
+                    // 批 26（docs/37 T11）："assistant-thinking" 型变换缝。
+                    yield MarkdownRenderer.toLogicalLines(
                         MarkdownTransformers.apply(text,
                             MarkdownMessageType.ASSISTANT_THINKING),
                         MarkdownTheme.current(),
                         TuiThemeBridge.fg(ThemeToken.THINKING_TEXT).italic());
+                }
                 // 批 16（T4d）：渲染器责任链优先（扩展/MCP resolver），未命中 ⇒
                 // 原 ToolCallCard 路径不变。renderer 产已转义文本行（裁决⑦），
                 // 着色由本适配层补。

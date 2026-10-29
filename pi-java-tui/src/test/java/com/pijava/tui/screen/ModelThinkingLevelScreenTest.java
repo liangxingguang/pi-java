@@ -159,6 +159,26 @@ class ModelThinkingLevelScreenTest {
         }
     }
 
+    /** loop=true：写完一个 override 后回模型步，而不是关闭整个子菜单。 */
+    @Test
+    void loopReturnsToModelStepAfterWritingOverride() throws Exception {
+        try (var session = newSession()) {
+            var model = thinkingModel();
+            session.setModel(model.id());
+            var screen = new ModelThinkingLevelScreen(session, true);
+
+            screen.onKeyEvent(ENTER);
+            screen.onKeyEvent(ENTER);
+
+            assertThat(screen.isDone()).isFalse();
+            assertThat(session.services().settings().accessors()
+                .getModelThinkingLevel(model.id().provider(), model.id().modelName()))
+                .isNotNull();
+            screen.onKeyEvent(ESC);
+            assertThat(screen.isDone()).isTrue();
+        }
+    }
+
     private static void typeFilter(ModelThinkingLevelScreen screen, String query) {
         for (char c : query.toCharArray()) {
             screen.onKeyEvent(KeyEvent.ofChar(c));

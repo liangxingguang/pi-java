@@ -34,6 +34,7 @@ public final class ModelThinkingLevelScreen implements ScreenOverlay {
     private record LevelChoice(String label, String level) {}
 
     private final AgentSession session;
+    private final boolean loop;
     private final SelectList<ModelInfo> modelList;
     private SelectList<LevelChoice> levelList;
     private ModelInfo chosenModel;
@@ -45,7 +46,13 @@ public final class ModelThinkingLevelScreen implements ScreenOverlay {
      * @param session 当前会话（模型目录、override 读写、当前模型即时生效）
      */
     public ModelThinkingLevelScreen(AgentSession session) {
+        this(session, false);
+    }
+
+    /** @param loop true 时每设置一项后回模型步（pi SteppedSubmenu loop）。 */
+    public ModelThinkingLevelScreen(AgentSession session, boolean loop) {
         this.session = session;
+        this.loop = loop;
         var models = new ArrayList<>(ModelsJsonConfig.allModels().listModels());
         models.sort(java.util.Comparator.comparing(
             m -> m.id().provider() + "/" + m.id().modelName()));
@@ -85,7 +92,16 @@ public final class ModelThinkingLevelScreen implements ScreenOverlay {
         var consumed = levelList.onKeyEvent(event);
         if (levelList.confirmed()) {
             choice = levelList.selected().orElse(null);
-            done = true;
+            if (loop) {
+                apply(session, ignored -> { });
+                step = Step.MODEL;
+                modelList.reset();
+                levelList = null;
+                chosenModel = null;
+                choice = null;
+            } else {
+                done = true;
+            }
         } else if (levelList.cancelled()) {
             done = true;
         }

@@ -48,6 +48,16 @@ public final class SettingsListModel {
         selectedIndex = 0;
     }
 
+    /** Select a row by id in the current filtered list; missing ids are ignored. */
+    public void select(String id) {
+        for (int i = 0; i < filteredItems.size(); i++) {
+            if (filteredItems.get(i).id().equals(id)) {
+                selectedIndex = i;
+                return;
+            }
+        }
+    }
+
     /** Cycle the selected value or request its submenu. */
     public Activation activate() {
         var item = selected();

@@ -1,84 +1,60 @@
 package com.pijava.tui.screen;
 
 import java.nio.file.Files;
-import java.nio.file.Path;
 
 import com.pijava.coding.agent.cli.ArgsParser;
 import com.pijava.coding.agent.core.AgentSession;
-
 import dev.tamboui.tui.event.KeyEvent;
-
 import org.junit.jupiter.api.Test;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * Phase 3 review fixes: the settings page navigates and cycles field values.
- */
+/** Settings selector interaction regressions. */
 class SettingsScreenTest {
 
     @Test
     void themeRowOpensSubmenuInsteadOfCycling() throws Exception {
         withIsolatedHome(() -> {
-            try (var session = AgentSession.create(
-                    ArgsParser.parse(new String[] {}))) {
+            try (var session = AgentSession.create(ArgsParser.parse(new String[] { }))) {
                 var screen = new SettingsScreen(session);
 
-                // 批 21（T11，S9）：首行 Theme 是子菜单入口——Enter 置请求位
-                //（PiTuiApp 检出后开 ThemeSubmenuScreen），不再循环 dark/light。
-                screen.onKeyEvent(KeyEvent.ofKey(
-                    dev.tamboui.tui.event.KeyCode.ENTER));
+                screen.activate("theme");
 
                 assertThat(screen.pollThemeRequest()).isTrue();
                 assertThat(session.services().settings().effective().theme).isNull();
                 assertThat(screen.isDone()).isFalse();
 
-                screen.onKeyEvent(KeyEvent.ofKey(
-                    dev.tamboui.tui.event.KeyCode.ESCAPE));
+                screen.escape();       // Theme 子菜单 ⇒ 设置主列表
+                assertThat(screen.isDone()).isFalse();
+                screen.escape();       // 设置主列表 ⇒ 关闭
                 assertThat(screen.isDone()).isTrue();
             }
         });
     }
 
     @Test
-    void downAndEnterCycleFollowUpMode() throws Exception {
+    void followUpModeCyclesFromDefaultToAll() throws Exception {
         withIsolatedHome(() -> {
-            try (var session = AgentSession.create(
-                    ArgsParser.parse(new String[] {}))) {
+            try (var session = AgentSession.create(ArgsParser.parse(new String[] { }))) {
                 var screen = new SettingsScreen(session);
 
-                screen.onKeyEvent(KeyEvent.ofKey(
-                    dev.tamboui.tui.event.KeyCode.DOWN));
-                screen.onKeyEvent(KeyEvent.ofKey(
-                    dev.tamboui.tui.event.KeyCode.DOWN));
-                screen.onKeyEvent(KeyEvent.ofKey(
-                    dev.tamboui.tui.event.KeyCode.ENTER));
-                screen.onKeyEvent(KeyEvent.ofKey(
-                    dev.tamboui.tui.event.KeyCode.ENTER));
+                screen.activate("follow-up-mode");
 
-                assertThat(session.services().settings().effective().followUpMode)
-                    .isEqualTo("all");
+                assertThat(session.services().settings().effective().followUpMode).isEqualTo("all");
             }
         });
     }
 
-    // ── 批 12（docs/23 §3/§7）：消费键行＋T14 子菜单入口 ─────────
-
     private static final dev.tamboui.tui.event.KeyEvent ENTER =
         KeyEvent.ofKey(dev.tamboui.tui.event.KeyCode.ENTER);
-    private static final dev.tamboui.tui.event.KeyEvent DOWN =
-        KeyEvent.ofKey(dev.tamboui.tui.event.KeyCode.DOWN);
 
     @Test
     void outputPadRowCyclesAndFlushes() throws Exception {
         withIsolatedHome(() -> {
-            try (var session = AgentSession.create(
-                    ArgsParser.parse(new String[] {}))) {
+            try (var session = AgentSession.create(ArgsParser.parse(new String[] { }))) {
                 var screen = new SettingsScreen(session);
-                // Output pad 行（第 11 行，0 起）：默认 1 ⇒ 循环到 0。
-                for (int i = 0; i < 11; i++) {
-                    screen.onKeyEvent(DOWN);
-                }
-                screen.onKeyEvent(ENTER);
+
+                screen.activate("output-padding");
 
                 assertThat(session.services().settings().uiPrefs().getOutputPad()).isZero();
             }
@@ -88,13 +64,10 @@ class SettingsScreenTest {
     @Test
     void warningsRowTogglesAnthropicExtraUsage() throws Exception {
         withIsolatedHome(() -> {
-            try (var session = AgentSession.create(
-                    ArgsParser.parse(new String[] {}))) {
+            try (var session = AgentSession.create(ArgsParser.parse(new String[] { }))) {
                 var screen = new SettingsScreen(session);
-                // Warn Anthropic extra usage 行（第 15 行）：默认 true ⇒ 循环到 false。
-                for (int i = 0; i < 15; i++) {
-                    screen.onKeyEvent(DOWN);
-                }
+
+                screen.activate("warnings");
                 screen.onKeyEvent(ENTER);
 
                 assertThat(session.services().settings().uiPrefs()
@@ -106,22 +79,15 @@ class SettingsScreenTest {
     @Test
     void thinkingLevelRowRequestsTheSubmenu() throws Exception {
         withIsolatedHome(() -> {
-            try (var session = AgentSession.create(
-                    ArgsParser.parse(new String[] {}))) {
+            try (var session = AgentSession.create(ArgsParser.parse(new String[] { }))) {
                 var screen = new SettingsScreen(session);
-                // 末行（第 18 行；批 13 T9 在其前插了 cache-warming 两行）＝子菜单
-                // 入口：Enter 置请求位、不写设置、不关屏。
-                for (int i = 0; i < 18; i++) {
-                    screen.onKeyEvent(DOWN);
-                }
-                screen.onKeyEvent(ENTER);
+
+                screen.activate("model-thinking");
 
                 assertThat(screen.pollModelThinkingRequest()).isTrue();
-                // 一次性检出：再 poll 复位。
                 assertThat(screen.pollModelThinkingRequest()).isFalse();
                 assertThat(screen.isDone()).isFalse();
-                assertThat(session.services().settings().effective().modelThinkingLevels)
-                    .isNull();
+                assertThat(session.services().settings().effective().modelThinkingLevels).isNull();
             }
         });
     }

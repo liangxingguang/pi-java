@@ -66,7 +66,10 @@ final class OverlayManager {
         // B244（pi interactive-mode.ts:4986-4989 对位）：设置可能已改，
         // 关屏统一重建补全目录（pi 是 toggle 即时重建，窄差 D4 时机差；
         // 重建是纯读装配，无副作用）。
-        chatScreen.setSlashCommands(slashFlow.loadSlashItems());
+        // 设置屏在每次切换时已即时重建；其它 overlay 关屏仍走旧统一时机。
+        if (!(done instanceof SettingsScreen)) {
+            chatScreen.setSlashCommands(slashFlow.loadSlashItems());
+        }
     }
 
     void openOverlay(ScreenOverlay screenOverlay) {

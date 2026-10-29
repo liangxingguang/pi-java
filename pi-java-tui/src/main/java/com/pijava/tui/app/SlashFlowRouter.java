@@ -16,6 +16,7 @@ import com.pijava.tui.screen.ModelSelectorScreen;
 import com.pijava.tui.screen.SessionListScreen;
 import com.pijava.tui.screen.SettingsScreen;
 import com.pijava.tui.screen.UserMessageSelectorScreen;
+import com.pijava.tui.screen.settings.SettingsActionHandler;
 import com.pijava.tui.util.TuiEventDispatcher;
 
 /**
@@ -148,8 +149,12 @@ final class SlashFlowRouter {
             case CommandRegistry.UI_TREE_SELECTOR -> openTreeSelector();
             case CommandRegistry.UI_FORK_SELECTOR -> openForkSelector();
             case CommandRegistry.UI_SETTINGS ->
-                // 批 21（T11）：设置屏带主题控制器（Theme 子菜单预览/应用）。
-                app.openOverlay(new SettingsScreen(app.session, app.themeController()));
+                app.openOverlay(new SettingsScreen(app.session, app.themeController(),
+                    new SettingsActionHandler.Host() {
+                        @Override public void rebuildAutocomplete() {
+                            chatScreen.setSlashCommands(loadSlashItems());
+                        }
+                    }));
             case CommandRegistry.UI_SCOPED_MODELS ->
                 chatScreen.appendSystemText(
                     "Use /scoped-models +<model> or /scoped-models -<model>");

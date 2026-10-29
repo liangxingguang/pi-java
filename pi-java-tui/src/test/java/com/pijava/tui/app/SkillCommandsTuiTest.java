@@ -1,10 +1,7 @@
 package com.pijava.tui.app;
 
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.List;
 
 import com.pijava.agent.skill.Skill;
 import com.pijava.agent.skill.SkillSource;
@@ -70,10 +67,11 @@ class SkillCommandsTuiTest {
     void settingsScreenHasSkillCommandsFieldThatCyclesAccessors() throws Exception {
         try (var session = createSession()) {
             var screen = new SettingsScreen(session);
-            var index = skillCommandsIndex(screen);
-            setSelectedField(screen, index);
+            for (char c : "Skill commands".toCharArray()) {
+                screen.onKeyEvent(KeyEvent.ofChar(c));
+            }
 
-            // 缺省 true ⇒ 首次 Enter 落到 false；再 Enter 回 true（往返）。
+            // 搜索命中唯一行；缺省 true ⇒ 首次 Enter false，再 Enter 回 true。
             screen.onKeyEvent(KeyEvent.ofKey(KeyCode.ENTER));
             assertThat(session.services().settings().accessors()
                     .getEnableSkillCommands())
@@ -107,32 +105,6 @@ class SkillCommandsTuiTest {
         new PiTuiApp(new InteractiveMode(session), chatScreen,
             new KeybindingsManager(), new TuiEventDispatcher());
         return chatScreen;
-    }
-
-    /** 反射读 fields（批 12 起为实例装配）中 "Skill commands" 的下标（断言字段存在）。 */
-    private static int skillCommandsIndex(SettingsScreen screen) throws Exception {
-        Field fields = SettingsScreen.class.getDeclaredField("fields");
-        fields.setAccessible(true);
-        List<?> list = (List<?>) fields.get(screen);
-        Method label = null;
-        for (int i = 0; i < list.size(); i++) {
-            var item = list.get(i);
-            if (label == null) {
-                label = item.getClass().getDeclaredMethod("label");
-                label.setAccessible(true);
-            }
-            if ("Skill commands".equals(label.invoke(item))) {
-                return i;
-            }
-        }
-        throw new AssertionError("SettingsScreen.fields 无 \"Skill commands\" 字段");
-    }
-
-    private static void setSelectedField(SettingsScreen screen, int index)
-            throws Exception {
-        Field selected = SettingsScreen.class.getDeclaredField("selected");
-        selected.setAccessible(true);
-        selected.setInt(screen, index);
     }
 
     private static Skill skill(String name, String description) {

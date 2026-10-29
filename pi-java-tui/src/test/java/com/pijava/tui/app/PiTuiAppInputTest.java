@@ -495,10 +495,13 @@ class PiTuiAppInputTest {
                 && text.equals(user.text()));
     }
 
-    private static int selectedField(Object overlay) throws Exception {
-        var field = SettingsScreen.class.getDeclaredField("selected");
-        field.setAccessible(true);
-        return field.getInt(overlay);
+    private static int selectedField(Object overlay) {
+        var id = ((SettingsScreen) overlay).selectedId();
+        return switch (id) {
+            case "autocompact" -> 0;
+            case "auto-resize-images" -> 1;
+            default -> -1;
+        };
     }
 
     private static void awaitSelectedField(Object overlay, int expected)
