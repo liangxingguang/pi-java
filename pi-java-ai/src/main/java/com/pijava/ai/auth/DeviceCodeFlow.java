@@ -26,9 +26,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 public final class DeviceCodeFlow {
 
     private static final long LOGIN_TIMEOUT_SECONDS = 15 * 60;
-    private static final long MIN_INTERVAL_MS = 1_000;
     private static final long DEFAULT_POLL_INTERVAL_SECONDS = 5;
-    private static final long SLOW_DOWN_INCREMENT_MS = 5_000;
 
     /**
      * B231（pi {@code auth/resolve.ts:105-106}）：刷新请求硬超时 15s。只绑
@@ -158,57 +156,45 @@ public final class DeviceCodeFlow {
     // ── Token polling ───────────────────────────────────────────────────
 
     private OAuthCredential pollForTokens(Device device) throws IOException {
-        long deadline = Instant.now().getEpochSecond() + device.expiresInSeconds();
-        long intervalMs = Math.max(MIN_INTERVAL_MS, device.intervalSeconds() * 1_000);
-        long slowDowns = 0;
-
-        while (Instant.now().getEpochSecond() < deadline) {
+        return DeviceCodePoller.poll(device.intervalSeconds(), device.expiresInSeconds(), () -> {
             var response = pollToken(device);
             if (response.statusCode() / 100 == 2) {
                 var node = parseJson(response);
-                // OpenAI Codex: device poll returns an intermediate authorization_code.
                 var authCode = text(node, "authorization_code");
-                if (authCode != null) {
-                    return exchangeAuthorizationCode(authCode, text(node, "code_verifier"));
-                }
-                return parseCredential(node);
+                return authCode != null
+                    ? new DeviceCodePoller.PollResult.Complete<>(
+                        exchangeAuthorizationCode(authCode, text(node, "code_verifier")))
+                    : new DeviceCodePoller.PollResult.Complete<>(parseCredential(node));
             }
-
             var node = tryParseJson(response);
             String error = text(node, "error");
             if (error != null && error.indexOf(':') > 0) {
-                // OpenAI Codex errors are objects like { error: { code } }.
                 var codeNode = node.get("error");
                 if (codeNode != null && codeNode.isObject()) {
                     error = text(codeNode, "code");
                 }
             }
-            if (!"authorization_pending".equals(error)
-                    && !"deviceauth_authorization_pending".equals(error)
-                    && (config.deviceStyle() != DeviceCodeConfig.DeviceAuthStyle.OPENAI_CODEX
-                    || (response.statusCode() != 403 && response.statusCode() != 404))) {
-                if ("slow_down".equals(error)) {
-                    slowDowns++;
-                    long serverInterval = node.has("interval") ? node.get("interval").asLong() : 0;
-                    intervalMs = serverInterval > 0
-                        ? Math.max(MIN_INTERVAL_MS, serverInterval * 1_000)
-                        : Math.max(MIN_INTERVAL_MS, intervalMs + SLOW_DOWN_INCREMENT_MS);
-                } else if ("expired_token".equals(error)) {
-                    throw new IOException("Device code expired. Please restart login.");
-                } else if ("access_denied".equals(error) || "denied".equals(error)) {
-                    throw new IOException("Device authorization was denied.");
-                } else if (error != null) {
-                    throw new IOException("Device token request failed: " + error);
-                } else {
-                    throw new IOException("Device token request failed (HTTP " + response.statusCode()
-                        + "): " + response.body());
-                }
+            if ("authorization_pending".equals(error) || "deviceauth_authorization_pending".equals(error)
+                    || config.deviceStyle() == DeviceCodeConfig.DeviceAuthStyle.OPENAI_CODEX
+                    && (response.statusCode() == 403 || response.statusCode() == 404)) {
+                return new DeviceCodePoller.PollResult.Pending<>();
             }
-            sleep(intervalMs);
-        }
-        throw new IOException(slowDowns > 0
-            ? "Device flow timed out after one or more slow_down responses"
-            : "Device flow timed out. Please restart login.");
+            if ("slow_down".equals(error)) {
+                return new DeviceCodePoller.PollResult.SlowDown<>(
+                    node.has("interval") ? node.get("interval").asLong() : 0);
+            }
+            if ("expired_token".equals(error)) {
+                return new DeviceCodePoller.PollResult.Failed<>("Device code expired. Please restart login.");
+            }
+            if ("access_denied".equals(error) || "denied".equals(error)) {
+                return new DeviceCodePoller.PollResult.Failed<>("Device authorization was denied.");
+            }
+            if (error != null) {
+                return new DeviceCodePoller.PollResult.Failed<>("Device token request failed: " + error);
+            }
+            return new DeviceCodePoller.PollResult.Failed<>("Device token request failed (HTTP "
+                + response.statusCode() + "): " + response.body());
+        });
     }
 
     private HttpResponse<String> pollToken(Device device) throws IOException {
@@ -323,14 +309,6 @@ public final class DeviceCodeFlow {
             }
         } catch (Exception ignored) {
             // 无桌面环境时用户手动打开
-        }
-    }
-
-    private static void sleep(long millis) {
-        try {
-            Thread.sleep(millis);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
         }
     }
 }

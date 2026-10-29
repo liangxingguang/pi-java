@@ -7,10 +7,9 @@ import java.util.Set;
 /**
  * 已知 OAuth provider 配置注册表（pi {@code auth/oauth/} 全量）。
  *
- * <p>两类流程并存：{@link OAuthProvider.Pkce}（OpenRouter/Anthropic，浏览器回调 +
- * PKCE）与 {@link OAuthProvider.Device}（xAI/Kimi/GitHub Copilot/OpenAI Codex，
- * RFC 8628 设备码）。端点与 client-id 对齐 pi 各 provider 文件；Radius 按
- * gateway 工厂构造。</p>
+ * <p>通用 PKCE、Anthropic/ChatGPT 专用浏览器流程、RFC 8628 设备码与 Radius
+ * browser/device-code 双流按 provider 分派。端点与 client-id 对齐 pi 各 provider
+ * 文件；Radius 也可按 gateway 工厂构造。</p>
  */
 public final class OAuthProviders {
 
@@ -56,22 +55,22 @@ public final class OAuthProviders {
 
     /** 按 provider 名查 OAuth 配置；无则返回 empty。 */
     public static Optional<OAuthProvider> get(String provider) {
+        if ("radius".equals(provider)) {
+            return Optional.of(new OAuthProvider.Radius(
+                new RadiusOAuthConfig("Radius", "https://radius.pi.dev")));
+        }
         return Optional.ofNullable(ALL.get(provider));
     }
 
     /** 已注册 provider 名。 */
     public static Set<String> names() {
-        return ALL.keySet();
+        var names = new java.util.LinkedHashSet<>(ALL.keySet());
+        names.add("radius");
+        return java.util.Collections.unmodifiableSet(names);
     }
 
-    /** Radius 网关（pi {@code createRadiusOAuth}）：按 gateway 构造 device 配置。 */
+    /** Radius 网关（pi {@code createRadiusOAuth}）：按 gateway 构造双流配置。 */
     public static OAuthProvider radius(String name, String gateway) {
-        String base = gateway.endsWith("/") ? gateway.substring(0, gateway.length() - 1) : gateway;
-        return new OAuthProvider.Device(DeviceCodeConfig.standard(
-            name,
-            base + "/v1/oauth/device",
-            base + "/v1/oauth/token",
-            "pi-gateway",
-            "gateway offline_access"));
+        return new OAuthProvider.Radius(new RadiusOAuthConfig(name, gateway));
     }
 }

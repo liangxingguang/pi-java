@@ -11,7 +11,7 @@ class OAuthProvidersTest {
     @Test
     void allPiProvidersAreRegistered() {
         assertThat(OAuthProviders.names()).containsExactlyInAnyOrder(
-            "openrouter", "anthropic", "openai", "xai", "kimi", "github-copilot", "openai-codex");
+            "openrouter", "anthropic", "openai", "xai", "kimi", "github-copilot", "openai-codex", "radius");
     }
 
     @Test
@@ -69,12 +69,10 @@ class OAuthProvidersTest {
 
     @Test
     void radiusFactoryBuildsGatewayConfig() {
-        var spec = (OAuthProvider.Device) OAuthProviders.radius("radius", "https://gateway.example.com/");
-        var config = spec.config();
-        assertThat(config.deviceCodeUrl()).isEqualTo("https://gateway.example.com/v1/oauth/device");
-        assertThat(config.tokenUrl()).isEqualTo("https://gateway.example.com/v1/oauth/token");
-        assertThat(config.clientId()).isEqualTo("pi-gateway");
-        assertThat(config.scope()).isEqualTo("gateway offline_access");
+        var spec = (OAuthProvider.Radius) OAuthProviders.radius("radius", "https://gateway.example.com/");
+        assertThat(spec.config().name()).isEqualTo("radius");
+        assertThat(spec.config().gateway()).isEqualTo("https://gateway.example.com");
+        assertThat(OAuthProviders.get("radius")).isPresent();
     }
 
     private static DeviceCodeConfig device(String name) {

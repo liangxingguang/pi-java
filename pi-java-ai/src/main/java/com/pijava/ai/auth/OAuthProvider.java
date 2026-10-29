@@ -3,15 +3,16 @@ package com.pijava.ai.auth;
 /**
  * 一个已注册 OAuth provider 的流程判别（pi {@code auth/oauth/load.ts}）。
  *
- * <p>sealed 四选一：{@link Pkce} 走通用 {@link OAuthFlow}（openrouter 形状）、
+ * <p>sealed 五选一：{@link Pkce} 走通用 {@link OAuthFlow}（openrouter 形状）、
  * {@link Anthropic} 走专用 {@link AnthropicOAuthFlow}（browser/copy-code 两登录法、
  * JSON token 体、固定端口回落）、{@link ChatGpt} 走 {@link ChatGptOAuthFlow}
- * （动态客户端、固定 1455 端口），{@link Device} 走 {@link DeviceCodeFlow}
- * （RFC 8628 设备码）。</p>
+ * （动态客户端、固定 1455 端口）、{@link Device} 走 {@link DeviceCodeFlow}
+ * （RFC 8628 设备码）、{@link Radius} 走 {@link RadiusOAuthFlow}
+ * （browser/PKCE 与 device-code 双流）。</p>
  */
 public sealed interface OAuthProvider
         permits OAuthProvider.Pkce, OAuthProvider.Anthropic, OAuthProvider.ChatGpt,
-        OAuthProvider.Device {
+        OAuthProvider.Device, OAuthProvider.Radius {
 
     /** 通用授权码 + PKCE 流程（OpenRouter）。 */
     record Pkce(OAuthConfig config) implements OAuthProvider {
@@ -25,7 +26,11 @@ public sealed interface OAuthProvider
     record ChatGpt() implements OAuthProvider {
     }
 
-    /** RFC 8628 device-code 流程（xAI、Kimi、GitHub Copilot、OpenAI Codex、Radius）。 */
+    /** RFC 8628 device-code 流程（xAI、Kimi、GitHub Copilot、OpenAI Codex）。 */
     record Device(DeviceCodeConfig config) implements OAuthProvider {
+    }
+
+    /** Radius browser/PKCE 与 device-code 双流。 */
+    record Radius(RadiusOAuthConfig config) implements OAuthProvider {
     }
 }

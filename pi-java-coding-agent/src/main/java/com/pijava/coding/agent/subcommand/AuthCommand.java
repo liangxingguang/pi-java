@@ -16,6 +16,8 @@ import com.pijava.ai.auth.OAuthFlow;
 import com.pijava.ai.auth.OAuthInteraction;
 import com.pijava.ai.auth.OAuthProvider;
 import com.pijava.ai.auth.OAuthProviders;
+import com.pijava.ai.auth.RadiusOAuthConfig;
+import com.pijava.ai.auth.RadiusOAuthFlow;
 
 /**
  * {@code pi-java auth} subcommand (Phase 3 design §9.4).
@@ -143,6 +145,7 @@ public final class AuthCommand {
             case OAuthProvider.ChatGpt ignored -> new ChatGptOAuthFlow()
                 .login(CONSOLE, chatGptHints());
             case OAuthProvider.Device(DeviceCodeConfig d) -> new DeviceCodeFlow(d).login(CONSOLE);
+            case OAuthProvider.Radius(RadiusOAuthConfig c) -> new RadiusOAuthFlow(c).login(CONSOLE);
         };
     }
 
