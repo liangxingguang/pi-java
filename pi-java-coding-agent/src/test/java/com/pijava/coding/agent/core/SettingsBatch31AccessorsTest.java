@@ -19,7 +19,7 @@ class SettingsBatch31AccessorsTest {
 
         assertThat(storage.readGlobal().quietStartup).isEqualTo("header");
         assertThat(manager.accessors().getQuietStartupMode()).isEqualTo("header");
-        assertThat(manager.accessors().getQuietStartup()).isNull();
+        assertThat(manager.accessors().getQuietStartup()).isFalse();
     }
 
     @Test

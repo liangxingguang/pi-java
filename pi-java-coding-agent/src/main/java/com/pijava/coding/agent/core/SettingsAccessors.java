@@ -141,8 +141,9 @@ public final class SettingsAccessors {
         return command == null ? null : List.copyOf(command);
     }
 
-    public Boolean getQuietStartup() {
-        return manager.effective().quietStartup instanceof Boolean value ? value : null;
+    /** 旧 boolean 只读口：仅显式 Boolean.TRUE 为 true；header/缺席/非法均为 false。 */
+    public boolean getQuietStartup() {
+        return Boolean.TRUE.equals(manager.effective().quietStartup);
     }
 
     /** Set the quiet-startup flag in the global scope. */
