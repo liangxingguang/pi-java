@@ -63,6 +63,14 @@ public final class KeybindingsManager {
     public static final String SESSION_FORK = "app.session.fork";
     public static final String SESSION_RESUME = "app.session.resume";
 
+    // ── app.models.*（scoped-models 选择器；pi keybindings.ts:119-141）─
+    public static final String MODELS_SAVE = "app.models.save";
+    public static final String MODELS_ENABLE_ALL = "app.models.enableAll";
+    public static final String MODELS_CLEAR_ALL = "app.models.clearAll";
+    public static final String MODELS_TOGGLE_PROVIDER = "app.models.toggleProvider";
+    public static final String MODELS_REORDER_UP = "app.models.reorderUp";
+    public static final String MODELS_REORDER_DOWN = "app.models.reorderDown";
+
     // ── tui.select.*／tui.input.newLine（批 17 T4，docs/28 §1.8；pi tui/
     // keybindings.ts:143-158 默认键逐字）——overlay 表（批 9 C1 教训：同表污染主屏）。
     public static final String SELECT_UP = "tui.select.up";           // up
@@ -165,6 +173,13 @@ public final class KeybindingsManager {
         overlayBindings.put(SESSION_RENAME, List.of(KeyStroke.of("r", true, false, false)));
         overlayBindings.put(SESSION_DELETE, List.of(KeyStroke.of("d", true, false, false)));
         overlayBindings.put(SESSION_DELETE_NONINVASIVE, List.of(KeyStroke.of("backspace", true, false, false)));
+        // scoped-models 六键只在选择器语境生效，不进全局 resolve。
+        overlayBindings.put(MODELS_SAVE, List.of(KeyStroke.of("s", true, false, false)));
+        overlayBindings.put(MODELS_ENABLE_ALL, List.of(KeyStroke.of("a", true, false, false)));
+        overlayBindings.put(MODELS_CLEAR_ALL, List.of(KeyStroke.of("x", true, false, false)));
+        overlayBindings.put(MODELS_TOGGLE_PROVIDER, List.of(KeyStroke.of("p", true, false, false)));
+        overlayBindings.put(MODELS_REORDER_UP, List.of(KeyStroke.of("up", false, true, false)));
+        overlayBindings.put(MODELS_REORDER_DOWN, List.of(KeyStroke.of("down", false, true, false)));
         // 批 17（T4）：pi tui/keybindings.ts:143-158 默认键逐字——扩展对话框五键。
         overlayBindings.put(SELECT_UP, List.of(KeyStroke.of("up", false, false, false)));
         overlayBindings.put(SELECT_DOWN, List.of(KeyStroke.of("down", false, false, false)));

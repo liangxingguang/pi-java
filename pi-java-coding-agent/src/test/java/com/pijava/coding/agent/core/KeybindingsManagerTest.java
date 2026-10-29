@@ -40,9 +40,9 @@ class KeybindingsManagerTest {
 
     @Test
     void exposesAllActionIds() {
-        // 11 实键全局＋4 空绑定 session（批 14）＋12 tree/copy＋6 选择器 session（批 14）
-        // ＋5 扩展对话框 tui.select.*/tui.input.newLine（批 17，overlay 表）。
-        assertThat(keys.actionIds()).hasSize(38);
+        // 11 实键全局＋4 空绑定 session＋12 tree/copy＋6 选择器 session
+        // ＋5 扩展对话框＋6 scoped-models（批 31，均 overlay 表）。
+        assertThat(keys.actionIds()).hasSize(44);
         assertThat(keys.actionIds()).contains(KeybindingsManager.INTERRUPT);
     }
 
