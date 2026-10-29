@@ -25,11 +25,11 @@ class ProviderCatalogConformanceTest {
         "moonshotai-cn", "moonshotai", "zai-coding-cn", "zai",
         "qwen-token-plan-cn", "xiaomi", "xiaomi-token-plan-cn",
         "minimax-cn", "minimax", "ant-ling", "ollama",
-        "openrouter", "openrouter-images", "xai"
+        "openrouter", "openrouter-images", "xai", "radius"
     };
 
     @Test
-    void catalogContainsNineteenProviders() {
+    void catalogContainsTwentyProviders() {
         var names = ProviderCatalog.all().stream().map(Provider::name).toList();
         assertThat(names).containsExactly(EXPECTED_NAMES);
     }
@@ -39,7 +39,9 @@ class ProviderCatalogConformanceTest {
         for (var provider : ProviderCatalog.all()) {
             assertThat(provider.name()).isNotBlank();
             assertThat(provider.displayName()).isNotBlank();
-            assertThat(provider.builtinModels().listModels()).isNotEmpty();
+            if (!"radius".equals(provider.name())) {
+                assertThat(provider.builtinModels().listModels()).isNotEmpty();
+            }
             assertThat(provider).isInstanceOf(ConfigurableProvider.class);
 
             var config = ((ConfigurableProvider) provider).providerConfig();

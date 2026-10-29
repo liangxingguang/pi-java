@@ -2,6 +2,7 @@ package com.pijava.ai.model;
 
 import java.util.Map;
 
+import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.provider.builtin.ProviderCatalog;
 
 import org.junit.jupiter.api.Test;
@@ -40,6 +41,17 @@ class DefaultModelIdsTest {
         for (var e : expected.entrySet()) {
             assertThat(DefaultModelIds.forProvider(e.getKey())).contains(e.getValue());
         }
+    }
+
+    @Test
+    void radiusDefaultUsesBalancedFromDynamicCatalog() {
+        assertThat(DefaultModelIds.forProvider("radius")).contains("balanced");
+        var catalog = com.pijava.ai.catalog.BuiltinCatalog.of(java.util.List.of(
+            ModelInfo.minimal(ModelId.of("radius", "fast")),
+            ModelInfo.minimal(ModelId.of("radius", "balanced"))));
+
+        assertThat(new DefaultModelResolver(catalog).resolve("radius").modelName())
+            .isEqualTo("balanced");
     }
 
     @Test

@@ -31,7 +31,7 @@ public final class DefaultProviders {
     private DefaultProviders() {}
 
     /**
-     * Register the 18 built-in providers, any ServiceLoader-discovered
+     * Register the 20 built-in providers, any ServiceLoader-discovered
      * third-party {@code ProviderFactory} implementations, and the user's
      * {@code models.json} custom providers (which override builtins on
      * name collision). A malformed models.json warns and continues —
@@ -68,7 +68,7 @@ public final class DefaultProviders {
      * pi 的 {@code withRemoteCatalog} 只套在生成的内置目录上。</p>
      */
     private static final java.util.Set<String> REMOTE_CATALOG_EXCLUDED =
-        java.util.Set.of("openrouter-images");
+        java.util.Set.of("openrouter-images", "radius");
 
     private static void wrapRemoteCatalogs(ProviderRegistry registry, String catalogBaseUrl) {
         var builtinIds = com.pijava.ai.provider.builtin.ProviderCatalog.all().stream()

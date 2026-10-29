@@ -6,7 +6,8 @@ import java.util.Optional;
 /**
  * 裸 provider 引用（{@code "anthropic"}、{@code null} 模式）解析时的默认模型 id —— pi
  * {@code coding-agent/src/core/model-resolver.ts:16-58} 的 {@code defaultModelPerProvider}
- * 表中、本仓已注册且有 npm 生成分片的 17 provider 子集（ollama 在 pi 无条目）。
+ * 表中、本仓已注册且有 npm 生成分片的 17 provider 子集，外加批 31 Radius 动态目录
+ * （ollama 在 pi 无条目）。
  *
  * <p><b>为什么不能直接取目录首条</b>：分片按 models.dev 的序排列，首条不保证是默认模型
  * （google 分片首条是 {@code deep-research-max-preview-04-2026}；openrouter 首条是
@@ -35,7 +36,8 @@ public final class DefaultModelIds {
         Map.entry("xiaomi", "mimo-v2.5-pro"),
         Map.entry("xiaomi-token-plan-cn", "mimo-v2.5-pro"),
         Map.entry("ant-ling", "Ring-2.6-1T"),
-        Map.entry("openrouter", "moonshotai/kimi-k2.6"));
+        Map.entry("openrouter", "moonshotai/kimi-k2.6"),
+        Map.entry("radius", "balanced"));
 
     private DefaultModelIds() {}
 
