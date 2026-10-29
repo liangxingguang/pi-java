@@ -35,6 +35,14 @@ public final class WriteTool {
         return new AgentTool<>() {
             @Override public String name() { return "write"; }
             @Override public String label() { return "write"; }
+            @Override public String promptSnippet() {
+                // pi writeToolSystemPromptContribution.snippet（write.ts:17）逐字。
+                return "Create or overwrite files";
+            }
+            @Override public List<String> promptGuidelines() {
+                // pi writeToolSystemPromptContribution.guidelines（write.ts:18）逐字。
+                return List.of("Use write only for new files or complete rewrites.");
+            }
             @Override public String description() {
                 return "Write content to a file. Creates the file if it doesn't exist, "
                     + "overwrites if it does. Automatically creates parent directories.";

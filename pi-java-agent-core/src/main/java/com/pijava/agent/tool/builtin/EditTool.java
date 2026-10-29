@@ -45,6 +45,23 @@ public final class EditTool {
         return new AgentTool<>() {
             @Override public String name() { return "edit"; }
             @Override public String label() { return "edit"; }
+            @Override public String promptSnippet() {
+                // pi editToolSystemPromptContribution.snippet（edit.ts:44）逐字。
+                return "Make precise file edits with exact text replacement, "
+                    + "including multiple disjoint edits in one call";
+            }
+            @Override public List<String> promptGuidelines() {
+                // pi editToolSystemPromptContribution.guidelines（edit.ts:45-51）逐字四条。
+                return List.of(
+                    "Use edit for precise changes (edits[].oldText must match exactly)",
+                    "When changing multiple separate locations in one file, use one edit call "
+                        + "with multiple entries in edits[] instead of multiple edit calls",
+                    "Each edits[].oldText is matched against the original file, not after "
+                        + "earlier edits are applied. Do not emit overlapping or nested edits. "
+                        + "Merge nearby changes into one edit.",
+                    "Keep edits[].oldText as small as possible while still being unique in the "
+                        + "file. Do not pad with large unchanged regions.");
+            }
             @Override public String description() {
                 return "Edit a single file using exact text replacement. "
                     + "Every edits[].oldText must match a unique, non-overlapping region "

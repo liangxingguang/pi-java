@@ -38,6 +38,14 @@ public final class ReadTool {
         return new AgentTool<>() {
             @Override public String name() { return "read"; }
             @Override public String label() { return "read"; }
+            @Override public String promptSnippet() {
+                // pi readToolSystemPromptContribution.snippet（read.ts:21）逐字。
+                return "Read file contents";
+            }
+            @Override public List<String> promptGuidelines() {
+                // pi readToolSystemPromptContribution.guidelines（read.ts:22）逐字。
+                return List.of("Use read to examine files instead of cat or sed.");
+            }
             @Override public String description() {
                 return "Read the contents of a file. Supports text files and images (jpg, png, gif, webp, bmp). "
                     + "Images are sent as attachments. "
