@@ -34,8 +34,9 @@ public interface AgentTool<TParams, TDetails> {
 
     /**
      * One-line snippet for the system prompt's Available-tools section
-     * (pi {@code ToolDefinition.promptSnippet}). Empty means fall back to
-     * {@link #description()}.
+     * (pi {@code ToolDefinition.promptSnippet}). Empty/absent means the tool
+     * does not enter the tools section at all（pi 稀疏语义，批 30/B94：
+     * 消费侧 {@code ContextAssembler} 无 description 回落）。
      */
     default String promptSnippet() {
         return "";

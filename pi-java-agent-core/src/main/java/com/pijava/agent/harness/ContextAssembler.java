@@ -66,23 +66,29 @@ final class ContextAssembler {
      * {@link ToolRegistry#activeOf}（跟注册表序），与
      * {@code PiLaneEngine.activeTools} 同一稳定源。</p>
      *
-     * <p>⚠️ <b>{@code toolSnippets} 用的是「有片段用片段、否则用描述」</b>，而 pi 的
-     * {@code tools} 段只收**声明了 {@code promptSnippet} 的**工具（{@code system-prompt.ts:151}）。
-     * pi 的 8 个内置工具都声明了片段，pi-java 的工具一个都没声明 ⇒ 照 pi 的稀疏规则会得到
-     * {@code (none)}，把工具清单整段抹掉。故此处保留 pi-java 既有的回落，并把
-     * 「pi-java 的工具没有 promptSnippet/promptGuidelines」登记为缺口
-     * （{@code 原 docs/52 §12}）。</p>
+     * <p>⚠️ <b>{@code toolSnippets} 严格按 pi 的稀疏语义</b>：{@code tools} 段只收
+     * <b>声明了 {@code promptSnippet} 的</b>工具（{@code system-prompt.ts:151} 的
+     * {@code filter(name => !!toolSnippets[name])}，{@link SystemPrompts#toolsSection}
+     * 已是同形过滤）⇒ 未声明 snippet 的工具（MCP 工具、未声明的扩展工具）不进段——
+     * 这正是 pi 的行为（pi 的 MCP 工具定义也不声明 snippet）。批 30（B94 收口）删掉了
+     * 此前的 description 回落——那是「pi-java 的工具一个都没声明」时代的权宜，
+     * 8/8 内置工具贡献落地后前提消失（docs/42 §1.3 裁决①）。</p>
+     *
+     * <p>⚠️ 片段/准则进表前过一次 pi 的归一（{@code agent-session.ts:1676-1697} 逐字对位，
+     * 见 {@link #normalizePromptSnippet}/{@link #normalizePromptGuidelines}）。</p>
      */
     SystemPromptOptions promptOptions(LaneState lane) {
         var tools = activeToolsInRegistryOrder();
         var snippets = new LinkedHashMap<String, String>();
         var guidelines = new LinkedHashMap<String, List<String>>();
         for (var tool : tools) {
-            var snippet = tool.promptSnippet();
-            snippets.put(tool.name(), snippet == null || snippet.isBlank() ? tool.description() : snippet);
-            var toolRules = tool.promptGuidelines();
-            if (toolRules != null && !toolRules.isEmpty()) {
-                guidelines.put(tool.name(), List.copyOf(toolRules));
+            var snippet = normalizePromptSnippet(tool.promptSnippet());
+            if (snippet != null) {
+                snippets.put(tool.name(), snippet);
+            }
+            var toolRules = normalizePromptGuidelines(tool.promptGuidelines());
+            if (!toolRules.isEmpty()) {
+                guidelines.put(tool.name(), toolRules);
             }
         }
         var skills = List.copyOf(ctx.skillManager().all());
@@ -168,6 +174,40 @@ final class ContextAssembler {
 
     private static boolean isPresent(String value) {
         return value != null && !value.isEmpty();
+    }
+
+    /**
+     * pi {@code _normalizePromptSnippet}（agent-session.ts:1678-1685 逐字）：
+     * 折行压缩为单行（{@code [\r\n]+}→空格 ⇒ {@code \s+}→空格 ⇒ trim）；
+     * 空/全空白 ⇒ {@code null}（pi 的 {@code undefined}——不进表）。
+     */
+    private static String normalizePromptSnippet(String text) {
+        if (text == null || text.isEmpty()) {
+            return null;
+        }
+        var oneLine = text.replaceAll("[\r\n]+", " ").replaceAll("\\s+", " ").trim();
+        return oneLine.isEmpty() ? null : oneLine;
+    }
+
+    /**
+     * pi {@code _normalizePromptGuidelines}（agent-session.ts:1687-1699 逐字）：
+     * 逐条 trim、丢空、按字面值去重保序。
+     */
+    private static List<String> normalizePromptGuidelines(List<String> guidelines) {
+        if (guidelines == null || guidelines.isEmpty()) {
+            return List.of();
+        }
+        var unique = new java.util.LinkedHashSet<String>();
+        for (var guideline : guidelines) {
+            if (guideline == null) {
+                continue;
+            }
+            var normalized = guideline.trim();
+            if (!normalized.isEmpty()) {
+                unique.add(normalized);
+            }
+        }
+        return List.copyOf(unique);
     }
 
     // ═══════════════════════════════════════════════════════════
