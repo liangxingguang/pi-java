@@ -71,8 +71,59 @@ record ExecutionContext(
      * 段名 → 内容；唯一生产者是扩展的 {@code before_agent_start} 写回
      * （{@code AgentHarness.setPromptSections}）。
      */
-    Supplier<java.util.Map<String, String>> promptSections
+    Supplier<java.util.Map<String, String>> promptSections,
+    /**
+     * 批 30（T6，B95）：pi-java 文档路径束（进 {@code docs} 段）；{@code null} ≙
+     * 不产出。非 Supplier——装配期一次解析（发行根位置运行期不变）。
+     */
+    com.pijava.agent.prompt.SystemPromptOptions.DocumentationPaths documentation
 ) {
+    /**
+     * 批 30 之前的 33 参形状（{@code documentation} 默认 {@code null}——存量
+     * 测试装配零改签）。
+     */
+    ExecutionContext(
+        StreamFn streamFn,
+        Supplier<ModelId<?>> model,
+        Supplier<ModelThinkingLevel> thinkingLevel,
+        Supplier<String> systemPrompt,
+        Supplier<Set<AgentTool<?, ?>>> activeTools,
+        int maxInputTokens,
+        java.util.function.ToIntFunction<ModelId<?>> contextWindow,
+        java.util.function.ToIntFunction<ModelId<?>> maxOutputTokens,
+        ToolRegistry toolRegistry,
+        ToolContext toolContext,
+        SkillManager skillManager,
+        HookSystem hookSystem,
+        LaneState lane,
+        Supplier<CompactionSettings> compactionSettings,
+        ThinkingLevelMap thinkingLevelMap,
+        TokenCounter tokenCounter,
+        SnapshotService snapshotService,
+        QueueManager queueManager,
+        Supplier<ToolExecution> toolExecution,
+        Supplier<Consumer<StreamEvent>> streamListener,
+        SummaryGenerator summaryGenerator,
+        java.util.function.BiConsumer<ModelId<?>, String> turnConfigApplier,
+        TelemetryContext telemetry,
+        com.pijava.agent.compaction.CompactionObserver compactionObserver,
+        Supplier<RetrySettings> retrySettings,
+        BooleanSupplier retryAborted,
+        RetryObserver retryObserver,
+        Supplier<List<String>> promptGuidelines,
+        Supplier<String> appendSystemPrompt,
+        Supplier<List<com.pijava.agent.prompt.SystemPromptOptions.ContextFile>> contextFiles,
+        com.pijava.ai.thinking.ThinkingBudgets thinkingBudgets,
+        Supplier<java.util.Map<String, String>> promptSections
+    ) {
+        this(streamFn, model, thinkingLevel, systemPrompt, activeTools, maxInputTokens,
+            contextWindow, maxOutputTokens, toolRegistry, toolContext, skillManager,
+            hookSystem, lane, compactionSettings, thinkingLevelMap, tokenCounter,
+            snapshotService, queueManager, toolExecution, streamListener, summaryGenerator,
+            turnConfigApplier, telemetry, compactionObserver, retrySettings, retryAborted,
+            retryObserver, promptGuidelines, appendSystemPrompt, contextFiles,
+            thinkingBudgets, promptSections, null);
+    }
     ExecutionContext {
         // 与 HarnessConfig 的规范默认同置：直接构造 ExecutionContext 的装配（测试、
         // 未来的第二宿主）不许从这些槽读到 null（3d 起含 retrySettings/

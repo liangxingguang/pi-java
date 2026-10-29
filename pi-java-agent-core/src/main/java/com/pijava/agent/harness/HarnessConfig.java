@@ -82,6 +82,8 @@ import com.pijava.telemetry.TelemetryContext;
  * @param contextFiles       pi {@code contextFiles}（包 24，B64）：AGENTS.md/CLAUDE.md
  *                           发现结果，进 {@code project_context} 段；晚读口，
  *                           默认空列表
+ * @param documentation      批 30（B95）：pi-java 文档路径束（进 {@code docs} 段）；
+ *                           {@code null} ≙ 不产出（SDK 默认）
  */
 public record HarnessConfig(
     StreamFn streamFn,
@@ -115,7 +117,13 @@ public record HarnessConfig(
     String appendSystemPrompt,
     Supplier<List<com.pijava.agent.prompt.SystemPromptOptions.ContextFile>> contextFiles,
     /** B128：pi {@code AgentOptions.thinkingBudgets}（settings.json 四段，无默认）；null ≙ undefined。 */
-    com.pijava.ai.thinking.ThinkingBudgets thinkingBudgets
+    com.pijava.ai.thinking.ThinkingBudgets thinkingBudgets,
+    /**
+     * 批 30（T6，B95）：pi-java 自身文档路径束（进系统提示 {@code docs} 段）。
+     * {@code null} ≙ 不产出该段——SDK 默认（他们的模型不该被指向 pi-java 仓的
+     * 文档，docs/42 裁决②）；生产由 coding-agent 宿主经 {@code PiJavaPaths} 供值。
+     */
+    com.pijava.agent.prompt.SystemPromptOptions.DocumentationPaths documentation
 ) {
     /** Canonical constructor applying default values and defensive copies. */
     public HarnessConfig {
@@ -157,7 +165,7 @@ public record HarnessConfig(
              null, null, toolRegistry, toolContext, commandPrefix, compactionResolver,
              skills, telemetry, thinkingLevelMap, steeringMode,
              followUpMode, toolExecution, streamListener, SummaryGenerator.truncating(),
-             null, null, null, null, List.of(), "", null, null);
+             null, null, null, null, List.of(), "", null, null, null);
     }
 
     public static final class Builder {
@@ -189,6 +197,7 @@ public record HarnessConfig(
         private String appendSystemPrompt = "";
         private Supplier<List<com.pijava.agent.prompt.SystemPromptOptions.ContextFile>> contextFiles;
         private com.pijava.ai.thinking.ThinkingBudgets thinkingBudgets;
+        private com.pijava.agent.prompt.SystemPromptOptions.DocumentationPaths documentation;
 
         public Builder streamFn(StreamFn fn) { this.streamFn = fn; return this; }
         public Builder model(ModelId<?> m) { this.model = m; return this; }
@@ -279,6 +288,12 @@ public record HarnessConfig(
             this.thinkingBudgets = value; return this;
         }
 
+        /** 批 30（T6，B95）：pi-java 文档路径束；默认 {@code null}（不产出 docs 段）。 */
+        public Builder documentation(
+                com.pijava.agent.prompt.SystemPromptOptions.DocumentationPaths value) {
+            this.documentation = value; return this;
+        }
+
         /** Build the {@link HarnessConfig}, validating required fields. */
         public HarnessConfig build() {
             if (streamFn == null) {
@@ -297,7 +312,7 @@ public record HarnessConfig(
                                      streamListener, summaryGenerator, compactionObserver,
                                      retrySettings, retryAborted, retryObserver,
                                      promptGuidelines, appendSystemPrompt, contextFiles,
-                                     thinkingBudgets);
+                                     thinkingBudgets, documentation);
         }
     }
 }

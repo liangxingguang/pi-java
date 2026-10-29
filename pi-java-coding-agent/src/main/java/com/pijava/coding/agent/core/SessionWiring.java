@@ -327,6 +327,9 @@ final class SessionWiring {
             .promptGuidelines(SessionSetup.DEFAULT_PROMPT_GUIDELINES)
             .appendSystemPrompt(SessionSetup.appendSystemPromptFor(args, settings,
                 java.nio.file.Path.of(System.getProperty("user.dir"))))
+            // 批 30（T6，B95）：docs 段生产者——解析到 pi-java 发行根才供值
+            // （仓外/独立 jar 运行 ⇒ null ⇒ 段不产出，docs/42 裁决②）。
+            .documentation(PiJavaPaths.documentation())
             .activeTools(SessionSetup.activeTools(selection, toolList))
             .toolRegistry(tools)
             .toolContext(policyToolContext)
