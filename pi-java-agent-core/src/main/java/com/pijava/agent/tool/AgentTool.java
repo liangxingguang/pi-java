@@ -49,6 +49,53 @@ public interface AgentTool<TParams, TDetails> {
     /** Description shown to the LLM in the system prompt / tool definition. */
     String description();
 
+    // ── 批 30（T1，B203 收编）：pi ToolDefinition 的五件元数据上本体 ──
+    // pi 的 agent 包 AgentTool 只有 outputSchema；其余四件是 coding-agent
+    // ToolDefinition 的扩展。Java 的 AgentTool 是两型合并（promptSnippet/
+    // promptGuidelines 已在上面，pi 里它们也只在 ToolDefinition）——故五件
+    // 全上 AgentTool 与该先例一致（docs/42 §3.1 末注）。
+
+    /**
+     * pi {@code ToolDefinition.outputSchema}（types.ts:596-600）——成功结果里
+     * {@code structuredContent} 的 JSON Schema。默认 {@code null}（无结构化输出契约）。
+     */
+    default Map<String, Object> outputSchema() {
+        return null;
+    }
+
+    /**
+     * pi {@code ToolDefinition.exposure}（types.ts:602-604）——模型如何触达本工具。
+     * 默认 {@link ToolExposure#DIRECT}（pi {@code ?? "direct"}，agent-session.ts:1556）。
+     */
+    default ToolExposure exposure() {
+        return ToolExposure.DIRECT;
+    }
+
+    /**
+     * pi {@code ToolDefinition.namespace}（types.ts:607）——工具所属的组
+     * （如它的 MCP 服务器）。默认 {@code null}（无组）。
+     */
+    default ToolNamespace namespace() {
+        return null;
+    }
+
+    /**
+     * pi {@code ToolDefinition.annotations}（types.ts:610）——工具行为提示
+     * （如来自 MCP 服务器的四 hint）。默认 {@code null}（无提示）。
+     */
+    default ToolAnnotations annotations() {
+        return null;
+    }
+
+    /**
+     * pi {@code ToolDefinition.defaultActive}（types.ts:612-617）——注册是否即激活。
+     * 默认 {@code true}：pi 对 {@code direct}/{@code model-only} 工具注册即激活，
+     * 其余 exposure 注册时永不激活（激活门消费本值，不消费 exposure 臂）。
+     */
+    default boolean defaultActive() {
+        return true;
+    }
+
     /** JSON Schema describing the tool's input parameters. */
     Map<String, Object> inputSchema();
 
