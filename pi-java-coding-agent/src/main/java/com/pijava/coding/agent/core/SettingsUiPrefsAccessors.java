@@ -53,6 +53,74 @@ public final class SettingsUiPrefsAccessors {
         manager.markModified("showHardwareCursor");
     }
 
+    /** pi {@code getShowImages}（settings-manager.ts:1180-1182）：缺省 true。 */
+    public boolean getShowImages() {
+        var terminal = manager.effective().terminal;
+        return terminal == null || terminal.showImages() == null || terminal.showImages();
+    }
+
+    /** 写全局 terminal.showImages，保留其它终端键。 */
+    public void setShowImages(boolean show) {
+        updateTerminal(new Settings.Terminal(show, null, null, null, null, null, null));
+        manager.markModified("terminal");
+    }
+
+    /** pi {@code getImageWidthCells}（:1193-1199）：非法/缺席 ⇒ 60，最小 1。 */
+    public int getImageWidthCells() {
+        var terminal = manager.effective().terminal;
+        var value = terminal == null ? null : terminal.imageWidthCells();
+        return value == null ? 60 : Math.max(1, value);
+    }
+
+    /** 写全局 terminal.imageWidthCells，最小 1。 */
+    public void setImageWidthCells(int width) {
+        updateTerminal(new Settings.Terminal(null, Math.max(1, width), null, null, null, null, null));
+        manager.markModified("terminal");
+    }
+
+    /** pi {@code getClearOnShrink}（:1210-1217）：设置＞环境＞false。 */
+    public boolean getClearOnShrink() {
+        var terminal = manager.effective().terminal;
+        if (terminal != null && terminal.clearOnShrink() != null) {
+            return terminal.clearOnShrink();
+        }
+        return "1".equals(System.getenv("PI_CLEAR_ON_SHRINK"));
+    }
+
+    /** 写全局 terminal.clearOnShrink。 */
+    public void setClearOnShrink(boolean enabled) {
+        updateTerminal(new Settings.Terminal(null, null, enabled, null, null, null, null));
+        manager.markModified("terminal");
+    }
+
+    /** pi {@code getShowTerminalProgress}（:1228-1230）：缺省 false。 */
+    public boolean getShowTerminalProgress() {
+        var terminal = manager.effective().terminal;
+        return terminal != null && Boolean.TRUE.equals(terminal.showTerminalProgress());
+    }
+
+    /** 写全局 terminal.showTerminalProgress。 */
+    public void setShowTerminalProgress(boolean enabled) {
+        updateTerminal(new Settings.Terminal(null, null, null, enabled, null, null, null));
+        manager.markModified("terminal");
+    }
+
+    /** null 组件表示沿用旧值；七个组件完整重建，杜绝静默丢字段。 */
+    private void updateTerminal(Settings.Terminal patch) {
+        var old = manager.global().terminal;
+        manager.global().terminal = new Settings.Terminal(
+            patch.showImages() != null ? patch.showImages() : old == null ? null : old.showImages(),
+            patch.imageWidthCells() != null ? patch.imageWidthCells()
+                : old == null ? null : old.imageWidthCells(),
+            patch.clearOnShrink() != null ? patch.clearOnShrink()
+                : old == null ? null : old.clearOnShrink(),
+            patch.showTerminalProgress() != null ? patch.showTerminalProgress()
+                : old == null ? null : old.showTerminalProgress(),
+            old == null ? null : old.hyperlinks(),
+            old == null ? null : old.images(),
+            old == null ? null : old.trueColor());
+    }
+
     /** pi {@code getFullscreenExitOutput}（:1251-1253）：非法值吞掉回落
      *  {@code "transcript"}。 */
     public String getFullscreenExitOutput() {

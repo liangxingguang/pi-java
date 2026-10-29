@@ -44,7 +44,8 @@ public final class Settings {
     public String externalEditor;
     public String shellPath;
     public String shellCommandPrefix;
-    public Boolean quietStartup;
+    /** boolean | "header"（pi QuietStartup；header 只保留启动头）。 */
+    public Object quietStartup;
     public String defaultProjectTrust;
     /** pi {@code packages}（settings-schema.ts:295-299，元素形 {@code PackageSourceSchema}
      *  :170-190）：npm/git/本地包源表，string（全量装载）或 object（资源过滤）。 */

@@ -142,12 +142,31 @@ public final class SettingsAccessors {
     }
 
     public Boolean getQuietStartup() {
-        return manager.effective().quietStartup;
+        return manager.effective().quietStartup instanceof Boolean value ? value : null;
     }
 
     /** Set the quiet-startup flag in the global scope. */
     public void setQuietStartup(Boolean quiet) {
         manager.global().quietStartup = quiet;
+        manager.markModified("quietStartup");
+    }
+
+    /** pi QuietStartup 的显示形：boolean | "header"，非法/缺席 ⇒ false。 */
+    public String getQuietStartupMode() {
+        var value = manager.effective().quietStartup;
+        if (value instanceof Boolean b) {
+            return Boolean.toString(b);
+        }
+        return "header".equals(value) ? "header" : "false";
+    }
+
+    /** 设置页三态写回；header 不折叠成 boolean。 */
+    public void setQuietStartupMode(String mode) {
+        manager.global().quietStartup = switch (mode) {
+            case "true" -> Boolean.TRUE;
+            case "header" -> "header";
+            default -> Boolean.FALSE;
+        };
         manager.markModified("quietStartup");
     }
 
@@ -187,9 +206,15 @@ public final class SettingsAccessors {
         return value == null ? List.of() : List.copyOf(value);
     }
 
-    /** Set the enabled models in the global scope. */
+    /** 可区分未设置（null）与显式空表的只读口。 */
+    public List<String> getEnabledModelsOrNull() {
+        var value = manager.effective().enabledModels;
+        return value == null ? null : List.copyOf(value);
+    }
+
+    /** Set the enabled models in the global scope; null removes the setting. */
     public void setEnabledModels(List<String> models) {
-        manager.global().enabledModels = List.copyOf(models);
+        manager.global().enabledModels = models == null ? null : List.copyOf(models);
         manager.markModified("enabledModels");
     }
 

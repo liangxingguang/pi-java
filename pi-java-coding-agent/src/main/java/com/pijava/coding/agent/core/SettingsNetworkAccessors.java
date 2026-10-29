@@ -29,6 +29,18 @@ public final class SettingsNetworkAccessors {
         manager.markModified("httpIdleTimeoutMs");
     }
 
+    /** pi {@code getTransport}（settings-manager.ts:795-797）：缺省 auto。 */
+    public String getTransport() {
+        var value = manager.effective().transport;
+        return value == null ? "auto" : value;
+    }
+
+    /** pi {@code setTransport}（:799-803）：写全局域。 */
+    public void setTransport(String transport) {
+        manager.global().transport = transport;
+        manager.markModified("transport");
+    }
+
     /** pi {@code getWebSocketConnectTimeoutMs}（:935-937）：缺席 ⇒ 空（无默认）。 */
     public java.util.OptionalLong getWebSocketConnectTimeoutMs() {
         return TimeoutSettings.parseTimeoutSetting(

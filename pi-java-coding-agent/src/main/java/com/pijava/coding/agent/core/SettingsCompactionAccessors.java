@@ -58,11 +58,41 @@ public final class SettingsCompactionAccessors {
         return b != null && Boolean.TRUE.equals(b.skipPrompt());
     }
 
+    /** pi {@code getImageAutoResize}（settings-manager.ts:1298-1300）：缺省 true。 */
+    public boolean getImageAutoResize() {
+        var images = manager.effective().images;
+        return images == null || images.autoResize() == null || images.autoResize();
+    }
+
+    /** 写全局 images.autoResize，保留 blockImages。 */
+    public void setImageAutoResize(boolean enabled) {
+        var old = manager.global().images;
+        manager.global().images = new Settings.Image(enabled,
+            old != null && Boolean.TRUE.equals(old.blockImages()));
+        manager.markModified("images");
+    }
+
     /** pi {@code getBlockImages}（settings-manager.ts:1311-1313）：
      *  {@code images?.blockImages ?? false}。 */
     public boolean getBlockImages() {
         var images = manager.effective().images;
         return images != null && Boolean.TRUE.equals(images.blockImages());
+    }
+
+    /** 写全局 images.blockImages，保留 autoResize。 */
+    public void setBlockImages(boolean blocked) {
+        var old = manager.global().images;
+        manager.global().images = new Settings.Image(
+            old == null || old.autoResize() == null || old.autoResize(), blocked);
+        manager.markModified("images");
+    }
+
+    /** pi {@code setMermaidRenderingMode}（settings-manager.ts:1412-1416）。 */
+    public void setMarkdownMermaid(String mode) {
+        var old = manager.global().markdown;
+        manager.global().markdown = new Settings.Markdown(
+            old == null ? null : old.codeBlockIndent(), mode);
+        manager.markModified("markdown");
     }
 
     /**
