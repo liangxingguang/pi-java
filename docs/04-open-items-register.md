@@ -80,10 +80,10 @@
 
 | # | 面 | 条目 |
 |---|---|---|
-| B94 | 模型可见 | 8 个内置工具的 `promptSnippet`/`promptGuidelines` 声明 |
-| B95 | 模型可见 | `docs` 段没有生产者（ContextAssembler 不传 DocumentationPaths） |
+| ~~B94~~ | 模型可见 | ~~8 个内置工具的 `promptSnippet`/`promptGuidelines` 声明~~ | **批 coding-agent-30 销号**（docs/42 T2/T3，2026-10-29 闭环）：read/edit/write 贡献补齐（pi read.ts:20-23/edit.ts:43-52/write.ts:16-19 逐字）⇒ 8/8 全落；消费侧删 description 回落＋双归一（pi agent-session.ts:1676-1697 逐字）——未声明 snippet 的工具不进 tools 段（pi 稀疏语义，裁决①） |
+| ~~B95~~ | 模型可见 | ~~`docs` 段没有生产者（ContextAssembler 不传 DocumentationPaths）~~ | **批 coding-agent-30 销号**（docs/42 T6）：`PiJavaPaths`（pi config.ts 三 getter 对位：PI_JAVA_PACKAGE_DIR env → 代码源向上找 README.md+docs/ 根标记 → 找不到不产出）＋HarnessConfig/ExecutionContext/ContextAssembler 接线＋SessionWiring 供值；SDK 默认不产出（裁决②）；examples 行随 pi-java-examples/ 就位首次产出 |
 
-> B94/B95 落点：agent-core 的 `ContextAssembler`/`SystemPrompts`＋coding-agent 工具声明（pi `system-prompt.ts:128-166`，消费者 `agent-session.ts:3533-3541`）。**2026-10-29 立项**：随 docs/06 §3 序 23「模型可见面收口批」（批 30），B95 的路径裁决随设计稿重开（批 28 后 pi-java-examples 已存，原「无 examples/」论据弱化）。ai 层其余欠账＝`map/02-ai.md` 的存疑形状差（15 条计半分）与 #8 `ToolUseContent.namespace`（随 MCP 包 B203）——原 docs/06 ai 未对齐清单 2026-10-26 删除（其「跨模块另案」指针已过时：CacheWarmer 批 13 闭环、B148 消费侧批 15 闭环、Kitty/剪贴板在 map/05 R14/R15/K34、Took 卡在 map/05 R11、structuredContent 消费侧即 B202），索引职能并入本表与 map/02。
+> B94/B95 落点：agent-core 的 `ContextAssembler`/`SystemPrompts`＋coding-agent 工具声明（pi `system-prompt.ts:128-166`，消费者 `agent-session.ts:3533-3541`）。**2026-10-29 闭环**（批 30，docs/42）：B94/B95 销号见行内注记。ai 层其余欠账＝`map/02-ai.md` 的存疑形状差（15 条计半分）；#8 `ToolUseContent.namespace` 同批销（map/02 #8 行）——原 docs/06 ai 未对齐清单 2026-10-26 删除（其「跨模块另案」指针已过时：CacheWarmer 批 13 闭环、B148 消费侧批 15 闭环、Kitty/剪贴板在 map/05 R14/R15/K34、Took 卡在 map/05 R11、structuredContent 消费侧即 B202），索引职能并入本表与 map/02。
 
 ### 3.3 功能整块
 
@@ -116,11 +116,11 @@
 | B197 | 内部 | `URI.create` 接受相对引用，而 pi 的 `new URL` 会抛异常 | `responseFromRedirectUrl` 已显式挡 scheme；其余 URL 入口未逐个复核 |
 | B198 | 内部 | `OAuthPage` 的 CSS 折行 | 字节差仅在 `<style>` 内空白，计算值相同（受 checkstyle 120 列限制） |
 | B202 | 内部 | MCP 结果的 `structuredContent` 没有消费者 | `ToolResult.structuredContent` 形状已落（包⑩）；消费者是 codemode（B161）与 `after_tool` 钩子改写（pi `types.ts:1439`），均未落 |
-| B203 | 模型可见 | MCP 的 exposure/namespace/outputSchema/annotations 未接到 `AgentTool` | pi 的 `ToolDefinition` 有这四项；Java 的 `AgentTool` 没有，包⑩让 `McpToolDefinition` 承载；激活路径是第⑫包与 B161/B162。**2026-10-29 立项**：随 docs/06 §3 序 23（含 ai 层 #8 namespace） |
+| ~~B203~~ | 模型可见 | ~~MCP 的 exposure/namespace/outputSchema/annotations 未接到 `AgentTool`~~ | **批 coding-agent-30 销号**（docs/42 T1/T5，2026-10-29 闭环）：五件（含 defaultActive）上 `AgentTool` 本体（agent-core 新 ToolExposure/ToolNamespace/ToolAnnotations）；批 27 过渡 sidecar `ToolDefinitions`＋`ExtensionContext.toolDefinitions()` 删除，`ModelToolControl` 四门改道工具本体；`McpAgentTool`/`ResourceAgentTool` 覆写＋`withExposure` 隐藏重注（pi index.ts:457）；`ExtensionToolInfo` 补 annotations（D91 余量收窄为仅 sourceInfo）。ai 层 #8 同批销（map/02） |
 | ~~B204~~ | 用户可见 | ~~MCP 工具与资源的 TUI 渲染器未移植~~ | **批 coding-agent-16 已销号**（docs/27 T4，2026-10-23 闭环）：`registerToolRenderer` 责任链（`ToolCallRenderer`/`ToolRendererResolver`/`ToolRendererRegistry`，pi types.ts:1695＋runner.ts:789-795 对位）＋内置 MCP resolver（`McpToolCallRenderer`，正则 label/折叠 5 行＋提示行）＋TUI 消费缝（`ToolRenderers` holder＋MessageBubble 两臂）。文本级接口（裁决⑦，窄差 D92） |
 | B205 | 内部 | MCP 工具适配器在 `pi-java-coding-agent`，不在 `pi-java-mcp` | `AgentTool` 在 agent-core 模块，`pi-java-mcp` 看不见它（依赖方向 `ai ← mcp`），所以模块分道。原 docs/28 §2 的模块图早画了 `coding-agent ← mcp`，pom 直到包⑩才接上那条依赖 |
 | B206 | 内部 | `ToolResult.isError` 是新增的语义通道 | pi 的 `isError` 来自结果对象（`AgentToolResult.isError`），pi-java 此前只由「抛没抛异常」派生。`PiToolRunner` 已改读结果字段，`after_tool` 钩子仍可改写 |
-| B207 | 内部 | `McpToolExposure` 是 pi 的 `ToolExposure`，暂居 mcp 包 | 5 个取值 `direct/model-only/codemode/deferred/hidden`；pi-java 扩展系统没有这个类型，唯一生产者是 MCP 适配器，待 E5（扩展 API）面成型时上移 |
+| ~~B207~~ | 内部 | ~~`McpToolExposure` 是 pi 的 `ToolExposure`，暂居 mcp 包~~ | **批 coding-agent-30 销号**（docs/42 T5）：运行面 `ToolExposure` 落定 agent-core（`com.pijava.agent.tool`，pi ToolDefinition 本体对位）；`McpToolExposure` 收窄为 McpExposure→ToolExposure 纯映射；批 27 的 coding-agent `extension/ToolExposure` 删除 |
 | B208 | 内部 | `ContentBlock.ImageContent(mediaType, data)` 与 pi 的 `{data, mimeType}` **参数序相反** | mcp 侧 `LlmContent.Image(data, mimeType)` 又跟 pi 一致，同一条转换链上有两个相反的序。换序点唯一（`McpResultContent.toBlock`），测试夹具两侧钉住 |
 | B210 | 用户可见 | `pi mcp` 的选项解析是自建的 | pi 的 `parseOptions` 有「收够 N 个位置参数即停止」语义（`add` 传 2），让 `add <server> <command> --flag` 的 `--flag` 透传给命令；picocli 表达不了这个语义（原 docs/38 §2.4） |
 | B211 | 用户可见 | `openBrowser` 是 pi-java 新增件 | 对应 pi `utils/open-browser.ts`；Java 新增 `BrowserLauncher`（Desktop → 平台命令 → 静默失败）；headless 环境只提示「visit the URL above」 |
@@ -529,6 +529,12 @@
 
 **✅ 已清零（2026-10-29 批 coding-agent-29，设计稿 docs/41）**：E 类 21 件全拆（E1–E23，行为零变化纯移动；用户裁决插队在所有功能批之前；「搭车拆」策略作废）。拆分全貌：E1 AgentSession 3,797→壳 496＋10 协作者（AgentSessionFactory 359／SessionWiring 492／ExtensionLoading 481／ModelToolControl 330／VirtualModelRouting 289〔批 27 既定块〕／PromptPipeline 471〔批 20 死锁包装逐字〕／TreeCompaction 375／SessionDiscoveryFork 496／SessionMessagingLifecycle 480／SessionDataViews 239）；E2 RpcDispatcher 767→448＋228＋96＋92；E5 ModelCompat 775→402＋382（12 档便捷构造器→静态工厂，57 调用点改签——全批唯一 public 形状变化）；E6 PiTuiApp 1,137→481＋6 卫星；E7 ChatScreen 1,040→468＋6 卫星；E8 DefaultExtensionContext 1,118→499＋306＋494；E9/E19 663/523→389＋292／325＋214（ThemeCatalog 跨模块调用故 public）；E17 537→425＋162；E21 515→393＋137（compaction() 口）；ai 五件 631/605/565/521/512→281/474/360/331/344＋各一协作者；agent-core 六件 588/545/545/545/526/505→375/420/435/417/443/308＋各一协作者。**闸门修真**：FileLength severity 提 error（裁决④）。排障钉：构造器链式委托须改工厂链／CRLF 使 perl `$` 锚失效／blank final 不可在字段初始化器引用／两起套件 flake（RichSessionListTest、InteractiveModeRestoreTest，隔离复跑即绿——§7 教训 3 同族）。全量 verify 5,441 测 0 失败、checkstyle 0 错 0 警告、spotbugs 13 模块零钉。
 
+### 批 coding-agent-30（docs/42，2026-10-29 闭环）：模型可见面收口——B94/B95/B203/ai#8 全销
+
+- 【场景】三个工单同属「模型可见面」（大模型能读到的提示文本与工具元数据形状）：B94 的 8 内置工具贡献声明（5/8 已落，缺 read/edit/write＋消费侧 description 回落权宜）；B95 的 docs 段零生产者；B203 的 MCP 五件元数据挂在批 27 过渡 sidecar 上（双源语义）。
+- 【决定】（docs/42，裁决①–④）：**T1** agent-core 类型地基（`ToolExposure`/`ToolNamespace`/`ToolAnnotations`＋`AgentTool` 五 default 方法——pi `ToolDefinition` 五件上本体，两型合并先例）→ **T2** B94 三工具贡献逐字（8/8 全落＋`ToolPromptContributionTest`〔pi tool-system-prompt-contributions.test 对位：8 工具×snippet/guidelines＋bash/powershell 环境闸门臂〕）→ **T3** ContextAssembler 删 description 回落（裁决①，pi 稀疏语义——未声明 snippet 的工具不进 tools 段）＋双归一（pi agent-session.ts:1676-1697 逐字）→ **T4** ai#8 `ToolUseContent.namespace` 全链（Responses 输入侧同模型闸门回放＋输出侧起点建块/收尾回填＋`StreamEvent.ToolCallEnd` 帧字段＋JSONL 落盘键〔旧档无键⇒null〕；`TransformMessages` 复制两臂携带〔pi `{...toolCall}` 展开对位〕；`StreamPartialBuilder` tool 簇拆 `ToolCallBlockAccumulator` 卫星过 FileLength 闸门）→ **T5** B203 收编（`McpAgentTool`/`ResourceAgentTool` 覆写五方法〔与 record 槽同源〕＋`withExposure` 隐藏重注〔pi index.ts:457〕；**批 27 sidecar `ToolDefinitions`＋`ExtensionContext.toolDefinitions()` 删除**，`ModelToolControl` 四门改道注册表本体〔查无⇒direct/true〕；`McpToolExposure` 收窄纯映射、extension/ToolExposure 删〔B207 随销〕；`ExtensionToolInfo` 补 annotations〔D91 余量收窄为仅 sourceInfo〕；Options.namespace 换 ToolNamespace〔pi index.ts:392-395 对象形：name 恒在/description trim 空缺席/instructions 按值出席——description/instructions 无窄差〕）→ **T6** B95 `PiJavaPaths`（pi config.ts 三 getter 对位：PI_JAVA_PACKAGE_DIR env → 代码源向上找 README.md+docs/ 组合根标记 → 找不到不产出；examples 目录存在才填）＋HarnessConfig/ExecutionContext/ContextAssembler 接线＋SessionWiring 供值（裁决② SDK 默认不产出）。
+- 【风险/代价】[模型可见] 未声明 snippet 的工具（MCP/未声明扩展工具）从 tools 段消失（对齐 pi）；仓内运行系统提示新增 `<docs>` 段（含 Examples 行，pi-java-examples/ 就位后首次产出）。[内部] `ExtensionContext.toolDefinitions()` 公共方法删除（批 27 过渡面，仓内无用户）。账面：模块 446.0/485 ≈ 92.0% 不动；map/07 120.5→**121.0/129 ≈ 93.8%**（#53 存疑→对齐）；map/02 207.0→**208.0/219 ≈ 95.0%**（#8 计分母缺失清零）；全仓 1,164.0/1379 ≈ **84.4%**。排障钉：**withPartial 型重建点静默吞新组件**（`AbstractChatApi` 身份附着层逐臂重建 ToolCallEnd 走五参便利构造 ⇒ 块上有值、事件 null——§7 教训第五条）＋PiJavaPaths 测试夹具同名根互染（fakeRoot 须按名分目录）。出处：docs/42 §1–§10。
+
 
 ---
 
@@ -556,3 +562,4 @@
    - checkstyle 结果须写明错误、警告各几个，不接受一句「checkstyle 0」。
    - 「某时刻还没发生」的时序断言是运气（跟虚拟线程抢调度），要改确定性断言（如「监听器线程 ≠ 发送线程」）。
    - **规则必须挂在会 fail 的闸门级别上**（批 29）：checkstyle.xml 全局 `severity=warning` ⇒ FileLength max=500 配了两年没拦过任何一次构建；E 类从 5 件实测扩到 21 件（含两件拆后回长）。批 29 已把 FileLength 单独提 error 级——新规矩：凡是「必须遵守」的编码规范，要么有 error 级机械闸门，要么默认它不存在。
+   - **record 加组件，重建点（映射器）比构造点更危险**（批 30）：保留旧元数便利构造器让全部存量构造点零改签，但 `StreamEvent.withPartial` 这类逐臂重建映射器走的是旧构造器 ⇒ 新组件被静默吞掉（现象＝块上有值、事件上 null——`AbstractChatApi` 身份附着层）。record 加尾组件后必须全仓搜「逐臂 new 同类型」的重建点，不能只搜构造点。

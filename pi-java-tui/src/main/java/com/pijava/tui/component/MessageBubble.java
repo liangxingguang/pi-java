@@ -137,7 +137,7 @@ public final class MessageBubble {
                 // 批 16（T4d）：渲染器责任链优先（扩展/MCP resolver），未命中 ⇒
                 // 原 ToolCallCard 路径不变。renderer 产已转义文本行（裁决⑦），
                 // 着色由本适配层补。
-                case ContentBlock.ToolUseContent(var id, var name, var arguments, _) ->
+                case ContentBlock.ToolUseContent(var id, var name, var arguments, _, _) ->
                     toolUseLines(name, arguments);
                 case ContentBlock.ToolResultContent(
                         var toolUseId, var toolName, var content, var isError) ->

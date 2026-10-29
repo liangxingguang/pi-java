@@ -113,8 +113,8 @@ pi SDK 逐文件（`packages/mcp/src`）：`client.ts` 615 · `transports/stream
 | 50 | structuredContent **消费者**（codemode 全量结果；`after_tool` 钩子改写） | 结果 | `extensions/mcp/tools.ts:11`；ai `types.ts:1439` | 形状在、无消费者 | **缺失** | 1 | B202 |
 | 51 | 协议 `Tool` 四属性（title/inputSchema/outputSchema/annotations） | 结果 | `protocol/types.ts:64-82` | `protocol/McpTool.java:21-27`；`ToolAnnotations.java` | 对齐 | 2 | — |
 | 52 | MCP→AgentTool 适配（label、description 三级回退、schema 补 `type`/`properties`、progress onUpdate、并行批） | 结果 | `tools.ts:260-300` | coding `extension/mcp/McpToolDefinition.java:103-209` | 对齐 | 2 | — |
-| 53 | `AgentTool` 承载 exposure/namespace/outputSchema/annotations | 结果 | `core/extensions/types.ts` `ToolDefinition` | `AgentTool` 无此四属性；`McpToolDefinition.java:41-50` 外挂承载 | 存疑（台账：激活依赖 81/90/91） | 1 | B203 |
-| 54 | `ToolExposure` 五值（direct/model-only/codemode/deferred/hidden）＋映射（codemode→deferred） | 结果 | `extensions/types.ts:516`；`tools.ts:45-47` | coding `extension/mcp/McpToolExposure.java` | 对齐（暂居 coding 包，待扩展系统成型上移） | 1 | B207 |
+| 53 | `AgentTool` 承载 exposure/namespace/outputSchema/annotations（＋defaultActive） | 结果 | `core/extensions/types.ts` `ToolDefinition` | agent-core `AgentTool` 五 default 方法＋`McpAgentTool`/`ResourceAgentTool` 覆写（批 30 收编，sidecar 删除） | 对齐 | 1 | B203（批 30 销） |
+| 54 | `ToolExposure` 五值（direct/model-only/codemode/deferred/hidden）＋映射（codemode→deferred） | 结果 | `extensions/types.ts:516`；`tools.ts:45-47` | agent-core `tool/ToolExposure.java`；`McpToolExposure` 收窄为纯映射 | 对齐（批 30 上移落定） | 1 | B207（批 30 销） |
 | 55 | `isError` 作为结果语义通道（runner 读结果字段而非只看抛错；after_tool 可改写） | 结果 | `tools.ts:228-233` | `McpResultConverter.java:19-51`；`ToolResult.isError()` | 对齐 | 2 | B206（已裁） |
 | 56 | 工具名归一：`mcp__s__t`、非字母数字→`_`、64 字符上限、sha256-8 后缀、isTaken 冲突裁定 | 结果 | `tools.ts:73-97`；`index.ts:398-420` | coding `extension/mcp/McpToolNames.java:47-65` | 对齐 | 2 | — |
 | 57 | 结果 20KB 中段截断＋token 估算＋全文落盘 `fullOutputPath`（locale 修复） | 结果 | `tools.ts:51,124-149` | `McpResultContent.java:33,106-129`；`McpOutputSaver.java` | 对齐 | 2 | B209（已修） |
@@ -206,12 +206,12 @@ pi SDK 逐文件（`packages/mcp/src`）：`client.ts` 615 · `transports/stream
 | B 协议/客户端（7） | 13 | 12.5 | **96.2%** | 85.7%（6/7） |
 | C 传输（11） | 15 | 13.5 | **90.0%** | 72.7%（8/11） |
 | D OAuth（15） | 21 | 18.5 | **88.1%** | 66.7%（10/15） |
-| E 工具/资源/结果（18） | 26 | 24.5 | **94.2%** | 88.9%（16/18） |
+| E 工具/资源/结果（18） | 26 | 25.0 | **96.2%** | 88.9%（16/18） |
 | F CLI（8） | 12 | 11.5 | **95.8%** | 87.5%（7/8） |
 | G 接线（17） | 23 | **23.0** | **100%（满分域）** | 100%（17/17） |
-| **模块合计（89 单位）** | **129** | **120.5** | **93.4%** | **82.0%（73/89）** |
+| **模块合计（89 单位）** | **129** | **121.0** | **93.8%** | **83.1%（74/89）** |
 
-**模块合计**：Σ权重 **129** ／ Σ(w×c) **120.5** ／ **加权完成度 = 120.5/129 = 93.4%**（未加权 82.0%）。
+**模块合计**：Σ权重 **129** ／ Σ(w×c) **121.0** ／ **加权完成度 = 121.0/129 ≈ 93.8%**（未加权 83.1%，批 30 #53 存疑→对齐 +0.5）。
 数字可复算：`grep -E '^\| [0-9]+ \|' docs/map/07-mcp.md` 取判定列（7）与权重列（8）。
 
 **权重 3 只有 1 条（#15 initialize 协商），对齐**。批 24 后计分母缺失仅剩 #50
@@ -227,10 +227,10 @@ pi SDK 逐文件（`packages/mcp/src`）：`client.ts` 615 · `transports/stream
 
 - w1：1 条 —— 50（structuredContent 消费者，挂 B202/codemode 族）。（批 24 清掉其余 13 条。）
 
-### 存疑 15 条（均 w1，方言/字节形态/测试缺口）
+### 存疑 14 条（均 w1，方言/字节形态/测试缺口）
 
 A：4/5/6/7（B181–B184）· B：20（in-memory 发布面）· C：27/29/30（B190/B196/B191/B197）·
-D：38/40/41/43/46（B193/B198/B212/B192/B217）· E：53（B203）· F：71（B213）。
+D：38/40/41/43/46（B193/B198/B212/B192/B217）· F：71（B213）。（批 30 清 E：53。）
 
 ---
 
