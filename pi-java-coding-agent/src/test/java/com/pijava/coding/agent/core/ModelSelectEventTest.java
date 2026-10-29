@@ -113,6 +113,18 @@ class ModelSelectEventTest {
         }
     }
 
+    @Test
+    void setModelWithPersistWritesDefaultProviderAndModel() {
+        try (var s = session("--provider", "faux", "--model", "hello", "--no-session",
+                "--no-extensions")) {
+            s.modelTools().setModel(ModelId.of("faux", "m2"), true);
+
+            assertThat(s.harness().getModel()).isEqualTo(ModelId.of("faux", "m2"));
+            assertThat(settingsStorage.readGlobal().defaultProvider).isEqualTo("faux");
+            assertThat(settingsStorage.readGlobal().defaultModel).isEqualTo("m2");
+        }
+    }
+
     /** 同模型不发射（pi modelsAreEqual 门逐字）。 */
     @Test
     void sameModelDoesNotEmit() {

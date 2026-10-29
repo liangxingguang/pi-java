@@ -108,6 +108,9 @@ public final class RemoteCatalogProvider implements Provider {
 
     // ── Provider 委派 ─────────────────────────────────────────
 
+    /** Authentication/catalog metadata visible through the dynamic wrapper. */
+    Provider delegate() { return delegate; }
+
     @Override public String name() { return delegate.name(); }
 
     @Override public String displayName() { return delegate.displayName(); }

@@ -135,8 +135,8 @@ final class ModelToolControl {
      * ?? DEFAULT} 两臂：java harness 恒有当前档，解析不出就不动，语义等价；
      * 「全无配置时写 thinking-level entry」的 pi 臂不移植，窄差 D54，裁决⑦）。
      *
-     * <p>pi {@code setModel} 的 persist（写默认模型）与 auth 预检面 java 本无
-     * （既有登记，docs/16 裁决①）。</p>
+     * <p>登录后的默认模型选择经 {@link #setModel(ModelId, boolean)} 打开 persist；
+     * 普通模型切换保持不写全局设置。</p>
      */
     void setModel(ModelId<?> model) {
         var previous = owner.harness().getModel();
@@ -149,6 +149,16 @@ final class ModelToolControl {
         // 之后）；同模型不发射（pi modelsAreEqual 门逐字）。
         if (owner.extensionFirer() != null && !java.util.Objects.equals(previous, model)) {
             owner.extensionFirer().modelSelect(model, previous, "set");
+        }
+    }
+
+    /** Set the session model and optionally persist it as the global default. */
+    void setModel(ModelId<?> model, boolean persist) {
+        setModel(model);
+        if (persist) {
+            owner.services().settings().accessors().setDefaultProvider(model.provider());
+            owner.services().settings().accessors().setDefaultModel(model.modelName());
+            owner.services().settings().flush();
         }
     }
 
