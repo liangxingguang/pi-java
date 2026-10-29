@@ -7,8 +7,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import com.pijava.agent.tool.ToolExposure;
+import com.pijava.agent.tool.ToolNamespace;
 import com.pijava.coding.agent.extension.ExtensionToolInfo;
-import com.pijava.coding.agent.extension.ToolExposure;
 
 import org.junit.jupiter.api.Test;
 
@@ -20,6 +21,14 @@ import org.junit.jupiter.api.Test;
 class ToolSearchTest {
 
     // ── pi :18-23 tokenize ───────────────────────────────────────────
+
+    /** 批 30（B203 收编）：tool_search 的元数据在工具本体（pi tool.ts:231＋index.ts:14）。 */
+    @Test
+    void toolSearchToolCarriesModelOnlyAndDefaultActiveFalse() {
+        var tool = new ToolSearchTool(null);
+        assertThat(tool.exposure()).isEqualTo(ToolExposure.MODEL_ONLY);
+        assertThat(tool.defaultActive()).isFalse();
+    }
 
     @Test
     void tokenizeSplitsCamelAndSnakeAndFoldsPlurals() {
@@ -91,8 +100,7 @@ class ToolSearchTest {
     @Test
     void namespaceTextIsIndexed() {
         var doc = ToolSearchDocument.of(tool("get_pod", "Get a pod", Map.of("type", "object")),
-            new com.pijava.coding.agent.core.ToolDefinitions.Namespace(
-                "mcp__k8s", "Kubernetes cluster", null));
+            new ToolNamespace("mcp__k8s", "Kubernetes cluster", null));
 
         assertThat(new Bm25Ranker().rank("kubernetes", List.of(doc), 8))
             .extracting(Bm25Ranker.Match::name).containsExactly("get_pod");

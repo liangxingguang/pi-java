@@ -22,11 +22,12 @@ import com.pijava.mcp.runtime.McpServerState;
  * toolOwners/serverTools/definitions 三表＋registerTools/hideTools/
  * syncResourceTools 逐字对位）。
  *
- * <p>exposure 表达（裁决③）：{@link com.pijava.agent.tool.AgentTool} 无
- * {@code exposure} 字段（窄差 D89/D91 维持）——本类自持 exposure 表；
- * declarable 经激活门表达：direct ⇒ 注册即激活；codemode/deferred ⇒ 注册不激活；
- * hidden/撤销 ⇒ 重注＋移出激活集（pi 的「工具不能注销，重注 hidden」对位——
- * java {@code ToolRegistry.register} 同名替换）。</p>
+ * <p>exposure 表达：批 30（B203 收编）起随 pi 上 {@code AgentTool} 本体
+ * （{@code McpAgentTool} 覆写五方法，pi {@code ToolDefinition} 对位）——批 27 的
+ * 会话级过渡外挂表（{@code ToolDefinitions}）随本批删除；declarable 经激活门表达：
+ * direct ⇒ 注册即激活；codemode/deferred ⇒ 注册不激活；hidden/撤销 ⇒ 重注＋移出
+ * 激活集（pi 的「工具不能注销，重注 hidden」对位——java {@code ToolRegistry.register}
+ * 同名替换）。</p>
  */
 final class McpToolRegistrar {
 
@@ -39,29 +40,22 @@ final class McpToolRegistrar {
     private final Map<String, Set<String>> serverTools = new HashMap<>();
     /** 工具名 → 最近注册的定义（撤销重注 hidden 用）。 */
     private final Map<String, McpToolDefinition> definitions = new HashMap<>();
-    /** 工具名 → 当前 exposure（裁决③外挂表；资源三工具同驻）。 */
+    /** 工具名 → 当前 exposure（资源三工具同驻；同步/撤离判定的簿记）。 */
     private final Map<String, McpExposure> exposures = new HashMap<>();
 
     /**
-     * 批 27（B162 裁决④）：把 exposure/namespace 镜像进会话级定义表
-     * （pi {@code _toolDefinitions} 单一事实源的对位——java 侧本表管 MCP 内部
-     * 簿记，共享表管四门与 tool_search 候选）。
+     * pi {@code index.ts:390-395} 的 namespace 对象：name 恒在；description 取
+     * 服务器配置（trim 后空 ≙ 缺席）；instructions 取连接的
+     * {@code connection.instructions}（缺席 ≙ null）。
      */
-    private void mirrorDefinition(String name, McpExposure exposure, String namespace,
-                                  String description, String instructions) {
-        try {
-            ctx.toolDefinitions().register(name,
-                new com.pijava.coding.agent.core.ToolDefinitions.Entry(
-                    // 批 24 映射保留：MCP codemode 在工具层记 DEFERRED（java 无
-                    // codemode 引擎；tool_search 对两档同等可搜，pi isSearchable 同）。
-                    com.pijava.coding.agent.extension.ToolExposure.valueOf(
-                        McpToolExposure.of(exposure).name()), true,
-                    namespace == null ? null
-                        : new com.pijava.coding.agent.core.ToolDefinitions.Namespace(
-                            namespace, description, instructions)));
-        } catch (UnsupportedOperationException e) {
-            // 无会话的上下文（flag 绑定等）——表不可得则跳过（四门走默认臂）。
+    private static com.pijava.agent.tool.ToolNamespace namespaceOf(
+            String namespace, String description, String instructions) {
+        if (namespace == null) {
+            return null;
         }
+        var trimmed = description == null ? null : description.trim();
+        return new com.pijava.agent.tool.ToolNamespace(namespace,
+            trimmed == null || trimmed.isEmpty() ? null : trimmed, instructions);
     }
     /** 资源工具最近一次注册的 exposure；null = 尚无服务器有资源。 */
     private @Nullable McpExposure resourceToolsExposure;
@@ -97,13 +91,13 @@ final class McpToolRegistrar {
             current.add(name);
             var exposure = McpServerConfigs.getMcpToolExposure(entry.config(), tool.name());
             var definition = McpToolDefinition.create(new McpToolDefinition.Options(
-                server, tool, name, exposure, namespace, connection.timeoutMs(),
+                server, tool, name, exposure,
+                namespaceOf(namespace, description, connection.instructions()),
+                connection.timeoutMs(),
                 callerSource(server, tool.name()),
                 () -> resourceServers().stream().anyMatch(c -> c.name().equals(server))));
             definitions.put(name, definition);
             exposures.put(name, exposure);
-            mirrorDefinition(name, exposure, namespace, description,
-                connection.instructions());
             ctx.tools().register(definition.agent());
             if (exposure == McpExposure.DIRECT) {
                 toActivate.add(name);
@@ -115,9 +109,11 @@ final class McpToolRegistrar {
         for (var name : previous) {
             var definition = definitions.get(name);
             if (!current.contains(name) && definition != null) {
-                ctx.tools().register(definition.agent());
+                // pi :419 同形（{ ...definition, exposure: "hidden" }——批 30 起
+                // exposure 在工具本体上，重注必须带 HIDDEN 覆写，否则本体残留原档）。
+                ctx.tools().register(definition.withExposure(
+                    com.pijava.agent.tool.ToolExposure.HIDDEN).agent());
                 exposures.put(name, McpExposure.HIDDEN);
-                mirrorDefinition(name, McpExposure.HIDDEN, null, null, null);
                 withdrawn.add(name);
             }
         }
@@ -132,9 +128,10 @@ final class McpToolRegistrar {
         for (var name : names) {
             var definition = definitions.get(name);
             if (definition != null) {
-                ctx.tools().register(definition.agent());
+                // pi :457 逐字（{ ...definition, exposure: "hidden" }）。
+                ctx.tools().register(definition.withExposure(
+                    com.pijava.agent.tool.ToolExposure.HIDDEN).agent());
                 exposures.put(name, McpExposure.HIDDEN);
-                mirrorDefinition(name, McpExposure.HIDDEN, null, null, null);
                 withdrawn.add(name);
             }
         }
@@ -219,7 +216,6 @@ final class McpToolRegistrar {
         for (var definition : resourceDefinitions) {
             definitions.put(definition.name(), definition);
             exposures.put(definition.name(), next);
-            mirrorDefinition(definition.name(), next, null, null, null);
             ctx.tools().register(definition.agent());
             names.add(definition.name());
         }

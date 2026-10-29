@@ -36,7 +36,8 @@ class McpToolDefinitionTest {
     private static McpToolDefinition definitions(McpTool tool, McpToolCaller caller) {
         return McpToolDefinition.create(new McpToolDefinition.Options(
                 "files", tool, "mcp__files__" + tool.name(), McpExposure.CODEMODE,
-                "mcp__files", 30_000L, () -> caller, null));
+                new com.pijava.agent.tool.ToolNamespace("mcp__files", null, null),
+                30_000L, () -> caller, null));
     }
 
     // ------------------------------------------------------------------ creation
@@ -54,14 +55,39 @@ class McpToolDefinitionTest {
         assertThat(definition.parameters()).isEqualTo(
                 Map.of("type", "object", "properties", Map.of("text", Map.of("type", "string"))));
         // codemode is exposed as deferred to the tool layer.
-        assertThat(definition.exposure()).isEqualTo(McpToolExposure.DEFERRED);
-        assertThat(definition.namespace()).isEqualTo("mcp__files");
+        assertThat(definition.exposure()).isEqualTo(com.pijava.agent.tool.ToolExposure.DEFERRED);
+        assertThat(definition.namespace())
+                .isEqualTo(new com.pijava.agent.tool.ToolNamespace("mcp__files", null, null));
         assertThat(definition.annotations()).isEqualTo(
-                new McpToolDefinition.Annotations(true, false, null, true));
+                new com.pijava.agent.tool.ToolAnnotations(true, false, null, true));
         assertThat(definition.outputSchema())
                 .containsEntry("required", List.of("content"))
                 .extracting(schema -> ((Map<?, ?>) schema).get("properties"))
                 .asString().contains("structuredContent");
+    }
+
+    /**
+     * 批 30（B203 收编）：五件元数据在 {@code AgentTool} 本体上与 record 槽同源
+     * （pi {@code ToolDefinition} 本体对位）——批 27 sidecar 删除后的单一事实源。
+     */
+    @Test
+    void theAgentToolCarriesTheSameMetadataAsTheRecord() {
+        var definition = definitions(tool("echo", "Echo", "says it back",
+                Map.of("type", "object"),
+                Map.of("type", "object"),
+                new ToolAnnotations(null, true, null, null, null)), (name, args, options) -> null);
+
+        var agent = definition.agent();
+        assertThat(agent.exposure()).isEqualTo(definition.exposure());
+        assertThat(agent.namespace()).isEqualTo(definition.namespace());
+        assertThat(agent.annotations()).isEqualTo(definition.annotations());
+        assertThat(agent.outputSchema()).isEqualTo(definition.outputSchema());
+        assertThat(agent.defaultActive()).isTrue();
+        // 隐藏覆写（pi index.ts:457 的 { ...definition, exposure: "hidden" }）。
+        var hidden = definition.withExposure(com.pijava.agent.tool.ToolExposure.HIDDEN);
+        assertThat(hidden.agent().exposure()).isEqualTo(com.pijava.agent.tool.ToolExposure.HIDDEN);
+        assertThat(hidden.exposure()).isEqualTo(com.pijava.agent.tool.ToolExposure.HIDDEN);
+        assertThat(hidden.agent().namespace()).isEqualTo(definition.namespace());
     }
 
     @Test
@@ -113,7 +139,8 @@ class McpToolDefinitionTest {
         var index = new int[] {0};
         var definition = McpToolDefinition.create(new McpToolDefinition.Options(
                 "files", tool("echo", null, "d", Map.of(), null, null), "mcp__files__echo",
-                McpExposure.DIRECT, "mcp__files", 30_000L,
+                McpExposure.DIRECT, new com.pijava.agent.tool.ToolNamespace("mcp__files", null, null),
+                30_000L,
                 () -> callers.get(index[0]++), null));
 
         definition.agent().execute("id", Map.of(), null, null, null);

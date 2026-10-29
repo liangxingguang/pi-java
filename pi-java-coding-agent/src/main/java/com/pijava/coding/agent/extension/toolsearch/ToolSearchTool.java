@@ -7,12 +7,12 @@ import java.util.Map;
 import com.pijava.agent.tool.AgentTool;
 import com.pijava.agent.tool.ExecutionMode;
 import com.pijava.agent.tool.ToolContext;
+import com.pijava.agent.tool.ToolExposure;
 import com.pijava.agent.tool.ToolResult;
 import com.pijava.agent.tool.ToolUpdateCallback;
 import com.pijava.ai.AbortSignal;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.coding.agent.extension.ExtensionToolInfo;
-import com.pijava.coding.agent.extension.ToolExposure;
 
 /**
  * The {@code tool_search} tool（pi {@code extensions/tool-search/tool.ts:159-247}
@@ -155,6 +155,23 @@ public final class ToolSearchTool implements AgentTool<Map<String, Object>, Tool
     @Override
     public String promptSnippet() {
         return PROMPT_SNIPPET;
+    }
+
+    /**
+     * 批 30（B203 收编）：pi 的 exposure 上本体——{@code model-only}
+     * （tool.ts:231 逐字注释 "Searching is not something scripts need; it changes
+     * what the model sees."）＋{@code defaultActive: false}
+     * （extensions/tool-search/index.ts:14——注册即不激活）。
+     */
+    @Override
+    public ToolExposure exposure() {
+        return ToolExposure.MODEL_ONLY;
+    }
+
+    /** pi {@code defaultActive: false}（index.ts:14）。 */
+    @Override
+    public boolean defaultActive() {
+        return false;
     }
 
     @Override

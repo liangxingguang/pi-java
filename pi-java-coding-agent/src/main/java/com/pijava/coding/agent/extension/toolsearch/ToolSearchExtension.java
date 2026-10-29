@@ -1,14 +1,16 @@
 package com.pijava.coding.agent.extension.toolsearch;
 
-import com.pijava.coding.agent.core.ToolDefinitions;
 import com.pijava.coding.agent.extension.ExtensionContext;
 import com.pijava.coding.agent.extension.PiExtension;
-import com.pijava.coding.agent.extension.ToolExposure;
 
 /**
  * 批 27（B162/T7）：内置 tool-search 扩展（pi
  * {@code extensions/tool-search/index.ts:1-18} 全文对位）——只做一件事：注册
- * {@code tool_search} 工具（{@code defaultActive: false}，注册即不激活）。
+ * {@code tool_search} 工具。
+ *
+ * <p>批 30（B203 收编）：{@code exposure: model-only}＋{@code defaultActive: false}
+ * 随元数据上本体（{@link ToolSearchTool} 覆写），批 27 的过渡 sidecar
+ * （{@code ToolDefinitions}）随本批删除。</p>
  *
  * <p>pi 的 {@code builtInExtensions} 条目是 {@code { name: "tool-search",
  * replaceable: true, builtin: true }}（extensions/index.ts:11）；java 经
@@ -38,9 +40,8 @@ public final class ToolSearchExtension implements PiExtension {
     @Override
     public void register(ExtensionContext ctx) {
         // pi index.ts:12-16 逐字：registerTool({ ...createToolSearchToolDefinition({ tools: pi }),
-        // defaultActive: false })。java：工具进注册表＋元数据进定义表（model-only
-        // exposure＋defaultActive=false ⇒ 装配期自动激活臂跳过，AgentSession
-        // isActivatedOnRegistration 门）。
+        // defaultActive: false })。java：工具进注册表；exposure/defaultActive 在
+        // ToolSearchTool 本体上（批 30），激活门经 isActivatedOnRegistration 读取。
         var context = ctx;
         ctx.tools().register(new ToolSearchTool(new ToolSearchTool.SearchTarget() {
             @Override
@@ -58,7 +59,5 @@ public final class ToolSearchExtension implements PiExtension {
                 context.setActiveTools(toolNames);
             }
         }));
-        ctx.toolDefinitions().register(ToolSearchTool.NAME,
-            ToolDefinitions.Entry.of(ToolExposure.MODEL_ONLY, false));
     }
 }

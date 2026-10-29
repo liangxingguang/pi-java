@@ -52,9 +52,6 @@ public final class DefaultExtensionContext implements ExtensionContext {
     private final ExtensionSurfaceRegistries surface = new ExtensionSurfaceRegistries(this);
     /** 批 16（T4b）：工具渲染器责任链（pi extension.toolRenderers 拍平对位）。 */
     private final ToolRendererRegistry toolRenderers = new ToolRendererRegistry();
-    /** 批 27（B162 裁决④）：pi {@code _toolDefinitions} 对位——每会话一份随上下文生死。 */
-    private final com.pijava.coding.agent.core.ToolDefinitions toolDefinitions =
-        new com.pijava.coding.agent.core.ToolDefinitions();
     /**
      * 批 28（docs/40 T2，裁决③）：pi {@code ReadonlySessionManager} 对位视图——
      * 惰性委托宿主会话（无宿主 ⇒ requireToolControl 同文抛错；--no-session 走
@@ -240,11 +237,6 @@ public final class DefaultExtensionContext implements ExtensionContext {
     @Override
     public void setActiveTools(java.util.List<String> toolNames) {
         requireToolControl().setActiveToolsByName(toolNames);
-    }
-
-    @Override
-    public com.pijava.coding.agent.core.ToolDefinitions toolDefinitions() {
-        return toolDefinitions;
     }
 
     /** 批 28（docs/40 T2）：pi {@code ExtensionContext.cwd}——宿主会话 cwd。 */

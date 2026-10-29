@@ -9,7 +9,10 @@ import org.jspecify.annotations.Nullable;
 
 import com.pijava.agent.tool.AgentTool;
 import com.pijava.agent.tool.ExecutionMode;
+import com.pijava.agent.tool.ToolAnnotations;
 import com.pijava.agent.tool.ToolContext;
+import com.pijava.agent.tool.ToolExposure;
+import com.pijava.agent.tool.ToolNamespace;
 import com.pijava.agent.tool.ToolResult;
 import com.pijava.agent.tool.ToolUpdateCallback;
 import com.pijava.ai.AbortSignal;
@@ -17,16 +20,18 @@ import com.pijava.ai.message.ContentBlock;
 import com.pijava.mcp.McpRequestOptions;
 import com.pijava.mcp.config.McpExposure;
 import com.pijava.mcp.protocol.McpTool;
-import com.pijava.mcp.protocol.ProgressNotification;
 import com.pijava.mcp.runtime.McpToolCaller;
+import com.pijava.mcp.protocol.ProgressNotification;
 
 /**
  * One MCP tool as something the agent can run (pi {@code createMcpToolDefinition},
  * {@code tools.ts:260-299}).
  *
- * <p>{@code AgentTool} carries no {@code exposure}, {@code namespace}, {@code outputSchema}, or
- * {@code annotations}; pi's {@code ToolDefinition} does, and their consumers are not ported yet,
- * so the adapter computes them here and the wiring package decides what to activate.</p>
+ * <p>批 30（B203 收编）：{@code exposure}/{@code namespace}/{@code outputSchema}/
+ * {@code annotations}/{@code defaultActive} 五件随 pi {@code ToolDefinition} 上
+ * {@link AgentTool} 本体（{@link McpAgentTool} 覆写，值与 record 槽同源）；
+ * record 的外挂字段保留（wiring 期使用）。批 27 的过渡外挂表
+ * （{@code ToolDefinitions}）随本批删除。</p>
  *
  * @param name the tool name the model sees, already sanitized
  * @param label {@code <server>/<tool>}, for the UI
@@ -44,18 +49,10 @@ public record McpToolDefinition(
         String description,
         Map<String, Object> parameters,
         Map<String, Object> outputSchema,
-        McpToolExposure exposure,
-        @Nullable String namespace,
-        @Nullable Annotations annotations,
+        ToolExposure exposure,
+        @Nullable ToolNamespace namespace,
+        @Nullable ToolAnnotations annotations,
         AgentTool<Map<String, Object>, McpToolDetails> agent) {
-
-    /** The boolean hints of an MCP tool's annotations ({@code types.ts:515-525}). */
-    public record Annotations(
-            @Nullable Boolean readOnlyHint,
-            @Nullable Boolean destructiveHint,
-            @Nullable Boolean idempotentHint,
-            @Nullable Boolean openWorldHint) {
-    }
 
     /** Where a runner gets the caller of one server. */
     @FunctionalInterface
@@ -77,7 +74,8 @@ public record McpToolDefinition(
      * @param tool the tool the server offers
      * @param name the sanitized name the model sees
      * @param exposure the server's exposure for this tool
-     * @param namespace the group this tool belongs to
+     * @param namespace the group this tool belongs to (pi index.ts:392-395 的
+     *                  namespace 对象：name 恒在，description/instructions 按值出席）
      * @param timeoutMs per-request timeout
      * @param getClient the caller, read on every call so a dropped connection reconnects
      * @param readableResources whether {@link McpResultContent#READ_MCP_RESOURCE_TOOL} can read
@@ -88,7 +86,7 @@ public record McpToolDefinition(
             McpTool tool,
             String name,
             McpExposure exposure,
-            String namespace,
+            @Nullable ToolNamespace namespace,
             long timeoutMs,
             CallerSource getClient,
             @Nullable BooleanSupplier readableResources) {
@@ -109,16 +107,31 @@ public record McpToolDefinition(
                 : tool.description().strip();
         var label = options.server() + "/" + tool.name();
         var parameters = McpResultSchema.toParameters(tool.inputSchema());
+        var outputSchema = McpResultSchema.createMcpResultSchema(tool.outputSchema());
+        var exposure = McpToolExposure.of(options.exposure());
+        var annotations = McpResultSchema.toAnnotations(tool);
         return new McpToolDefinition(
                 options.name(),
                 label,
                 description,
                 parameters,
-                McpResultSchema.createMcpResultSchema(tool.outputSchema()),
-                McpToolExposure.of(options.exposure()),
+                outputSchema,
+                exposure,
                 options.namespace(),
-                McpResultSchema.toAnnotations(tool),
-                new McpAgentTool(options, label, description, parameters));
+                annotations,
+                new McpAgentTool(options, label, description, parameters,
+                    outputSchema, exposure, annotations));
+    }
+
+    /**
+     * pi 的 {@code { ...definition, exposure: "hidden" }}（index.ts:457/:419 对位）——
+     * 撤销/hidden 重注：同一工具换 exposure 再注册（工具不能注销，同名替换）。
+     */
+    public McpToolDefinition withExposure(ToolExposure exposure) {
+        var agent = (McpAgentTool) this.agent;
+        return new McpToolDefinition(name, label, description, parameters, outputSchema,
+            exposure, namespace, annotations,
+            agent.withExposure(exposure));
     }
 
     /** The runnable half. */
@@ -128,18 +141,31 @@ public record McpToolDefinition(
         private final String label;
         private final String description;
         private final Map<String, Object> parameters;
+        private final Map<String, Object> outputSchema;
+        private final ToolExposure exposure;
+        private final @Nullable ToolAnnotations annotations;
 
         private McpAgentTool(Options options, String label, String description,
-                             Map<String, Object> parameters) {
+                             Map<String, Object> parameters, Map<String, Object> outputSchema,
+                             ToolExposure exposure, @Nullable ToolAnnotations annotations) {
             this.options = options;
             this.label = label;
             this.description = description;
             this.parameters = parameters;
+            this.outputSchema = outputSchema;
+            this.exposure = exposure;
+            this.annotations = annotations;
         }
 
         @Override
         public String name() {
             return options.name();
+        }
+
+        /** pi 的 exposure 覆盖重注（index.ts:457）：同 options/字段，只换 exposure。 */
+        private McpAgentTool withExposure(ToolExposure newExposure) {
+            return new McpAgentTool(options, label, description, parameters, outputSchema,
+                newExposure, annotations);
         }
 
         @Override
@@ -156,6 +182,31 @@ public record McpToolDefinition(
         public Map<String, Object> inputSchema() {
             return parameters;
         }
+
+        // ── 批 30（B203）：pi ToolDefinition 五件（与 record 槽同源）──
+
+        @Override
+        public Map<String, Object> outputSchema() {
+            return outputSchema;
+        }
+
+        @Override
+        public ToolExposure exposure() {
+            return exposure;
+        }
+
+        @Override
+        public @Nullable ToolNamespace namespace() {
+            return options.namespace();
+        }
+
+        @Override
+        public @Nullable ToolAnnotations annotations() {
+            return annotations;
+        }
+
+        // defaultActive 不覆写：pi 的 MCP 工具定义不声明 defaultActive（undefined ⇒
+        // _isActivatedOnRegistration 的 `!== false` 臂按 true 走），AgentTool 默认 true 同形。
 
         @Override
         public ExecutionMode executionMode() {

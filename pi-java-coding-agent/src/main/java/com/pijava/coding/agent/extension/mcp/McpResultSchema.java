@@ -6,7 +6,7 @@ import java.util.Map;
 
 import org.jspecify.annotations.Nullable;
 
-import com.pijava.coding.agent.extension.mcp.McpToolDefinition.Annotations;
+import com.pijava.agent.tool.ToolAnnotations;
 import com.pijava.mcp.protocol.McpTool;
 
 /**
@@ -55,12 +55,13 @@ public final class McpResultSchema {
 
     /**
      * The boolean hints of an MCP tool's annotations, or {@code null} when it has none
-     * ({@code tools.ts:251-258}).
+     * ({@code tools.ts:251-258})。批 30（B203）：返回 agent-core
+     * {@link ToolAnnotations}（{@code McpToolDefinition.Annotations} 随 sidecar 收编删除）。
      *
      * @param tool the tool
      * @return the hints, or {@code null}
      */
-    public static @Nullable Annotations toAnnotations(McpTool tool) {
+    public static @Nullable ToolAnnotations toAnnotations(McpTool tool) {
         var annotations = tool.annotations();
         if (annotations == null) {
             return null;
@@ -72,6 +73,6 @@ public final class McpResultSchema {
         if (readOnly == null && destructive == null && idempotent == null && openWorld == null) {
             return null;
         }
-        return new Annotations(readOnly, destructive, idempotent, openWorld);
+        return new ToolAnnotations(readOnly, destructive, idempotent, openWorld);
     }
 }

@@ -325,9 +325,13 @@ class McpResourceToolsTest {
     @Test
     void allThreeToolsAreReadOnlyAndDirect() {
         for (var definition : tools(new FakeServer("files"))) {
-            assertThat(definition.exposure()).isEqualTo(McpToolExposure.DIRECT);
+            assertThat(definition.exposure()).isEqualTo(com.pijava.agent.tool.ToolExposure.DIRECT);
             assertThat(definition.annotations()).isEqualTo(
-                    new McpToolDefinition.Annotations(true, null, null, null));
+                    new com.pijava.agent.tool.ToolAnnotations(true, null, null, null));
+            // 批 30（B203）：本体与 record 同源。
+            assertThat(definition.agent().exposure())
+                    .isEqualTo(com.pijava.agent.tool.ToolExposure.DIRECT);
+            assertThat(definition.agent().annotations()).isEqualTo(definition.annotations());
             assertThat(definition.namespace()).isNull();
         }
         assertThat(tools(new FakeServer("f"))).extracting(McpToolDefinition::name)

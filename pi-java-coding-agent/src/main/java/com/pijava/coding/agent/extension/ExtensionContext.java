@@ -353,15 +353,6 @@ public interface ExtensionContext {
     void registerMarkdownTransformer(MarkdownTransformer transformer);
 
     /**
-     * 批 27（B162 裁决④）：工具定义元数据表（pi {@code _toolDefinitions} 对位）。
-     * <b>内部面</b>——生产方是内置扩展（tool-search／MCP registrar）；一般扩展经
-     * {@link #getAllTools()} 读投影即可，无需碰本表。
-     */
-    default com.pijava.coding.agent.core.ToolDefinitions toolDefinitions() {
-        throw new UnsupportedOperationException("toolDefinitions not available in this context");
-    }
-
-    /**
      * 批 27（B162/T11，E5-26）：pi {@code registerVirtualModel}（types.ts:1874-1884；
      * loader.ts:500-510 对位）——注册虚拟模型（路由每请求择物理模型）。重复注册
      * 同 provider+id 即替换。路由的 {@code ctx} 是<b>本</b>扩展上下文（pi 的

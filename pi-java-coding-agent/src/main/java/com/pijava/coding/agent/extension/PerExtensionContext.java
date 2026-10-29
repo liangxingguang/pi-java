@@ -147,11 +147,6 @@ final class PerExtensionContext implements ExtensionContext {
     }
 
     @Override
-    public com.pijava.coding.agent.core.ToolDefinitions toolDefinitions() {
-        return base.toolDefinitions();
-    }
-
-    @Override
     public String cwd() {
         return base.cwd();
     }

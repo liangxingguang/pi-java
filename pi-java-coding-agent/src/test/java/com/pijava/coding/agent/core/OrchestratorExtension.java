@@ -6,19 +6,22 @@ import java.util.Map;
 import com.pijava.agent.tool.AgentTool;
 import com.pijava.agent.tool.ExecutionMode;
 import com.pijava.agent.tool.ToolContext;
+import com.pijava.agent.tool.ToolExposure;
 import com.pijava.agent.tool.ToolResult;
 import com.pijava.agent.tool.ToolUpdateCallback;
 import com.pijava.ai.AbortSignal;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.coding.agent.extension.ExtensionContext;
 import com.pijava.coding.agent.extension.PiExtension;
-import com.pijava.coding.agent.extension.ToolExposure;
 
 /**
  * 批 27（B162/T3+T4 测试夹具）：pi 的 orchestratorExtension
  * （{@code agent-session-tool-orchestration.test.ts:14-53} 对位）——注册
  * {@code echo}（direct）、{@code helper}（codemode）、{@code run_tools}
  * （model-only；执行中经 {@code ctx.executeTool()} 依次调 helper/echo/自身）。
+ *
+ * <p>批 30（B203 收编）：exposure 从批 27 的 sidecar 表改到工具本体
+ * （pi {@code ToolDefinition.exposure} 对位）。</p>
  *
  * <p>顶层 public 类是 ServiceLoader 的硬要求（嵌套类实例化会被
  * IllegalAccess 静默吞）。</p>
@@ -32,18 +35,13 @@ public final class OrchestratorExtension implements PiExtension {
 
     @Override
     public void register(ExtensionContext ctx) {
-        ctx.tools().register(plain("echo"));
-        ctx.toolDefinitions().register("echo",
-            ToolDefinitions.Entry.of(ToolExposure.DIRECT, true));
-        ctx.tools().register(plain("helper"));
-        ctx.toolDefinitions().register("helper",
-            ToolDefinitions.Entry.of(ToolExposure.CODEMODE, true));
+        ctx.tools().register(plain("echo", ToolExposure.DIRECT));
+        ctx.tools().register(plain("helper", ToolExposure.CODEMODE));
         ctx.tools().register(orchestrator(ctx));
-        ctx.toolDefinitions().register("run_tools",
-            ToolDefinitions.Entry.of(ToolExposure.MODEL_ONLY, true));
     }
 
-    private static AgentTool<Map<String, Object>, Object> plain(String name) {
+    private static AgentTool<Map<String, Object>, Object> plain(String name,
+                                                                ToolExposure exposure) {
         return new AgentTool<>() {
             @Override public String name() {
                 return name;
@@ -59,6 +57,10 @@ public final class OrchestratorExtension implements PiExtension {
 
             @Override public Map<String, Object> inputSchema() {
                 return Map.of("type", "object");
+            }
+
+            @Override public ToolExposure exposure() {
+                return exposure;
             }
 
             @Override public ExecutionMode executionMode() {
@@ -92,6 +94,10 @@ public final class OrchestratorExtension implements PiExtension {
                 return Map.of("type", "object");
             }
 
+            @Override public ToolExposure exposure() {
+                return ToolExposure.MODEL_ONLY;
+            }
+
             @Override public ExecutionMode executionMode() {
                 return new ExecutionMode.Parallel();
             }
@@ -120,3 +126,4 @@ public final class OrchestratorExtension implements PiExtension {
         };
     }
 }
+

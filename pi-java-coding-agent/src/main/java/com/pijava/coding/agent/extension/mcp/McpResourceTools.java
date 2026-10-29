@@ -359,11 +359,15 @@ public final class McpResourceTools {
     private static McpToolDefinition tool(Options options, String name, String description,
                                           Map<String, Object> parameters,
                                           Map<String, Object> outputSchema, ToolBody body) {
+        // 批 30（B203 收编）：exposure/annotations 上工具本体（ResourceAgentTool 覆写），
+        // record 槽与本体同源（pi resources.ts:331 的 readOnlyHint 逐字）。
+        var exposure = McpToolExposure.of(options.exposure());
+        var annotations = new com.pijava.agent.tool.ToolAnnotations(true, null, null, null);
         return new McpToolDefinition(
                 name, name, description, parameters, outputSchema,
-                McpToolExposure.of(options.exposure()), null,
-                new McpToolDefinition.Annotations(true, null, null, null),
-                new ResourceAgentTool(name, description, parameters, body));
+                exposure, null, annotations,
+                new ResourceAgentTool(name, description, parameters, exposure, annotations,
+                    outputSchema, body));
     }
 
     /** What one call of a resource tool does. */
@@ -382,13 +386,21 @@ public final class McpResourceTools {
         private final String name;
         private final String description;
         private final Map<String, Object> parameters;
+        private final com.pijava.agent.tool.ToolExposure exposure;
+        private final com.pijava.agent.tool.ToolAnnotations annotations;
+        private final Map<String, Object> outputSchema;
         private final ToolBody body;
 
         private ResourceAgentTool(String name, String description, Map<String, Object> parameters,
-                                  ToolBody body) {
+                                  com.pijava.agent.tool.ToolExposure exposure,
+                                  com.pijava.agent.tool.ToolAnnotations annotations,
+                                  Map<String, Object> outputSchema, ToolBody body) {
             this.name = name;
             this.description = description;
             this.parameters = parameters;
+            this.exposure = exposure;
+            this.annotations = annotations;
+            this.outputSchema = outputSchema;
             this.body = body;
         }
 
@@ -410,6 +422,23 @@ public final class McpResourceTools {
         @Override
         public Map<String, Object> inputSchema() {
             return parameters;
+        }
+
+        // ── 批 30（B203）：本体覆写（与 McpToolDefinition record 槽同源）──
+
+        @Override
+        public com.pijava.agent.tool.ToolExposure exposure() {
+            return exposure;
+        }
+
+        @Override
+        public com.pijava.agent.tool.ToolAnnotations annotations() {
+            return annotations;
+        }
+
+        @Override
+        public Map<String, Object> outputSchema() {
+            return outputSchema;
         }
 
         @Override

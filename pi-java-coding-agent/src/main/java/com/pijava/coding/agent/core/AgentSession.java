@@ -46,7 +46,7 @@ import com.pijava.coding.agent.extension.ExtensionShortcuts;
 import com.pijava.coding.agent.extension.ExtensionToolInfo;
 import com.pijava.coding.agent.extension.ExtensionUI;
 import com.pijava.coding.agent.extension.MarkdownTransformer;
-import com.pijava.coding.agent.extension.ToolExposure;
+import com.pijava.agent.tool.ToolExposure;
 import com.pijava.coding.agent.extension.ToolRendererRegistry;
 import com.pijava.coding.agent.extension.SessionEventFirer;
 import com.pijava.coding.agent.theme.Theme;

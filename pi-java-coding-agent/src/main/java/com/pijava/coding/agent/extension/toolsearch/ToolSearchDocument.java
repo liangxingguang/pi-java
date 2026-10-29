@@ -3,7 +3,7 @@ package com.pijava.coding.agent.extension.toolsearch;
 import java.util.List;
 import java.util.Map;
 
-import com.pijava.coding.agent.core.ToolDefinitions;
+import com.pijava.agent.tool.ToolNamespace;
 import com.pijava.coding.agent.extension.ExtensionToolInfo;
 
 /**
@@ -15,7 +15,7 @@ public record ToolSearchDocument(String name, String text) {
 
     /** pi {@code createToolSearchDocument}（:103-116 逐字）。 */
     public static ToolSearchDocument of(ExtensionToolInfo tool,
-                                        ToolDefinitions.Namespace namespace) {
+                                        ToolNamespace namespace) {
         var parts = new java.util.ArrayList<String>();
         parts.add(tool.name());
         parts.add(tool.name().replace("_", " "));

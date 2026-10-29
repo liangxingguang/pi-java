@@ -183,7 +183,7 @@ final class ModelToolControl {
             // 不进活跃集。
             if (tool != null
                     && toolExposureOf(name)
-                        != com.pijava.coding.agent.extension.ToolExposure.HIDDEN
+                        != com.pijava.agent.tool.ToolExposure.HIDDEN
                     && isActivatableTool(name)) {
                 tools.add(tool);
             }
@@ -238,62 +238,53 @@ final class ModelToolControl {
     }
 
     /**
-     * pi {@code getAllTools}（agent-session.ts:1495-1506）的投影。批 27（B162
-     * 裁决④）：{@code exposure}/{@code parameters}/{@code namespace} 三字段落地
-     * （D91 收窄；余 annotations/sourceInfo 无对位）。
+     * pi {@code getAllTools}（agent-session.ts:1495-1506）的投影。批 30（B203
+     * 收编）：{@code exposure}/{@code namespace}/{@code annotations} 从工具本体读
+     * （pi {@code ToolDefinition} 本体对位；D91 余量收窄为「仅 sourceInfo 无对位」）。
      */
     java.util.List<com.pijava.coding.agent.extension.ExtensionToolInfo> getAllTools() {
-        var definitions = toolDefinitionsOrNull();
         return owner.services().tools().all().stream()
-            .map(t -> {
-                var entry = definitions == null ? null : definitions.get(t.name());
-                return new com.pijava.coding.agent.extension.ExtensionToolInfo(
-                    t.name(), t.description(),
-                    t.promptGuidelines() == null ? java.util.List.of()
-                        : java.util.List.copyOf(t.promptGuidelines()),
-                    entry == null
-                        ? com.pijava.coding.agent.extension.ToolExposure.DIRECT
-                        : entry.exposure(),
-                    t.inputSchema() == null ? java.util.Map.of() : t.inputSchema(),
-                    entry == null ? null : entry.namespace());
-            })
+            .map(t -> new com.pijava.coding.agent.extension.ExtensionToolInfo(
+                t.name(), t.description(),
+                t.promptGuidelines() == null ? java.util.List.of()
+                    : java.util.List.copyOf(t.promptGuidelines()),
+                t.exposure(),
+                t.inputSchema() == null ? java.util.Map.of() : t.inputSchema(),
+                t.namespace(), t.annotations()))
             .toList();
     }
 
     // ── 批 27（docs/38 T6）：exposure 四门（pi :1543-1567/:3595-3604 对位）──
-
-    /** 定义表（无扩展装配 ⇒ {@code null}，四门全走 pi 默认臂）。 */
-    private ToolDefinitions toolDefinitionsOrNull() {
-        var context = owner.extensionContext();
-        return context == null ? null : context.toolDefinitions();
-    }
+    // 批 30（B203 收编）：元数据源从批 27 的过渡 sidecar 改到工具本体（pi
+    // _toolDefinitions.get(name)?.definition.<field> 对位——pi 的定义本体即注册表
+    // 里的工具；java 的 ToolRegistry 即那个表）。
 
     /** pi {@code _getToolExposure}（agent-session.ts:1554-1556）：查无 ⇒ {@code direct}。 */
-    com.pijava.coding.agent.extension.ToolExposure toolExposureOf(String name) {
-        var definitions = toolDefinitionsOrNull();
-        return definitions == null
-            ? com.pijava.coding.agent.extension.ToolExposure.DIRECT
-            : definitions.exposureOf(name);
+    com.pijava.agent.tool.ToolExposure toolExposureOf(String name) {
+        var tool = owner.services().tools().get(name);
+        return tool == null
+            ? com.pijava.agent.tool.ToolExposure.DIRECT
+            : tool.exposure();
     }
 
     /** pi {@code _isDeclarable}（:3595-3599）：激活即声明给模型。 */
     boolean isDeclarableTool(String name) {
         var exposure = toolExposureOf(name);
-        return exposure == com.pijava.coding.agent.extension.ToolExposure.DIRECT
-            || exposure == com.pijava.coding.agent.extension.ToolExposure.MODEL_ONLY;
+        return exposure == com.pijava.agent.tool.ToolExposure.DIRECT
+            || exposure == com.pijava.agent.tool.ToolExposure.MODEL_ONLY;
     }
 
     /**
-     * pi {@code _isActivatedOnRegistration}（:3601-3604，types.ts:612-617 的默认
-     * 规则）：declarable 且 defaultActive ≠ false。查无条目 ⇒ pi 默认 true。
+     * pi {@code _isActivatedOnRegistration}（:3601-3604）：declarable 且
+     * defaultActive ≠ false。查无工具 ⇒ pi 的 undefined 定义臂（{@code !== false}
+     * 成立）⇒ true。
      */
     boolean isActivatedOnRegistration(String name) {
         if (!isDeclarableTool(name)) {
             return false;
         }
-        var definitions = toolDefinitionsOrNull();
-        var entry = definitions == null ? null : definitions.get(name);
-        return entry == null || entry.defaultActive();
+        var tool = owner.services().tools().get(name);
+        return tool == null || tool.defaultActive();
     }
 
     /**
@@ -306,7 +297,7 @@ final class ModelToolControl {
                 || !ToolNameMatcher.isMcpToolName(name)) {
             return true;
         }
-        return toolExposureOf(name) != com.pijava.coding.agent.extension.ToolExposure.DIRECT
+        return toolExposureOf(name) != com.pijava.agent.tool.ToolExposure.DIRECT
             && owner.services().tools().get(
                 com.pijava.coding.agent.extension.toolsearch.ToolSearchTool.NAME) != null;
     }
@@ -320,9 +311,9 @@ final class ModelToolControl {
         return owner.services().tools().all().stream()
             .filter(tool -> {
                 var exposure = toolExposureOf(tool.name());
-                return exposure == com.pijava.coding.agent.extension.ToolExposure.CODEMODE
-                    || exposure == com.pijava.coding.agent.extension.ToolExposure.DEFERRED
-                    || (exposure == com.pijava.coding.agent.extension.ToolExposure.DIRECT
+                return exposure == com.pijava.agent.tool.ToolExposure.CODEMODE
+                    || exposure == com.pijava.agent.tool.ToolExposure.DEFERRED
+                    || (exposure == com.pijava.agent.tool.ToolExposure.DIRECT
                         && active.contains(tool.name()));
             })
             .toList();
