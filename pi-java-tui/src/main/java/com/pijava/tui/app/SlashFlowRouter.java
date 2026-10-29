@@ -1,9 +1,14 @@
 package com.pijava.tui.app;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.pijava.ai.catalog.FileModelsStore;
 import com.pijava.coding.agent.core.AgentSession;
+import com.pijava.coding.agent.core.AgentSessionScopeSink;
+import com.pijava.coding.agent.core.ModelCatalogRefresh;
+import com.pijava.coding.agent.core.ScopedModelController;
 import com.pijava.coding.agent.core.KeybindingsManager;
 import com.pijava.coding.agent.core.slash.CommandRegistry;
 import com.pijava.coding.agent.core.slash.PromptTemplateItems;
@@ -13,6 +18,7 @@ import com.pijava.coding.agent.modes.InteractiveMode;
 import com.pijava.tui.component.SlashCompleter;
 import com.pijava.tui.screen.ChatScreen;
 import com.pijava.tui.screen.ModelSelectorScreen;
+import com.pijava.tui.screen.ScopedModelsScreen;
 import com.pijava.tui.screen.SessionListScreen;
 import com.pijava.tui.screen.SettingsScreen;
 import com.pijava.tui.screen.UserMessageSelectorScreen;
@@ -155,9 +161,18 @@ final class SlashFlowRouter {
                             chatScreen.setSlashCommands(loadSlashItems());
                         }
                     }));
-            case CommandRegistry.UI_SCOPED_MODELS ->
-                chatScreen.appendSystemText(
-                    "Use /scoped-models +<model> or /scoped-models -<model>");
+            case CommandRegistry.UI_SCOPED_MODELS -> {
+                var sink = new AgentSessionScopeSink(app.session);
+                var controller = ScopedModelController.open(
+                    sink, AgentSessionScopeSink.availableModels(app.session));
+                var selector = new ScopedModelsScreen(controller, keys, chatScreen::appendSystemText);
+                app.openOverlay(selector);
+                selector.startRefresh(
+                    () -> new ModelCatalogRefresh(FileModelsStore.defaultStore())
+                        .refresh(app.session.services().providers().listAll(), true, true),
+                    () -> AgentSessionScopeSink.availableModels(app.session),
+                    Duration.ofSeconds(15), dispatcher::dispatch);
+            }
             // 批 15（T8）：/thinking（空参）的选择器（裁决⑥简版）。
             case CommandRegistry.UI_THINKING_SELECTOR ->
                 app.openOverlay(new com.pijava.tui.screen.ThinkingLevelScreen(
