@@ -98,7 +98,7 @@ public final class ModelCommands {
         registry.register(new SlashCommand() {
             @Override public String name() { return "scoped-models"; }
             @Override public String description() {
-                return "Enable/disable Ctrl+P cycling models";
+                return "Enable/disable models for Ctrl+P cycling";
             }
             @Override public String argumentHint() { return "[+|-]<model>"; }
             @Override public CompletionStage<String> execute(String args, SlashContext context) {

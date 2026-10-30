@@ -13,9 +13,8 @@ import java.security.SecureRandom;
  * bug report 上传（pi {@code core/bug-report-upload.ts} 逐段对位）：multipart
  * form-data POST 到 Radius 网关 {@code /v1/bug-reports}，匿名或带 Radius token。
  *
- * <p>裁决⑩：java 无 Radius provider，生产恒匿名（{@code token == null}）；
- * token 参预留（{@code Authorization: Bearer} 臂有测试），Radius 登录面落地时
- * 接线（窄差 D85）。网关地址<b>每调现读</b>环境（批 14 静态冻结教训）。</p>
+ * <p>有 Radius token 时经 {@code Authorization: Bearer} 归因上传；无 token 时匿名。
+ * 网关地址<b>每调现读</b>环境（批 14 静态冻结教训）。</p>
  */
 public final class BugReportUpload {
 

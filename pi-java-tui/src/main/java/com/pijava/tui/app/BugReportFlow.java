@@ -2,10 +2,12 @@ package com.pijava.tui.app;
 
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
+import com.pijava.ai.auth.Credentials;
 import com.pijava.ai.auth.FileCredentialStore;
 import com.pijava.ai.auth.OAuthCredentialStore;
 import com.pijava.coding.agent.core.AgentSession;
@@ -29,8 +31,8 @@ import com.pijava.tui.util.TuiEventDispatcher;
  *
  * <p>编排同 {@link TreeNavigationFlow}：overlay 一屏一换（pi showOverlay/
  * restoreEditor 对位），阻塞工作（摘要/上传）跑 worker 虚拟线程，UI 写经
- * dispatcher 回渲染线程。全部文案【用户可见】逐字。裁决⑩：上传恒匿名
- * （token 缝预留在 {@link BugReportUpload}）。</p>
+ * dispatcher 回渲染线程。全部文案【用户可见】逐字。有 Radius 凭证时归因上传，
+ * 无凭证时匿名；凭证解析失败不降级。</p>
  */
 public final class BugReportFlow {
 
@@ -59,6 +61,7 @@ public final class BugReportFlow {
     private final Supplier<BugReportUpload> uploader;
     private final BooleanSupplier offline;
     private final Supplier<Path> zipDir;
+    private final Supplier<Optional<String>> radiusCredentials;
 
     /** 生产构造：真上传件、PI_OFFLINE 环境门（pi 只查 env）、cwd 落 ZIP。 */
     public BugReportFlow(AgentSession session, ChatScreen chatScreen,
@@ -79,6 +82,15 @@ public final class BugReportFlow {
                   TuiEventDispatcher dispatcher, Consumer<ScreenOverlay> openOverlay,
                   Supplier<BugReportUpload> uploader, BooleanSupplier offline,
                   Supplier<Path> zipDir) {
+        this(session, chatScreen, dispatcher, openOverlay, uploader, offline, zipDir,
+            () -> Credentials.resolveApiKey("radius"));
+    }
+
+    /** Full dependency seam, including a locally scripted credential source for tests. */
+    BugReportFlow(AgentSession session, ChatScreen chatScreen,
+                  TuiEventDispatcher dispatcher, Consumer<ScreenOverlay> openOverlay,
+                  Supplier<BugReportUpload> uploader, BooleanSupplier offline,
+                  Supplier<Path> zipDir, Supplier<Optional<String>> radiusCredentials) {
         this.session = session;
         this.chatScreen = chatScreen;
         this.dispatcher = dispatcher;
@@ -86,6 +98,7 @@ public final class BugReportFlow {
         this.uploader = uploader;
         this.offline = offline;
         this.zipDir = zipDir;
+        this.radiusCredentials = radiusCredentials;
     }
 
     /** pi {@code reportBug(context, initialHint)} 入口。 */
@@ -217,8 +230,9 @@ public final class BugReportFlow {
         openOverlay.accept(loader);
         var worker = Thread.startVirtualThread(() -> {
             try {
-                // 裁决⑩：恒匿名（java 无 Radius provider；token 缝预留）。
-                var result = uploader.get().upload(bundle, null);
+                // D85：有 Radius token 则归因；解析失败进入既有上传失败路径，不匿名降级。
+                var radiusToken = radiusCredentials.get().orElse(null);
+                var result = uploader.get().upload(bundle, radiusToken);
                 dispatcher.dispatch(() -> {
                     openOverlay.accept(null);
                     recordInSession(bundle, "upload", null);

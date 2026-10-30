@@ -20,7 +20,7 @@ public final class SettingsCommands {
     public static void registerAll(CommandRegistry registry) {
         registry.register(new SlashCommand() {
             @Override public String name() { return "settings"; }
-            @Override public String description() { return "Open settings"; }
+            @Override public String description() { return "Open settings menu"; }
             @Override public String argumentHint() { return ""; }
             @Override public CompletionStage<String> execute(String args, SlashContext ctx) {
                 return CompletableFuture.completedFuture(CommandRegistry.UI_SETTINGS);
