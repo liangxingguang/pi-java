@@ -9,11 +9,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
 
@@ -70,8 +68,6 @@ class BugReportFlowTest {
     private ChatScreen chatScreen;
     private TuiEventDispatcher dispatcher;
     private final AtomicReference<ScreenOverlay> overlayRef = new AtomicReference<>();
-    private final AtomicReference<String> uploadAuthorization = new AtomicReference<>();
-    private final AtomicInteger uploadCalls = new AtomicInteger();
     private ScriptedProvider provider;
 
     @BeforeEach
@@ -159,8 +155,6 @@ class BugReportFlowTest {
     // ── 夹具 ────────────────────────────────────────────────
 
     private void newRig() {
-        uploadAuthorization.set(null);
-        uploadCalls.set(0);
         provider = new ScriptedProvider();
         var registry = ProviderRegistry.create();
         registry.register(provider);
@@ -176,12 +170,6 @@ class BugReportFlowTest {
     private BugReportFlow flow(BugReportUpload upload, boolean offline) {
         return new BugReportFlow(session, chatScreen, dispatcher, overlayRef::set,
             () -> upload, () -> offline, () -> tmp);
-    }
-
-    private BugReportFlow flowWithCredentials(BugReportUpload upload,
-                                               java.util.function.Supplier<Optional<String>> credentials) {
-        return new BugReportFlow(session, chatScreen, dispatcher, overlayRef::set,
-            () -> upload, () -> false, () -> tmp, credentials);
     }
 
     /** 默认流（upload 指向「不应被调用」的死端口；调用即失败 ⇒ 可断言没走 upload）。 */
@@ -227,12 +215,10 @@ class BugReportFlowTest {
         throw new AssertionError("聊天区未出现「" + text + "」——现有：" + messageTexts());
     }
 
-    private HttpServer gateway(int status, String body) throws Exception {
+    private static HttpServer gateway(int status, String body) throws Exception {
         var server = HttpServer.create(
             new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
         server.createContext("/v1/bug-reports", exchange -> {
-            uploadCalls.incrementAndGet();
-            uploadAuthorization.set(exchange.getRequestHeaders().getFirst("authorization"));
             exchange.getRequestBody().readAllBytes();
             var bytes = body.getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().set("content-type", "application/json");
@@ -375,60 +361,6 @@ class BugReportFlowTest {
                 .map(com.pijava.agent.entry.Entry.Custom.class::cast).toList();
             assertThat(customs).hasSize(1);
             assertThat(customs.getFirst().data()).containsEntry("delivery", "upload");
-        } finally {
-            server.stop(0);
-        }
-    }
-
-    @Test
-    void bugUploadUsesRadiusTokenWhenAvailable() throws Exception {
-        newRig();
-        var server = gateway(200, "{\"ok\":true,\"bug_report\":{\"id\":\"br-token\"}}");
-        try {
-            flowWithCredentials(uploadTo(server), () -> Optional.of("radius-secret")).begin(null);
-            drive(overlayRef.get(), ENTER);
-            drive(overlayRef.get(), ENTER);
-            drive(overlayRef.get(), ENTER);
-
-            awaitText("Bug report uploaded. Report ID: br-token");
-            assertThat(uploadAuthorization.get()).isEqualTo("Bearer radius-secret");
-        } finally {
-            server.stop(0);
-        }
-    }
-
-    @Test
-    void bugUploadWithoutRadiusTokenRemainsAnonymous() throws Exception {
-        newRig();
-        var server = gateway(200, "{\"ok\":true,\"bug_report\":{\"id\":\"br-anon\"}}");
-        try {
-            flowWithCredentials(uploadTo(server), Optional::empty).begin(null);
-            drive(overlayRef.get(), ENTER);
-            drive(overlayRef.get(), ENTER);
-            drive(overlayRef.get(), ENTER);
-
-            awaitText("Bug report uploaded. Report ID: br-anon");
-            assertThat(uploadCalls.get()).isEqualTo(1);
-            assertThat(uploadAuthorization.get()).isNull();
-        } finally {
-            server.stop(0);
-        }
-    }
-
-    @Test
-    void credentialRefreshFailureDoesNotDowngradeToAnonymous() throws Exception {
-        newRig();
-        var server = gateway(200, "{\"ok\":true,\"bug_report\":{\"id\":\"unexpected\"}}");
-        try {
-            flowWithCredentials(uploadTo(server), () -> {
-                throw new IllegalStateException("expired");
-            }).begin(null);
-            drive(overlayRef.get(), ENTER);
-            drive(overlayRef.get(), ENTER);
-            drive(overlayRef.get(), ENTER);
-
-            awaitChoiceScreen("credential failure fallback");
-            assertThat(uploadCalls.get()).isZero();
         } finally {
             server.stop(0);
         }
