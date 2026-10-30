@@ -12,6 +12,7 @@ import com.pijava.coding.agent.core.ModelCatalogRefresh;
 import com.pijava.coding.agent.core.ProviderLoginCatalog;
 import com.pijava.coding.agent.core.ProviderLoginService;
 import com.pijava.coding.agent.core.ScopedModelController;
+import com.pijava.coding.agent.core.SessionShareService;
 import com.pijava.coding.agent.core.KeybindingsManager;
 import com.pijava.coding.agent.core.slash.CommandRegistry;
 import com.pijava.coding.agent.core.slash.PromptTemplateItems;
@@ -24,6 +25,7 @@ import com.pijava.tui.screen.LoginFlow;
 import com.pijava.tui.screen.ModelSelectorScreen;
 import com.pijava.tui.screen.ScopedModelsScreen;
 import com.pijava.tui.screen.SessionListScreen;
+import com.pijava.tui.screen.ShareFlow;
 import com.pijava.tui.screen.SettingsScreen;
 import com.pijava.tui.screen.UserMessageSelectorScreen;
 import com.pijava.tui.screen.settings.SettingsActionHandler;
@@ -166,6 +168,19 @@ final class SlashFlowRouter {
                         }
                     }));
             case CommandRegistry.UI_LOGIN -> openLogin(input);
+            case CommandRegistry.UI_SHARE -> new ShareFlow(new SessionShareService(app.session),
+                new ShareFlow.Host() {
+                    @Override public void open(com.pijava.tui.screen.ScreenOverlay overlay) {
+                        app.openOverlay(overlay);
+                    }
+
+                    @Override public void dismiss(com.pijava.tui.screen.ScreenOverlay overlay) {
+                        app.dismissOverlay(overlay);
+                    }
+
+                    @Override public void status(String message) { chatScreen.appendSystemText(message); }
+                    @Override public void error(String message) { chatScreen.showError(message); }
+                }, dispatcher::dispatch).begin();
             case CommandRegistry.UI_SCOPED_MODELS -> {
                 var sink = new AgentSessionScopeSink(app.session);
                 var controller = ScopedModelController.open(

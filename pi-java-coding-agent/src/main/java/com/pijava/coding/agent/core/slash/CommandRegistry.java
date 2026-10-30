@@ -42,6 +42,7 @@ public final class CommandRegistry {
     public static final String UI_FORK_SELECTOR = "@ui:fork-selector";
     public static final String UI_SETTINGS = "@ui:settings";
     public static final String UI_LOGIN = "@ui:login";
+    public static final String UI_SHARE = "@ui:share";
     public static final String UI_SCOPED_MODELS = "@ui:scoped-models";
     /** 批 15（T7）：{@code /bug} 故障上报流；hint 由 TUI 从原始输入行切（裁决⑦）。 */
     public static final String UI_BUG_REPORT = "@ui:bug-report";

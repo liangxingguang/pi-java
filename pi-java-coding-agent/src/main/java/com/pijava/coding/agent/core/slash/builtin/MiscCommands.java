@@ -5,7 +5,6 @@ import java.util.concurrent.CompletionStage;
 
 import com.pijava.ai.auth.FileCredentialStore;
 import com.pijava.coding.agent.core.KeybindingsManager;
-import com.pijava.coding.agent.core.SessionShare;
 import com.pijava.coding.agent.core.crash.CrashLog;
 import com.pijava.coding.agent.core.crash.CrashRecord;
 import com.pijava.coding.agent.core.slash.CommandRegistry;
@@ -82,26 +81,8 @@ public final class MiscCommands {
                         + "Failed to import session: " + e.getMessage();
                 }
             }));
-        registry.register(new SlashCommand() {
-            @Override public String name() { return "share"; }
-            @Override public String description() { return "Share session as GitHub gist"; }
-            @Override public String argumentHint() { return ""; }
-            @Override public CompletionStage<String> execute(String args, SlashContext ctx) {
-                try {
-                    var tmp = java.nio.file.Files.createTempFile("pi-java-share", ".jsonl");
-                    try {
-                        ctx.session().exportJsonl(tmp);
-                        var jsonl = java.nio.file.Files.readString(tmp);
-                        var url = new SessionShare().share(jsonl);
-                        return CompletableFuture.completedFuture("Shared session: " + url);
-                    } finally {
-                        java.nio.file.Files.deleteIfExists(tmp);
-                    }
-                } catch (Exception e) {
-                    return CompletableFuture.completedFuture("Share failed: " + e.getMessage());
-                }
-            }
-        });
+        registry.register(simple("share", "Share session as a secret GitHub gist", "",
+            (args, ctx) -> CommandRegistry.UI_SHARE));
         registry.register(new SlashCommand() {
             @Override public String name() { return "copy"; }
             @Override public String description() {
