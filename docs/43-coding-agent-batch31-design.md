@@ -653,4 +653,30 @@ var result = uploader.get().upload(bundle, radiusToken);
 
 ## §13 闭环记录
 
-待实施与验收后填写；本稿当前仅为设计待审版本，不代表功能已经落地。
+**闭环日 2026-10-30；T1–T12 全部落地（实施提交 `83cc0d15`…`05cb2f02` 共 11 个）。**
+
+### 实际改动
+
+- 新增主源 35 文件：ai 7（`RadiusProvider`/`RadiusGatewayConfig`/`RadiusGatewayClient`/`RadiusOAuthFlow`/`RadiusOAuthHttp`/`RadiusOAuthConfig`/`DeviceCodePoller`）；coding-agent 16（`SettingsAccessors` 改动外的 `EnabledModelSet`/`ScopedModelSelection`/`ScopedModelController`/`AgentSessionScopeSink`/`ProviderLoginCatalog`/`ProviderLoginService`/`LoginAuthType`/`LoginExecutor`/`LoginInteraction`/`LoginProviderOption`/`RadiusMcpOffer`/`GhCli`/`SessionShareService`/`RadiusArtifactUploader`/`ShareCancellation`/`ShareOutcome`）；tui 12（`settings/SettingsItems`/`SettingsItem`/`SettingsListModel`/`SettingsListView`/`SettingsActionHandler`/`WarningSettingsScreen`、`ScopedModelsScreen`/`ScopedModelRefresh`、`LoginFlow`/`LoginProviderScreen`/`LoginDialogScreen`、`ShareFlow`、`MessageBubbleVisibility`）。改签：`SettingsScreen` 改薄适配（346 行块改写）、`SlashFlowRouter`/`PiTuiApp`/`OverlayManager`/`BugReportFlow`/`MiscCommands`/`CommandRegistry`/`ModelToolControl`/`DefaultProviders`/`DefaultModelIds`/`OAuthProviders`/`OAuthProvider`/`DeviceCodeFlow`/`DefaultOAuthTokenRefresher`/`RemoteCatalogProvider` 等。
+- 新增测试 23 文件＋夹具 `ProviderLoginFixtures`，78 个测试方法（领域：`RadiusGatewayClientTest`/`RadiusProviderTest`/`RadiusOAuthFlowTest`/`ProviderLoginCatalogTest`/`ProviderLoginServiceTest`/`RadiusArtifactUploaderTest`/`RadiusMcpOfferTest`/`ScopedModelSelectionTest`/`ScopedModelControllerTest`/`ScopedModelKeybindingsTest`/`SessionShareServiceTest`/`Batch31CommandContractTest`；TUI：`SettingsListModelTest`/`SettingsItemsTest`/`SettingsActionHandlerTest`/`SettingsFlowTest`/`ScopedModelsScreenTest`/`ScopedModelRefreshTest`/`LoginFlowTest`/`ShareFlowTest`/`BugReportFlowRadiusAuthTest`/`MessageBubbleVisibilityTest`＋`PiTuiAppInputInteractionTest` 拆分）。测试全部用本地假 HTTP/假 `gh`，不连真实 Radius/GitHub。
+
+### 行为变化
+
+`/settings` 变整表＋搜索＋10 行窗口＋warnings/theme/model-thinking 子菜单（三态 quietStartup、嵌套 record 写回）；`/scoped-models` 变会话态选择器（改选只动会话 scope、Ctrl+S 才落 `enabledModels`、15s 刷新＋代次丢弃）；`/login` 变认证方式/provider 选择＋API key/OAuth（browser PKCE/device code）＋凭证后单 provider 刷新＋默认模型；`/share` 变 Radius 制品上传，无 Radius 凭证才走 `gh auth status`→HTML→私有 gist，输出 `Share URL`＋`Gist`；`/bug` 有 Radius 凭证时带 Bearer（**D85 销号**）；Radius provider 进入模型选择器（目录由 `/v1/config` 动态下发，空 baseline 启动，**B226 销号**）。
+
+### 账面（逐行实算）
+
+- map/04：C 域 #1/#5/#8/#18 四行存疑→对齐（+3.0）＋旧汇总逐行纠错（+0.5）⇒ **38.0/38＝100%（满分域第十四）**；模块 446.0→**449.5/485 ≈ 92.7%**（未加权 247.0/289 ≈ 85.5%）。
+- map/05：S7/S15/S17 缺失→对齐（+1.0／+1.0／+2.0）⇒ 133.5→**137.5/244 ≈ 56.4%**（未加权 56/147 ≈ 38.1%）。
+- map/02：#21 Radius provider、#44 Radius OAuth 按用户新口径各以权重 2 纳入分母（219→223、208.0→**212.0/223 ≈ 95.1%**）。
+- 全仓：1,164.0→**1,175.5/1,383 ≈ 85.0%**（分母 1,379→1,383）。
+
+### 验证
+
+- 全量 `mvn clean verify`：**退出码 0**，12 个模块 **5,550 个测试、0 失败、0 错误、22 跳过**（evals 20 跳过为无宿主臂）。
+- checkstyle：15 个模块 ×「0 Checkstyle violations」（**0 错误 0 警告**，含 FileLength `severity=error` 闸门）。
+- spotbugs：13 个分析模块 `BugInstance size is 0`（零钉）。
+
+### 评审修真与排障
+
+本批无设计变更级评审修真；T12 全量回归抓回三处夹具/计数问题（均已随本批修正）：① `RichSessionListTest` 用 `ArrayList` 收并发 `onProgress` 回调丢条目（期望 12 实得 11）⇒ `Collections.synchronizedList`（非实现缺陷）；② `PiTuiAppInputTest.submittedUserMessageRendersAsBubble` 断言 `lastMessage` 被真实请求的 429 `Error` 消息打破 ⇒ 改断言消息列表含 `ChatMessage.User` 气泡；③ evals `ProviderCatalogConformance` 的「19 家 provider」计数钉随 Radius 成为第 20 家更新（用例改名 `twenty-providers`）。构建环境同既往：`JAVA_HOME=D:\soft\jdk\jdk-25`（默认 JDK 26 触发 enforcer `[25,26)` 失败），日志落盘后单取 `$LASTEXITCODE`。

@@ -15,8 +15,8 @@ import com.pijava.evals.api.EvalResult;
 import com.pijava.evals.api.EvalSuite;
 
 /**
- * Catalog-level checks for the 19 built-in providers (包 A-02 起 openrouter chat
- * 加入；计数以 ProviderCatalog 实测为准）。
+ * Catalog-level checks for the 20 built-in providers (包 A-02 起 openrouter chat
+ * 加入；批 31 起 Radius 加入；计数以 ProviderCatalog 实测为准）。
  */
 public final class ProviderCatalogConformance implements EvalSuite {
 
@@ -28,9 +28,9 @@ public final class ProviderCatalogConformance implements EvalSuite {
     @Override
     public List<EvalCase> cases() {
         return List.of(
-            evalCase("nineteen-providers", ctx -> {
-                if (ProviderCatalog.all().size() != 19) {
-                    throw new AssertionError("expected 19 providers, got "
+            evalCase("twenty-providers", ctx -> {
+                if (ProviderCatalog.all().size() != 20) {
+                    throw new AssertionError("expected 20 providers, got "
                         + ProviderCatalog.all().size());
                 }
             }),

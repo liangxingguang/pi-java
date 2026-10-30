@@ -330,10 +330,11 @@ class PiTuiAppInputTest {
             Thread.sleep(400);
 
             // The optimistic user bubble must appear in the rendered frame,
-            // even though the model run may still be in flight or fail.
+            // even though the model run may still be in flight or fail
+            // (a failure appends an Error message after it).
             assertThat(chatScreen.messageCount()).isGreaterThan(0);
-            assertThat(chatScreen.lastMessage())
-                .isInstanceOf(ChatMessage.User.class);
+            assertThat(chatScreen.messages())
+                .anyMatch(message -> message instanceof ChatMessage.User);
             assertThat(backend.hasLineContaining("你")).isTrue();
             // The theme must actually style the bubble (regression for the
             // white-box look when TCSS selectors didn't match).

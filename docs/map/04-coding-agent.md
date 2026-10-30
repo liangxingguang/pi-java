@@ -127,15 +127,15 @@ pi 另有 **`/skill:name` 命令族**（`enableSkillCommands` 默认 true，`int
 
 | # | 命令 | pi 行 | java 有 | 权重 | 判定 | 证据 |
 |---|---|---|---|---|---|---|
-| 1 | `/settings` | `:20` | ⚠️ `SettingsCommands.java:22` | 2 | **存疑** | java 只返回 `UI_SETTINGS` marker（`:26`）；pi `settings-selector.ts`（995 行） |
+| 1 | `/settings` | `:20` | ✅ `SettingsCommands.java`＋tui `screen/settings/` | 2 | **对齐** | **批 31（2026-10-30，docs/43 T1–T3）**：完整 32 项、搜索/环绕/10 行窗口、warnings/theme/model-thinking 子菜单、三态 quietStartup 与嵌套 record 写回；独立终端消费面/鼠标不扩 scope，登记 D177/D178 |
 | 2 | `/model` | `:21` | ✅ `ModelCommands.java`＋`core/ModelExactMatch.java` | 2 | **对齐** | **批 15（2026-10-23，docs/26 T9）**：直设臂——`findExactModelReferenceMatch` 逐字（全形/拆形/裸 id 唯一，歧义⇒null）、候选集 scoped 优先（未命中收口选择器）、无 scope 未命中 15s 刷新回落后再找、命中 `setModel`＋`Model: <id>`＋auth 警告时机；窄差 D86（裸选择器无搜索词预选） |
 | 3 | `/tree` | `:22` | ⚠️ `SessionCommands.java:61` | 1 | **对齐** | 批 8（docs/18）：marker 拆分＋原地导航＋摘要三选流；**批 9（docs/19）**：选择器本体＝entry 树落地（`TreeSelectorOverlay`＋`TreeListModel`＋`TreeListRenderer`，map/05 S12/S13 对齐，D37/D40 销号，窄差 D43–D46/D48） |
 | 4 | `/thinking` | `:23` | ✅ `ThinkingCommands.java`＋tui `ThinkingLevelScreen.java` | 2 | **对齐** | **批 15（2026-10-23，docs/26 T8）**：空参⇒选择器 marker（裁决⑥ SelectList 简版——当前级预选/Enter 即设/Esc，persist 第二键与 DEFAULT 标记属 S8 域登 D84）；有参⇒大小写不敏感精确匹配 `getAvailableThinkingLevels`（七值全集/目录映射过滤逐字），未中逐字错文、中⇒直设＋`Thinking level: <level>` |
-| 5 | `/scoped-models` | `:24` | ⚠️ `ModelCommands.java:29` | 1 | **存疑** | pi `scoped-models-selector.ts` 401 行。**批 3b（2026-10-14）**：写入的 patterns 已被消费——`ModelScoping` 读 `--models ?? enabledModels` 解析 scope，驱动初始模型与 Ctrl+P/RPC 轮转（B137 销号）；仍缺 pi 的选择器 UI（＋/-/裸加 CLI 已齐） |
+| 5 | `/scoped-models` | `:24` | ✅ `ScopedModelController.java`＋tui `ScopedModelsScreen.java` | 1 | **对齐** | **批 31（docs/43 T4/T5）**：搜索、单项/全选/清空/provider 切换、排序、不可用项；`All` 与显式空表分流，修改只动会话 scope，Ctrl+S 才持久化；15 秒刷新与代次取消，登记 D181 |
 | 6 | `/export` | `:25` | ✅ `MiscCommands.java`（`pathCommandArgument`） | 2 | **对齐** | **批 15（2026-10-23，docs/26 T10）**：引号解析逐字（配对取内/无配对⇒缺省/空白截断）；`.jsonl` 尾⇒JSONL、其余（含无参）⇒HTML——无参 `session-<ISO :.→->.html` 落 cwd；状态/失败文案逐字 |
 | 7 | `/import` | `:26` | ✅ `MiscCommands.java:61` | 1 | 对齐 | |
-| 8 | `/share` | `:27` | ⚠️ `MiscCommands.java:76` | 1 | **存疑** | pi 主路径 **Radius 网关**（`session-share.ts`），gist fallback；java 只有 gist（`SessionShare.java`） |
-| 9 | `/bug` | `:28` | ✅ `core/bugreport/`＋`core/crash/`＋tui `BugReportFlow.java` | 1 | **对齐** | **批 15（2026-10-23，docs/26 T1–T7，B79 销号）**：全链——三屏流（描述/转录/摘要/递交逐字文案）＋脱敏（SENSITIVE_KEY 逐字/redactUrl 手写解析）＋metadata/diagnostics 收集＋摘要缝（四守卫逐字）＋multipart 上传（恒匿名，D85）＋ZIP 导出（JDK，D79）＋会话尾 `pi.bug-report` 条目＋crash-log 集成；窄差 D79–D85/D87/D88 |
+| 8 | `/share` | `:27` | ✅ `SessionShareService.java`＋`RadiusArtifactUploader.java`＋`GhCli.java`＋tui `ShareFlow.java` | 1 | **对齐** | **批 31（docs/43 T10）**：当前分支含 `pi.share` 序列化；有 Radius token 走 `/v1/artifacts`，一旦尝试所有结局均不 fallback；无 token 才经 `gh auth status`→HTML→私有 gist，返回 viewer＋gist URL；loader/Esc 取消/临时目录清理，状态码回落登 D180 |
+| 9 | `/bug` | `:28` | ✅ `core/bugreport/`＋`core/crash/`＋tui `BugReportFlow.java` | 1 | **对齐** | **批 15（2026-10-23，docs/26 T1–T7，B79 销号）**：全链——三屏流＋脱敏＋metadata/diagnostics＋摘要缝＋multipart 上传＋ZIP＋会话尾记录＋crash-log；**批 31 D85 销号**：有 Radius token 带 Bearer、无 token 匿名、刷新失败不匿名降级；其余窄差 D79–D84/D87/D88 |
 | 10 | `/copy` | `:29` | ✅ `MiscCommands.java:96` | 2 | 对齐 | |
 | 11 | `/name` | `:30` | ✅ `SessionCommands.java:22` | 1 | 对齐 | `AgentSession.java:529` |
 | 12 | `/session` | `:31` | ✅ `SessionCommands.java`＋`core/SessionStats.java`＋`core/UsageCostBreakdown.java` | 1 | **对齐** | **批 15（2026-10-23，docs/26 T11，D68 销号）**：pi 段序全量——Session Info（Name?/File/ID）→ Messages → Tokens（Input 三件套和＋缓存拆分命中率）→ Cache Warming → Cost（breakdown 分桶 responseModel 优先/Tools 桶/滤零/降序；Cache Re-billed 搬入本段） |
@@ -144,7 +144,7 @@ pi 另有 **`/skill:name` 命令族**（`enableSkillCommands` 默认 true，`int
 | 15 | `/fork` | `:34` | ✅ `SessionCommands.java:33` | 2 | **对齐** | **批 10（2026-10-22，B254/docs/21）**：user-message 选择器落地（`UserMessageSelectorScreen`，pi `user-message-selector.ts` 155 行对位——全量 user 消息、初始选中最后一条、环绕导航、选中 fork＋编辑器回填选中消息文本＋"Forked to new session"）；描述改 pi 逐字；窄差 D50（带参 `forkCopy` 臂 java 独有） |
 | 16 | `/clone` | `:35` | ✅ `SessionCommands.java:48` | 1 | 对齐 | |
 | 17 | `/trust` | `:36` | ✅ `SettingsCommands.java:30` | 2 | 对齐 | |
-| 18 | `/login` | `:37` | ⚠️ `MiscCommands.java:140` | 2 | **存疑** | pi `login-dialog.ts` + OAuth 选择器 **＋ 顶层直供 Radius**（`interactive-mode.ts:5887-5952`）**＋ 登录后提供把 Radius 写进全局 `mcp.json`**（`offerRadiusMcpServer:6377`，调用点 `:6357`）；java 只用 `System.console().readPassword`（`:154`）收 API key |
+| 18 | `/login` | `:37` | ✅ `ProviderLoginCatalog.java`＋`ProviderLoginService.java`＋tui `LoginFlow.java`＋`RadiusMcpOffer.java` | 2 | **对齐** | **批 31（docs/43 T6–T9/T11）**：认证方式/provider 搜索与直参分派、API key 掩码/OAuth 双法、凭证保存后单 provider 刷新、默认模型持久化与迟到选择保护；Radius 顶层末位、MCP 保字段写回＋Yes 后 reload；文本级对话框登 D179 |
 | 19 | `/logout` | `:38` | ✅ `MiscCommands.java:164` | 1 | 对齐 | |
 | 20 | `/new` | `:39` | ✅ `SessionCommands.java:63` | 2 | 对齐 | |
 | 21 | `/compact` | `:40` | ✅ `MiscCommands.java` | 2 | **对齐** | **批 15 核销**（docs/26 T12）：abort-first 已落——`AgentSession.compact(...)` 三入口首句 `abortAndWaitForIdle()`（pi `compact()` 首句 `await this.abort()` 对位，agent-core 批 1 #17；`AgentSessionCompactAbortTest`＋dispatch 路 `SlashChangelogCompactTest` 双钉：agent_end 先于 CompactionStart） |
@@ -153,11 +153,12 @@ pi 另有 **`/skill:name` 命令族**（`enableSkillCommands` 默认 true，`int
 | 24 | `/quit` | `:43` | ✅ `MiscCommands.java:173` | 2 | 对齐 | |
 | 25 | `/skill:<name>` 命令族 | `interactive-mode.ts:805-815` | ✅ `CommandRegistry.java` dispatch 透传＋`SkillCommandItems.java` | 2 | **对齐** | **批 2（2026-10-19，B244/docs/12）**：注册面＝补全目录（`PiTuiApp.loadSlashItems` skill 臂，受开关门）＋提交透传（`/skill:` 前缀 dispatch 返回 null 落 prompt，批 4 展开器接手）＋RPC `get_commands` skill 臂（`RpcDispatcher.buildCommands`）；裁决②展开不受开关门；窄差 D3 仅放行 `/skill:` 前缀（pi 任何未识别 slash 都落 prompt） |
 
-**汇总：对齐 20 / 缺失 0 / 存疑 5 / 合计 25 = 80.0%**；**Σ权重 38 / Σ(w×c) 34.5 / 加权 90.7%**
+**汇总：对齐 25 / 缺失 0 / 存疑 0 / 合计 25 = 100%**；**Σ权重 38 / Σ(w×c) 38.0 / 加权 100%（批 31，满分域第十四）**
 > 批 2（2026-10-19，B244/docs/12）：#25 缺失 → **对齐**。同批更正本行旧账（旧行「对齐 11/Σwc 25.0」与逐行判定不符；逐行实算为对齐 10/Σwc 24.0，与下方汇总表 C 域 24.0 一致）。
 > 批 10（2026-10-22，B254/docs/21）：#15 `/fork` 存疑 → **对齐**（user-message 选择器，窄差 D50 登记）。
 > 批 15（2026-10-23，docs/26）：**7 行翻动**——#2 `/model` 存疑→对齐（T9 直设臂）、#4 `/thinking` 缺失→对齐（T8）、#6 `/export` 存疑→对齐（T10 默认臂＋引号解析）、#9 `/bug` 缺失→对齐（T1–T7 全链，B79 销号）、#12 `/session` 存疑→对齐（T11 全段，D68 销号）、#13 `/changelog` 存疑→对齐（T12 核销）、#21 `/compact` 存疑→对齐（T12 核销 abort-first）。余 6 存疑：#1 设置选择器/#5 scoped-models 选择器/#8 Radius 分享/#18 Radius 登录/#23 reload（批 16）。
 > 批 16（2026-10-23，docs/27）：#23 `/reload` 存疑→**对齐**（T5 七步序＋双门文案逐字，B246 销号；窄差 D90/D93）。余 5 存疑：#1/#5/#8/#18 不动。
+> 批 31（2026-10-30，docs/43）：#1/#5/#8/#18 四行存疑→**对齐**；设计前逐行实为 21 对齐＋4 存疑＝35.0/38（旧汇总 34.5 错位），闭环 **38.0/38＝100%**，C 域成为满分域第十四。
 
 ---
 
@@ -652,24 +653,24 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 |---|---:|---:|---:|---:|
 | A. CLI 参数 | 62 | 62.0 | 100% | 100% |
 | B. 子命令 | 15 | 15.0 | 100% | 100% |
-| C. Slash 命令 | 38 | 34.5 | 90.7% | 80.0% |
+| C. Slash 命令 | 38 | 38.0 | 100%（批 31，满分域第十四） | 100% |
 | D. 扩展系统 41 事件 | 83 | 83.0 | 100%（批 23，满分域第十三） | 100% |
 | D′. 扩展 UI 注入面 | 16 | 1.0 | 6.3% | 0% |
 | E1. 配置文件 / 清单 | 10 | 10.0 | 100% | 100% |
 | E2. settings.json 键 | 84 | 81.5 | 97.0% | 92.5% |
 | E3. 会话管理行为 | 40 | 40.0 | 100% | 100% |
 | E4. 资源发现 | 14 | 14.0 | 100% | 100% |
-| E5. 扩展 API 面 | 58 | 51.0 | 87.9% | 88.6% |
+| E5. 扩展 API 面 | 58 | 54.0 | 93.1% | 88.6% |
 | E6. 包管理器 | 31 | 31.0 | 100% | 100% |
 | E7. RPC 面 | 12 | 12.0 | 100% | 100% |
 | G. 主流新增子系统 | 18 | 12.0 | 66.7% | 60.0% |
 | F. 整块缺失（子系统） | 13 | 0.0 | 0% | 0% |
-| **模块合计（不含 E8）** | **494** | **450.5** | **91.2%** | **84.4%** |
+| **模块合计（不含 E8）** | **494** | **454.0** | **91.9%** | **85.8%** |
 | E8. 边缘/面外子系统（与 E3/C/G 重叠，不计入） | 7 | 5.0 | 71.4% | 66.7% |
 
-**模块合计**：Σ权重 494 ／ Σ(w×c) 450.5 ／ **加权完成度 = 450.5/494 ≈ 91.2%**（未加权 244.0/289 ≈ 84.4%；批 27 后值——按 Δ 续列：批 26 的 442.5＋本批 8.0〔E5-26/27 +3.0、G-8/9/10 +5.0〕）。
+**模块合计**：Σ权重 494 ／ Σ(w×c) 454.0 ／ **加权完成度 = 454.0/494 ≈ 91.9%**（未加权 248.0/289 ≈ 85.8%；批 31 后值——含 C 域旧汇总纠错 +0.5 与四行翻正 +3.0）。
 
-**去重口径**（F 域有 2 行与 E4/E6 重叠＋G-1..G-5 归 map/07）：Σ权重 **485** ／ Σ(w×c) **446.0** ／ **加权完成度 = 446.0/485 ≈ 92.0%**（未加权 243.0/289 ≈ 84.1%）。
+**去重口径**（F 域有 2 行与 E4/E6 重叠＋G-1..G-5 归 map/07）：Σ权重 **485** ／ Σ(w×c) **449.5** ／ **加权完成度 = 449.5/485 ≈ 92.7%**（未加权 247.0/289 ≈ 85.5%）。
 > 口径注记（批 14）：A/E3 域行与未加权汇总表已逐行实算（含往批滞后收平：E2 对齐 44→46、E3 段汇总 27.5→28.5 的批 10 滞后）；模块加权合计按 Δ 续列，与逐行域和的 ±1.5 存量口径差随下次全量重测一并收平（批 4 同例）。
 > 批 15（2026-10-23，docs/26）：C 域 7 行翻动（+7.0：#2/#4/#6/#9/#12/#13/#21——T8–T12＋B79 销号）；E8-2/E8-3 注记行随翻（不计入分母）；E8-1 旧汇总漏算一并更正。
 > 批 16（2026-10-23，docs/27）：**9.5 点翻动**——E5-7/E5-30（+1.0×2）＋E5-11（+1.0）＋E5-18（+2.0）＋E5-29（存疑→对齐 +1.0）＋A-43（+1.0）＋C-23（存疑→对齐 +0.5）＋D#36（+2.0）；D#11 不动（裁决⑤随 E5-23 批）；E8-7 注记行随翻（不计入分母）。B204/B246 销号；B221 收编 ②④⑤。

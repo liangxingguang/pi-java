@@ -3,6 +3,7 @@ package com.pijava.agent.session.jsonl;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
@@ -94,7 +95,8 @@ class RichSessionListTest {
         for (int i = 0; i < 12; i++) {
             seed(root, CWD, null, "msg-" + i);
         }
-        var publishes = new ArrayList<Publish>();
+        // 回调来自并发 worker，收集列表必须线程安全。
+        var publishes = Collections.synchronizedList(new ArrayList<Publish>());
         var infos = JsonlSessionRepository.over(root).listRich(CWD,
             (loaded, total, partial) -> publishes.add(new Publish(loaded, partial != null)),
             null);
@@ -104,7 +106,7 @@ class RichSessionListTest {
         assertThat(publishes.stream().filter(Publish::withSnapshot).map(Publish::loaded))
             .containsExactlyInAnyOrder(1, 10, 12);
         // 快照内容按活动序（modified desc）排好
-        var snapshots = new ArrayList<List<RichSessionInfo>>();
+        var snapshots = Collections.synchronizedList(new ArrayList<List<RichSessionInfo>>());
         JsonlSessionRepository.over(root).listRich(CWD, (loaded, total, partial) -> {
             if (partial != null) {
                 snapshots.add(partial);

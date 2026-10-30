@@ -50,7 +50,7 @@
 | S4 | 启动欢迎卡（**不列 themes**） | ✓ `interactive-mode.ts:1772 showLoadedResources` | ✓ `WelcomeOverlay.java:41 buildCard` | **对齐** | 2 | 形状不同（pi 列 context/skills/prompts/extensions、不列 themes；java 是 Codex 风格方框），但承诺相同：启动即告知模型/目录/版本 |
 | S5 | 模型选择器（列表 / 上下选 / 确认） | ✓ `components/model-selector.ts:40`（421 行） | ✓ `ModelSelectorScreen.java:17`（58 行） | **对齐** | 2 | java：`ModelsJsonConfig.allModels()` 平铺排序 + `SelectList` |
 | S6 | 模型选择器：搜索过滤 | ✓ `model-search.ts:7,17` + `model-selector.ts` | ✗ | **缺失** | 1 | java 无过滤输入 |
-| S7 | scoped-models 选择器（Ctrl+P 循环集） | ✓ `components/scoped-models-selector.ts:97`（401 行） | ✗ | **缺失** | 1 | `PiTuiApp.java:419` 直接 `appendSystemText("Use /scoped-models +<model> …")` |
+| S7 | scoped-models 选择器（Ctrl+P 循环集） | ✓ `components/scoped-models-selector.ts:97`（401 行） | ✓ `ScopedModelsScreen.java`＋`ScopedModelController`＋`ScopedModelRefresh` | **对齐** | 1 | **批 31（docs/43 T4/T5）**：搜索、单项/全选/清空/provider 切换、排序、不可用项；`All` 与显式空表分流，修改仅会话 scope、Ctrl+S 持久化；15s 刷新＋代次取消（D181） |
 | S8 | thinking level 选择器 | ✓ `components/thinking-selector.ts:36`（154 行） | ✗ | **缺失** | 2 | java 只在 `SettingsScreen.java:36` 里循环 6 个值 |
 | S9 | theme 选择器 | ✓ `components/theme-selector.ts:13`（67 行）＋`settings-selector.ts` ThemeSubmenu | ✓ `ThemeSubmenuScreen.java`＋`SettingsScreen` Theme 子菜单入口 | **对齐** | 1 | **批 21（docs/32 T11）**：single/automatic 两模式＋预览＋Esc 还原＋对形持久化；独立 ThemeSelectorComponent（pi 仅导出未自用）不移植（窄差 D130） |
 | S10 | 会话选择器（列表 / 选 / 确认） | ✓ `session-selector.ts:694 class SessionSelectorComponent`（1045 行） | ✓ `SessionListScreen.java:16`（50 行） | **对齐** | 2 | java：`session.listSessions()` + 前 8 位 id |
@@ -58,9 +58,9 @@
 | S12 | 会话树选择器（分支列表） | ✓ `components/tree-selector.ts:1336 class TreeSelectorComponent`（~1400 行） | ✓ `component/tree/TreeSelectorOverlay.java`＋`TreeListModel`＋`TreeListRenderer`（批 9，docs/19） | **对齐** | 2 | 批 9（docs/19）：entry 树本体落地（D37 销号）——树形缩进/连接符/gutter、折叠、活动路径、多根虚拟根全对位；窄差 D43–D46/D48 登记；`/fork` 的 lane 平表留在旧 `TreeSelectorScreen`（pi 实为 user-message 选择器，B254） |
 | S13 | 树选择器：折叠展开 / 标签编辑 / 过滤模式 / 搜索 / 复制 | ✓ `tree-selector.ts:112 filterMode`（5 种）、`:632 copySelected`、`:637 updateNodeLabel`、`:1004 handleInput` | ✓ `TreeListModel.java`（折叠传染/五过滤/搜索 AND/段跳）、`TreeSelectorOverlay.java`（label 编辑臂/copy 三结局）、`AgentSession.setLabel`（持久化＋时间戳） | **对齐** | 1 | 批 9（docs/19）：折叠/标签编辑（含 `[+label time]`）/五过滤/搜索/复制全落（pi tree-selector.test.ts 13 用例对位移植 23 测） |
 | S14 | 设置页（字段列表 + 循环取值） | ✓ `settings-selector.ts:465 class SettingsSelectorComponent`（~960 行） | ✓ `SettingsScreen.java:21`（153 行） | **对齐** | 2 | java `SettingsScreen.java:30-47`；pi 侧字段含 `tuiMode`/`fullscreenExitOutput`/`fullscreenScrollbar`/`fullscreenWheelScrollLines`/`outputPad`（本锚点起说明文案改为「messages, tool output, and command output」）等，java 列表是其子集 |
-| S15 | 设置页：子菜单 / 主题页 / 警告页 / 实验项 | ✓ `settings-submenu.ts:31 SelectSubmenu` + `:178 SteppedSubmenu` | ✗ | **缺失** | 1 | java 是单一平铺列表 |
+| S15 | 设置页：子菜单 / 主题页 / 警告页 / 实验项 | ✓ `settings-submenu.ts:31 SelectSubmenu` + `:178 SteppedSubmenu` | ✓ `tui/screen/settings/`（SettingsItems＋子菜单屏） | **对齐** | 1 | **批 31（docs/43 T1–T3）**：完整设置项表、warnings/theme/model-thinking 子菜单、三态与嵌套写回；终端消费面/鼠标不扩 scope（D177/D178） |
 | S16 | config 选择器（`/config`） | ✓ `components/config-selector.ts:875`（~940 行） | ✗ | **缺失** | 1 | java 无 config 命令 |
-| S17 | OAuth / 登录对话框 | ✓ `login-dialog.ts:12` + `oauth-selector.ts:58` | ✗ | **缺失** | 2 | java 的 `/login` 是 `System.console().readPassword`（`MiscCommands.java:134-148`），无对话框 |
+| S17 | OAuth / 登录对话框 | ✓ `login-dialog.ts:12` + `oauth-selector.ts:58` | ✓ `LoginFlow.java`＋`LoginDialogScreen`＋`LoginProviderScreen` | **对齐** | 2 | **批 31（docs/43 T6–T9）**：认证方式/provider 选择与搜索、API key 掩码/OAuth 双法、迟到选择保护、Radius MCP 提议；文本级对话框（D179） |
 | S18 | 首次设置向导 | ✓ `components/first-time-setup.ts:33` | ✗ | **缺失** | 1 | 一次性路径 |
 | S19 | 项目信任选择器 | ✓ `components/trust-selector.ts:32` | ✗ | **缺失** | 2 | java 只有 `SettingsScreen.java:40-42` 的 `Project trust` 循环 |
 | S20 | 排队消息选择器（Alt+Up 取回并编辑） | ✓ `components/user-message-selector.ts:110`（155 行） | ✓ `InteractiveMode.restoreQueuedMessages`＋`PiTuiApp` DEQUEUE 臂＋`ChatScreen.restoreToEditor`（批 10，docs/21） | **对齐** | 1 | 批 10（docs/21）：dequeue 全链接地——引擎两队列＋压缩缓冲清空、pi 序合并 `"\n\n"` 回填编辑器（排队在前草稿在后）、文案逐字＋复数形、hint 行随绑定表取键名；键平台规则同批落（Windows/WSL `alt+q`，K11 同翻） |
@@ -263,7 +263,7 @@
 | **Markdown 组件** | **1025**（`tui/components/markdown.ts`） | 严格删除线 tokenizer、链接、hr、任务列表、流式围栏修剪、缓存、padding/背景；测试 `markdown.test.ts`（pi-java 有 `MarkdownRenderer` 221 行但**生产零调用**） |
 | **alt-screen 搜索 + 选择** | **327 + ~500**（`alt-screen-search.ts` + `tui-alt-screen.ts` 的选择/复制/闪烁部分） | 搜索索引、匹配导航、文本选择、自动滚动、copy-on-select、OSC133 zone |
 | **扩展 UI 组件族** | **~1000**（`extension-selector/input/editor` + `interactive-mode.ts:2398-2870`） | `custom<T>()` / `setFooter` / `setHeader` / widget / 通知 / 错误显示；pi-java 仅 RPC 通道 |
-| **选择器族（未实现 9 个）** | **~2900**（config 875 + scoped-models 401 + session-selector 1045 非基础部分 + thinking 154 + theme 67 + trust 134 + oauth 214 + login 238 + first-time-setup + show-images 50 + user-message 155） | 见 S6-S9、S11、S15-S21、S32（S13 批 9 已闭环） |
+| **选择器族（未实现 5 个）** | **~1600**（config 875 + thinking 154 + trust 134 + first-time-setup + show-images 50） | 见 S6、S8、S16、S18、S19、S21（S7/S15/S17 批 31、S9 批 21、S20 批 10、S13 批 9 已闭环） |
 | **逐工具渲染器** | **1053 + 112**（`core/tools/renderers/*.ts` + `render-utils.ts`） | read/write/edit/bash/grep/find/ls 各自展示形状；MCP/fallback 工具的 args 展示；记录在案的 `Took` 计时 |
 | **工具执行卡（可折叠 + 流式）** | **631**（`tool-execution.ts` 408 + `bash-execution.ts` 223） | `Ctrl+O` 展开、部分结果、diff、图像 |
 | **主题系统（JSON + schema + 热重载 + OKLab 色值 + system 主题 + 70 token）** | **3105**（`theme.ts` 1086 + `theme-controller.ts` 253 + `theme/theme-schema.ts` 146 + `schemas/theme.schema.json` 365 + `theme/system-theme.ts` 655 + `tui/src/colors.ts` 367 + `tui/src/oklab.ts` 233） | pi-java 只有 2 个各 37 行的 `.tcss`，**无 schema、无色值系统、无 system 主题** |
@@ -500,7 +500,7 @@
 | 主题/样式（T1–T11，11 单元） | 18 | 6.5 | **36.1%** | 27.3% |
 | web 对齐面（W1–W16，16 单元） | 33 | 27.0 | **81.8%** | 56.3% |
 
-**模块合计**：Σ权重 **244**（R29 批 22 出分母） ／ Σ(w×c) **133.5** ／ **加权完成度 = 133.5/244 ≈ 54.7%**（未加权 **53/147 ≈ 36.1%**，**+18.6pp**）
+**模块合计**：Σ权重 **244**（R29 批 22 出分母） ／ Σ(w×c) **137.5** ／ **加权完成度 = 137.5/244 ≈ 56.4%**（未加权 **56/147 ≈ 38.1%**，**+18.3pp**）
 
 > 批 10（2026-10-22，docs/21）：S20 缺失→对齐（+1.0）、K11 缺失→对齐（+1.0）；R28 证据更新不翻（流式 bash/工具挂载仍缺）。
 > 批 13（2026-10-23，docs/24）：R24 存疑→对齐（+0.5，cache-warmer 子系统批随收——生产者/文案逐字/门//session 段/footer）。
@@ -511,6 +511,7 @@
 > 批 22（2026-10-25，docs/33）：**W15 web 会话列表 onProgress 缺失→对齐（+1.0，sessionsProgress/cancelSessions＋代次闸＋前端渐进渲染）＋R29 终裁不做出分母（分母 245→244）**。Σ 121.5→**122.5/244 ≈ 50.2%**。
 > 批 25（2026-10-27，docs/36）：**Markdown 激活批——R1（w3）/R2/R3/R4/R5/R9 六行缺失→对齐（+10.0）**；S24 判定不动（注记更新：纯文本落差消除）。Σ 122.5→**132.5/244 ≈ 54.3%**。
 > 批 26（2026-10-28，docs/37）：R6 缺失→对齐（+1.0，扩展 markdown transformer 钩随 E5-9 落地）。Σ 132.5→**133.5/244 ≈ 54.7%**。
+> 批 31（2026-10-30，docs/43）：**S7 scoped-models 选择器 缺失→对齐（+1.0）＋S15 设置子菜单 缺失→对齐（+1.0）＋S17 登录对话框 缺失→对齐（+2.0）**。Σ 133.5→**137.5/244 ≈ 56.4%**（未加权 53→56/147）。
 
 > 较前锚点（144 单元：241 权 / 108.0 / **44.8%**）变化 **−0.5pp**，构成：① K20 对齐→存疑（w2）分子 −1.0；② R18/R24 缺失→存疑（w1×2）分子 +1.0；③ 新增 4 单元（R28 存疑 w1 +0.5；R29/K39/C20 缺失 w1×3）分母 +4、分子 +0.5。净效果：分子 +0.5、分母 +4。
 
