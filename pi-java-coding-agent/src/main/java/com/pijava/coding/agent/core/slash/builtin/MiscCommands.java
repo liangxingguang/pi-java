@@ -164,31 +164,8 @@ public final class MiscCommands {
                     return "Compaction failed: " + e.getMessage();
                 }
             }));
-        registry.register(new SlashCommand() {
-            @Override public String name() { return "login"; }
-            @Override public String description() { return "Configure provider auth"; }
-            @Override public String argumentHint() { return "<provider>"; }
-            @Override public CompletionStage<String> execute(String args, SlashContext ctx) {
-                if (args.isBlank()) {
-                    return CompletableFuture.completedFuture(
-                        "Usage: /login <provider> (anthropic|openai|google|deepseek|mistral)");
-                }
-                var console = System.console();
-                if (console == null) {
-                    return CompletableFuture.completedFuture(
-                        "No console available. Set the environment variable "
-                            + "or run: pi-java auth " + args.trim());
-                }
-                var key = new String(console.readPassword(
-                    "API key for %s: ", args.trim()));
-                if (key.isBlank()) {
-                    return CompletableFuture.completedFuture("Aborted.");
-                }
-                new FileCredentialStore().storeApiKey(args.trim(), key);
-                return CompletableFuture.completedFuture(
-                    "API key saved for " + args.trim() + ".");
-            }
-        });
+        registry.register(simple("login", "Configure provider authentication", "<provider>",
+            (args, ctx) -> CommandRegistry.UI_LOGIN));
         registry.register(simple("logout", "Remove provider auth", "<provider>",
             (args, ctx) -> {
                 if (args.isBlank()) {

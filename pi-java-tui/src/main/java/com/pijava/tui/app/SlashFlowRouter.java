@@ -1,5 +1,6 @@
 package com.pijava.tui.app;
 
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -8,6 +9,8 @@ import com.pijava.ai.catalog.FileModelsStore;
 import com.pijava.coding.agent.core.AgentSession;
 import com.pijava.coding.agent.core.AgentSessionScopeSink;
 import com.pijava.coding.agent.core.ModelCatalogRefresh;
+import com.pijava.coding.agent.core.ProviderLoginCatalog;
+import com.pijava.coding.agent.core.ProviderLoginService;
 import com.pijava.coding.agent.core.ScopedModelController;
 import com.pijava.coding.agent.core.KeybindingsManager;
 import com.pijava.coding.agent.core.slash.CommandRegistry;
@@ -17,6 +20,7 @@ import com.pijava.coding.agent.core.slash.SlashContext;
 import com.pijava.coding.agent.modes.InteractiveMode;
 import com.pijava.tui.component.SlashCompleter;
 import com.pijava.tui.screen.ChatScreen;
+import com.pijava.tui.screen.LoginFlow;
 import com.pijava.tui.screen.ModelSelectorScreen;
 import com.pijava.tui.screen.ScopedModelsScreen;
 import com.pijava.tui.screen.SessionListScreen;
@@ -161,6 +165,7 @@ final class SlashFlowRouter {
                             chatScreen.setSlashCommands(loadSlashItems());
                         }
                     }));
+            case CommandRegistry.UI_LOGIN -> openLogin(input);
             case CommandRegistry.UI_SCOPED_MODELS -> {
                 var sink = new AgentSessionScopeSink(app.session);
                 var controller = ScopedModelController.open(
@@ -196,6 +201,39 @@ final class SlashFlowRouter {
                 }
             }
         }
+    }
+
+    /** Open provider login, preserving the raw argument for exact id/name lookup. */
+    private void openLogin(String input) {
+        var reference = input != null && input.length() > 6 ? input.substring(6).trim() : null;
+        var flow = new LoginFlow(
+            ProviderLoginCatalog.options(app.session.services().providers()),
+            new ProviderLoginService(app.session),
+            com.pijava.coding.agent.core.FileSettingsStorage.defaultAgentDir(),
+            Path.of(app.session.cwd()), new LoginFlow.Host() {
+                @Override public void open(com.pijava.tui.screen.ScreenOverlay overlay) {
+                    app.openOverlay(overlay);
+                }
+
+                @Override public void dismiss(com.pijava.tui.screen.ScreenOverlay overlay) {
+                    app.dismissOverlay(overlay);
+                }
+
+                @Override public void status(String message) { chatScreen.appendSystemText(message); }
+                @Override public void warning(String message) { chatScreen.showWarning(message); }
+                @Override public void error(String message) { chatScreen.showError(message); }
+
+                @Override
+                public void reload() {
+                    try {
+                        app.session.reload();
+                        chatScreen.setSlashCommands(loadSlashItems());
+                    } catch (RuntimeException e) {
+                        chatScreen.showError(e.getMessage() == null ? e.toString() : e.getMessage());
+                    }
+                }
+            }, dispatcher::dispatch);
+        flow.begin(reference == null || reference.isEmpty() ? null : reference);
     }
 
     /**
