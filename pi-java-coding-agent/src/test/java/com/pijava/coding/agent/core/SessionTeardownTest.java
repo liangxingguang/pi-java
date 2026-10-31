@@ -176,6 +176,9 @@ class SessionTeardownTest {
         assertThatThrownBy(() -> old.harness().prompt("x"))
             .as("旧会话真正关闭（docs/16 §3.6）")
             .isInstanceOf(HarnessClosedException.class);
+        // 批 33（#19）：新会话惰性落盘——先写首条对话，文件才出现（下方走盘断言的前提）。
+        dispatcher.currentSession().session().appendMessage(
+            new Message.UserMessage(List.of(new ContentBlock.TextContent("seed"))));
         var shutdowns = EVENTS.stream().filter(e -> e.startsWith("shutdown:new:")).toList();
         assertThat(shutdowns).as("shutdown{new, 新 id} 恰一次").hasSize(1);
         var newId = shutdowns.get(0).substring("shutdown:new:".length());
@@ -254,6 +257,8 @@ class SessionTeardownTest {
             try (var b = AgentSession.create(args,
                     PersistentSessionRepositories.jsonl(dir), providers, toolContext(),
                     SettingsManager.load(args.projectTrustOverride()))) {
+                // 批 33（#19）：无对话的会话不落盘——先跑一轮，switchTo 才查得到。
+                b.processPrompt("other").statusFuture().get(20, TimeUnit.SECONDS);
                 bId = b.sessionId();
             }
             // 造一条只在 harness、未落盘的 entry（persistPending 的操作数）。

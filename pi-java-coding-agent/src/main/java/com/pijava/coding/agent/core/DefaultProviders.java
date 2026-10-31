@@ -1,6 +1,7 @@
 package com.pijava.coding.agent.core;
 
 import com.pijava.agent.harness.StreamFn;
+import com.pijava.agent.tool.ToolContext;
 import com.pijava.agent.tool.ToolRegistry;
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.AuthKind;
@@ -142,6 +143,14 @@ public final class DefaultProviders {
         registerModelsJsonProviders(registry);
         wrapRemoteCatalogs(registry, catalogBaseUrl);
         kept.values().forEach(registry::register);
+    }
+
+    /**
+     * 批 32（docs/44 §3.2）：持久（JSONL）会话＋注入 provider 的 eval harness 装配缝；
+     * 3 参 {@code create} 走内存仓库取不到 {@code sessionFile}。
+     */
+    public static AgentSession createPersistentSession(Args args, ProviderRegistry providers, ToolContext toolContext) {
+        return AgentSessionFactory.createWeb(args, providers, toolContext);
     }
 
     /**

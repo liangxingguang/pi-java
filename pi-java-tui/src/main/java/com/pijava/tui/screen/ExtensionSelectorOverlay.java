@@ -30,7 +30,8 @@ import dev.tamboui.tui.event.KeyEvent;
  * hint 行 {@code ↑↓ navigate  <confirm> select  <cancel> cancel}。timeout 倒计时
  * 由宿主（TuiExtensionUI 的共享调度器）驱动：{@link #countdownTick} 改标题为
  * {@code "{title} ({Ns})"}、{@link #countdownExpired} ＝取消（pi CountdownTimer 逐字）。
- * ctrl+o（app.tools.expand）不消费（窄差 D97）。</p>
+ * ctrl+o（app.tools.expand）转发全局工具输出展开态并消费（批 34 销 D97，
+ * pi extension-selector.ts:98-100 对位）。</p>
  */
 public final class ExtensionSelectorOverlay implements ScreenOverlay, ExtensionDialog {
 
@@ -42,6 +43,8 @@ public final class ExtensionSelectorOverlay implements ScreenOverlay, ExtensionD
     private final KeybindingsManager keys;
     private final IntSupplier terminalCols;
     private final CompletableFuture<String> result;
+    /** 批 34（K8/D97）：ctrl+o 的全局展开态翻转（可 null ⇒ 只消费不动作）。 */
+    private final Runnable onToggleToolsExpanded;
     // ⚠️ 写点在渲染线程（onKeyEvent），读点在 layout()——但倒计时线程会经
     // countdownTick/cancel 触达本对象（volatile 族）⇒ spotbugs 按共享变量审：
     // 读-改-写用 AtomicInteger（批 12 ChatScreen.runToolCalls 先例同旨）。
@@ -59,15 +62,18 @@ public final class ExtensionSelectorOverlay implements ScreenOverlay, ExtensionD
      * @param keys         键位表（tui.select.* overlay 臂）
      * @param terminalCols 终端列数源（DynamicBorder 宽）
      * @param result       结局 future（apply 时完成：选项或 null）
+     * @param onToggleToolsExpanded ctrl+o 转发（批 34，K8/D97；可 null）
      */
     public ExtensionSelectorOverlay(String title, List<String> options,
                                     KeybindingsManager keys, IntSupplier terminalCols,
-                                    CompletableFuture<String> result) {
+                                    CompletableFuture<String> result,
+                                    Runnable onToggleToolsExpanded) {
         this.baseTitle = title;
         this.options = List.copyOf(options);
         this.keys = keys;
         this.terminalCols = terminalCols;
         this.result = result;
+        this.onToggleToolsExpanded = onToggleToolsExpanded;
     }
 
     // ── 键分派（pi handleInput :85-105 分派序逐字）──────────────
@@ -75,6 +81,13 @@ public final class ExtensionSelectorOverlay implements ScreenOverlay, ExtensionD
     @Override
     public boolean onKeyEvent(KeyEvent event) {
         var stroke = TamboUIAdapter.toStroke(event);
+        // pi :98-100：app.tools.expand 先于四导航键判定，转发后恒消费。
+        if (keys.matches(KeybindingsManager.TOOLS_EXPAND, stroke)) {
+            if (onToggleToolsExpanded != null) {
+                onToggleToolsExpanded.run();
+            }
+            return true;
+        }
         if (keys.matches(KeybindingsManager.SELECT_UP, stroke)
                 || ("k".equals(stroke.key()) && !stroke.ctrl() && !stroke.alt() && !stroke.shift())) {
             selectedIndex.getAndUpdate(i -> Math.max(0, i - 1));
@@ -90,7 +103,6 @@ public final class ExtensionSelectorOverlay implements ScreenOverlay, ExtensionD
         } else if (keys.matches(KeybindingsManager.SELECT_CANCEL, stroke)) {
             cancel();
         }
-        // ctrl+o（app.tools.expand）不消费——窄差 D97（pi 转发 toggleToolOutputExpansion）。
         return true;
     }
 

@@ -1,6 +1,8 @@
 package com.pijava.tui.app;
 
+import com.pijava.ai.model.ModelCapability;
 import com.pijava.coding.agent.core.KeybindingsManager;
+import com.pijava.coding.agent.core.slash.builtin.ThinkingCommands;
 import com.pijava.coding.agent.modes.InteractiveMode;
 import com.pijava.tui.screen.ChatScreen;
 import com.pijava.tui.screen.ModelSelectorScreen;
@@ -149,35 +151,46 @@ final class GlobalKeyRouter {
             }
             return EventResult.HANDLED;
         }
-        // Empty editor: navigation keys scroll the transcript directly.
-        if (chatScreen.isInputEmpty() && isChatNavigation(event)) {
-            scrollByKey(event);
+        // 批 34（K20；pi tui-alt-screen.ts:750-792 对位）：全屏 PgUp/PgDn 恒滚视口、
+        // Ctrl+Home/End 顶/底；内联保留空编辑器的 PgUp/PgDn（D195）。裸 ↑↓/Home/End
+        // 归还编辑器（K27 历史／行首行尾——B238-①）。
+        if (app.runner != null && isAltScreenScroll(event)) {
+            scrollViewport(event);
+            return EventResult.HANDLED;
+        }
+        if (chatScreen.isInputEmpty() && isInlinePageScroll(event)) {
+            scrollViewport(event);
             return EventResult.HANDLED;
         }
         chatScreen.onKeyEvent(event);
         return EventResult.HANDLED;
     }
 
-    private static boolean isChatNavigation(KeyEvent event) {
-        if (event.hasCtrl() || event.hasAlt() || event.hasShift()) {
-            return false;
+    /** pi alt-screen 滚动键：PgUp/PgDn 无修饰；Home/End 仅 Ctrl（恒消费）。 */
+    private static boolean isAltScreenScroll(KeyEvent event) {
+        boolean bare = !event.hasCtrl() && !event.hasAlt() && !event.hasShift();
+        if (bare && (event.code() == KeyCode.PAGE_UP || event.code() == KeyCode.PAGE_DOWN)) {
+            return true;
         }
-        return switch (event.code()) {
-            case KeyCode.UP, KeyCode.DOWN, KeyCode.PAGE_UP, KeyCode.PAGE_DOWN,
-                 KeyCode.HOME, KeyCode.END -> true;
-            default -> false;
-        };
+        return event.hasCtrl() && !event.hasAlt() && !event.hasShift()
+            && (event.code() == KeyCode.HOME || event.code() == KeyCode.END);
     }
 
-    private void scrollByKey(KeyEvent event) {
+    /** 内联（regular）独有：空编辑器裸 PgUp/PgDn 滚转录（D195；裸 Home/End 归编辑器）。 */
+    private static boolean isInlinePageScroll(KeyEvent event) {
+        return !event.hasCtrl() && !event.hasAlt() && !event.hasShift()
+            && (event.code() == KeyCode.PAGE_UP || event.code() == KeyCode.PAGE_DOWN);
+    }
+
+    private void scrollViewport(KeyEvent event) {
+        // pi PAGE_SCROLL_OVERLAP = 4（tui-alt-screen.ts:76）：页步长留重叠。
+        int page = Math.max(1, chatScreen.visibleRows() - 4);
         switch (event.code()) {
-            case KeyCode.UP -> chatScreen.scrollByRows(-1);
-            case KeyCode.DOWN -> chatScreen.scrollByRows(1);
-            case KeyCode.PAGE_UP -> chatScreen.scrollByRows(-chatScreen.visibleRows());
-            case KeyCode.PAGE_DOWN -> chatScreen.scrollByRows(chatScreen.visibleRows());
-            case KeyCode.HOME -> chatScreen.scrollToTop();
-            case KeyCode.END -> chatScreen.scrollToBottom();
-            default -> { /* unreachable for isChatNavigation events */ }
+            case KeyCode.PAGE_UP -> chatScreen.scrollByRows(-page);
+            case KeyCode.PAGE_DOWN -> chatScreen.scrollByRows(page);
+            case KeyCode.HOME -> chatScreen.scrollToTop();      // 仅 ctrl+home 到此
+            case KeyCode.END -> chatScreen.scrollToBottom();    // 仅 ctrl+end 到此
+            default -> { /* not a scroll key */ }
         }
     }
 
@@ -260,8 +273,43 @@ final class GlobalKeyRouter {
                         + " queued message" + (restored.count() > 1 ? "s" : "") + " to editor");
                 }
             }
-            default -> { /* thinking.* / tools.expand → Phase 6 */ }
+            // 批 34（K7；pi interactive-mode.ts:4527-4536 对位）：Shift+Tab 循环思考等级。
+            case KeybindingsManager.THINKING_CYCLE -> cycleThinkingLevel();
+            // 批 34（K9；pi :4589-4594 对位）：Ctrl+T 显隐 thinking 块。
+            case KeybindingsManager.THINKING_TOGGLE -> toggleThinkingVisibility();
+            // 批 34（K8；pi :4557/:4561 对位）：Ctrl+O 展开/折叠工具输出。
+            case KeybindingsManager.TOOLS_EXPAND -> app.toggleToolsExpanded();
+            default -> { /* 其余动作未接线 */ }
         }
+    }
+
+    /**
+     * 批 34（K7；pi {@code cycleThinkingLevel} :4527-4536 对位）：按可用集轮转；
+     * 模型不支持 thinking ⇒ 状态行提示不轮转（pi 返回 undefined 臂）。
+     */
+    private void cycleThinkingLevel() {
+        var model = app.session.harness().getModel();
+        boolean supports = model != null && app.session.modelCatalog().find(model)
+            .map(info -> info.capabilities().contains(ModelCapability.THINKING))
+            .orElse(true);                  // 目录外模型：能力未知 ⇒ 支持（D200）
+        if (!supports) {
+            chatScreen.appendSystemText("Current model does not support thinking");
+            return;
+        }
+        var levels = ThinkingCommands.availableLevels(app.session);
+        var current = app.session.harness().getThinkingLevel();
+        int index = levels.indexOf(current);        // 不在集合 ⇒ -1 ⇒ 取首项（pi 同）
+        var next = levels.get((index + 1) % levels.size());
+        app.session.setThinkingLevel(next);
+        chatScreen.appendSystemText("Thinking level: " + next.label());
+    }
+
+    /** 批 34（K9；pi :4589-4594 对位）：反转持久设置项，渲染面现读下一帧生效。 */
+    private void toggleThinkingVisibility() {
+        var accessors = app.session.services().settings().accessors();
+        boolean hidden = !Boolean.TRUE.equals(accessors.getHideThinkingBlock());
+        accessors.setHideThinkingBlock(hidden);
+        chatScreen.appendSystemText("Thinking blocks: " + (hidden ? "hidden" : "visible"));
     }
 
     /**

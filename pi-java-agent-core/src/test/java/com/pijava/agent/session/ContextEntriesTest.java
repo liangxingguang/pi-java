@@ -476,4 +476,100 @@ class ContextEntriesTest {
             bash("b", null, "cmd", null, null, false, false, null, null)))
             .isEqualTo("Ran `cmd`\n(no output)");
     }
+
+    // ── 批 33（#8）：compaction systemMessage 投影 ─────────────────────────────
+
+    private static Entry.Message systemEntry(String id, String parentId, String text) {
+        return new Entry.Message(id, 0, parentId, Instant.EPOCH,
+            new Message.SystemMessage(text, Instant.EPOCH, java.util.Map.of(), List.of(), List.of()),
+            null);
+    }
+
+    private static Entry.Compaction compactionWithSystem(String id, String parentId,
+                                                         String summary, String firstKeptId,
+                                                         Message.SystemMessage system) {
+        return new Entry.Compaction(id, 0, parentId, Instant.EPOCH, summary, firstKeptId,
+            List.of(), 1000, null, null, null, system);
+    }
+
+    @Test
+    void compactionSystemMessageProjectsBeforeSummary() {
+        var system = new Message.SystemMessage("sys prompt", Instant.ofEpochMilli(5),
+            java.util.Map.of(), List.of(), List.of());
+        var comp = compactionWithSystem("c", "b", "SUMMARY", "b", system);
+        var path = List.<Entry>of(
+            message("a", null, "user", "q1"),
+            message("b", "a", "assistant", "r1"),
+            comp,
+            message("d", "c", "user", "q2"));
+
+        var msgs = ContextEntries.toMessages(path);
+        assertThat(msgs).hasSize(4);
+        assertThat(msgs.get(0)).as("pi session-entry-to-context-messages:463").isSameAs(system);
+        assertThat(textOf(msgs.get(1))).contains("SUMMARY");
+    }
+
+    @Test
+    void contextEditOnCompactionKeepsSystemMessage() {
+        var system = new Message.SystemMessage("sys prompt", Instant.ofEpochMilli(5),
+            java.util.Map.of(), List.of(), List.of());
+        var comp = compactionWithSystem("c", "b", "SUMMARY", "b", system);
+        var path = List.<Entry>of(
+            message("a", null, "user", "q1"),
+            message("b", "a", "assistant", "r1"),
+            comp,
+            replacement("e1", "c", "c", com.pijava.agent.entry.CustomMessageContent.of("edited")));
+
+        var msgs = ContextEntries.toMessages(path);
+        assertThat(msgs).hasSize(3);
+        assertThat(msgs.get(0))
+            .as("system 消息不在 edit 白名单 ⇒ 原样保留（pi :525-539）")
+            .isSameAs(system);
+        assertThat(textOf(msgs.get(1))).isEqualTo("edited");
+    }
+
+    @Test
+    void omissionEditOnCompactionDropsBothMessages() {
+        var system = new Message.SystemMessage("sys prompt", Instant.ofEpochMilli(5),
+            java.util.Map.of(), List.of(), List.of());
+        var comp = compactionWithSystem("c", null, "SUMMARY", "c", system);
+        var path = List.<Entry>of(comp, omission("e1", "c", "c"));
+
+        assertThat(ContextEntries.toMessages(path))
+            .as("replacement=null ⇒ 投影出的两条消息都被剔除")
+            .isEmpty();
+    }
+
+    @Test
+    void systemMessagesInsideRetainedSegmentAreFiltered() {
+        var old = message("a", null, "user", "old");
+        var retainedSystem = systemEntry("s1", "a", "retained sys");
+        var kept = message("b", "s1", "assistant", "kept");
+        var comp = compaction("c", "b", "SUMMARY", "s1");
+        var after = message("d", "c", "user", "after");
+
+        var context = ContextEntries.contextEntries(
+            List.<Entry>of(old, retainedSystem, kept, comp, after));
+        assertThat(context)
+            .as("保留段里的 system 消息不进食上下文（pi buildContextEntries:506）")
+            .containsExactly(comp, kept, after);
+        assertThat(ContextEntries.toMessages(List.<Entry>of(old, retainedSystem, kept, comp, after)))
+            .hasSize(3);
+    }
+
+    @Test
+    void systemMessagesAfterCompactionAreKept() {
+        var old = message("a", null, "user", "old");
+        var comp = compaction("c", "a", "SUMMARY", "c");
+        var afterSystem = systemEntry("s2", "c", "new sys");
+        var after = message("d", "s2", "user", "after");
+
+        var context = ContextEntries.contextEntries(
+            List.<Entry>of(old, comp, afterSystem, after));
+        assertThat(context)
+            .as("压缩点之后的 system 消息照常全收（pi :510）")
+            .containsExactly(comp, afterSystem, after);
+        var msgs = ContextEntries.toMessages(List.<Entry>of(old, comp, afterSystem, after));
+        assertThat(msgs.get(1)).isSameAs(afterSystem.message());
+    }
 }

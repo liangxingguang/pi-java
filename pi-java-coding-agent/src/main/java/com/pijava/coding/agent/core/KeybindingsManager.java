@@ -31,6 +31,8 @@ public final class KeybindingsManager {
     public static final String THINKING_CYCLE = "app.thinking.cycle";    // Shift+Tab
     public static final String TOOLS_EXPAND = "app.tools.expand";        // Ctrl+O
     public static final String THINKING_TOGGLE = "app.thinking.toggle";  // Ctrl+T
+    // 批 34（S8；pi keybindings.ts app.thinking.save）：thinking 选择器内 ctrl+s。
+    public static final String THINKING_SAVE = "app.thinking.save";      // Ctrl+S（仅选择器）
     public static final String EXTERNAL_EDITOR = "app.editor.external";  // Ctrl+G
     public static final String FOLLOW_UP = "app.message.followUp";       // Alt+Enter
     public static final String DEQUEUE = "app.message.dequeue";          // Alt+Up（Windows/WSL ⇒ Alt+Q）
@@ -175,6 +177,8 @@ public final class KeybindingsManager {
         overlayBindings.put(SESSION_DELETE_NONINVASIVE, List.of(KeyStroke.of("backspace", true, false, false)));
         // scoped-models 六键只在选择器语境生效，不进全局 resolve。
         overlayBindings.put(MODELS_SAVE, List.of(KeyStroke.of("s", true, false, false)));
+        // 批 34（S8）：thinking 选择器「存为默认」——overlay 表，主屏 resolve 不命中。
+        overlayBindings.put(THINKING_SAVE, List.of(KeyStroke.of("s", true, false, false)));
         overlayBindings.put(MODELS_ENABLE_ALL, List.of(KeyStroke.of("a", true, false, false)));
         overlayBindings.put(MODELS_CLEAR_ALL, List.of(KeyStroke.of("x", true, false, false)));
         overlayBindings.put(MODELS_TOGGLE_PROVIDER, List.of(KeyStroke.of("p", true, false, false)));

@@ -100,7 +100,7 @@ public sealed interface Entry {
                 new ThinkingLevelChange(e.id(), seq, parentId, timestamp, e.thinkingLevel());
             case Compaction e -> new Compaction(e.id(), seq, parentId, timestamp, e.summary(),
                 e.firstKeptEntryId(), e.retainedTail(), e.tokensBefore(), e.details(), e.usage(),
-                e.fromHook());
+                e.fromHook(), e.systemMessage());
             case BranchSummary e -> new BranchSummary(e.id(), seq, parentId, timestamp, e.fromId(),
                 e.summary(), e.details(), e.usage(), e.fromHook());
             case Custom e -> new Custom(e.id(), seq, parentId, timestamp, e.customType(), e.data());
@@ -187,6 +187,10 @@ public sealed interface Entry {
      * （{@code session-manager.ts:100-101}）：{@code null} ≙ pi 的 undefined（旧文件
      * 兼容），{@code true} ⇒ 扩展生成的 entry（其 {@code details} 结构不可信，
      * 文件清单不回灌，见 {@code compaction.ts:70} 守卫）。</p>
+     *
+     * <p>{@code systemMessage} 对位 pi {@code CompactionEntry.systemMessage?}
+     * （{@code session-manager.ts:102-103}）：压缩点当时的完整系统提示与工具状态；
+     * {@code null} ≙ pi 的 undefined（旧文件与无系统消息的会话）。</p>
      */
     record Compaction(
         String id,
@@ -199,8 +203,27 @@ public sealed interface Entry {
         int tokensBefore,
         Map<String, Object> details,
         com.pijava.ai.Usage usage,
-        Boolean fromHook
+        Boolean fromHook,
+        com.pijava.ai.message.Message.SystemMessage systemMessage
     ) implements Entry {
+        /** 旧 11 参签名（无 {@code systemMessage}），存量构造点零改签。 */
+        public Compaction(
+            String id,
+            long seq,
+            String parentId,
+            Instant timestamp,
+            String summary,
+            String firstKeptEntryId,
+            List<com.pijava.ai.message.Message> retainedTail,
+            int tokensBefore,
+            Map<String, Object> details,
+            com.pijava.ai.Usage usage,
+            Boolean fromHook
+        ) {
+            this(id, seq, parentId, timestamp, summary, firstKeptEntryId, retainedTail,
+                tokensBefore, details, usage, fromHook, null);
+        }
+
         /** Defensively copies {@code retainedTail}. */
         public Compaction {
             retainedTail = List.copyOf(retainedTail);

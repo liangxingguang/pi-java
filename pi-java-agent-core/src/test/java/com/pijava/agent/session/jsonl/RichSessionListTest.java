@@ -75,6 +75,9 @@ class RichSessionListTest {
         Path root = Files.createTempDirectory("pi-rich-empty");
         var repo = JsonlSessionRepository.over(root);
         var session = repo.create(new JsonlSessionCreateOptions(null, CWD, null, null));
+        // 批 33（#19）：惰性创建要求先有 user/assistant 消息才落盘；
+        // 无用户消息的会话仍按 pi :866 给 "(no messages)" 占位。
+        session.appendEntry(new ProvisionedEntry<>(assistant("reply")), "main");
         session.setName("   ");
         session.storage().drain();
         String id = session.getMetadata().id();

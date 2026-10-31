@@ -157,24 +157,52 @@ class PiTuiAppScrollTest {
             Thread.sleep(300);
             int bottom = harness.chatScreen.scrollOffset();
 
-            harness.backend.feed("\u001b[A"); // Up
-            awaitOffset(harness, bottom - 1);
+            // 批 34（K20，B238-①）：全屏下裸 ↑↓/Home/End 归还编辑器，不再滚视口。
+            for (var key : new String[] {"\u001b[A", "\u001b[B", "\u001b[H", "\u001b[F"}) {
+                harness.backend.feed(key);
+                Thread.sleep(150);
+                assertThat(harness.chatScreen.scrollOffset()).isEqualTo(bottom);
+            }
 
-            harness.backend.feed("\u001b[B"); // Down
-            awaitOffset(harness, bottom);
-
-            harness.backend.feed("\u001b[H"); // Home
-            awaitOffset(harness, 0);
-
-            harness.backend.feed("\u001b[F"); // End
-            awaitOffset(harness, bottom);
-
+            // PgUp/PgDn 步长 = visibleRows - 4（pi PAGE_SCROLL_OVERLAP）。
             harness.backend.feed("\u001b[5~"); // PageUp
             int visible = harness.chatScreen.visibleRows();
-            awaitOffset(harness, Math.max(0, bottom - visible));
+            awaitOffset(harness, Math.max(0, bottom - Math.max(1, visible - 4)));
+
+            // Ctrl+Home/Ctrl+End ⇒ 顶/底（裸 Home/End 已归编辑器）。
+            harness.backend.feed("\u001b[1;5H");
+            awaitOffset(harness, 0);
+            harness.backend.feed("\u001b[1;5F");
+            awaitOffset(harness, bottom);
 
             harness.backend.feed("\u001b[6~"); // PageDown
             awaitOffset(harness, bottom);
+        }
+    }
+
+    /** 批 34（K20/D195）：内联（runner == null）裸 ↑/Home 仍由编辑器消费。 */
+    @Test
+    void inlineBareArrowsAndHomeGoToEditor() throws Exception {
+        var session = AgentSession.create(
+            ArgsParser.parse(new String[] {"--session-dir", sessionDir.toString()}));
+        try (session) {
+            var chatScreen = new ChatScreen();
+            var dispatcher = new TuiEventDispatcher();
+            var app = new PiTuiApp(new InteractiveMode(session), chatScreen,
+                new KeybindingsManager(), dispatcher);
+            chatScreen.setEditorText("a\nb");   // 光标在末行行尾
+
+            app.onInlineEvent(dev.tamboui.tui.event.KeyEvent.ofKey(
+                dev.tamboui.tui.event.KeyCode.UP));
+            app.onInlineEvent(dev.tamboui.tui.event.KeyEvent.ofChar('X'));
+            assertThat(chatScreen.inputText()).as("↑ 落到编辑器上一行")
+                .isEqualTo("aX\nb");
+
+            app.onInlineEvent(dev.tamboui.tui.event.KeyEvent.ofKey(
+                dev.tamboui.tui.event.KeyCode.HOME));
+            app.onInlineEvent(dev.tamboui.tui.event.KeyEvent.ofChar('Y'));
+            assertThat(chatScreen.inputText()).as("Home 落到编辑器行首")
+                .isEqualTo("YaX\nb");
         }
     }
 

@@ -35,6 +35,14 @@ final class EntryJsonCodec {
                 if (messageNode != null && "bashExecution".equals(messageNode.path("role").asText())) {
                     yield decodeBashExecution(messageNode, id, seq, parentId, timestamp);
                 }
+                // 批 33（#17/D194）：pi 迁移把 v2 的 message.role:"hookMessage" 就地改成
+                // "custom"。Message sealed 类型没有 custom 变体 ⇒ 读作 Entry.CustomMessage
+                // （旧 hook 消息没有 customType，display 默认为用户可见）。
+                if (messageNode != null && "custom".equals(messageNode.path("role").asText())) {
+                    yield new Entry.CustomMessage(id, seq, parentId, timestamp,
+                        "hookMessage", decodeContentLenient(messageNode.get("content")), true,
+                        JsonlCodec.optionalObject(messageNode, "details"));
+                }
                 Message message = MessageJsonCodec.decode(messageNode);
                 Boolean terminate = node.has("terminate") && node.get("terminate").asBoolean(false)
                     ? Boolean.TRUE : null;
@@ -48,11 +56,12 @@ final class EntryJsonCodec {
             case Entry.TYPE_COMPACTION -> new Entry.Compaction(id, seq, parentId, timestamp,
                 JsonlCodec.requireString(node, "summary"),
                 JsonlCodec.optionalString(node, "firstKeptEntryId"),
-                MessageJsonCodec.decodeList(node.get("retainedTail")),
+                decodeRetainedTail(node.get("retainedTail")),
                 JsonlCodec.requireInt(node, "tokensBefore"),
                 JsonlCodec.optionalObject(node, "details"),
                 decodeUsage(node.get("usage")),
-                optionalFromHook(node).orElse(null));
+                optionalFromHook(node).orElse(null),
+                decodeSystemMessage(node.get("systemMessage")));
             case Entry.TYPE_BRANCH_SUMMARY -> new Entry.BranchSummary(id, seq, parentId, timestamp,
                 JsonlCodec.requireString(node, "fromId"),
                 JsonlCodec.requireString(node, "summary"),
@@ -155,6 +164,41 @@ final class EntryJsonCodec {
             return new CustomMessageContent.Blocks(blocks);
         }
         throw JsonlCodec.DecodeError.schema("has invalid content");
+    }
+
+    /** 旧 hook 消息可能带 {@code content:null}（pi 迁移不改内容，宽容读取 ⇒ 空块表）。 */
+    private static CustomMessageContent decodeContentLenient(JsonNode node) {
+        if (node == null || node.isNull()) {
+            return new CustomMessageContent.Blocks(List.of());
+        }
+        return decodeContent(node);
+    }
+
+    /**
+     * 批 33（#16/D190）：{@code retainedTail} 是 Java 内部边界桥字段，pi 的
+     * compaction 行**没有**这个键；缺席/null ⇒ 空表（不再像
+     * {@link MessageJsonCodec#decodeList} 那样抛 schema 错）。
+     */
+    private static List<Message> decodeRetainedTail(JsonNode node) {
+        if (node == null || node.isNull()) {
+            return List.of();
+        }
+        return MessageJsonCodec.decodeList(node);
+    }
+
+    /**
+     * 批 33（#8）：compaction 的系统消息快照（pi {@code CompactionEntry.systemMessage?}）；
+     * 缺席/null ⇒ {@code null}，非 SystemMessage ⇒ schema 错。
+     */
+    private static Message.SystemMessage decodeSystemMessage(JsonNode node) {
+        if (node == null || node.isNull()) {
+            return null;
+        }
+        Message message = MessageJsonCodec.decode(node);
+        if (!(message instanceof Message.SystemMessage system)) {
+            throw JsonlCodec.DecodeError.schema("has invalid systemMessage");
+        }
+        return system;
     }
 
     /** pi {@code fromHook?: boolean}：键缺席/非布尔 ⇒ empty ≙ pi undefined（旧文件兼容）。

@@ -41,8 +41,8 @@ class KeybindingsManagerTest {
     @Test
     void exposesAllActionIds() {
         // 11 实键全局＋4 空绑定 session＋12 tree/copy＋6 选择器 session
-        // ＋5 扩展对话框＋6 scoped-models（批 31，均 overlay 表）。
-        assertThat(keys.actionIds()).hasSize(44);
+        // ＋5 扩展对话框＋6 scoped-models（批 31）＋1 thinking-save（批 34，均 overlay 表）。
+        assertThat(keys.actionIds()).hasSize(45);
         assertThat(keys.actionIds()).contains(KeybindingsManager.INTERRUPT);
     }
 

@@ -93,17 +93,25 @@ public final class PiV3Wire {
         }
     }
 
-    /** 解析一行 pi v3 头；{@code kind} 固定为 {@link #SESSION_KIND}。 */
+    /** 解析一行 pi 头；{@code kind} 固定为 {@link #SESSION_KIND}。 */
     public static JsonlCodec.ParseResult<JsonlV4Header> parseHeader(JsonNode node) {
         try {
             if (!SESSION_KIND.equals(text(node, "type"))) {
                 return JsonlCodec.ParseResult.err(
                     JsonlCodec.DecodeError.schema("is not a session header"));
             }
-            int version = node.hasNonNull("version") ? node.get("version").asInt() : 1;
-            if (version != SESSION_VERSION) {
-                // pi 的 v1/v2 是 2026 年前的格式，本仓从没写过，也不做它们的迁移。
-                // 明说而不是静默新建 —— 静默新建正是 pi 侧那个坑（docs/12 §5）。
+            int version = 1; // v1 会话没有 version 键（session-manager.ts:45）
+            if (node.hasNonNull("version")) {
+                JsonNode value = node.get("version");
+                if (!value.isNumber()) {
+                    return JsonlCodec.ParseResult.err(JsonlCodec.DecodeError.schema(
+                        "has invalid session version"));
+                }
+                version = value.asInt();
+            }
+            if (version < 1 || version > SESSION_VERSION) {
+                // 批 33（#17/D193）：1/2 由 LegacyPiVersionMigrator 在严格解析前迁移；
+                // >3 的未来格式显式报错（pi 会按当前语法继续读）。
                 return JsonlCodec.ParseResult.err(JsonlCodec.DecodeError.schema(
                     "has unsupported session version " + version));
             }

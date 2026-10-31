@@ -42,6 +42,8 @@ public final class TuiExtensionUiHost {
         (command, content) -> Optional.empty();
     private volatile IntSupplier terminalCols = () -> 80;
     private volatile IntSupplier terminalRows = () -> 24;
+    /** 批 34（K8，D97）：扩展选择器内 Ctrl+O 的全局展开态翻转（pi :2721 对位）。 */
+    private volatile Runnable toolsToggle = () -> { };
 
     // ── 渲染线程护栏（裁决⑤/窄差 D98）──
     private volatile Thread renderThread;
@@ -137,6 +139,16 @@ public final class TuiExtensionUiHost {
     /** 批 21（T9）：主题控制器回填（晚绑定 holder，bindApp 同族）。 */
     public void setThemeController(com.pijava.coding.agent.theme.ThemeController controller) {
         this.themeController = controller;
+    }
+
+    /** 批 34（K8）：工具输出展开态翻转回填（bindApp 同族）。 */
+    public void bindToolsToggle(Runnable toggle) {
+        this.toolsToggle = toggle == null ? () -> { } : toggle;
+    }
+
+    /** 批 34（K8，D97）：扩展选择器内 Ctrl+O 转发（pi extension-selector.ts:100）。 */
+    public void toggleToolsExpanded() {
+        toolsToggle.run();
     }
 
     /** 批 21（T9）：主题控制器读面（null ⇒ 未装配——setTheme 走失败臂）。 */

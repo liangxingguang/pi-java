@@ -14,6 +14,7 @@ import com.pijava.agent.tool.ShellResult;
 import com.pijava.agent.tool.ToolContext;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
+import com.pijava.ai.message.Message;
 import com.pijava.ai.message.StopReason;
 import com.pijava.ai.provider.FauxProvider;
 import com.pijava.ai.provider.ProviderRegistry;
@@ -73,6 +74,9 @@ class RecordBashResultTest {
     void idleRecordAppendsAndPersistsImmediately() throws Exception {
         Path dir = Files.createTempDirectory("pi-bash-rec-idle");
         try (var session = persistentRig(dir, List.of(reply("r")), 0)) {
+            // 批 33（#19）：bashExecution 非对话消息——先写首条 user 消息让会话落盘。
+            session.session().appendMessage(new Message.UserMessage(List.of(
+                new ContentBlock.TextContent("seed"))));
             session.recordBashResult("echo hello", OK, false);
 
             var bash = bashEntries(session);

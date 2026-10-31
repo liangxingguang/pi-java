@@ -23,6 +23,8 @@ public abstract class ConformanceGroup3Test {
     void createListOpenAndDuplicateCreate() {
         try (var b = backend()) {
             var session = b.create("cwd", "fixed-id");
+            // 批 33（#19）：JSONL 惰性创建 ⇒ create 本身不落盘；有对话后 list/open 可见。
+            session.appendEntry(userMessage("m1", "hi"), "main");
             assertThat(b.list()).extracting(SessionMetadata::id).contains("fixed-id");
             var reopened = b.open("fixed-id");
             assertThat(reopened.getMetadata().id()).isEqualTo("fixed-id");
@@ -152,6 +154,7 @@ public abstract class ConformanceGroup3Test {
     void nonMessageLeafAsDefaultForkTargetIsInvalid() {
         try (var b = backend()) {
             var session = b.create("cwd");
+            session.appendEntry(userMessage("m1", "hi"), "main");
             session.appendEntry(custom("c1", "event", null), "main");
             assertThatThrownBy(() -> b.fork(session.getMetadata().id(),
                 new ForkOptions.Branch(null, null)))

@@ -19,10 +19,10 @@ import dev.tamboui.widgets.input.TextAreaState;
  * TamboUI {@link TextAreaState}: fish-style undo (consecutive word chars
  * coalesce into one undo unit), an Emacs-style kill ring (Ctrl+K/U kill to
  * line end/start, Ctrl+W/Alt+D kill word backward/forward, Ctrl+Y yank,
- * Alt+Y yank-pop), word navigation (Ctrl+Left/Right, Alt+B/F) and the
- * Ctrl+A/E/B/F / Ctrl+Home/End cursor shortcuts. Undo restores both text and
- * cursor via {@code TextAreaState}'s cursor-move primitives (it has no cursor
- * setter).</p>
+ * Alt+Y yank-pop), word navigation (Ctrl+Left/Right, Alt+B/F), the
+ * Ctrl+A/E/B/F cursor shortcuts, and prompt history on bare ↑/↓ (K27,
+ * {@link EditorHistory}). Undo restores text and cursor via TextAreaState's
+ * cursor-move primitives (it has no cursor setter).</p>
  */
 public final class EditorComponent {
 
@@ -38,6 +38,8 @@ public final class EditorComponent {
     private final TextAreaState state = new TextAreaState();
     private final EditorElement element;
     private final KillRing killRing = new KillRing();
+    /** 批 34（K27）：提示历史＋↑/↓ 首末行分派（pi editor.ts navigateHistory 对位）。 */
+    private final EditorHistory history = new EditorHistory();
     private final ArrayDeque<Snapshot> undoStack = new ArrayDeque<>();
     private Consumer<String> submitHandler = text -> { };
     private String lastAction;
@@ -95,6 +97,11 @@ public final class EditorComponent {
      */
     public void onKeyEvent(KeyEvent event) {
         var stroke = TamboUIAdapter.toStroke(event);
+        // 批 34（K27；pi editor.ts:928/941 对位）：↑/↓ 首末行走提示历史，其余键退出浏览。
+        if (history.handleNavigation(event.code(), event.hasCtrl() || event.hasAlt(),
+                state, this::pushSnapshot)) {
+            return;
+        }
         // pi tui.editor.* bindings that do not clash with the app.* shortcuts.
         if (stroke.ctrl() && "w".equals(stroke.key())) {
             deleteWordBackward();
@@ -140,14 +147,13 @@ public final class EditorComponent {
             moveWordRight();
             return;
         }
-        // pi cursorLineStart/End and cursorLeft/Right extra defaults.
-        if (stroke.ctrl() && "a".equals(stroke.key())
-                || stroke.ctrl() && "home".equals(stroke.key())) {
+        // pi cursorLineStart/End（批 34，K20：ctrl+home/end 归还上层视口滚动的
+        // 顶/底键；行首行尾只留 ctrl+a/ctrl+e——pi 本锚点同形）。
+        if (stroke.ctrl() && "a".equals(stroke.key())) {
             state.moveCursorToLineStart();
             return;
         }
-        if (stroke.ctrl() && "e".equals(stroke.key())
-                || stroke.ctrl() && "end".equals(stroke.key())) {
+        if (stroke.ctrl() && "e".equals(stroke.key())) {
             state.moveCursorToLineEnd();
             return;
         }
@@ -422,6 +428,7 @@ public final class EditorComponent {
         }
         pushSnapshot();
         lastAction = null;
+        history.reset();
         state.insert(text);
     }
 
@@ -432,6 +439,7 @@ public final class EditorComponent {
             pushSnapshot();
         }
         lastAction = null;
+        history.reset();
         state.setText(replacement);
     }
 
@@ -455,6 +463,7 @@ public final class EditorComponent {
         state.clear();
         undoStack.clear();
         lastAction = null;
+        history.reset();
     }
 
     /** Replace the editor content (programmatic edits are undoable). */
@@ -464,6 +473,7 @@ public final class EditorComponent {
             pushSnapshot();
         }
         lastAction = null;
+        history.reset();
         state.setText(replacement);
     }
 
@@ -471,6 +481,7 @@ public final class EditorComponent {
     public void insertNewline() {
         pushSnapshot();
         lastAction = null;
+        history.reset();
         state.insert("\n");
     }
 
@@ -478,6 +489,8 @@ public final class EditorComponent {
     public void submit() {
         var text = state.text();
         if (!text.isBlank()) {
+            history.add(text);        // pi addToHistory：先入历史再交 handler
+            history.reset();
             submitHandler.accept(text);
             state.clear();
             undoStack.clear();

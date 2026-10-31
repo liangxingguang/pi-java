@@ -10,6 +10,7 @@ import com.pijava.coding.agent.cli.Args;
 import com.pijava.coding.agent.extension.DefaultExtensionContext;
 import com.pijava.coding.agent.extension.ExtensionManager;
 import com.pijava.coding.agent.extension.ExtensionUI;
+import com.pijava.coding.agent.extension.PiExtension;
 import com.pijava.coding.agent.extension.ResourcePaths;
 import com.pijava.coding.agent.prompt.PromptTemplates;
 import com.pijava.coding.agent.skill.SkillDiscovery;
@@ -52,6 +53,9 @@ final class ExtensionLoading {
     private List<com.pijava.coding.agent.theme.Theme> themes = List.of();
     /** 批 21（T8）：reload 完成监听者（模式层主题收尾口）。 */
     private final java.util.concurrent.CopyOnWriteArrayList<Runnable> reloadListeners =
+        new java.util.concurrent.CopyOnWriteArrayList<>();
+    /** 批 32（docs/44 T2）：进程内注册的扩展（pi {@code inlineExtensions} 对位）。 */
+    private final List<PiExtension> inlineExtensions =
         new java.util.concurrent.CopyOnWriteArrayList<>();
 
     ExtensionLoading(AgentSession owner) {
@@ -118,6 +122,20 @@ final class ExtensionLoading {
     void extensionManager(com.pijava.coding.agent.extension.ExtensionManager manager) {
         this.extensionManager = manager;
     }
+    /**
+     * 批 32（docs/44 T2）：进程内注册扩展（pi {@code inlineExtensions} 对位）。
+     * 需要已装配的 {@link ExtensionManager}（{@code --no-extensions} 下无注册面）。
+     */
+    void addInline(PiExtension ext) {
+        var manager = extensionManager;
+        if (manager == null) {
+            throw new IllegalStateException(
+                "Inline extensions require an assembled extension manager");
+        }
+        inlineExtensions.add(ext);
+        manager.registerInline(ext, "inline:" + ext.name());
+    }
+
     /** 扩展注册的 provider 名集读写面（loadExtensions 簿记；reload 快照保留）。 */
     java.util.Set<String> extensionProviderNames() {
         return extensionProviderNames;

@@ -4,9 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import com.pijava.agent.session.jsonl.JsonlCodec;
+import com.pijava.ai.message.ContentBlock;
+import com.pijava.ai.message.Message;
 import com.pijava.coding.agent.cli.ArgsParser;
 import com.pijava.coding.agent.core.AgentSession;
 import com.pijava.coding.agent.core.slash.SlashContext;
@@ -24,8 +27,12 @@ class ExportCommandTest {
     Path tmp;
 
     private AgentSession session() {
-        return AgentSession.create(ArgsParser.parse(
+        var s = AgentSession.create(ArgsParser.parse(
             new String[] {"--session-dir", tmp.resolve("sessions").toString()}));
+        // 批 33（#19）：建会话不落盘——/export 的 JSONL 快路径要文件，先写首条对话。
+        s.session().appendMessage(new Message.UserMessage(List.of(
+            new ContentBlock.TextContent("seed"))));
+        return s;
     }
 
     private static String dispatch(AgentSession session, String input) throws Exception {

@@ -10,6 +10,8 @@ import com.pijava.agent.compaction.CompactionService;
 import com.pijava.agent.compaction.CompactionSettings;
 import com.pijava.agent.entry.Entry;
 import com.pijava.agent.hook.SuppliedCompaction;
+import com.pijava.agent.session.ContextEntries;
+import com.pijava.ai.api.Transcripts;
 import com.pijava.ai.message.Message;
 import com.pijava.telemetry.SpanOptions;
 import com.pijava.telemetry.TelemetrySpan;
@@ -78,12 +80,18 @@ final class CompactionTranscriptBuilder {
             ctx.telemetry().popCurrent(summarySpan);
         }
         var retainedTail = keptMessagesFrom(lane.transcript, result.firstKeptEntryId());
+        // 批 33（#8）：压缩点的完整系统提示与工具状态（pi appendCompaction:1270-1283）；
+        // entry 与 systemMessage 共用同一个 Instant（pi 把 systemMessage.timestamp 覆盖为
+        // compaction 时刻）。
+        Instant now = Instant.now();
+        var systemMessage = currentSystemMessage(lane.transcript, now);
         var compactionEntry = new Entry.Compaction(
             UUID.randomUUID().toString(), lane.nextSeq(), HarnessUtils.lastEntryId(lane),
-            Instant.now(), result.summary(), result.firstKeptEntryId(),
+            now, result.summary(), result.firstKeptEntryId(),
             // fromHook=null ≙ pi undefined（pi-generated；扩展摘要的 fromHook=true
             // 写路在 suppliedTranscript，docs/15）。
-            retainedTail, (int) result.tokensBefore(), result.details(), result.usage(), null);
+            retainedTail, (int) result.tokensBefore(), result.details(), result.usage(), null,
+            systemMessage);
         return new Built(assembleKept(lane.transcript, result.firstKeptEntryId(),
             compactionEntry), result);
     }
@@ -98,11 +106,13 @@ final class CompactionTranscriptBuilder {
     Built suppliedTranscript(LaneState lane, SuppliedCompaction supplied) {
         var result = new CompactionResult(supplied.summary(), supplied.firstKeptEntryId(),
             supplied.tokensBefore(), null, supplied.usage(), supplied.details());
+        Instant now = Instant.now();
         var compactionEntry = new Entry.Compaction(
             UUID.randomUUID().toString(), lane.nextSeq(), HarnessUtils.lastEntryId(lane),
-            Instant.now(), supplied.summary(), supplied.firstKeptEntryId(),
+            now, supplied.summary(), supplied.firstKeptEntryId(),
             keptMessagesFrom(lane.transcript, supplied.firstKeptEntryId()),
-            (int) supplied.tokensBefore(), supplied.details(), supplied.usage(), true);
+            (int) supplied.tokensBefore(), supplied.details(), supplied.usage(), true,
+            currentSystemMessage(lane.transcript, now));
         return new Built(assembleKept(lane.transcript, supplied.firstKeptEntryId(),
             compactionEntry), result);
     }
@@ -139,5 +149,19 @@ final class CompactionTranscriptBuilder {
             }
         }
         return kept;
+    }
+
+    /**
+     * 批 33（#8）：压缩点的系统提示快照。{@link Transcripts#getCurrentSystemMessage}
+     * 已经逐字实现 pi {@code getCurrentSystemMessage}（内容按 {@code "\n\n"} 拼接、
+     * sections 按名覆盖、toolsAdded 取当前工具、两者皆无为 {@code null}）；这里
+     * 只把 timestamp 覆盖为 compaction 时刻（pi {@code session-manager.ts:1283}）。
+     */
+    private static Message.SystemMessage currentSystemMessage(List<Entry> transcript,
+                                                              Instant timestamp) {
+        var current = Transcripts.getCurrentSystemMessage(ContextEntries.toMessages(transcript));
+        return current == null ? null
+            : new Message.SystemMessage(current.content(), timestamp,
+                current.sections(), current.toolsAdded(), current.toolsRemoved());
     }
 }

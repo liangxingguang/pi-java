@@ -2,6 +2,7 @@ package com.pijava.agent.session.jsonl;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 import com.pijava.agent.entry.CustomMessageContent;
 import com.pijava.agent.entry.Entry;
@@ -9,6 +10,8 @@ import com.pijava.agent.entry.ProvisionedEntry;
 import com.pijava.agent.session.LogItem;
 import com.pijava.agent.session.LogOptions;
 import com.pijava.agent.session.SessionJson;
+import com.pijava.ai.message.ContentBlock;
+import com.pijava.ai.message.Message;
 
 import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -129,6 +132,10 @@ class PiV3ContextEditEntryTest {
         Path dir = Files.createTempDirectory("pi-v3-context-edit-write");
         var repo = JsonlSessionRepository.over(dir);
         var session = repo.create(new JsonlSessionCreateOptions(null, "work", null, null));
+        // 批 33（#19）：惰性创建要求先有 user/assistant 消息才落盘。
+        session.appendEntry(new ProvisionedEntry<>(new Entry.Message("m2", 0, null, null,
+            new Message.UserMessage(List.of(new ContentBlock.TextContent("hi")), null), null)),
+            "main");
         session.appendEntry(new ProvisionedEntry<>(new Entry.ContextEdit(
             "e1", 0, null, null, "m2", null)), "main");
         session.storage().drain();

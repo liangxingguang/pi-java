@@ -72,10 +72,11 @@ class PiTuiAppInputInteractionTest {
             awaitNoLine(backend, "scroll-line-39",
                 "newest message scrolled out of view after PageUp");
 
-            // End resumes sticky auto-scroll back to the bottom.
-            backend.feed("\u001b[4~");
+            // Ctrl+End resumes sticky auto-scroll back to the bottom
+            // (批 34 K20: bare End now belongs to the editor).
+            backend.feed("\u001b[1;5F");
             awaitLine(backend, "scroll-line-39",
-                "End returns to the newest message");
+                "Ctrl+End returns to the newest message");
 
             runner.quit();
             thread.join(5000);

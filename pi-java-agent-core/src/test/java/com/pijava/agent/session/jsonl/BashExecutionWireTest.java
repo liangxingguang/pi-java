@@ -2,11 +2,14 @@ package com.pijava.agent.session.jsonl;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 import com.pijava.agent.entry.Entry;
 import com.pijava.agent.entry.ProvisionedEntry;
 import com.pijava.agent.session.LogItem;
 import com.pijava.agent.session.LogOptions;
+import com.pijava.ai.message.ContentBlock;
+import com.pijava.ai.message.Message;
 
 import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -125,6 +128,10 @@ class BashExecutionWireTest {
         Path dir = Files.createTempDirectory("pi-v3-bash-write");
         var repo = JsonlSessionRepository.over(dir);
         var session = repo.create(new JsonlSessionCreateOptions(null, "work", null, null));
+        // 批 33（#19）：惰性创建要求先有 user/assistant 消息才落盘。
+        session.appendEntry(new ProvisionedEntry<>(new Entry.Message("m1", 0, null, null,
+            new Message.UserMessage(List.of(new ContentBlock.TextContent("hi")), null), null)),
+            "main");
         session.appendEntry(new ProvisionedEntry<>(new Entry.BashExecution(
             "b1", 0, null, null, "git status", "On branch main\n",
             1, false, true, "/tmp/full.log", Boolean.TRUE)), "main");
@@ -171,6 +178,10 @@ class BashExecutionWireTest {
         Path dir = Files.createTempDirectory("pi-v3-bash-write-min");
         var repo = JsonlSessionRepository.over(dir);
         var session = repo.create(new JsonlSessionCreateOptions(null, "work", null, null));
+        // 批 33（#19）：惰性创建要求先有 user/assistant 消息才落盘。
+        session.appendEntry(new ProvisionedEntry<>(new Entry.Message("m1", 0, null, null,
+            new Message.UserMessage(List.of(new ContentBlock.TextContent("hi")), null), null)),
+            "main");
         session.appendEntry(new ProvisionedEntry<>(new Entry.BashExecution(
             "b1", 0, null, null, "true", "", null, false, false, null, null)), "main");
         session.storage().drain();

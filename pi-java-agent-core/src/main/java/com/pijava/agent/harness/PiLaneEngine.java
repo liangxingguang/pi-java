@@ -79,6 +79,15 @@ public final class PiLaneEngine {
     }
 
     /**
+     * 当前渲染后的整份系统提示（pi {@code getCurrentSystemPrompt} 对位）——
+     * 由 {@link ContextAssembler#renderPrompt} 现算，供 {@link AgentHarness#currentSystemPrompt()}
+     * 暴露给扩展 {@code before_agent_start} 与 eval harness。
+     */
+    String currentPrompt(String laneName) {
+        return assembler.renderPrompt(ctx.requireLane(laneName));
+    }
+
+    /**
      * 用一个新 prompt 驱动一次运行（pi {@code runAgentLoop}）。
      *
      * @param downstream 会话层接收器，可为 {@code null}

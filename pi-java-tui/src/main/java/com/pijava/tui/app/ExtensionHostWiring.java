@@ -67,6 +67,7 @@ final class ExtensionHostWiring {
         this.extensionUiHost = host;
         host.bindApp(app::openOverlay, app::dismissOverlay, this::externalEditorRoundtrip,
             app::terminalCols, app::terminalRows);
+        host.bindToolsToggle(app::toggleToolsExpanded);   // 批 34（K8，D97）
         chatScreen.setTerminalWidthSource(app::terminalCols);
     }
 

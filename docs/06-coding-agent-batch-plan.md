@@ -20,15 +20,15 @@
 
 ---
 
-## §1 进度总览（2026-10-30 实算，批 31 闭环后）
+## §1 进度总览（2026-10-31 实算，批 34 闭环后）
 
 | 指标 | 读数 |
 |---|---|
-| 已闭环批次 | **31**（批 1–31，设计稿原 docs/11–41 历史在 git〔docs/36/37/38/40/41 存活待清理〕＋docs/42/43） |
-| 设计待审批次 | **0**（下一包号 docs/44＝批 32 设计稿〔evals 域收口，序 25〕） |
-| 计划批次（批 30 起） | **2026-10-29 用户裁决重排**：examples/TUI 降为队尾（理由：pi-java 以 web 为主要交互方式、examples 是验收规格非功能流程；examples 全做裁决不变），结构债清空已插队闭环（批 29）——批 30 模型可见面收口、批 31 C 域 slash 尾已闭环、批 32＝evals、批 33＝session 余量（§3 序 25–26）→ TUI 队尾批组（序 27，变量③ 屏域＋长尾，4–6 批）→ **examples 六批最尾**（序 28；组 2–10 合并映射维持 docs/39 §7 修订段，原批 29–34 编号让位，启动时按实重排） |
-| **总批次估计** | **31＋2（新主线序 25–26）＋4–6（TUI 队尾）＋6（examples 队尾）**（每批闭环时按真实欠账重排，允许增删） |
-| 模块账面（Σ 485，去重） | 449.5 ≈ **92.7%**（批 31 +3.5：C 域四行翻正 +3.0＋旧汇总纠错 +0.5） |
+| 已闭环批次 | **34**（批 1–34，设计稿原 docs/11–41 历史在 git〔docs/36/37/38/40/41 存活待清理〕＋docs/42/43/44/45/46） |
+| 设计待审批次 | **0**（下一包号 docs/47；下一批＝§3 序 27 TUI 队尾批组续批） |
+| 计划批次（批 30 起） | **2026-10-29 用户裁决重排**：examples/TUI 降为队尾（理由：pi-java 以 web 为主要交互方式、examples 是验收规格非功能流程；examples 全做裁决不变），结构债清空已插队闭环（批 29）——批 30 模型可见面收口、批 31 C 域 slash 尾、批 32 evals 域收口、批 33 session 余量（§3 序 26）、**批 34 TUI 队尾首批**（序 27）已闭环 → TUI 队尾批组续批（序 27，变量③ 屏域＋长尾，余 3–5 批）→ **examples 六批最尾**（序 28；组 2–10 合并映射维持 docs/39 §7 修订段，原批 29–34 编号让位，启动时按实重排） |
+| **总批次估计** | **34＋3–5（TUI 队尾）＋6（examples 队尾）**（每批闭环时按真实欠账重排，允许增删） |
+| 模块账面（Σ 485，去重） | 449.5 ≈ **92.7%**（批 33 不翻动：session 收口全在 map/06） |
 | 满分域 | **14 个**（批 31 C 域）+ map/07 G 组满分（批 24） |
 | C 域（slash，Σ 38） | 38.0 ＝ **100%**（批 31 满分） |
 | D 域（扩展事件，Σ 83） | 83.0 ＝ **100%**（批 23 满分） |
@@ -37,8 +37,9 @@
 | G 域（主流新子系统，Σ 18） | 12.0 ≈ **66.7%**（批 27 +5.0；余 G-6/G-7 codemode 挂 B161） |
 | map/07 mcp（Σ 129） | 121.0 ≈ **93.8%**（批 30 #53 存疑→对齐，B203/B207 销；计分母缺失仅剩 #50） |
 | map/02 ai（Σ 223） | 212.0 ≈ **95.1%**（批 31 Radius #21/#44 纳入分母） |
-| map/05 tui/web（Σ 244） | 137.5 ≈ **56.4%**（批 31 +4.0：S7/S15/S17） |
-| 全仓账面（Σ 1383） | 1,175.5 ≈ **85.0%**（批 31：map/04 +3.5、map/02 +4.0、map/05 +4.0，分母 1,379→1,383） |
+| map/05 tui/web（Σ 244） | 152.5 ≈ **62.5%**（批 34 +15.0：S8／K6/K7/K8/K9／K10／K20／K27） |
+| map/06 session＋evals（Σ 87） | 85.0 ≈ **97.7%**（批 33 +11.0：存储后端 20 行翻 8 行对齐＋P0 session 条清零，对齐 19/存疑 1） |
+| 全仓账面（Σ 1383） | 1,231.0 ≈ **89.0%**（批 34：map/05 +15.0，分母不变） |
 
 > ⚠️ 总批次是**估计值**，不是承诺。examples 批表（docs/39 §7）允许按裁剪阀
 > 增删批次；§3.3 余两个拍板变量每个能摆动 1–6 批。
@@ -82,6 +83,9 @@
 | 29 | docs/41 | 2026-10-29 | **结构债清空批**（2026-10-29 用户裁决插队首站＋E 类全量实测 5→21 件扩容）：E1–E23 全拆至 ≤500（行为零变化纯移动；AgentSession 3,797→496＋10 协作者、DefaultExtensionContext 1,118→499＋306＋494、PiTuiApp 1,137→481＋6 卫星、ChatScreen 1,040→468＋6 卫星，余 17 件各拆一协作者；ModelCompat 12 档便捷构造器→静态工厂＝全批唯一 public 形状变化〔57 调用点改签〕）＋**闸门修真**（checkstyle FileLength severity warning→error——两年无闸门根因，裁决④）＋docs/04 §7 教训第四条；排障钉：构造器链式委托改工厂链／CRLF 破 perl `$` 锚／blank final 初始化器引用／两起套件 flake 隔离即绿／嵌套 record 搬出实现类须显式 import | 账面不变（结构债不进地图行）——模块 446.0/485 ≈ **92.0%**；全仓 1,163.0/1379 ≈ **84.3%**；**E 类清零** |
 | 30 | docs/42 | 2026-10-29 | **模型可见面收口批**（序 23）：T1 B203 类型地基（agent-core ToolExposure/ToolNamespace/ToolAnnotations＋AgentTool 五 default 方法）→ T2 B94 read/edit/write 贡献（8/8 全落＋pi tool-system-prompt-contributions.test 对位断言）→ T3 ContextAssembler 删 description 回落＋snippet/guidelines 双归一（裁决①，pi 稀疏语义）→ T4 ai#8 ToolUseContent.namespace 全链（Responses 输入同模型闸门／输出起点+收尾／ToolCallEnd 帧／JSONL 键；StreamPartialBuilder tool 簇拆卫星过 FileLength 闸门）→ T5 B203 收编（五件上本体；批 27 sidecar ToolDefinitions＋toolDefinitions() 删；ModelToolControl 四门改道；withExposure 隐藏重注；ExtensionToolInfo 补 annotations；B207 随销）→ T6 B95 PiJavaPaths＋三模块接线＋SessionWiring 供值（裁决② SDK 默认不产出）；**B94/B95/B203/ai#8 销号**；排障钉：AbstractChatApi.withPartial 重建事件丢新组件（五参便利构造静默吞 namespace——块对事件 null 的二象性即此）；PiJavaPaths 测试夹具同名根互染 | 模块账面不动；map/07 120.5→**121.0/129 ≈ 93.8%**（+0.5：#53 存疑→对齐）；map/02 207.0→**208.0/219 ≈ 95.0%**（+1.0：#8 计分母缺失清零）；全仓 **1,164.0/1379 ≈ 84.4%** |
 | 31 | docs/43 | 2026-10-30 | **C 域 slash 尾批**（序 24）：T1–T3 `/settings` 完整设置项表＋子菜单＋三态/嵌套写回 → T4/T5 `/scoped-models` 选择器（搜索/全选/清空/provider/排序/不可用项；`All`/显式空表分流、会话 scope、Ctrl+S 持久化、15s 刷新＋代次取消）→ T6–T9/T11 `/login`（ProviderLoginCatalog/Service/Flow/Dialog/Provider 屏＋RadiusMcpOffer 写回 mcp.json＋reload）→ T10 `/share`（SessionShareService＋RadiusArtifactUploader＋GhCli；Radius 优先、尝试后不 fallback、无 token 走私有 gist）→ Radius provider/OAuth（`/v1/config` 动态目录整替 baseline）→ D85 销号；**B226 销号**；窄差 D176–D181；排障钉：并发 onProgress 夹具须线程安全集合（RichSessionListTest 此前误判 flake）／真实模型请求的 TUI 用例不得断言 `lastMessage`（网络失败会追 Error） | map/04 **+3.5** ⇒ 449.5/485 ≈ **92.7%**（C 域 38.0/38＝100%，满分域第十四；原始口径 454.0/494 ≈ 91.9%）；map/02 **+4.0** ⇒ 212.0/223 ≈ **95.1%**（Radius 两单元纳入分母）；map/05 **+4.0** ⇒ 137.5/244 ≈ **56.4%**；全仓 1,164.0→**1,175.5/1383 ≈ 85.0%** |
+| 32 | docs/44 | 2026-10-31 | **evals 域收口批**（序 25；**B258 立项即销号**）：T1 框架演进（`EvalResult` 分数/理由＋`EvalSuite.judges/threshold`＋`EvalReporter` 落盘）→ T2 agent-core/coding-agent 缝（`AgentHarness.currentSystemPrompt()`＋`before_agent_start` 传渲染后提示＋`ExtensionManager.registerInline`＋reload 保留 inline 扩展）→ T3/T4/T5 真 harness（`IsolatedEnvironment` 属性隔离＋会话装配＋`HarnessRun` 采集/artifact＋`DocumentationVariants` 变体变换与段校验）→ T6 判分三实现（StructuredOutput/ToolCall/Levenshtein）→ T7 `plan`＋`report`（配对/blocked/lift/flags/文本）→ T8 `EvalCli`＋`EvalCatalog`＋`ArtifactLayout`→ T9 Docker 编排（两 target＋假进程契约＋JUnit XML）→ T10 `AcmeServer`＋`ConfiguredRuntimeInspector`＋provider eval 两件 → T11/T12 六类 host eval（docs 审计/扩展作者/模型作者/provider 集成/smoke/TUI 文档审计）；窄差 D182–D189（D182 Docker 不真构建、D183 TUI 文档问答替代 context-footer oracle、D184 扩展作者 eval 额外开 bash、D185 静态注册表/JUnit XML、D186 `inspect_provider` 代写 models.json＋探针、D187 内联 `install_extension` 装载 JAR、D188 `SmokeEval` 在 docs-lift 下也配对、D189 footer 行为文本复刻按 codepoint 近似宽度）；行为变化：`before_agent_start` 处理器看到渲染后整份提示（此前空串，pi 语义） | map/06 **+29.5** ⇒ 74.0/87 ≈ **85.1%**（评测 20 行：对齐 19/存疑 1，42.0/43 ≈ 97.7%）；map/04／map/02／map/05 不动；全仓 1,175.5→**1,205.0/1383 ≈ 87.1%** |
+| 33 | docs/45 | 2026-10-31 | **session 余量批**（序 26）：T4 compaction `systemMessage` 全链（`Entry.Compaction` 第 12 组件＋编解码／投影 `[systemMessage, summary]`／保留段 system 过滤／`CompactionTranscriptBuilder` 两臂同 `Instant`）→ T2 JSONL 惰性创建（`pending` 缓冲＋首个 user/assistant 一次性落盘＋fork `createImmediate`）→ T3 pi v1/v2 迁移（`LegacyPiVersionMigrator` v1→v2→v3＋原子重写；`PiV3Wire.parseHeader` 接受 1/2/3）→ T5 新增测试＋存量夹具补首条对话 → T1 文档翻账 → T6 全量回归；窄差 D190–D194 | map/06 **+11.0** ⇒ 85.0/87 ≈ **97.7%**（存储后端 8 行翻对齐：对齐 19／缺失 0／存疑 1〔#6〕；**P0 session 条清零**）；map/04／map/02／map/05 不动；全仓 1,205.0→**1,216.0/1383 ≈ 87.9%** |
+| 34 | docs/46 | 2026-10-31 | **TUI 队尾首批（交互主路批，序 27）**：T1 键位状态基座（`THINKING_SAVE` 入 overlay 表＋`MessageBubbleVisibility` 展开态缝＋`PiTuiApp.toolOutputExpanded`）→ T2 K7 `Shift+Tab` 循环 thinking＋K9 `Ctrl+T` 显隐 thinking（`GlobalKeyRouter` 两臂＋转录状态行）→ T3 K8 `Ctrl+O` 全局工具输出展开（投影参＋扩展选择器 `ctrl+o` 转发，D97 销）→ T4 K27 提示历史（新 `EditorHistory` 143 行＋`EditorComponent` ↑/↓ 三臂＋submit 记录）→ T5 S8 `ThinkingLevelScreen` 完整选择器（描述列／DEFAULT／`ctrl+s` 存默认／type-to-filter，D84 销）→ T6 K20 滚动键重裁（全屏 PgUp/PgDn 恒滚视口＋Ctrl+Home/End 顶底＋裸 Home/End/↑↓ 归还编辑器，B238-① 销）；K6/K10 账面翻账；窄差 D195–D200；**B259 立项不改码** | map/05 **+15.0** ⇒ 152.5/244 ≈ **62.5%**（8 行翻对齐：S8＋K6–K10＋K20＋K27；未加权 64/147 ≈ 43.5%）；map/04／map/02／map/06 不动；全仓 1,216.0→**1,231.0/1383 ≈ 89.0%**；**B66/B238①/D84/D97 销号**；设计稿 §11 预算 150.5 漏计 K6 的 +2.0，按逐行实算修正 |
 > 口径注记：批 8 起模块分母按**去重** 487（原 496），读数以最新一批闭环回填为准。
 
 ---
@@ -102,9 +106,9 @@
 
 | ~~23~~ | ~~模型可见面收口批~~ | — | **批 30 已闭环**（docs/42，2026-10-29）：B94/B95/B203/ai#8 全销；B95 裁决②落地（env→根标记→不产出；SDK 默认不产出；examples 行随 pi-java-examples/ 就位首次产出） |
 | ~~24~~ | ~~C 域 slash 尾（设置/scoped-models 选择器、Radius 分享/登录族）~~ | — | **批 31 已闭环**（docs/43，2026-10-30）：四行翻对齐＋Radius provider/OAuth；C 域 38.0/38＝100%（满分域第十四）；B226/D85 销号 |
-| 25 | evals 域收口（map/06 评测 29.1%，20 行多缺失） | 中 | **下一批（docs/44＝批 32）**；需先盘点立项（无独立台账项） |
-| 26 | session 余量（map/06 条目信封扩展键〔w3 存疑，P0 队列唯一剩条〕＋会话文件惰性创建等） | 小 | 取证为主（批 33） |
-| 27 | TUI 队尾批组（变量③ 屏域 S2a–d/S6–S8/S15–S19/S21/S24＋R7/R8＋长尾 B38/B39/B46/B47/B66/B78/B145/B238＋E5-31 TUI 臂挂账；估 4–6 批逐批立项） | 大 | **2026-10-29 拍板降为队尾，不取消**；排在序 23–26 之后、examples 之前 |
+| ~~25~~ | ~~evals 域收口（map/06 评测 29.1%，20 行多缺失）~~ | — | **批 32 已闭环**（docs/44，2026-10-31）：评测 20 行对齐 19/存疑 1（42.0/43 ≈ 97.7%），map/06 74.0/87 ≈ 85.1%；**B258 立项即销号**；窄差 D182–D189 |
+| ~~26~~ | ~~session 余量（map/06 条目信封扩展键〔w3 存疑，P0 队列唯一剩条〕＋会话文件惰性创建等）~~ | 小 | **批 33 已闭环**（docs/45，2026-10-31）：惰性创建＋pi v1/v2 迁移＋compaction `systemMessage`＋信封扩展键 D190；存储后端 8 行翻对齐（32.0→43.0/44 ≈ 97.7%），map/06 74.0→85.0/87 ≈ 97.7%；**P0 session 条清零**；窄差 D190–D194 |
+| 27 | TUI 队尾批组（变量③ 屏域 S2a–d/S6–S8/S15–S19/S21/S24＋R7/R8＋长尾 B38/B39/B46/B47/B66/B78/B145/B238＋E5-31 TUI 臂挂账；估 4–6 批逐批立项） | 大 | **2026-10-29 拍板降为队尾，不取消**；排在序 23–26 之后、examples 之前。**首批批 34 已闭环**（docs/46，2026-10-31：S8＋K6–K10＋K20＋K27，B66／B238①／D84／D97 销号）；余 3–5 批继续 |
 | 28 | examples 六批（组 2–10，合并映射维持 docs/39 §7 修订段） | 86 件 | **最尾**：其余欠账清零后启动（2026-10-29 用户裁决），批号届时重排——原批 29–34 编号已让位序 23–26 |
 
 **触发条件型欠账**（不占独立批次，随宿主批顺带收）：~~B246~~（批 16 已销号）、

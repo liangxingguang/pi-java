@@ -188,8 +188,7 @@ final class SessionPersistence {
             return session;
         }).orElseGet(() -> {
             var created = handle.create(cwd, null);
-            session.session(created);
-            attach(session, handle, created.getMetadata());
+            attachOpened(session, created, created.getMetadata());
             return session;
         });
         // 批 20（B32，pi main.ts:709-715）：--name 写 session_info（web 臂同）。
@@ -342,7 +341,7 @@ final class SessionPersistence {
             + "'; creating a new session with that id.");
         var created = handle.createWithId(cwd, args.sessionId());
         session.session(created);
-        attach(session, handle, created.getMetadata());
+        attachOpened(session, created, created.getMetadata());
     }
 
     /** create＋session 置换＋attach 的公共形（pi :448 / :1800 静默新建共用，T6a）。 */
@@ -363,7 +362,7 @@ final class SessionPersistence {
                                                String cwd, String parentSessionId) {
         var created = handle.create(cwd, parentSessionId);
         session.session(created);
-        attach(session, handle, created.getMetadata());
+        attachOpened(session, created, created.getMetadata());
         return session;
     }
 

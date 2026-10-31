@@ -209,8 +209,12 @@ final class PromptPipeline {
             // 批 16（T3c）：sections 基线＝harness 当前自定义段的拷贝，处理器改写
             // 的终态写回 harness——下一 run 的 promptLoadout diff 自动产补丁
             //（pi systemPromptOptions.sections 贯穿处理器、写回装配输入的链对位）。
+            // 批 32（docs/44 T2，裁决③）：事件 {@code systemPrompt} 传**渲染后**整份提示
+            // （pi runner.ts:1420-1472 的 event.systemPrompt 对位）——此前传
+            // {@code harness::getSystemPrompt}（车道 customPrompt，通常空串），扩展
+            // 拿不到模型实际收到的提示。
             var start = owner.extensionFirer().beforeAgentStart(expandedPrompt,
-                owner.harness()::getSystemPrompt, owner.harness().getPromptSections());
+                owner.harness()::currentSystemPrompt, owner.harness().getPromptSections());
             for (var draft : start.messages()) {
                 owner.messaging().appendCustomDraft(draft);
             }

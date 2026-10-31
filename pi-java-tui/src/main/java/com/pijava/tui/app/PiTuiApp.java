@@ -83,6 +83,8 @@ public final class PiTuiApp {
     // 批 15（T2c）：fatal marker 臂置位——launcher 退出码改 1（pi exit(1)）。
     // 批 29：包私有缝（SlashFlowRouter 的 fatal 臂置位）。
     volatile boolean fatalExit;
+    // 批 34（K8；pi toolOutputExpanded :4561）：Ctrl+O 驱动的全局工具输出展开态。
+    volatile boolean toolOutputExpanded;
 
     /** Creates the app with the default scroll configuration. */
     public PiTuiApp(InteractiveMode mode, ChatScreen chatScreen,
@@ -132,6 +134,8 @@ public final class PiTuiApp {
         // hideThinkingBlock 现读：设置页切换后当前转录也立即隐藏/恢复 thinking。
         com.pijava.tui.component.MessageBubbleVisibility.install(() ->
             Boolean.TRUE.equals(session.services().settings().accessors().getHideThinkingBlock()));
+        // 批 34（K8）：工具输出展开态现读缝（Ctrl+O 翻转 ⇒ 下一帧重投影）。
+        com.pijava.tui.component.MessageBubbleVisibility.installToolsExpanded(() -> toolOutputExpanded);
         this.sessionEvents = new SessionEventChannel(dispatcher, chatScreen::onSessionEvent);
         // 批 12（docs/23）：settings 消费键 live-read 注入——先于补全目录装配
         // （completer 重建带上 maxVisible 源）；现读 this.session ⇒ switchSession
@@ -375,6 +379,17 @@ public final class PiTuiApp {
     /** 双击时间窗的时钟注入（测试面；生产 System::currentTimeMillis）。 */
     void setNowMillis(java.util.function.LongSupplier supplier) {
         keyRouter.setNowMillis(supplier);
+    }
+
+    /** 批 34（K8；pi :4557/:4561）：翻转全局工具输出展开态（幂等短路＋状态行）。 */
+    void toggleToolsExpanded() { setToolsExpanded(!toolOutputExpanded); }
+
+    void setToolsExpanded(boolean expanded) {
+        if (expanded == toolOutputExpanded) {
+            return;
+        }
+        toolOutputExpanded = expanded;
+        chatScreen.appendSystemText("Tool output: " + (expanded ? "expanded" : "collapsed"));
     }
 
     /** 终端行数（ResizeEvent 跟踪，初值 24——裁决⑧）。 */

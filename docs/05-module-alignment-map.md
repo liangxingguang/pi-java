@@ -77,18 +77,18 @@ protocol/client/server 按 R1 整体排除（未加权数字见 map/01）。pi-j
 
 ---
 
-## 1 总表（coding-agent 批 31 后值，2026-10-30；agent-core 批 5 后值，2026-10-18；telemetry 批 1 后值，2026-10-17；ai 批 31 后 2026-10-30；批 3b/4/6/8 为台账行为项、加权不变；批 28 账面不动〔examples 批 1〕；其余模块为 2026-10-12 重测值）
+## 1 总表（coding-agent 批 31 后值，2026-10-30；evals 批 32／session 批 33 后值，2026-10-31；agent-core 批 5 后值，2026-10-18；telemetry 批 1 后值，2026-10-17；ai 批 31 后 2026-10-30；批 3b/4/6/8 为台账行为项、加权不变；批 28 账面不动〔examples 批 1〕；其余模块为 2026-10-12 重测值）
 
 | 模块（地图） | Σ权重 | Σ(w×c) | **加权完成度** | 未加权 | 权重 3 层 |
 |---|---:|---:|---:|---:|---:|
 | pi-java-ai（map/02，**批31后**） | 223 | 212.0 | **95.1%** | 86.6%（103/119） | **100%（33/33）** |
 | pi-java-mcp（map/07，**批30后**） | 129 | 121.0 | **93.8%** | 83.1%（74/89） | 100%（1/1） |
 | pi-java-agent-core（map/03，**批5后**） | 180 | 180.0 | **100%** | 100%（90/90） | **100%（27/27）** |
-| session-sqlite ＋ evals（map/06） | 87 | 44.5 | **51.1%** | 50.0%（20/40） | — |
+| session-sqlite ＋ evals（map/06，**批33后**） | 87 | 85.0 | **97.7%** | 95.0%（38/40） | — |
 | pi-java-telemetry（map/01，**批1后**） | 34 | 34.0 | **100%** | 100%（16/16） | 100%（21/21） |
-| pi-java-tui/web（map/05，**批31后**） | 244 | 137.5 | **56.4%** | 38.1%（56/147） | 71.2% |
+| pi-java-tui/web（map/05，**批34后**） | 244 | 152.5 | **62.5%** | 43.5%（64/147） | 75.0% |
 | pi-java-coding-agent（map/04，剔 MCP 粗单元） | 485 | 449.5 | **92.7%** | 85.5%（247.0/289） | 87.0%（20/23） |
-| **合计（去重后，coding-agent 批31后）** | **1,383** | **1,175.5** | **85.0%** | — | — |
+| **合计（去重后，coding-agent 批31/session 批33/tui 批34后）** | **1,383** | **1,231.0** | **89.0%** | — | — |
 
 > map/04 原始口径（含 G-1..G-5）：Σw 494 ／ Σwc 454.0 ／ **91.9%**（批 31：C 域四行翻正＋旧汇总纠错）；两处账都在，总表用去重值。
 > w3 注记（批 19）：包管理器 #18/#19/#23 清零（批 18 两翻当时漏入 w3 表，本批收平）⇒ 73.9%（17/23）→ 87.0%（20/23）。
@@ -183,15 +183,15 @@ G 域新子系统：MCP 明细在 map/07；codemode 3,957 行＋tool-search/virt
 - 批 28（2026-10-28 闭环，docs/40，**examples 移植批 1——组 1「事件守卫与输入改写」16 件**）：**T1 模块地基**（`pi-java-examples` 第 12 模块；main 资源 services 全量登记；不进 pi-java-dist）→ **T2 宿主面补缺**（`ExtensionContext.cwd()`＋`ExtensionSessionView`〔pi `ReadonlySessionManager` 对位，落 `getEntries()`，余 14 成员挂账〕）→ **T3–T8 十六件**（hello／structured-output〔terminate〕／dynamic-tools／permission-gate／protected-paths／confirm-destructive／dirty-repo-guard／project-trust／input-transform／input-transform-streaming／inline-bash／pirate／claude-rules／prompt-customizer／event-bus／provider-payload〔`JsJson` 手写 JSON.stringify 语义臂——F2 取证空容器/整型键序/数字形字节差〕；F3 取证 TypeBox 1.3.27 键序）。map/04 **无行翻动**——账面不动（模块 446.0/485 ≈ 92.0%、合计 1,163.0/1379 ≈ 84.3% 保持；docs/40 §7：E5-33/F#22 翻行以 102 件处置完毕为条件，本批 **16/102**）。窄差 D172–D175。排障钉：TCCL 夹具第三钉（作用域 loader 须过滤父链上 examples 主名单）／`Map.of` 不保单序（JSON 键序锚点须 LinkedHashMap）／`ScriptedUi` null 应答哨兵／spotbugs 一钉（NP_BOOLEAN_RETURN_NULL⇒两态 boolean）。新模块 18 主文件＋17 测试件 **69 用例**。
 - 批 31（2026-10-30 闭环，docs/43，**C 域 slash 尾——`/settings`／`/scoped-models`／`/share`／`/login`＋Radius**）：**T1–T3 settings**（完整设置项表＋子菜单＋三态/嵌套写回）→ **T4/T5 scoped-models**（`ScopedModelsScreen`＋`ScopedModelController`＋`ScopedModelRefresh`；`All`/显式空表分流、会话 scope、Ctrl+S 持久化、15s 刷新＋代次取消）→ **T6–T9/T11 login**（`ProviderLoginCatalog`/`ProviderLoginService`/`LoginFlow`/`LoginDialogScreen`/`LoginProviderScreen`＋`RadiusMcpOffer` 写回 mcp.json＋reload）→ **T10 share**（`SessionShareService`＋`RadiusArtifactUploader`＋`GhCli`：Radius 优先且尝试后不 fallback，无 token 走私有 gist）→ **Radius provider/OAuth**（`RadiusProvider`＋`RadiusGatewayClient`＋`RadiusOAuthFlow`/`Config`/`Http`；`/v1/config` 动态目录整替 baseline）→ **D85 销号**（`/bug` 有 Radius token 时带 Bearer、刷新失败不匿名降级）。map/04 **C 域四行 +3.0＋旧汇总纠错 +0.5** ⇒ C 域 38.0/38＝100%（满分域第十四）；模块 446.0→**449.5/485 ≈ 92.7%**（去重；原始口径 454.0/494 ≈ 91.9%、未加权 248/289 ≈ 85.8%）。map/02 **两行 +4.0** ⇒ 212.0/223 ≈ 95.1%；map/05 **三行 +4.0** ⇒ 137.5/244 ≈ 56.4%。合计 1,164.0→**1,175.5/1,383 ≈ 85.0%**。**B226 销号**；窄差 D176–D181；行为变化注记：`/settings`/`/scoped-models`/`/share`/`/login` 从占位/简版变完整交互面，Radius 出现在登录目录与分享上传优先链。测试新增/改写见 docs/43 §13。
 
-### 2.5 tui/web — 56.4%（总表行；map/05 域表 56.4%）｜ map/05
+### 2.5 tui/web — 62.5%（总表行；map/05 域表 62.5%）｜ map/05
 
-web 对齐面 81.8% 最高；主题/样式 36.1% 最低。**批 25（docs/36）Markdown 激活批落地**：B65 死代码接线销号——R1/R2/R3/R4/R5/R9 六行翻对齐（渲染特性 19.2% → 44.9%；w3 子集 67.3% → 71.2%）；逐工具渲染器缺（B47）。**批 31（docs/43）**：S7 scoped-models 选择器、S15 设置子菜单、S17 登录对话框三行缺失→对齐（+4.0）。
-新锚点带来 4 条新行为缺口（B238）：Ctrl+Home/End 视口键、安装变更重启警告、OSC 7501 程序状态、APC 假光标。
+web 对齐面 81.8% 最高；主题/样式 36.1% 最低。**批 25（docs/36）Markdown 激活批落地**：B65 死代码接线销号——R1/R2/R3/R4/R5/R9 六行翻对齐（渲染特性 19.2% → 44.9%；w3 子集 67.3% → 71.2%）；逐工具渲染器缺（B47）。**批 31（docs/43）**：S7 scoped-models 选择器、S15 设置子菜单、S17 登录对话框三行缺失→对齐（+4.0）。**批 34（docs/46）TUI 队尾首批**：S8 thinking 选择器（+2.0）＋K6/K7/K8/K9/K10/Key20/Key27 七行翻对齐（+13.0）⇒ 137.5→**152.5/244 ≈ 62.5%**（未加权 64/147 ≈ 43.5%）；B66／B238①／D84／D97 销号；K27 提示历史落 `EditorHistory`（143 行），C16 仍存疑（缺 K26/K31）。
+新锚点带来 4 条新行为缺口（B238）：~~Ctrl+Home/End 视口键~~（批 34 已销号）、安装变更重启警告、OSC 7501 程序状态、APC 假光标。
 
-### 2.6 session ＋ evals — 51.1% ｜ map/06
+### 2.6 session ＋ evals — 97.7% ｜ map/06
 
-存储后端 **72.7%**（重测最大跃升：投影/context_edit/会话名/标签/JSONL v3 头五条转对齐；旧值 48.9%）。
-残余缺口：条目信封扩展键存疑（权重 3）、不迁 pi v1/v2、会话文件惰性创建。评测 29.1%（20 行多缺失，无独立台账项）。
+存储后端 **97.7%**（批 33（docs/45）收口：会话文件惰性创建、pi v1/v2 迁移、compaction `systemMessage`、条目信封扩展键 D190 四实现＋`#3`/`#9`/`#14`/`#20` 四项账面纠错 ⇒ 32.0→43.0/44）。
+残余缺口：仅 `#6` 存疑（lane 模型 vs pi 单 leaf 树，权重 2；S1）。**批 32（docs/44）评测 20 行收口**：15 行缺失/存疑→对齐、`#20` 缺失→存疑，评测 12.5→**42.0/43 ≈ 97.7%**（B258 销号）⇒ 本范围 44.5→74.0→**85.0/87 ≈ 97.7%**（未加权 95.0%，38/40）。
 chord 按 R5 权重 0；sqlite 模块保留但参照后端已删（B59 裁决）。
 
 ### 2.7 telemetry / protocol / client / server — map/01
@@ -206,8 +206,8 @@ protocol/client/server 按 R1 整体移出分母：protocol 是已删 pi 代码�
 - **ai：零条** ✅。
 - **agent-core：零条** ✅（批 5 后模块 100%——权重 3 层 27/27＋确认缺失清零＋存疑清零）。
 - **coding-agent（权重 3 层 87.0%）**：剩余：examples/ 可执行验收规格（map/04 w3 #17、E5-33/F#22——2026-10-29 用户裁决：全做维持、**排期最尾**，其余欠账清零后启动）；~~包管理器三件（#18/#19/#23）~~（批 18/19 销）。
-- **tui（权重 3 层 71.2%——批 25 R1 翻对齐）**：逐工具渲染器（B47）、spinner/working 指示器、提示历史（K27）、主题 token 覆盖残余（~~B163~~ 批 21 销号）等渲染长尾。**2026-10-29 用户裁决：TUI/web 未做面降为队尾不取消**（web 为主交互；docs/06 §3 序 26）。
-- **session**：JSONL 条目信封形状（map/06 #16，权重 3 存疑）。
+- **tui（权重 3 层 75.0%——批 25 R1 翻对齐＋批 34 K27 翻对齐）**：逐工具渲染器（B47）、spinner/working 指示器、主题 token 覆盖残余（~~B163~~ 批 21 销号）、编辑面长尾 K26 大粘贴／K31 jump mode 等渲染长尾（~~K27 提示历史~~ 批 34 销号）。**2026-10-29 用户裁决：TUI/web 未做面降为队尾不取消**（web 为主交互；docs/06 §3 序 26）；批 34 已落首批。
+- **session：零条** ✅（批 33 后 map/06 权重 3 层清零——`#16` 条目信封翻对齐）。
 
 ---
 

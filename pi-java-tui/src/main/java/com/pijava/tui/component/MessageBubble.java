@@ -168,7 +168,7 @@ public final class MessageBubble {
      * 批 16（T4d）：ToolUse 臂——渲染器命中用其行（标题行加粗对位 pi 的
      * {@code toolTitle} bold；args 部分 pi 是 muted，文本级接口不分段 ⇒ 整行 bold
      * 首行＋dim 续行，窄差 D92 的着色粒度差），未命中回落 ToolCallCard。
-     * java 无 expanded 交互缝 ⇒ 恒折叠臂（D92 含此项）。
+     * 批 34（K8）：expanded 改现读全局展开态（Ctrl+O 驱动，D197）。
      */
     private static List<LogicalLine> toolUseLines(String name, Map<String, Object> arguments) {
         var renderer = ToolRenderers.resolve(name);
@@ -176,7 +176,7 @@ public final class MessageBubble {
             return new ToolCallCard(toolName(name), toolArgs(arguments), "running").lines();
         }
         var rendered = renderer.renderCall(toolName(name),
-            arguments == null ? Map.of() : arguments, false);
+            arguments == null ? Map.of() : arguments, MessageBubbleVisibility.toolsExpanded());
         return styledFlat(rendered, 0, Style.EMPTY.bold(), Style.EMPTY.dim());
     }
 
@@ -192,7 +192,7 @@ public final class MessageBubble {
                 isError ? "error" : "done").lines();
         }
         var rendered = renderer.renderResult(toolName(toolName), joinText(content),
-            isError, false);
+            isError, MessageBubbleVisibility.toolsExpanded());
         var style = isError ? Style.EMPTY.red() : Style.EMPTY.dim();
         return styledFlat(rendered, TOOL_INDENT, style, style);
     }

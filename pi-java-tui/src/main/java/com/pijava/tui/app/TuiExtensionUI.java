@@ -97,7 +97,7 @@ public final class TuiExtensionUI implements ExtensionUI {
         }
         var result = new CompletableFuture<String>();
         var overlay = new ExtensionSelectorOverlay(title, options, host.keybindings(),
-            host.terminalCols(), result);
+            host.terminalCols(), result, host::toggleToolsExpanded);
         return runDialog(overlay, overlay, result, signal,
             opts != null ? opts.timeoutMillis() : null);
     }

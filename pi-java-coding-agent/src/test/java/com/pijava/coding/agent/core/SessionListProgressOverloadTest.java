@@ -43,8 +43,12 @@ class SessionListProgressOverloadTest {
     }
 
     private AgentSession session() {
-        return AgentSession.create(ArgsParser.parse(
+        var s = AgentSession.create(ArgsParser.parse(
             new String[] {"--session-dir", root.toString()}));
+        // 批 33（#19）：建会话不落盘——被测会话自身也要有条对话才会被列出。
+        s.session().appendMessage(new Message.UserMessage(List.of(
+            new ContentBlock.TextContent("live"))));
+        return s;
     }
 
     @Test
@@ -89,7 +93,9 @@ class SessionListProgressOverloadTest {
                     signal.abort();   // 首帧即中止（pi throwIfAborted 对位）
                 }, signal))
                 .hasMessageContaining("bort");   // Aborted 文案形（AbortException）
-            assertThat(frames).hasSize(1);
+            // pi 同款 10 路 worker：中止只在循环头检查，已在飞的 worker 会把手头
+            // 文件读完并发布——首帧中止后最多再收到一圈并发帧，而不是恰好 1 帧。
+            assertThat(frames).hasSizeLessThanOrEqualTo(10);
         }
     }
 

@@ -2,10 +2,13 @@ package com.pijava.agent.session.jsonl;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 import com.pijava.agent.entry.Entry;
 import com.pijava.agent.session.LogItem;
 import com.pijava.agent.session.LogOptions;
+import com.pijava.ai.message.ContentBlock;
+import com.pijava.ai.message.Message;
 import com.pijava.ai.message.StopReason;
 
 import org.junit.jupiter.api.Test;
@@ -106,6 +109,11 @@ class PiV3UsageEntryTest {
         Path dir = Files.createTempDirectory("pi-v3-usage-cache-warm");
         var repo = JsonlSessionRepository.over(dir);
         var session = repo.create(new JsonlSessionCreateOptions(null, "work", null, null));
+        // 批 33（#19）：惰性创建要求先有 user/assistant 消息才落盘。
+        session.appendEntry(new com.pijava.agent.entry.ProvisionedEntry<>(new Entry.Message(
+            "m1", 0, null, null,
+            new Message.UserMessage(List.of(new ContentBlock.TextContent("hi")), null), null)),
+            "main");
         session.appendEntry(new com.pijava.agent.entry.ProvisionedEntry<>(new Entry.Usage(
             "u9", 0, null, null, "cache_warm", "anthropic", "claude-opus-4-6",
             new com.pijava.ai.Usage(0, 1, 100, 0, null, null, 101,
@@ -163,6 +171,11 @@ class PiV3UsageEntryTest {
         Path dir = Files.createTempDirectory("pi-v3-usage-write");
         var repo = JsonlSessionRepository.over(dir);
         var session = repo.create(new JsonlSessionCreateOptions(null, "work", null, null));
+        // 批 33（#19）：惰性创建要求先有 user/assistant 消息才落盘。
+        session.appendEntry(new com.pijava.agent.entry.ProvisionedEntry<>(new Entry.Message(
+            "m1", 0, null, null,
+            new Message.UserMessage(List.of(new ContentBlock.TextContent("hi")), null), null)),
+            "main");
         session.appendEntry(new com.pijava.agent.entry.ProvisionedEntry<>(new Entry.Usage(
             "u1", 0, null, null, "assistant", "anthropic", "claude-sonnet-5-5",
             new com.pijava.ai.Usage(100, 20, 40, 10, 6.0, 8.0, 170,

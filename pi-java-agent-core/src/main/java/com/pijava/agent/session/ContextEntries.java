@@ -122,7 +122,9 @@ public final class ContextEntries {
             if (e.id().equals(firstKeptId)) {
                 foundFirstKept = true;
             }
-            if (foundFirstKept) {
+            // pi buildContextEntries:506：保留段里的 system 消息不进食上下文
+            // （压缩点之后的 system 消息照常全收，:510）。
+            if (foundFirstKept && !isSystemMessageEntry(e)) {
                 context.add(e);
             }
         }
@@ -185,14 +187,11 @@ public final class ContextEntries {
                 // 标记；pi 规定只有（下标 0 的）最新 compaction 贡献摘要消息。
                 messages = List.of();
             } else {
-                Message projectedMessage = project(e);
-                messages = projectedMessage == null ? List.of() : List.of(projectedMessage);
+                messages = projectMessages(e);
             }
             Entry.ContextEdit edit = edits.get(e.id());
             if (edit != null) {
-                Message base = messages.isEmpty() ? null : messages.getFirst();
-                Message effective = base == null ? null : applyEdit(base, edit);
-                messages = effective == null ? List.of() : List.of(effective);
+                messages = applyEdit(messages, edit);
             }
             projected.add(new ProjectedEntry(e, messages));
         }
@@ -207,16 +206,54 @@ public final class ContextEntries {
     }
 
     /**
-     * pi {@code projectContextEntry}（session-manager.ts:519-542）：replacement
-     * 为 null ⇒ 剔除目标；非 null ⇒ 只换 content，消息元数据（usage/timestamp/api…）
-     * 保留。edit 白名单仅 user/assistant/toolResult 消息与 custom_message
-     * （appendContextEdit 的 editable 判定）；custom_message 在投影时已是
-     * {@link Message.UserMessage}，走第一支。裸串 content 经
-     * {@link CustomMessageContent#toBlocks()} 归一成 text 块（导入形兜底，:533-536）。
+     * 批 33（#8）：一条源条目投影出的消息列表。compaction 带
+     * {@code systemMessage} ⇒ {@code [systemMessage, 摘要]}（pi
+     * {@code session-manager.ts:461-464}）；其余条目仍是零或一条。
      */
-    private static Message applyEdit(Message message, Entry.ContextEdit edit) {
+    private static List<Message> projectMessages(Entry e) {
+        if (e instanceof Entry.Compaction c) {
+            Message summary = project(c);
+            return c.systemMessage() == null
+                ? List.of(summary)
+                : List.of(c.systemMessage(), summary);
+        }
+        Message projected = project(e);
+        return projected == null ? List.of() : List.of(projected);
+    }
+
+    /** 保留段内的 system 消息条目（pi {@code buildContextEntries:506} 的过滤判据）。 */
+    private static boolean isSystemMessageEntry(Entry e) {
+        return e instanceof Entry.Message m && m.message() instanceof Message.SystemMessage;
+    }
+
+    /**
+     * pi {@code projectContextEntry}（session-manager.ts:519-542）的列表级应用
+     * （批 33 起 compaction 可投影出两条消息，:525 对每条生效）：replacement
+     * 为 null ⇒ 剔除全部；否则逐条套用单条逻辑，system 消息不在 pi 白名单 ⇒
+     * 原样保留。
+     */
+    private static List<Message> applyEdit(List<Message> messages, Entry.ContextEdit edit) {
         if (edit.replacement() == null) {
-            return null;
+            return List.of();
+        }
+        List<Message> edited = new ArrayList<>(messages.size());
+        for (var message : messages) {
+            edited.add(applyEditToMessage(message, edit));
+        }
+        return edited;
+    }
+
+    /**
+     * 单条消息的 edit（原 docs/13 §4.2）：replacement 为 null ⇒ 剔除；非 null ⇒
+     * 只换 content，消息元数据（usage/timestamp/api…）保留。edit 白名单仅
+     * user/assistant/toolResult 消息与 custom_message（appendContextEdit 的
+     * editable 判定）；custom_message 在投影时已是 {@link Message.UserMessage}，
+     * 走第一支。裸串 content 经 {@link CustomMessageContent#toBlocks()} 归一成
+     * text 块（导入形兜底，:533-536）。
+     */
+    private static Message applyEditToMessage(Message message, Entry.ContextEdit edit) {
+        if (edit.replacement() == null) {
+            return message;
         }
         List<ContentBlock> blocks = edit.replacement().content().toBlocks();
         if (message instanceof Message.UserMessage user) {

@@ -196,6 +196,8 @@ class SessionPersistenceResolutionTest {
         }
         String otherId;
         try (var b = rig(dir)) {
+            // 批 33（#19）：无对话的会话不落盘——先跑一轮，--session-id 目标才查得到。
+            b.processPrompt("second").status();
             otherId = b.sessionId();
         }
 

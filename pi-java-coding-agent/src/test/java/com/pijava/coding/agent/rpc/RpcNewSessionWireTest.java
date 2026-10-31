@@ -11,6 +11,8 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import com.pijava.agent.tool.DefaultFileSystem;
 import com.pijava.agent.tool.DefaultShellExecutor;
 import com.pijava.agent.tool.ToolContext;
+import com.pijava.ai.message.ContentBlock;
+import com.pijava.ai.message.Message;
 import com.pijava.ai.provider.FauxProvider;
 import com.pijava.ai.provider.ProviderRegistry;
 import com.pijava.coding.agent.cli.ArgsParser;
@@ -171,6 +173,9 @@ class RpcNewSessionWireTest {
                 + "\"parentSession\":\"parent-file-id\"}");
 
             assertThat(responseLine(out)).contains("\"cancelled\":false");
+            // 批 33（#19）：新会话惰性落盘——先写首条对话，header 才落文件。
+            d.currentSession().session().appendMessage(
+                new Message.UserMessage(List.of(new ContentBlock.TextContent("seed"))));
             // header 落盘断言：新会话 jsonl 首行含 parentSession（pi 线键逐字，
             // session-manager.ts:1069 对位）。
             var file = Path.of(d.currentSession().sessionFile());

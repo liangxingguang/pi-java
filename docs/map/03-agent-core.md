@@ -384,7 +384,7 @@ pi 侧证据锚定 `agent/src/*` 或 `coding-agent/src/core/*`。
 
 | # | 旧判定 | 新判定 | 依据 |
 |---|---|---|---|
-| **#73** JSONL 存储 | 存疑（形状，v4 vs v3） | **对齐** | pi-java 落 pi v3 原生线：`PiV3Wire` 头、label/session_info/usage/context_edit 原生条目、消息原生拼写、方言行挂 custom 并链接入树、legacy 头惰性迁移；`PiV3WireFormatTest`/`PiNativeSpelling*Test` 双向夹具（2026-10-04/05，包 12–14） |
+| **#73** JSONL 存储 | 存疑（形状，v4 vs v3） | **对齐** | pi-java 落 pi v3 原生线：`PiV3Wire` 头、label/session_info/usage/context_edit 原生条目、消息原生拼写、方言行挂 custom 并链接入树、legacy 头惰性迁移；`PiV3WireFormatTest`/`PiNativeSpelling*Test` 双向夹具（2026-10-04/05，包 12–14）。**批 33（docs/45）注记**：条目信封的 `lane`／`retainedTail` 扩展键与会话文件惰性创建不改变 v3 落线判定（pi `JSON.parse` 忽略未知键）；`PiV3Wire.parseHeader` 头解析放宽到 v1/v2，读前经 `LegacyPiVersionMigrator` 迁移 |
 | **#102** reset 基线 system | 存疑 | **对齐** | **B70 已取证消解**：载体不同（pi 首条消息 vs java `Context.systemPrompt` 字段）、行为一致（清空工作副本不丢基线，下次请求重注入） |
 | **#86** `_emitSessionCompactFailed` | 存疑（F3） | **作废（R1）** | pi 该方法**只**发扩展事件 `session_compact_failed`（归 04）；公开失败事件是 java 已齐的 `compaction_end{errorMessage}`；java 源码注释同裁决 |
 | **#88** `ActiveToolsChange` | 存疑（C1） | **作废（R1）** | `active_tools_change` 在 pi 两锚全树零命中；java 早已据 R2 删变体（`Entry.java:23-24`） |

@@ -24,7 +24,7 @@ class ExtensionSelectorOverlayTest {
 
     private ExtensionSelectorOverlay overlay(List<String> options,
                                              CompletableFuture<String> result) {
-        return new ExtensionSelectorOverlay("Pick", options, keys, () -> 80, result);
+        return new ExtensionSelectorOverlay("Pick", options, keys, () -> 80, result, null);
     }
 
     private static String visibleText(List<List<ExtensionSelectorOverlay.Span>> layout) {
@@ -95,6 +95,37 @@ class ExtensionSelectorOverlayTest {
         assertThat(overlay.isDone()).isTrue();
         overlay.apply(null, s -> { });
         assertThat(result).isCompletedWithValue(null);
+    }
+
+    // ── ctrl+o 转发（批 34，K8/D97；pi extension-selector.ts:98-100）──
+
+    @Test
+    void ctrlOForwardsToolsExpandWithoutNavigating() {
+        var result = new CompletableFuture<String>();
+        var toggled = new java.util.concurrent.atomic.AtomicInteger();
+        var overlay = new ExtensionSelectorOverlay(
+            "Pick", List.of("a", "b"), keys, () -> 80, result, toggled::incrementAndGet);
+
+        overlay.onKeyEvent(KeyEvent.ofChar('o', KeyModifiers.CTRL));
+        assertThat(toggled).hasValue(1);
+        assertThat(overlay.isDone()).isFalse();
+
+        // 先于导航判定：选中项未移动，Enter 仍提交首项。
+        overlay.onKeyEvent(KeyEvent.ofKey(KeyCode.ENTER));
+        overlay.apply(null, s -> { });
+        assertThat(result).isCompletedWithValue("a");
+    }
+
+    @Test
+    void ctrlOWithoutForwarderIsStillConsumed() {
+        var result = new CompletableFuture<String>();
+        var overlay = overlay(List.of("a", "b"), result);
+
+        overlay.onKeyEvent(KeyEvent.ofChar('o', KeyModifiers.CTRL));
+        assertThat(overlay.isDone()).isFalse();
+        overlay.onKeyEvent(KeyEvent.ofKey(KeyCode.ENTER));
+        overlay.apply(null, s -> { });
+        assertThat(result).isCompletedWithValue("a");
     }
 
     // ── 渲染行形（pi 构造器子件序＋updateList）──

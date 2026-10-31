@@ -116,6 +116,16 @@ public final class SelectList<T> {
         return confirmed;
     }
 
+    /** 批 34（S8）：过滤后的可见项（自绘列表读点）。 */
+    public List<T> visibleItems() {
+        return List.copyOf(visible);
+    }
+
+    /** 批 34（S8）：当前选中下标（钳过界；空表为 0）。 */
+    public int selectedIndex() {
+        return Math.min(selected, Math.max(0, visible.size() - 1));
+    }
+
     /** Reset selection state (e.g. when reopening the selector). */
     public void reset() {
         selected = 0;

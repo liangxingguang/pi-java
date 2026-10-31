@@ -412,8 +412,13 @@ public final class RpcDispatcher {
         }
     }
 
-    /** 当前会话（批 17 评审回补 #2 的测试探针；new_session 后是新对象）。 */
-    AgentSession currentSession() {
+    /**
+     * 当前会话（new_session 后是新对象）。
+     *
+     * <p>批 17 评审回补 #2 的测试探针；批 33 起跨包夹具（惰性落盘需给新会话
+     * 写首条对话）也读此出口。</p>
+     */
+    public AgentSession currentSession() {
         return session;
     }
 

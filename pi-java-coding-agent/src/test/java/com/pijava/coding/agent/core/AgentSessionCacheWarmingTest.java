@@ -22,6 +22,7 @@ import com.pijava.agent.tool.ToolContext;
 import com.pijava.ai.Usage;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
+import com.pijava.ai.message.Message;
 import com.pijava.ai.message.StopReason;
 import com.pijava.ai.provider.FauxProvider;
 import com.pijava.ai.provider.ProviderRegistry;
@@ -186,6 +187,9 @@ class AgentSessionCacheWarmingTest {
         var handle = PersistentSessionRepositories.jsonl(dir);
         try (var session = AgentSession.create(args, handle, providers, toolContext(),
                 SettingsManager.load(args.projectTrustOverride()))) {
+            // 批 33（#19）：建会话不落盘——先产生首条对话，appendUsage 才随之写出。
+            session.session().appendMessage(new Message.UserMessage(List.of(
+                new ContentBlock.TextContent("seed"))));
             var events = new CopyOnWriteArrayList<AgentSessionEvent>();
             try (var sub = session.subscribe(events::add)) {
                 var usage = new Usage(0, 1, 100, 0, null, null, 101,

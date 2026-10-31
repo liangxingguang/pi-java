@@ -57,7 +57,7 @@ class PirateExtensionTest {
                 session.services().slashCommands().get("pirate")
                     .execute("", SlashContext.of(session)).toCompletableFuture().join();
 
-                var base = session.harness().getSystemPrompt();
+                var base = session.harness().currentSystemPrompt();
                 var result = session.processPrompt("ahoy", PromptConfig.defaults());
                 assertThat(result.status().exitCode()).isZero();
                 assertThat(session.harness().getSystemPrompt())

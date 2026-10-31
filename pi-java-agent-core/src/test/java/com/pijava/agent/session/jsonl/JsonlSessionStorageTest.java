@@ -221,6 +221,8 @@ class JsonlSessionStorageTest {
         Path dir = Files.createTempDirectory("pi-jsonl-a7");
         var repo = JsonlSessionRepository.over(dir);
         var session = repo.create(new JsonlSessionCreateOptions("s1", "cwd", null, null));
+        // 批 33（#19）：惰性创建要求先有 user/assistant 消息才落盘。
+        session.appendEntry(message("m1", "hi"), "main");
         var details = java.util.Map.of("kind", "card",
             "nested", java.util.Map.of("n", List.of(1, 2)));
         var usage = java.util.Map.of("input", 3, "output", 5);

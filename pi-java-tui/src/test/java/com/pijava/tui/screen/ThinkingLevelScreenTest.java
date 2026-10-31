@@ -35,7 +35,8 @@ class ThinkingLevelScreenTest {
         try (var session = session()) {
             var current = session.harness().getThinkingLevel();
             var statuses = new ArrayList<String>();
-            var screen = new ThinkingLevelScreen(session, statuses::add);
+            var screen = new ThinkingLevelScreen(session,
+                new com.pijava.coding.agent.core.KeybindingsManager(), () -> 80, statuses::add);
 
             screen.onKeyEvent(ENTER); // 当前级预选 ⇒ 直接 Enter
             assertThat(screen.isDone()).isTrue();
@@ -51,7 +52,8 @@ class ThinkingLevelScreenTest {
         try (var session = session()) {
             session.setThinkingLevel(ModelThinkingLevel.off());
             var statuses = new ArrayList<String>();
-            var screen = new ThinkingLevelScreen(session, statuses::add);
+            var screen = new ThinkingLevelScreen(session,
+                new com.pijava.coding.agent.core.KeybindingsManager(), () -> 80, statuses::add);
 
             screen.onKeyEvent(DOWN);  // off ⇒ minimal
             screen.onKeyEvent(ENTER);
@@ -69,7 +71,8 @@ class ThinkingLevelScreenTest {
         try (var session = session()) {
             var before = session.harness().getThinkingLevel();
             var statuses = new ArrayList<String>();
-            var screen = new ThinkingLevelScreen(session, statuses::add);
+            var screen = new ThinkingLevelScreen(session,
+                new com.pijava.coding.agent.core.KeybindingsManager(), () -> 80, statuses::add);
 
             screen.onKeyEvent(DOWN);
             screen.onKeyEvent(ESC);
@@ -84,7 +87,8 @@ class ThinkingLevelScreenTest {
     @Test
     void renderShowsTitle() throws Exception {
         try (var session = session()) {
-            var screen = new ThinkingLevelScreen(session, s -> { });
+            var screen = new ThinkingLevelScreen(session,
+                new com.pijava.coding.agent.core.KeybindingsManager(), () -> 80, s -> { });
             assertThat(screen.render()).isNotNull();
         }
     }

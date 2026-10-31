@@ -7,6 +7,8 @@ import java.util.Map;
 import com.pijava.agent.tool.DefaultFileSystem;
 import com.pijava.agent.tool.DefaultShellExecutor;
 import com.pijava.agent.tool.ToolContext;
+import com.pijava.ai.message.ContentBlock;
+import com.pijava.ai.message.Message;
 import com.pijava.ai.provider.FauxProvider;
 import com.pijava.ai.provider.ProviderRegistry;
 import com.pijava.coding.agent.cli.ArgsParser;
@@ -52,6 +54,9 @@ class InitialNameWritebackTest {
     void nameSurvivesResume() {
         try (var s = session("--session-dir", tmp.toString(),
                 "--session-id", "n2", "--name", "kept")) {
+            // 批 33（#19）：惰性落盘——首条对话触发 header＋session_info 写出。
+            s.session().appendMessage(new Message.UserMessage(List.of(
+                new ContentBlock.TextContent("seed"))));
             assertThat(s.storedSessionName()).isEqualTo("kept");
         }
         // resume（-c 空臂静默新建会挑它——同 cwd 唯一会话）。

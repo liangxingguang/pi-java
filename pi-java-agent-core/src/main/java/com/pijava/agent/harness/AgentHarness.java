@@ -63,6 +63,19 @@ public class AgentHarness extends HarnessPromptAndToolAccessors {
         return toolContext;
     }
 
+    /**
+     * 当前**渲染后**的整份系统提示（pi {@code getCurrentSystemPrompt} 对位）。
+     *
+     * <p>与 {@link #getSystemPrompt()} 不同：后者是车道的 {@code customPrompt}
+     * （pi {@code systemPrompt} 的替换语义，通常为空串），本方法返回装配器按
+     * 当前配置现算的完整文本（preamble／tools／rules／docs 各段）。扩展
+     * {@code before_agent_start} 的 {@code systemPrompt} 入参、eval harness 的
+     * {@code without_docs} 变换都以它为准。</p>
+     */
+    public String currentSystemPrompt() {
+        return piEngine.currentPrompt(DEFAULT_LANE);
+    }
+
     /** Current tool execution mode. */
     public ToolExecution toolExecution() {
         return lane.toolExecution;

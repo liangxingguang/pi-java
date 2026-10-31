@@ -51,7 +51,7 @@
 | S5 | 模型选择器（列表 / 上下选 / 确认） | ✓ `components/model-selector.ts:40`（421 行） | ✓ `ModelSelectorScreen.java:17`（58 行） | **对齐** | 2 | java：`ModelsJsonConfig.allModels()` 平铺排序 + `SelectList` |
 | S6 | 模型选择器：搜索过滤 | ✓ `model-search.ts:7,17` + `model-selector.ts` | ✗ | **缺失** | 1 | java 无过滤输入 |
 | S7 | scoped-models 选择器（Ctrl+P 循环集） | ✓ `components/scoped-models-selector.ts:97`（401 行） | ✓ `ScopedModelsScreen.java`＋`ScopedModelController`＋`ScopedModelRefresh` | **对齐** | 1 | **批 31（docs/43 T4/T5）**：搜索、单项/全选/清空/provider 切换、排序、不可用项；`All` 与显式空表分流，修改仅会话 scope、Ctrl+S 持久化；15s 刷新＋代次取消（D181） |
-| S8 | thinking level 选择器 | ✓ `components/thinking-selector.ts:36`（154 行） | ✗ | **缺失** | 2 | java 只在 `SettingsScreen.java:36` 里循环 6 个值 |
+| S8 | thinking level 选择器 | ✓ `components/thinking-selector.ts:36`（154 行） | ✓ `ThinkingLevelScreen.java:36`（批 34，docs/46） | **对齐** | 2 | **批 34 翻判定**：标题/cycle hint/描述列（`LEVEL_DESCRIPTIONS` 逐字）/默认级 ` · default`/选中 `✓ `/自绘搜索行/`ctrl+s` 存默认＋Enter 只设会话级/底行三键提示；`SelectList` 读点 `visibleItems`/`selectedIndex`；窄差 D196（自绘搜索行） |
 | S9 | theme 选择器 | ✓ `components/theme-selector.ts:13`（67 行）＋`settings-selector.ts` ThemeSubmenu | ✓ `ThemeSubmenuScreen.java`＋`SettingsScreen` Theme 子菜单入口 | **对齐** | 1 | **批 21（docs/32 T11）**：single/automatic 两模式＋预览＋Esc 还原＋对形持久化；独立 ThemeSelectorComponent（pi 仅导出未自用）不移植（窄差 D130） |
 | S10 | 会话选择器（列表 / 选 / 确认） | ✓ `session-selector.ts:694 class SessionSelectorComponent`（1045 行） | ✓ `SessionListScreen.java:16`（50 行） | **对齐** | 2 | java：`session.listSessions()` + 前 8 位 id |
 | S11 | 会话选择器：搜索 / 排序 / 命名过滤 / 路径切换 / 重命名 / 删除 / 进度 | ✓ `session-selector.ts:76-116`、`session-selector-search.ts`、`user-message-selector.ts`；`onProgress` 带 `partialSessions` 增量渲染 + `AbortController` 取消 | ✓ `component/session/`（批 14，docs/25：搜索/三档排序/命名过滤/路径开关/删除流/双 scope 进度全落） | **存疑** | 1 | **批 14 翻判定**：picker 语境与 pi 逐字节一致；**rename 面板 UI 不移植**（picker 臂 pi 本就无生产者，裁决⑦——rename 生产者是会话内 `/resume` 面，随交互选择器批收编）；`SessionListScreen`（S10 的 `/resume` 旧屏）未换引擎 |
@@ -127,11 +127,11 @@
 | K3 | `Ctrl+D` 空输入时退出 | 键绑定 | `keybindings.ts:28 app.exit` | `PiTuiApp.java:443-447` | **对齐** | 2 | — |
 | K4 | `Ctrl+L` 打开模型选择器 | 键绑定 | `keybindings.ts:49 app.model.select` | `PiTuiApp.java:448-449` | **对齐** | 2 | — |
 | K5 | `Alt+Enter` 排队 follow-up | 键绑定 | `keybindings.ts:67-70`：**Windows 上是 `ctrl+q`**，`alt+enter` 归 `tui.input.newLine` | `KeybindingsManager.java:28` 绑 `alt+enter`（默认表 `:67`）；`TamboUIAdapter.isNewlineEnter` 走 `shift+enter`；followUp 处理 `PiTuiApp.java:427-438`（压缩中也缓冲，B175） | **存疑** | 2 | H-9.2-② |
-| K6 | `Ctrl+P` 模型循环（前/后） | 键绑定 | `keybindings.ts:41-48 app.model.cycleForward/Backward` | 常量存在（`KeybindingsManager.java:22`）但 `PiTuiApp.java:450` **default 分支＝死码** | **缺失** | 2 | B66 |
-| K7 | `Shift+Tab` 循环 thinking level | 键绑定 | `keybindings.ts:33 app.thinking.cycle` | 同上（`KeybindingsManager.java:24` → 死码） | **缺失** | 2 | B66 |
-| K8 | `Ctrl+O` 展开/折叠工具输出 | 键绑定 | `keybindings.ts:50 app.tools.expand` | 同上（`:25` → 死码），且无折叠态（R12） | **缺失** | 2 | B66 |
-| K9 | `Ctrl+T` 显隐 thinking 块 | 键绑定 | `keybindings.ts:51 app.thinking.toggle` | 同上（`:26` → 死码） | **缺失** | 2 | B66 |
-| K10 | `Ctrl+G` 外部编辑器 | 键绑定 | `keybindings.ts:59 app.editor.external` + `external-editor.ts:46` | 同上（`:27` → 死码） | **缺失** | 1 | B66 |
+| K6 | `Ctrl+P` 模型循环（前/后） | 键绑定 | `keybindings.ts:41-48 app.model.cycleForward/Backward` | ✓ `GlobalKeyRouter.java:245-248 MODEL_CYCLE → cycleModelForward()`（B137/ai 批 3b 已接） | **对齐** | 2 | ~~B66~~ 批 34 账面翻账（docs/46，接线早于台账） |
+| K7 | `Shift+Tab` 循环 thinking level | 键绑定 | `keybindings.ts:33 app.thinking.cycle` | ✓ `GlobalKeyRouter` THINKING_CYCLE 臂（批 34，docs/46）＋`AgentSession.cycleThinkingLevel`＋转录系统行 | **对齐** | 2 | ~~B66~~ 批 34 接线（docs/46） |
+| K8 | `Ctrl+O` 展开/折叠工具输出 | 键绑定 | `keybindings.ts:50 app.tools.expand` | ✓ `GlobalKeyRouter` TOOLS_EXPAND 臂＋`PiTuiApp.toggleToolsExpanded`→`MessageBubbleVisibility.installToolsExpanded` 渲染现读（批 34，docs/46）；扩展选择器 `ctrl+o` 转发（D97 销） | **对齐** | 2 | ~~B66~~ 批 34 接线；R12 工具卡折叠/流式整块仍缺（窄差 D197） |
+| K9 | `Ctrl+T` 显隐 thinking 块 | 键绑定 | `keybindings.ts:51 app.thinking.toggle` | ✓ `GlobalKeyRouter` THINKING_TOGGLE 臂＋`MessageBubbleVisibility.install` 现读（批 34，docs/46）；设置项 `hideThinkingBlock` 口径 | **对齐** | 2 | ~~B66~~ 批 34 接线（docs/46） |
+| K10 | `Ctrl+G` 外部编辑器 | 键绑定 | `keybindings.ts:59 app.editor.external` + `external-editor.ts:46` | ✓ `GlobalKeyRouter.java:250 EXTERNAL_EDITOR → openExternalEditor()`（批 12 T3 已接） | **对齐** | 1 | ~~B66~~ 批 34 账面翻账（docs/46，接线早于台账） |
 | K11 | `Alt+Up` 取回排队消息 | 键绑定 | `keybindings.ts:71-73 app.message.dequeue`（**Windows 默认改为 `alt+q`**） | `KeybindingsManager.java`（`useWindowsKeybindings` 逐字：Windows/WSL `alt+q`、其余 `alt+up`）＋`PiTuiApp` DEQUEUE 臂 | **对齐** | 1 | ~~B66~~ 批 10（docs/21，2026-10-22）接线 |
 | K12 | `Ctrl+Z` 挂起进程 | 键绑定 | `keybindings.ts:29-32 app.suspend`（非 Windows） | ✗ | **缺失** | 1 | — |
 | K13 | `Ctrl+X` 复制消息到剪贴板 | 键绑定 | `keybindings.ts:63 app.message.copy`（描述「Copy selection or last assistant message」） | ✗（有 `/copy` 命令 `MiscCommands.java:95-96`，无键位） | **缺失** | 1 | — |
@@ -141,14 +141,14 @@
 | K17 | 用户键位覆盖（`keybindings.json`） | 配置 | `core/keybindings.ts`（本锚点改用 typebox `KeybindingValueSchema` 校验、跳过 `$schema`；schema 文件另出 `schemas/keybindings.schema.json`）+ migration 测试 | ✗（`KeybindingsManager.java:14` 注释「User overrides from keybindings.json → Phase 6」） | **缺失** | 1 | H-9.2-⑩ |
 | K18 | 键位提示渲染（`keyText`/`keyHint`/`rawKeyHint`） | 组件 | `components/keybinding-hints.ts:48` | `KeybindingHints.java:19`（只有 `keyText:29`，无 `keyHint`/`rawKeyHint`） | **存疑** | 2 | — |
 | K19 | 滚轮/触控板归一化（事件流 → 行滚动） | 交互 | `tui/src/tui-alt-screen.ts:491 scrollBy` + `tui/src/wheel-scroll.ts` | `ScrollInputNormalizer.java:20`（274 行，Codex TUI2 PR#8357 移植）+ `ScrollConfig.java:35` | **存疑** | 3 | — |
-| K20 | 键盘滚动（空编辑器时 ↑↓/PgUp/PgDn/Home/End 驱动转录） | 交互 | pi：`tui/src/keybindings.ts:208-209` —— **本锚点起 top/bottom 默认键改为 `ctrl+home`/`ctrl+end`**（`home`/`end` 让还给编辑器行首行尾，`:96-101`）；↑↓/PgUp/PgDn 仍是 `tui.altScreen.*`（`:160-182`） | `PiTuiApp.java:340-360 isChatNavigation`/`scrollByKey`，其中 **HOME/END 直接滚视口**（`:346`、`:357-358`） | **存疑** | 2 | — |
+| K20 | 键盘滚动（空编辑器时 ↑↓/PgUp/PgDn/Home/End 驱动转录） | 交互 | pi：`tui/src/keybindings.ts:208-209` —— **本锚点起 top/bottom 默认键改为 `ctrl+home`/`ctrl+end`**（`home`/`end` 让还给编辑器行首行尾，`:96-101`）；↑↓/PgUp/PgDn 仍是 `tui.altScreen.*`（`:160-182`） | ✓ `GlobalKeyRouter` `isAltScreenScroll`/`isInlinePageScroll`/`scrollViewport`（批 34，docs/46）：裸 Home/End/↑↓ 归还编辑器（↑↓ 另由 K27 历史接手），PgUp/PgDn 仅空编辑器滚视口，Ctrl+Home/End 视口 top/bottom（全屏＋内联双臂） | **对齐** | 2 | ~~B238①~~ 批 34 销号（D195/D200） |
 | K21 | 转录搜索 | 交互 | `tui/src/alt-screen-search.ts:156-197` | ✗ | **缺失** | 1 | — |
 | K22 | 鼠标文本选择 / copy-on-select | 交互 | `tui-alt-screen.ts:305 hasActiveSelection`、`:1464 copySelectionToClipboard`（失败时具体错误文案 + 5 s flash） | ✗ | **缺失** | 1 | — |
 | K23 | 滚动条（绘制 + 拖拽 + 悬停加宽） | 交互 | `tui-alt-screen` scrollbar + `test/scrollbar-theme.test.ts` | `ChatViewportElement.java:129-190`、`:224-283` | **对齐** | 3 | — |
 | K24 | 斜杠命令补全弹层 | 交互 | `autocomplete.ts:303 CombinedAutocompleteProvider`（835 行；前导空白后仍补全） | `SlashCompleter.java:17`（146 行，前缀匹配） | **对齐** | 2 | — |
 | K25 | `@文件` 路径补全（fuzzy + `fd`） | 交互 | `autocomplete.ts:421-477`（file 分支）、`:737 scoreEntry`；CJK 标点作分隔符（`tui/src/utils.ts:58-63`）、`skill:` 按裸名模糊排序、wrapper 后补路径 | ✗ | **缺失** | 2 | — |
 | K26 | 大粘贴折叠为 `[paste #N +L lines]` | 交互 | `tui/components/editor.ts:31-55`（paste marker 原子段）+ `test/editor.test.ts` | ✗ | **缺失** | 1 | — |
-| K27 | 提示历史 ↑/↓ 导航（含 draft 还原、100 条上限） | 交互 | `editor.ts:347 history/historyIndex`、`:428 addToHistory` | ✗（↑/↓ 是 `moveCursorUp/Down`，`EditorComponent.java:145-146`） | **缺失** | 3 | H-9.2-② |
+| K27 | 提示历史 ↑/↓ 导航（含 draft 还原、100 条上限） | 交互 | `editor.ts:347 history/historyIndex`、`:428 addToHistory` | ✓ `EditorHistory.java`（143 行，批 34，docs/46）＋`EditorComponent` ↑/↓ 三臂：首/末行导航历史、draft 还原、100 条上限、非导航键重置浏览 | **对齐** | 3 | ~~H-9.2-②~~ 批 34 接线（docs/46） |
 | K28 | undo（fish 式连续字符合并） | 交互 | `editor.ts:368 undoStack` + `undo-stack.ts:28` | `EditorComponent.java:312-328` + `EditorComponentUndoKillRingTest` | **对齐** | 3 | — |
 | K29 | kill ring / yank / yank-pop | 交互 | `editor.ts:337-338` + `kill-ring.ts:46` | `KillRing.java:1` + `EditorComponent.java:287-311` | **对齐** | 2 | — |
 | K30 | 词导航（`Ctrl+←/→`、`Alt+B/F`） | 交互 | `word-navigation.ts:117` | `EditorWordNav.java:1`（199 行） | **对齐** | 2 | — |
@@ -181,7 +181,7 @@
 | C13 | truncated-text / visual-truncate | 组件 | `tui/components/truncated-text.ts:65`、`components/visual-truncate.ts` | 部分：`TextLayout.java:1`（232 行）含 displayWidth/wrap | **存疑** | 2 | — |
 | C14 | mouse-region（把鼠标事件限定到区域） | 组件 | `tui/components/mouse-region.ts:33`（三张消息卡用它，见 K37） | ✗（`ChatViewportElement.handleMouseEvent:205` 是元素级） | **缺失** | 1 | — |
 | C15 | dynamic-border（编辑框边框随思考等级变色） | 组件 | `components/dynamic-border.ts:25` + `interactive-mode.ts:4516 updateEditorBorderColor` | ✗ | **缺失** | 1 | — |
-| C16 | 编辑组件（多行 + 折叠 + 历史） | 组件 | `tui/components/editor.ts:297 class Editor`（2473 行）+ `editor-component.ts:74` + `custom-editor.ts:148` | `EditorComponent.java:27`（461 行） | **存疑** | 3 | 缺 K26/K27/K31；见「存疑」清单 |
+| C16 | 编辑组件（多行 + 折叠 + 历史） | 组件 | `tui/components/editor.ts:297 class Editor`（2473 行）+ `editor-component.ts:74` + `custom-editor.ts:148` | `EditorComponent.java:27`（500 行）＋`EditorHistory.java`（143 行，批 34） | **存疑** | 3 | 批 34 补 K27（提示历史）；仍缺 K26 大粘贴折叠／K31 jump mode；见「存疑」清单 |
 | C17 | 模糊匹配 | 工具 | `tui/src/fuzzy.ts:12 fuzzyMatch`（**子序列**匹配 + `-5×连续 / +2×间隔 / -10×词边界 / +0.1×位置`）、`:100 fuzzyFilter`（按空白/斜杠**分词**、每词都要匹配、分数求和） | `FuzzyMatcher.java:50 score()` 是**子串**匹配（`startsWith`→0、`indexOf`→下标、否则不匹配），**无分词** | **存疑** | 2 | B78 |
 | C18 | 布局引擎（constraint/flex/嵌套） | 框架 | `tui/src/layout.ts:449` + `layout-node.ts:51` | TamboUI 布局（外部） | **对齐**（经 TamboUI） | 3 | — |
 | C19 | stdin 缓冲（CSI 分片重组） | 框架 | `tui/src/stdin-buffer.ts:444` + `test/stdin-buffer.test.ts` | TamboUI `Backend` | **对齐**（经 TamboUI） | 3 | — |
@@ -363,12 +363,12 @@
 | K5 | `Alt+Enter` 排队 follow-up | 键位与 pi 的 Windows 默认（`ctrl+q`）冲突；「Alt+Enter=换行」被 java 换成 Shift+Enter | `KeybindingsManager.java:67` vs `keybindings.ts:67-70` |
 | K18 | 键位提示渲染 | java 只有 `keyText`，无 `keyHint`/`rawKeyHint`/`keyDisplayText` | `KeybindingHints.java:29` vs `keybinding-hints.ts:48` |
 | K19 | 滚轮/触控板归一化 | java 移植自 Codex TUI2 PR#8357，pi 现代码是 `wheel-scroll.ts` ⇒ 都有归一化、模型不同 | `ScrollInputNormalizer.java:20` vs `tui-alt-screen.ts:491` |
-| **K20** | **键盘滚动（Home/End）** | **本锚点翻判定**：pi 把视口 top/bottom 改成 `Ctrl+Home/End`，裸 Home/End 归还编辑器；java 仍是空编辑器时 Home/End 滚视口。↑↓/PgUp/PgDn 两侧一致 | `PiTuiApp.java:346,357-358` vs `tui/keybindings.ts:96-101,208-209` |
+| **K20** | **键盘滚动（Home/End）** | ~~本锚点翻判定：pi 把视口 top/bottom 改成 `Ctrl+Home/End`，裸 Home/End 归还编辑器；java 仍是空编辑器时 Home/End 滚视口~~ **批 34（docs/46）已对齐**：裸 ↑↓/Home/End 归还编辑器，PgUp/PgDn 空编辑器滚视口，Ctrl+Home/End 视口 top/bottom | `GlobalKeyRouter` vs `tui/keybindings.ts:96-101,208-209` |
 | K32 | Kitty 键盘协议 | java 有 CSI-u（`parseCsiU:309`）但无 `modifyOtherKeys`（`CSI 27;m;k~`）、无 Shift 符号逻辑匹配；覆盖率未逐序列核 | `EventParser.java:224,309` vs `keys.ts:731,792,1292` |
 | K38 | 全屏滚轮加速 + 行数配置 | pi 有专用 `WheelScrollAccelerator`（速度模型 + `fullscreenWheelScrollLines` 1–100/auto），java 有 Codex 固定默认的有界加速、**无用户设置项** | `wheel-scroll.ts:35` vs `ScrollInputNormalizer.java:14` + `ScrollConfig.java:28-36` |
 | C2 | 选择列表 | pi 有分组/模糊/多选，java 是单选线性列表 | `SelectList.java:1` vs `select-list.ts:273` |
 | C13 | truncated-text / visual-truncate | java 的截断能力散在 `TextLayout`/`ToolCallCard.truncate`，无独立组件、行为未逐项核 | `TextLayout.java:1`、`ToolCallCard.java:33-37` |
-| C16 | 编辑组件 | 核心编辑语义对齐（undo/kill-ring/词导航），但缺 3 项（K26/K27/K31）⇒ 不能判「对齐」 | `EditorComponent.java:27` vs `editor.ts:297` |
+| C16 | 编辑组件 | 核心编辑语义对齐（undo/kill-ring/词导航/提示历史 K27 批 34），但缺 K26 大粘贴折叠与 K31 jump mode ⇒ 不能判「对齐」 | `EditorComponent.java:27` vs `editor.ts:297` |
 | C17 | 模糊匹配 | pi 是**子序列**匹配 + 按空白/斜杠分词（`fuzzy.ts:12,100`），pi-java 是**子串**匹配 + 无分词（`FuzzyMatcher.java:50`）；且挂载点错位 | `FuzzyMatcher.java:50` vs `fuzzy.ts:12,100` + `select-list.ts:61` |
 | T3 | 用户自定义主题 | java 支持 `.tcss`，pi 是 JSON + typebox schema 校验（本锚点 schema 拆为 `theme-schema.ts` + 发布 `schemas/theme.schema.json`）⇒ 格式/校验能力都不同 | `PiTheme.java:42-89` vs `theme/theme-schema.ts:1` |
 | T6 | 语法高亮色板 | java 3 色 vs pi 10 token；且 java 的代码块路径是死代码（R9） | `SyntaxHighlighter.java:21-23` vs `dark.json` `syntax*` |
@@ -383,11 +383,11 @@
 
 ## 缺失清单（全部 85 条）
 
-**屏幕/面板（20）**：S2a 转录搜索 · S2b 文本选择/copy-on-select · S2c flash 提示 · S2d 全屏图像 · S6 模型搜索 · S7 scoped-models 选择器 · S8 thinking 选择器 · S9 theme 选择器 · S11 会话选择器高级功能 · S15 设置子菜单 · S16 config 选择器 · S17 OAuth/登录对话框 · S18 首次设置向导 · S19 信任选择器 · S20 排队消息选择器 · S21 show-images 选择器 · S22 扩展 UI 四件套 · S23 扩展 widget/footer · S25 会话统计面
+**屏幕/面板（19）**：S2a 转录搜索 · S2b 文本选择/copy-on-select · S2c flash 提示 · S2d 全屏图像 · S6 模型搜索 · S7 scoped-models 选择器 · S9 theme 选择器 · S11 会话选择器高级功能 · S15 设置子菜单 · S16 config 选择器 · S17 OAuth/登录对话框 · S18 首次设置向导 · S19 信任选择器 · S20 排队消息选择器 · S21 show-images 选择器 · S22 扩展 UI 四件套 · S23 扩展 widget/footer · S25 会话统计面（~~S8~~ 批 34 已翻对齐）
 
 **渲染特性（21）**：R1 Markdown 渲染（死代码）· R2 表格 · R3 删除线 · R4 链接 · R5 流式围栏修剪 · R6 transformer 钩子 · R7 mermaid · R8 LaTeX · R9 代码块高亮（死代码）· R11 逐工具渲染器 · R12 工具卡折叠 · R13 bash 执行组件 · R14 图像协议 · R15 图片粘贴 · R19 skill 调用卡 · R22 公告 · R23 终端标题 · R25 thinking 丢弃提示 · R26 工具调用参数渲染 · R27 3D 彩蛋/logo · **R29 安装变更重启警告（新锚点新增）**
 
-**键绑定/交互（21）**：K6 Ctrl+P · K7 Shift+Tab · K8 Ctrl+O · K9 Ctrl+T · K10 Ctrl+G · K12 Ctrl+Z · K13 Ctrl+X · K14 Ctrl+V · K15 Ctrl+N · K16 app.session.* · K17 keybindings.json · K21 转录搜索 · K22 鼠标选择 · K25 @文件补全 · K26 大粘贴折叠 · K27 提示历史 · K31 jump mode · K34 原生剪贴板 · K35 终端能力探测 · K37 消息卡鼠标点击展开 · **K39 OSC 7501 程序状态（新锚点新增）**（~~K11~~ 批 10 已翻对齐）
+**键绑定/交互（15）**：K12 Ctrl+Z · K13 Ctrl+X · K14 Ctrl+V · K15 Ctrl+N · K16 app.session.* · K17 keybindings.json · K21 转录搜索 · K22 鼠标选择 · K25 @文件补全 · K26 大粘贴折叠 · K31 jump mode · K34 原生剪贴板 · K35 终端能力探测 · K37 消息卡鼠标点击展开 · **K39 OSC 7501 程序状态（新锚点新增）**（~~K6/K7/K8/K9/K10~~ 批 34 接线或账面翻账、~~K11~~ 批 10、~~K27~~ 批 34 已翻对齐）
 
 **TUI 组件（9）**：C3 settings-list · C4 input · C5 loader/spinner · C6 working 指示器 · C7 bordered loader · C8 cancellable loader · C14 mouse-region · C15 dynamic-border · **C20 假光标（新锚点新增）**
 
@@ -493,14 +493,14 @@
 
 | 域 | Σ权重 | Σ(w×系数) | 加权完成度 | 未加权完成度 |
 |---|---:|---:|---:|---:|
-| 屏幕/面板（35 单元） | 47 | 24.5 | **52.1%** | 40.0% |
+| 屏幕/面板（35 单元） | 47 | 26.5 | **56.4%** | 42.9% |
 | 渲染特性（R1–R29，28 单元；R21 权重 0 已剔；R29 批 22 出分母） | 39 | 17.5 | **44.9%** | 33.3% |
-| 键绑定/交互（K1–K39，39 单元；K36 权重 0 已剔） | 66 | 33.5 | **50.8%** | 28.9% |
+| 键绑定/交互（K1–K39，39 单元；K36 权重 0 已剔） | 66 | 46.5 | **70.5%** | 47.4% |
 | TUI 组件（C1–C20，20 单元） | 41 | 22.5 | **54.9%** | 35.0% |
 | 主题/样式（T1–T11，11 单元） | 18 | 6.5 | **36.1%** | 27.3% |
 | web 对齐面（W1–W16，16 单元） | 33 | 27.0 | **81.8%** | 56.3% |
 
-**模块合计**：Σ权重 **244**（R29 批 22 出分母） ／ Σ(w×c) **137.5** ／ **加权完成度 = 137.5/244 ≈ 56.4%**（未加权 **56/147 ≈ 38.1%**，**+18.3pp**）
+**模块合计**：Σ权重 **244**（R29 批 22 出分母） ／ Σ(w×c) **152.5** ／ **加权完成度 = 152.5/244 ≈ 62.5%**（未加权 **64/147 ≈ 43.5%**，**+23.7pp**）
 
 > 批 10（2026-10-22，docs/21）：S20 缺失→对齐（+1.0）、K11 缺失→对齐（+1.0）；R28 证据更新不翻（流式 bash/工具挂载仍缺）。
 > 批 13（2026-10-23，docs/24）：R24 存疑→对齐（+0.5，cache-warmer 子系统批随收——生产者/文案逐字/门//session 段/footer）。
@@ -512,6 +512,7 @@
 > 批 25（2026-10-27，docs/36）：**Markdown 激活批——R1（w3）/R2/R3/R4/R5/R9 六行缺失→对齐（+10.0）**；S24 判定不动（注记更新：纯文本落差消除）。Σ 122.5→**132.5/244 ≈ 54.3%**。
 > 批 26（2026-10-28，docs/37）：R6 缺失→对齐（+1.0，扩展 markdown transformer 钩随 E5-9 落地）。Σ 132.5→**133.5/244 ≈ 54.7%**。
 > 批 31（2026-10-30，docs/43）：**S7 scoped-models 选择器 缺失→对齐（+1.0）＋S15 设置子菜单 缺失→对齐（+1.0）＋S17 登录对话框 缺失→对齐（+2.0）**。Σ 133.5→**137.5/244 ≈ 56.4%**（未加权 53→56/147）。
+> 批 34（2026-10-31，docs/46）：**S8 thinking 选择器（+2.0）＋K6 Ctrl+P＋K7 Shift+Tab＋K8 Ctrl+O＋K9 Ctrl+T（w2×4，+8.0）＋K10 Ctrl+G（+1.0）＋K20 滚动键 存疑→对齐（+1.0）＋K27 提示历史（w3，+3.0）**。Σ 137.5→**152.5/244 ≈ 62.5%**（未加权 56→64/147）；C16 仍存疑（补 K27，缺 K26/K31）。设计稿 §11 预算 150.5 漏计 K6 的 +2.0，实施后逐行实算修正。
 
 > 较前锚点（144 单元：241 权 / 108.0 / **44.8%**）变化 **−0.5pp**，构成：① K20 对齐→存疑（w2）分子 −1.0；② R18/R24 缺失→存疑（w1×2）分子 +1.0；③ 新增 4 单元（R28 存疑 w1 +0.5；R29/K39/C20 缺失 w1×3）分母 +4、分子 +0.5。净效果：分子 +0.5、分母 +4。
 
@@ -538,7 +539,7 @@
 | K1 | `Esc` 中断 | **对齐** |
 | K19 | 滚轮/触控板归一化 | **存疑** |
 | K23 | 滚动条 | **对齐** |
-| K27 | 提示历史 ↑/↓ 导航 | **缺失** |
+| K27 | 提示历史 ↑/↓ 导航 | **对齐**（批 34/docs/46） |
 | K28 | undo（fish 式合并） | **对齐** |
 | K32 | Kitty 键盘协议解析 | **存疑** |
 | C1 | 滚动视图 | **对齐** |
@@ -558,7 +559,7 @@
 | W7 | 终局 `usage` 非空 | **对齐** |
 | W10 | `agent_end.messages` 整表替换 | **存疑** |
 
-⇒ 权重 3 里 **16 对齐 / 5 缺失 / 5 存疑**（**71.2%**——批 25 R1 翻对齐）。缺失的 5 条全部是 **TUI 的「每轮都看得见」的能力**：`R11` 逐工具渲染器、`K27` 提示历史、`C5` spinner、`C6` working 指示器、`T2` 主题 token。**这 5 条是加权口径下的最高收益点**；本锚点新增/翻转的单元无一进入这个子集（最高权重 2）。
+⇒ 权重 3 里 **17 对齐 / 4 缺失 / 5 存疑**（**75.0%**——批 25 R1 翻对齐＋批 34 K27 翻对齐）。缺失的 4 条全部是 **TUI 的「每轮都看得见」的能力**：`R11` 逐工具渲染器、`C5` spinner、`C6` working 指示器、`T2` 主题 token。**这 4 条是加权口径下的最高收益点**；本锚点新增/翻转的单元无一进入这个子集（最高权重 2）。
 
 **未加权 vs 加权的差（+20.0pp）差在哪**
 

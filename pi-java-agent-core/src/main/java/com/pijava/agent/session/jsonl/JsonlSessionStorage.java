@@ -34,22 +34,54 @@ public final class JsonlSessionStorage implements SessionStorage<JsonlSessionMet
     private final JsonlSessionMetadata metadata;
     private final SessionState state = new SessionState();
     private final Object writeLock = new Object();
+    /** 创建时的头（惰性落盘时重写）；load/fork 后不再使用。 */
+    private final JsonlV4Header header;
+    /** 文件是否已存在（create 后为 false，首次对话或 load/fork 后为 true）。 */
+    private boolean flushed;
+    /** 未落盘的已编码行（含尾换行）——首次对话时随头一次性写出。 */
+    private final StringBuilder pending = new StringBuilder();
 
-    private JsonlSessionStorage(JsonlSessionRepoFileSystem fs, JsonlSessionMetadata metadata) {
+    private JsonlSessionStorage(JsonlSessionRepoFileSystem fs, JsonlV4Header header,
+                                JsonlSessionMetadata metadata) {
         this.fs = fs;
+        this.header = header;
         this.metadata = metadata;
     }
 
-    /** Create a storage backed by a fresh file. */
+    /**
+     * Create a storage backed by a fresh file.
+     *
+     * <p>批 33（#19）：与 pi {@code _persist} 一致 —— 建会话时**不落盘**，
+     * 出现第一条 user/assistant 消息时才一次性写出 header ＋ 全部内存条目
+     * （pi {@code session-manager.ts:1172-1189}）。{@code modifiedAtMs} 在没有
+     * 文件时用头的时间占位。</p>
+     */
     public static JsonlSessionStorage create(JsonlSessionRepoFileSystem fs, Path path,
                                              JsonlV4Header header) {
+        var storage = new JsonlSessionStorage(fs, header,
+            metadataFromHeader(header, path, header.createdAtMs()));
+        storage.flushed = false;
+        return storage;
+    }
+
+    /** fork 专用：目标必须立即可 load，故写头并把 {@code flushed} 置真。 */
+    private static JsonlSessionStorage createImmediate(JsonlSessionRepoFileSystem fs, Path path,
+                                                       JsonlV4Header header) {
         fs.writeFile(path, JsonlCodec.encodeHeader(header));
-        return new JsonlSessionStorage(fs, metadataFromHeader(header, path, fs.fileInfoMtimeMs(path)));
+        var storage = new JsonlSessionStorage(fs, header,
+            metadataFromHeader(header, path, fs.fileInfoMtimeMs(path)));
+        storage.flushed = true;
+        return storage;
     }
 
     /** Load a storage from an existing file, repairing a torn tail. */
     public static JsonlSessionStorage load(JsonlSessionRepoFileSystem fs, Path path) {
         String content = fs.readTextFile(path);
+        // 批 33（#17）：pi v1/v2 在严格解析前迁移并重写，重读迁移结果再走严格路径。
+        if (LegacyPiVersionMigrator.needsMigration(content)) {
+            LegacyPiVersionMigrator.migrate(fs, path, content);
+            content = fs.readTextFile(path);
+        }
         String[] physicalLines = content.split("\n", -1);
         if (physicalLines.length > 0 && physicalLines[physicalLines.length - 1].isEmpty()) {
             physicalLines = java.util.Arrays.copyOf(physicalLines, physicalLines.length - 1);
@@ -61,8 +93,9 @@ public final class JsonlSessionStorage implements SessionStorage<JsonlSessionMet
         if (!headerResult.ok()) {
             throw new JsonlSessionError(path, 1, headerResult.error());
         }
-        var storage = new JsonlSessionStorage(fs,
+        var storage = new JsonlSessionStorage(fs, headerResult.value(),
             metadataFromHeader(headerResult.value(), path, fs.fileInfoMtimeMs(path)));
+        storage.flushed = true;
 
         for (int index = 1; index < physicalLines.length; index++) {
             String line = physicalLines[index];
@@ -107,7 +140,7 @@ public final class JsonlSessionStorage implements SessionStorage<JsonlSessionMet
         var mutations = state.createForkMutations(options);
         String tempPath = path + ".tmp";
         try {
-            var target = create(fs, Path.of(tempPath), header);
+            var target = createImmediate(fs, Path.of(tempPath), header);
             for (var mutation : mutations) {
                 fs.appendFile(Path.of(tempPath), JsonlCodec.encodeMutation(mutation));
                 target.applyMutation(mutation);
@@ -181,6 +214,7 @@ public final class JsonlSessionStorage implements SessionStorage<JsonlSessionMet
             var mutation = new SessionMutation.Entry(lane, committed);
             appendMutation(mutation);
             applyMutation(mutation);
+            flushIfConversationStarted();
             return committed;
         }
     }
@@ -289,7 +323,46 @@ public final class JsonlSessionStorage implements SessionStorage<JsonlSessionMet
     // ── Internals ──────────────────────────────────────────
 
     private void appendMutation(SessionMutation mutation) {
-        fs.appendFile(metadata.path(), JsonlCodec.encodeMutation(mutation));
+        String line = JsonlCodec.encodeMutation(mutation);
+        if (!flushed) {
+            pending.append(line);
+            return;
+        }
+        fs.appendFile(metadata.path(), line);
+    }
+
+    /**
+     * 批 33（#19）：首次出现 user/assistant 消息时一次性写出 header ＋ 全部
+     * 缓冲行（pi {@code _persist} 的 {@code flushed=false} 臂，{@code session-manager.ts:1175-1189}）。
+     * temp＋rename 保证文件要么不存在、要么是完整前缀。
+     */
+    private void flushIfConversationStarted() {
+        if (flushed || !hasConversation()) {
+            return;
+        }
+        Path target = metadata.path();
+        String tempPath = target + ".tmp";
+        fs.writeFile(Path.of(tempPath), JsonlCodec.encodeHeader(header) + pending);
+        fs.renameFile(Path.of(tempPath), target);
+        pending.setLength(0);
+        flushed = true;
+    }
+
+    /**
+     * pi {@code _hasConversation}（{@code session-manager.ts:1166-1170}）：是否存在
+     * user/assistant 消息条目。bashExecution 与 system 消息不命中（pi 逐字三条件）。
+     */
+    private boolean hasConversation() {
+        for (var item : state.getLog(LogOptions.none())) {
+            if (item instanceof LogItem.EntryItem e
+                    && e.entry() instanceof Entry.Message message) {
+                String role = message.message().role();
+                if ("user".equals(role) || "assistant".equals(role)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private void applyMutation(SessionMutation mutation) {

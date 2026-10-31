@@ -139,6 +139,34 @@ class CompactionThresholdGateTest {
         assertThat(lane.transcript.getFirst()).isInstanceOf(Entry.Compaction.class);
         var marker = (Entry.Compaction) lane.transcript.getFirst();
         assertThat(marker.tokensBefore()).isEqualTo(500);
+        // 批 33（#8）：没有系统消息也没有工具 ⇒ systemMessage 缺席（pi :1283 的 undefined 臂）。
+        assertThat(marker.systemMessage()).isNull();
+    }
+
+    @Test
+    void compactionCapturesCurrentSystemMessageWithSameTimestamp() {
+        // 批 33（#8）：压缩点的系统提示快照（pi appendCompaction:1270-1283）。
+        var lane = new LaneState();
+        var system = new Message.SystemMessage("sys prompt", Instant.ofEpochMilli(1),
+            java.util.Map.of("alpha", "one"), List.of(), List.of());
+        var first = new Message.UserMessage(List.of(new ContentBlock.TextContent("first")));
+        var msg = withUsage(500);
+        lane.transcript.add(messageEntry("s1", null, system));
+        lane.transcript.add(messageEntry("e0", "s1", first));
+        lane.transcript.add(messageEntry("e1", "e0", msg));
+        lane.messages.add(system);
+        lane.messages.add(first);
+        lane.messages.add(msg);
+
+        var executor = new CompactionExecutor(ctx(lane, SETTINGS, MODEL, id -> 200));
+        assertThat(executor.checkThreshold("default", lane)).isTrue();
+        var marker = (Entry.Compaction) lane.transcript.getFirst();
+        assertThat(marker.systemMessage()).isNotNull();
+        assertThat(marker.systemMessage().content()).isEqualTo(system.content());
+        assertThat(marker.systemMessage().sections()).containsEntry("alpha", "one");
+        assertThat(marker.systemMessage().timestamp())
+            .as("entry 与 systemMessage 共用同一个 Instant（pi :1283 覆盖时间戳）")
+            .isEqualTo(marker.timestamp());
     }
 
     @Test

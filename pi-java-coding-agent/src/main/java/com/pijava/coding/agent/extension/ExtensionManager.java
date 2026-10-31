@@ -167,6 +167,22 @@ public final class ExtensionManager {
         }
     }
 
+    /**
+     * 批 32（docs/44 T2）：以**进程内实例**注册一个扩展（pi {@code inlineExtensions}
+     * 对位）——不经 ServiceLoader/JAR，身份合成 {@code inline:<name>}。
+     *
+     * <p>用于 eval harness 的自定义工具与提示变换扩展；{@code /reload} 不重建
+     * {@link ExtensionManager}，故注册结果天然跨 reload 存活。</p>
+     *
+     * @param ext           扩展实例
+     * @param extensionPath 身份串（null/空白时用扩展名）
+     */
+    public void registerInline(PiExtension ext, String extensionPath) {
+        var path = extensionPath == null || extensionPath.isBlank()
+            ? "inline:" + ext.name() : extensionPath;
+        load(ext, path);
+    }
+
     /** 从外部 JAR 加载扩展（URLClassLoader），返回已加载扩展名。 */
     public Set<String> loadJar(Path jar) {
         var names = new LinkedHashSet<String>();

@@ -46,6 +46,9 @@ class WebSessionsProgressTest {
         savedUserHome = System.getProperty("user.home");
         System.setProperty("user.home", fakeHome.toString());
         session = AgentSession.createWeb(ArgsParser.parse(new String[] {}));
+        // 批 33（#19）：建会话不落盘——先写首条对话，被测 web 会话才进同根列表。
+        session.session().appendMessage(new Message.UserMessage(List.of(
+            new ContentBlock.TextContent("web session"))));
         sent = new LinkedBlockingQueue<>();
         dispatcher = new WebDispatcher(session, session.sessionArgs(), sent::add);
     }

@@ -233,6 +233,8 @@ class SessionResumeFoldTest {
     @Test
     void seededRecordsAreReadable() throws Exception {
         Path root = seed(session -> {
+            // 批 33（#19）：惰性落盘——记录随首条对话一起写出（无对话则无文件）。
+            session.appendEntry(userMessage("m1", "seed"), LANE);
             session.appendRecord(new NewRecord<>(openRun("run-1")));
             session.appendRecord(new NewRecord<>(finish("run-1", OperationOutcome.COMPLETED)));
         });
@@ -244,8 +246,9 @@ class SessionResumeFoldTest {
                 LANE, null, null, null, null, EntryOrder.OLDEST_FIRST, null));
             assertThat(records).hasSize(2);
             assertThat(records.get(1)).isInstanceOf(LaneRecord.OperationFinished.class);
+            // 落盘的是那唯一一条对话（记录本身不在 entry 面）。
             assertThat(handle.open(meta).findEntries(new EntryQuery(
-                null, null, EntryOrder.OLDEST_FIRST, null, null))).isEmpty();
+                null, null, EntryOrder.OLDEST_FIRST, null, null))).hasSize(1);
         } finally {
             handle.close();
         }

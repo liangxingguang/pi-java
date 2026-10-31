@@ -247,7 +247,7 @@ class SessionLifecycleEventsTest {
             // input 先于展开（pi :1991）：驱动拿到的是变换后文本。
             assertThat(EVENTS).contains("input:original:interactive");
             assertThat(EVENTS).anyMatch(e -> e.equals("before_agent_start:transformed text:"
-                + s.harness().getSystemPrompt()));
+                + s.harness().currentSystemPrompt()));
             var userTexts = s.harness().snapshot(s.laneName()).transcript().stream()
                 .filter(e -> e instanceof Entry.Message)
                 .map(e -> ((Entry.Message) e).message())

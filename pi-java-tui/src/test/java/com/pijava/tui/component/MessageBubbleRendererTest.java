@@ -21,6 +21,7 @@ class MessageBubbleRendererTest {
     @AfterEach
     void tearDown() {
         ToolRenderers.install(null);
+        MessageBubbleVisibility.installToolsExpanded(null);
     }
 
     private static ChatMessage.Assistant toolUse(String name, Map<String, Object> args) {
@@ -74,5 +75,27 @@ class MessageBubbleRendererTest {
         // 非 mcp__ 名：resolver 不管 ⇒ ToolCallCard（与无注册表同输出）。
         assertThat(markups(toolUse("read", Map.of("path", "/tmp/x"))))
             .isEqualTo(fallback);
+    }
+
+    /** 批 34（K8）：投影现读全局展开态——true ⇒ 展开臂全量，无折叠提示行。 */
+    @Test
+    void expandedReadingDrivesRendererExpandArm() {
+        var registry = new ToolRendererRegistry();
+        registry.register(McpToolCallRenderer.resolver());
+        ToolRenderers.install(registry);
+        var seven = "l1\nl2\nl3\nl4\nl5\nl6\nl7";
+
+        MessageBubbleVisibility.installToolsExpanded(() -> true);
+        var expanded = markups(toolResult("mcp__s__t", seven));
+        assertThat(expanded).doesNotContain("... (2 more lines)")
+            .contains("l7");
+
+        MessageBubbleVisibility.installToolsExpanded(() -> false);
+        assertThat(markups(toolResult("mcp__s__t", seven)))
+            .contains("... (2 more lines)");
+
+        MessageBubbleVisibility.installToolsExpanded(null);   // 回落 false
+        assertThat(markups(toolResult("mcp__s__t", seven)))
+            .contains("... (2 more lines)");
     }
 }

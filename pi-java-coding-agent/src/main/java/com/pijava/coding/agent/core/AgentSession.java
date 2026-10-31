@@ -441,13 +441,16 @@ public final class AgentSession implements AutoCloseable {
     /** 批 17（T1）：pi {@code runner.mode} 对位（现读）。 */
     public String extensionMode() { return extensions.extensionMode(); }
     /** 委托 {@link ExtensionLoading}。 */ public void reload() { extensions.reload(); }
+    /** 批 32（T2）：进程内注册扩展（pi inlineExtensions 对位；eval harness 入口）。 */
+    public void addInlineExtension(com.pijava.coding.agent.extension.PiExtension ext) { extensions.addInline(ext); }
     /** 委托 {@link ExtensionLoading}。 */ public List<Path> themePaths() { return extensions.themePaths(); }
     /** 委托 {@link ExtensionLoading}。 */
     public List<Theme> themes() { return extensions.themes(); }
     /** 委托 {@link ExtensionLoading}。 */
     public void addReloadListener(Runnable listener) { extensions.addReloadListener(listener); }
     // ── Package-private accessors ──
-    Session<?> session() { return session; }
+    /** 底层会话树（pi {@code AgentSession.sessionManager} 公开属性对位；批 33 惰性落盘需外部写首条对话）。 */
+    public Session<?> session() { return session; }
     void session(Session<?> session) { this.session = session; }
     SessionEventFirer extensionFirer() { return extensionFirer; }
     void extensionFirer(SessionEventFirer firer) { this.extensionFirer = firer; }

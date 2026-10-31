@@ -78,29 +78,29 @@ Memory 后端，它是 coding-agent 的**进程内会话注册表**（`-c/-r/--f
 |---|---|---|---|---|---|---|
 | 1 | 2 | create 建会话 | `SessionManager.create:1755`／`newSession:1057`（写 header 行 `:1064-1071`） | `SessionRepository.create:18` | 对齐 | — |
 | 2 | 2 | list 列会话（扫描目录 → `SessionInfo[]`） | `static list:1900`／`listAll:1921` | `SessionRepository.list:27`；`JsonlSessionRepository.list:69` | 对齐 | — |
-| 3 | 1 | list 进度回调 ＋ 部分结果增量发布 ＋ `AbortSignal` ＋ 并发扫描 | `SessionListProgress:884-889`；节流 `CURRENT_SESSION_LIST_PUBLISH_INTERVAL = 10`（`:893`）；`listSessionsFromDir:941-971`；`signal?.throwIfAborted()` `:879/:911/:946/:971` | **无**（list 同步全量、无回调、无中止、无并发） | **缺失**（4 项） | **B55** |
+| 3 | 1 | list 进度回调 ＋ 部分结果增量发布 ＋ `AbortSignal` ＋ 并发扫描 | `SessionListProgress:884-889`；节流 `CURRENT_SESSION_LIST_PUBLISH_INTERVAL = 10`（`:893`）；`listSessionsFromDir:941-971`；`signal?.throwIfAborted()` `:879/:911/:946/:971` | `RichSessionLister.java`（`onProgress`＋节流增量发布＋`AbortSignal`＋并发扫描；B55 批 4 已闭环，本批仅纠账面） | 对齐 | — |
 | 4 | 2 | open 打开会话 | `static open:1766` | `SessionRepository.open:24` | 对齐 | — |
 | 5 | 2 | fork 分支会话 | `forkFrom:1815`／`createBranchedSession:1632` | `SessionRepository.fork:33` | 对齐 | — |
 | 6 | 2 | 分支创建 / 移动 | `branch:1579`／`resetLeaf:1591`／`branchWithSummary:1600`（树 + leaf 指针） | `SessionStorage.createLane:30`／`moveLane:33`（lane 概念；落线为 pi `custom` 行，见 #16） | **存疑**（粒度不同：pi 单 leaf 树，java lane） | — |
 | 7 | 3 | 追加 entry（message / thinking_level_change / model_change / custom / custom_message / usage / context_edit） | `appendMessage:1204`、`appendThinkingLevelChange:1217`、`appendModelChange:1230`、`appendCustomEntry:1290`、`appendCustomMessageEntry:1339`；落盘 `_persist:1172`（`appendFileSync :1187`） | `SessionStorage.appendEntry:41`；`Entry` 9 变体（`Entry.java:35-44`） | 对齐 | — |
-| 8 | 3 | compaction 条目 | `appendCompaction:1260`；`CompactionEntry:91-104`（`summary`/`firstKeptEntryId`/`tokensBefore`/`details?`/`usage?`/`fromHook?`/`systemMessage?`） | `Entry.Compaction:151-167`（多 `retainedTail`；缺 `fromHook`/`systemMessage`） | **存疑**（列集分叉） | — |
-| 9 | 3 | 分支摘要条目 | `branchWithSummary:1600`（entry `:1612`）／`BranchSummaryEntry:106-118`（`fromId`/`summary`/`details?`/`usage?`/`fromHook?`） | `Entry.BranchSummary:170-179`（缺 `fromHook`） | **存疑** | — |
+| 8 | 3 | compaction 条目 | `appendCompaction:1260`；`CompactionEntry:91-104`（`summary`/`firstKeptEntryId`/`tokensBefore`/`details?`/`usage?`/`fromHook?`/`systemMessage?`） | `Entry.Compaction`（`summary`/`firstKeptEntryId`/`tokensBefore`/`details`/`usage`/`fromHook`/`systemMessage` 齐；多 `retainedTail` 扩展键，pi 忽略未知键） | 对齐 | — |
+| 9 | 3 | 分支摘要条目 | `branchWithSummary:1600`（entry `:1612`）／`BranchSummaryEntry:106-118`（`fromId`/`summary`/`details?`/`usage?`/`fromHook?`） | `Entry.BranchSummary:170-179`（含 `fromHook`；账面滞后已纠） | 对齐 | — |
 | 10 | 3 | compaction-aware 上下文投影（含 provenance） | `buildContextEntries:476`／`buildSessionProjection:543`／`SessionProjection:216` | `ContextEntries.projectEntries:185-214`；`ProjectedEntry`（`:167`）携带 source 条目即 provenance；compaction 裁剪/孤儿 edit 规则同 pi（`:175-214` 注释逐行对 pi） | **对齐（形状不同）** | — |
 | 11 | 3 | **`context_edit` 条目（append-only 上下文改写）** | `ContextEditEntry:175-182`（`targetId`/`replacement`）；`appendContextEdit:1360`；投影 `projectContextEntry:519-538` | `Entry.ContextEdit:283-294`；编解码 `EntryJsonCodec:75-109`；投影 `ContextEntries.applyEdit:231-250`；写线补显式 null `PiV3Wire:155-157`；生产者＝压缩/遗漏恢复（`CompactionService`、`RecoveryOmissions`） | **对齐**（**翻转**） | — |
 | 12 | 2 | 会话名 | `appendSessionInfo:1304`／`getSessionName:1318`（`SessionInfoEntry:142-147`，`type:"session_info"`） | `SessionStorage.getName:72`／`setName:75`；**JSONL 线已原生落 `session_info`**（`PiV3Wire:209-214`，读回 `:237-238`）；SQLite 仍走 `facts` 表（参照已删） | **对齐**（**翻转**；内部仍 Fact 模型） | — |
 | 13 | 1 | entry 标签 | `getLabel:1432`／`appendLabelChange:1441`（`LabelEntry:135-141`，`type:"label"`） | `SessionStorage.getLabel:78`／`setLabel:81`；**JSONL 线原生落 `label`**（`PiV3Wire:217-223`，读回 `:239-241`） | **对齐**（**翻转**） | — |
-| 14 | 2 | usage 条目 ＋ 会话用量汇总 | `UsageEntry:80-90`（`type:"usage"`）；`appendUsage:1244`；`core/usage-totals.ts` | `Entry.Usage:207-222`（pi 九键逐字 ＋ runId/entryId 等审计扩展键）；D6 后账随一等 entry 走（`SessionState:325-328`、SQLite `SqliteMutationReplay` D6 注释）；汇总 `SessionStats:13-19` | **存疑**（载体已对齐；汇总桶不同：java cached/uncached/total vs pi input/output/cacheRead/cacheWrite） | — |
+| 14 | 2 | usage 条目 ＋ 会话用量汇总 | `UsageEntry:80-90`（`type:"usage"`）；`appendUsage:1244`；`core/usage-totals.ts` | `Entry.Usage`（pi 九键逐字 ＋ runId/entryId 等审计扩展键）；D6 后账随一等 entry 走（`SessionState:325-328`、SQLite `SqliteMutationReplay` D6 注释）；用户可见汇总在 `coding-agent`：`SessionStats.UsageTokens(input,output,cacheRead,cacheWrite,total)`＋`UsageCostBreakdown` | 对齐 | — |
 | 15 | 3 | **JSONL 头部线格式** | `SessionHeader:43-56`＝`{type:"session",version?:3,id,timestamp(ISO),cwd,parentSession?}`；写点 `:1064-1071`；`CURRENT_SESSION_VERSION = 3`（`:41`）；pi 靠 `e.type==="session"` 找头（`:1086`） | `PiV3Wire.encodeHeader:75-94`（同六键、ISO 毫秒）；读 `:97-121`：pi v3 头 ＋ 本仓旧 `kind:"header"` 头（`JsonlCodec.parseHeader:113-145`） | **对齐**（**翻转**） | — |
-| 16 | 3 | **JSONL 条目线格式（type 词表 ＋ 基字段）** | 基字段 `SessionEntryBase:57-63`＝`{type,id,parentId,timestamp(ISO)}`（**无 `seq`**）；`SessionEntry:183-197` 11 个 type | `Entry` 9 变体（`Entry.java:53-61`）＋ label/session_info 走 Fact 族读写；`PiV3Wire.encodeEntryLine:139-158`（去 seq、ISO 时间戳，`lane` 保留为 pi 容忍的扩展键）；合成行＝pi 原生 `custom`（`customType:"pi-java.lane"`/`"pi-java.record.*"`）＋`session_info`/`label`（`:160-245`）；seq 由行号重建 | **存疑（形状）**（**自缺失翻转**：双向可读；合成行借 custom 扩展承载） | map/03 **#73** |
-| 17 | 2 | **JSONL 旧版本读取（pi v1→v2→v3 迁移）** | `migrateV1ToV2:287`／`migrateV2ToV3:316`／`migrateToCurrentVersion:337`（读后 `_rewriteFile()`） | **明确不迁 pi v1/v2**（`PiV3Wire.parseHeader:103-109` 对非 v3 报错）；只惰性重写**本仓旧** `kind:"header"`/`kind:"entry|record|lane|fact"` 文件（`JsonlSessionStorage:99-101/301-335`） | **缺失**（刻意非目标：java 从未写过 pi v1/v2） | — |
+| 16 | 3 | **JSONL 条目线格式（type 词表 ＋ 基字段）** | 基字段 `SessionEntryBase:57-63`＝`{type,id,parentId,timestamp(ISO)}`（**无 `seq`**）；`SessionEntry:183-197` 11 个 type | `Entry` 9 变体（`Entry.java:53-61`）＋ label/session_info 走 Fact 族读写；`PiV3Wire.encodeEntryLine:139-158`（去 seq、ISO 时间戳，`lane` 保留为 pi 容忍的扩展键）；compaction 的 `retainedTail` 同为 pi 忽略键（D190）；合成行＝pi 原生 `custom`＋`customType`；seq 由行号重建 | 对齐 | map/03 **#73** |
+| 17 | 2 | **JSONL 旧版本读取（pi v1→v2→v3 迁移）** | `migrateV1ToV2:287`／`migrateV2ToV3:316`／`migrateToCurrentVersion:337`（读后 `_rewriteFile()`） | `LegacyPiVersionMigrator`（v1→v2→v3 节点级迁移＋原子重写；`load` 严格解析前调用）；`PiV3Wire.parseHeader` 接受 1/2/3，>3 报 `unsupported session version`（D192–D194） | 对齐 | — |
 | 18 | 2 | JSONL 文件名 / 目录名 | `:1078-1080`＝`${ISO.replace(/[:.]/g,"-")}_${id}.jsonl`（**不 encode**）；`getDefaultSessionDirPath:589-594` | `JsonlSessionRepository.sessionFileName:250-253` 同形；`sessionDirectoryName:245-247` 同形 | 对齐 | — |
-| 19 | 2 | **会话文件惰性创建（首个 user/assistant 消息才落盘）** | `_hasConversation:1166-1170`；`_persist:1172-1191`（setup 条目只留内存） | `JsonlSessionStorage.create:44-48`（create 即写 header 文件） | **缺失** | — |
-| 20 | 1 | 内存后端 | `SessionManager.inMemory:1804` | `MemorySessionStorage:31` ＋ coding-agent 注册表 `core/session/InMemorySessionRepository.java` | **存疑**（java 两构造 vs pi 单类） | — |
+| 19 | 2 | **会话文件惰性创建（首个 user/assistant 消息才落盘）** | `_hasConversation:1166-1170`；`_persist:1172-1191`（setup 条目只留内存） | `JsonlSessionStorage.create` 不落盘＋`pending` 缓冲；`appendEntry` 后 `flushIfConversationStarted` 一次写 header＋全部缓冲；fork 走 `createImmediate` 立即物化（D191） | 对齐 | — |
+| 20 | 1 | 内存后端 | `SessionManager.inMemory:1804` | `MemorySessionStorage:31` ＋ coding-agent 注册表 `core/session/InMemorySessionRepository.java`（pi 单类与 Java「存储＋注册表」是分层，不是缺失） | 对齐 | — |
 
-**行数**：20 行 —— 对齐 **11** / 缺失 **3** / 存疑 **6**。
+**行数**：20 行 —— 对齐 **19** / 缺失 **0** / 存疑 **1**。
 **权重**：**Σ = 44**（20 行全部进分母）。
-**Σ(w×c) = 25×1.0（对齐）＋ 14×0.5（存疑）＝ 32.0** ⇒ **加权完成度 = 32.0/44 = 72.7%**。
-（上一锚点：6 / 6 / 8，21.5/44＝48.9%。翻转明细见文末「本轮翻转清单」。）
+**Σ(w×c) = 42.0（对齐 19 行）＋ 1.0（存疑 #6，w2×0.5）＝ 43.0** ⇒ **加权完成度 = 43.0/44 = 97.7%**。
+（批 33（docs/45）：#3/#8/#9/#14/#16/#17/#19/#20 八行翻对齐，缺失清零；仅 #6 lane vs pi 单 leaf 树维持存疑。翻转明细见文末「本轮翻转清单」。）
 
 ---
 
@@ -131,29 +131,29 @@ pi-java 侧：自研框架 `EvalSuite`/`EvalCase`/`EvalRunner`/`EvalReporter` �
 | # | 权重 | 能力 | pi 证据（`ea448f454`） | java 证据（`edc8749d`） | 判定 |
 |---|---|---|---|---|---|
 | 1 | 1 | 声明式 eval 定义（`describeEval`） | `evals/documentation-audit.eval.ts:6/43`、`tui.docs.eval.ts:13` | `api/EvalSuite.java:8` | 对齐（形状不同） |
-| 2 | 3 | **真 coding-agent harness**（临时目录真会话 + transcript/usage 回读） | `src/harness.ts:471-475`（`createPiCodingAgentHarness`）、`:517-523`（`createPiDocumentationEvalHarness`） | **无**（`api/EvalContext.java:13`） | **缺失** |
-| 3 | 2 | **LLM-as-judge 评分** | `tui.docs.eval.ts:12-13`（`Levenshtein`+`createJudge`）、`extensions.docs.eval.ts:2`（`StructuredOutputJudge`/`ToolCallJudge`） | **无**（`api/EvalResult.java:14-17` 只有布尔） | **缺失** |
-| 4 | 2 | baseline vs candidate A/B 对照表 + 变体计划 | `src/report.ts:36-75`；`src/plan.ts:1/39` | **无** | **缺失** |
-| 5 | 2 | 对照报告汇总（paired metric / correctness lift） | `src/report.ts:359/436` | **无** | **缺失** |
-| 6 | 2 | reporter 落产物（`session.jsonl`） | `src/report.ts:123`（`persistSession`）、`:101`（`classifyCaseStatus`） | 部分：`api/EvalReporter.java:15/23`（不落盘） | **缺失** |
-| 7 | 2 | 会话 JSONL 快照作为 test attachment | `src/report.ts:9`（`PI_SESSION_SNAPSHOT_ARTIFACT`） | **无** | **缺失** |
-| 8 | 2 | 从 run 里查工具调用（`toolCalls`） | `evals/documentation-audit.eval.ts:6/59` | **无** | **缺失** |
-| 9 | 3 | eval 运行器 CLI | `src/cli.ts`（`parseEvalCli`/`compareDiscovery`）；`package.json` 双轨入口 | 部分：`runner/EvalRunner.java:63`（`runAll`，纯内存） | **存疑** |
-| 10 | 2 | docs 审计 eval | `evals/documentation-audit.eval.ts:10-59`（verdict 含 `inconclusive`） | **无** | **缺失** |
-| 11 | 2 | 扩展作者 eval | `evals/extensions.docs.eval.ts:1-40`（走 judge） | 部分：`ExtensionLifecycleTest.java:33` | **存疑** |
-| 12 | 2 | 模型作者 eval | `evals/models.docs.eval.ts` + `configured-runtime.ts` | **无** | **缺失** |
-| 13 | 2 | provider 集成 eval（本地 HTTP mock server） | `evals/acme-server.ts:1-154` + `custom-provider.docs.eval.ts` + `openai-provider.docs.eval.ts` | 部分：`smoke/ProviderSmokeTest.java:37`（默认 assumption 跳过的真 ping） | **存疑** |
+| 2 | 3 | **真 coding-agent harness**（临时目录真会话 + transcript/usage 回读） | `src/harness.ts:471-475`（`createPiCodingAgentHarness`）、`:517-523`（`createPiDocumentationEvalHarness`） | `harness/PiCodingAgentHarness.java`（临时 home/workspace/sessionDir 真会话）、`IsolatedEnvironment.java`（属性隔离）、`HarnessRun.java`（transcript/usage/artifacts 回读） | **对齐** |
+| 3 | 2 | **LLM-as-judge 评分** | `tui.docs.eval.ts:12-13`（`Levenshtein`+`createJudge`）、`extensions.docs.eval.ts:2`（`StructuredOutputJudge`/`ToolCallJudge`） | `judge/{StructuredOutputJudge,ToolCallJudge,LevenshteinJudge}.java`＋`api/EvalResult.java`（score/reason） | **对齐** |
+| 4 | 2 | baseline vs candidate A/B 对照表 + 变体计划 | `src/report.ts:36-75`；`src/plan.ts:1/39` | `plan/TaskPlan.java`（交替变体顺序）＋`plan/DocumentationVariant.java`＋`plan/EvalCaseDescriptor.java` | **对齐** |
+| 5 | 2 | 对照报告汇总（paired metric / correctness lift） | `src/report.ts:359/436` | `report/ComparisonReport.java`（配对/blocked/lift/flags）＋`ComparisonReportText.java` | **对齐** |
+| 6 | 2 | reporter 落产物（`session.jsonl`） | `src/report.ts:123`（`persistSession`）、`:101`（`classifyCaseStatus`） | `report/EvalObservation.java`／`CaseStatus.java`＋`cli/ArtifactLayout.java`＋`HarnessRun.sessionFile` | **对齐** |
+| 7 | 2 | 会话 JSONL 快照作为 test attachment | `src/report.ts:9`（`PI_SESSION_SNAPSHOT_ARTIFACT`） | `PiCodingAgentHarness.PI_SESSION_SNAPSHOT_ARTIFACT`＋`HarnessRun.sessionFile` | **对齐** |
+| 8 | 2 | 从 run 里查工具调用（`toolCalls`） | `evals/documentation-audit.eval.ts:6/59` | `harness/TranscriptEvents.toolCalls`＋`HarnessRun.toolCalls/successfulToolCalls` | **对齐** |
+| 9 | 3 | eval 运行器 CLI | `src/cli.ts`（`parseEvalCli`/`compareDiscovery`）；`package.json` 双轨入口 | `cli/EvalCli.java`＋`EvalCatalog.java`＋`ArtifactLayout.java`（`.eval/<ISO>_<uuid>/`） | **对齐** |
+| 10 | 2 | docs 审计 eval | `evals/documentation-audit.eval.ts:10-59`（verdict 含 `inconclusive`） | `contents/DocumentationAuditEval.java`（页面级 case＋内联 `submit_documentation_audit`） | **对齐** |
+| 11 | 2 | 扩展作者 eval | `evals/extensions.docs.eval.ts:1-40`（走 judge） | `contents/ExtensionsDocsEval.java`（`bash` 臂＋内联 `install_extension`＋reload＋judge） | **对齐** |
+| 12 | 2 | 模型作者 eval | `evals/models.docs.eval.ts` + `configured-runtime.ts` | `contents/ModelsDocsEval.java`＋`fixtures/ConfiguredRuntimeInspector.inspectAddedModel` | **对齐** |
+| 13 | 2 | provider 集成 eval（本地 HTTP mock server） | `evals/acme-server.ts:1-154` + `custom-provider.docs.eval.ts` + `openai-provider.docs.eval.ts` | `fixtures/AcmeServer.java`＋`contents/{CustomProviderDocsEval,OpenAiProviderDocsEval}.java`＋`ConfiguredRuntimeInspector.inspectProvider` | **对齐** |
 | 14 | 3 | **ChatApi 协议一致性套件（C1–C10）** | **无对应物** | `conformance/ChatApiConformanceSuite.java:24/:33-45` | 对齐（java 反超） |
-| 15 | 2 | 简单 smoke eval | `evals/smoke.eval.ts:10-16` | 部分：`smoke/ProviderSmokeTest.java:37` | **存疑** |
+| 15 | 2 | 简单 smoke eval | `evals/smoke.eval.ts:10-16` | `contents/SmokeEval.java`（单 case「capital of France」、空工具） | **对齐** |
 | 16 | 3 | eval 框架本体 | **外部 npm ×3**（`vitest-evals`/`@vitest-evals/core`/`autoevals`） | 自研（`evals/api/*.java`） | 对齐（自研替代） |
-| 17 | 1 | 框架单测 | `test/*.test.ts`（815 行） | `src/test/...`（412 行，含 conformance/smoke/extension） | 对齐 |
-| 18 | 3 | **Docker eval 执行** | `src/docker.ts:38`＋`docker/Dockerfile`＋`docker/entrypoint.ts` | **无** | **缺失** |
-| 19 | 2 | **文档变体任务计划** | `src/plan.ts:1`（`DOCUMENTATION_VARIANTS`）、`:39`（`createTaskPlan`） | **无** | **缺失** |
-| 20 | 2 | **TUI 文档审计 eval** | `evals/tui.docs.eval.ts:12-13/192/229` | **无** | **缺失** |
+| 17 | 1 | 框架单测 | `test/*.test.ts`（815 行） | `src/test/...`（harness/judge/plan/report/docker/contents/fixtures 七组） | 对齐 |
+| 18 | 3 | **Docker eval 执行** | `src/docker.ts:38`＋`docker/Dockerfile`＋`docker/entrypoint.ts` | `docker/{DockerContext,DockerImageSpec,DockerCommandBuilder,DockerProcess,DockerEvalRunner,JUnitXmlReader}.java`＋`docker/Dockerfile`（D182 边界：真实构建不进 CI） | **对齐** |
+| 19 | 2 | **文档变体任务计划** | `src/plan.ts:1`（`DOCUMENTATION_VARIANTS`）、`:39`（`createTaskPlan`） | `plan/TaskPlan.java`＋`plan/DocumentationVariant.java`＋`harness/DocumentationVariants.java`（提示变换两变体） | **对齐** |
+| 20 | 2 | **TUI 文档审计 eval** | `evals/tui.docs.eval.ts:12-13/192/229` | `contents/TuiDocsEval.java`（Java 文档问答＋Levenshtein 0.75）＋`fixtures/RecordingFooterOracle.java`（D183 边界：非 pi context-footer oracle） | **存疑** |
 
-**行数**：20 行 —— 对齐 4 / 缺失 12 / 存疑 4。
-**权重**：**Σ = 43** ⇒ **Σ(w×c) = 8（对齐）＋ 4.5（存疑）＝ 12.5** ⇒ **加权完成度 = 12.5/43 = 29.1%**（未变）。
-评测缺口的汇总见 `docs/05-module-alignment-map.md` §2.5 / §3.4（台账 `docs/04` 无独立 evals 条目）。
+**行数**：20 行 —— 对齐 19 / 缺失 0 / 存疑 1。
+**权重**：**Σ = 43** ⇒ **Σ(w×c) = 41.0（对齐）＋ 1.0（存疑 #20）＝ 42.0** ⇒ **加权完成度 = 42.0/43 ≈ 97.7%**（批 32，docs/44：15 行缺失/存疑→对齐，`#20` 缺失→存疑＝D183）。
+评测缺口的汇总见 `docs/05-module-alignment-map.md` §2.6（台账 `docs/04` 的 B258 已随批 32 销号）。
 
 ---
 
@@ -223,9 +223,9 @@ pi `scripts/` 是仓库自身构建/发布/校验工具，按 R5 **不进产品�
 | 条目 | 旧说 | 本锚点实测 | 证据 |
 |---|---|---|---|
 | **B59 SQLite schema 分叉** | 「全项目单点最大拖累 Σ权重 25、+16.2pp」 | **自始即错，销号**：pi 无 SQLite 后端、参照包已删且从未上 `bin pi` ⇒ R1＋R5 移出分母；模块保留 | 见 §口径/B59 |
-| **JSONL v3/v4 互读**（map/03 #73） | 旧文：双向不可读，用户可见硬故障 | **v3 双向互读已通**（包 12/14）：java 写 pi 六键头与无 seq 条目，pi 靠 `type:"session"` 找头、条目只 `JSON.parse`；java 读 pi 头/条目/`session_info`/`label`/`custom`。**残余**：#16 合成行走 `custom` 扩展（存疑，挂 #73）、#17 不迁 pi v1/v2（刻意） | pi `session-manager.ts:1086/353-368`；java `PiV3Wire.java:75-245` |
+| **JSONL v3/v4 互读**（map/03 #73） | 旧文：双向不可读，用户可见硬故障 | **v3 双向互读已通**（包 12/14）；批 33 后 #16 信封（`lane`／`retainedTail` 扩展键）翻对齐、#17 v1/v2 迁移落地 | pi `session-manager.ts:1086/353-368`；java `PiV3Wire.java:75-245` |
 | **`context_edit` 条目** | 上一轮「新发现，java 零对应」 | **已落地，销号**：条目/编解码/投影/写线 null 键齐，生产者为压缩与遗漏恢复 | `Entry.java:283-294`；`ContextEntries.java:185-250` |
-| **会话文件惰性创建** | 上一轮「新发现」 | **仍缺**：java create 即写头 | pi `:1166-1191`；java `JsonlSessionStorage.java:44-48` |
+| **会话文件惰性创建** | 上一轮「新发现」 | **批 33 已落地**：create 不落盘，首个 user/assistant 消息时一次性写 header＋缓冲 | pi `:1166-1191`；java `JsonlSessionStorage` |
 | **A17 写者租约** | 「java 反超/越界」 | **维持**：pi 主流从未有租约 ⇒ `WriterLease`/`WriterLeaseRows`/心跳是自研；`DEFAULT_TTL_MS=30_000`（`SqliteSessionRepository.java:37`），权 0 | 同左 |
 | **E6 拆分超限文件** | 记为未结 | **`SqliteSessionStorage` 已解决**（现 **486** 行 <500，`storage/` 子包）；`AgentHarness` 现 **595** 行（E4，仍超） | 工作树 `wc -l` |
 | **E7 `appendEntry`/`appendRecord` 重复** | 保留（判断项） | **三处**（JSONL/Memory/SQLite 各一） | 三后端 storage 类 |
@@ -240,13 +240,13 @@ pi `scripts/` 是仓库自身构建/发布/校验工具，按 R5 **不进产品�
 
 | 档 | 存储后端 | 评测 | 合计 |
 |---|---|---|---|
-| **对齐** | 11 | 4 | **15** |
-| **缺失** | 3 | 12 | **15** |
-| **存疑** | 6 | 4 | **10** |
+| **对齐** | 19 | 19 | **38** |
+| **缺失** | 0 | 0 | **0** |
+| **存疑** | 1 | 1 | **2** |
 | 合计 | 20 | 20 | **40** |
 
-**未加权完成度（按行数）= 15 / 40 = 37.5%**；**按系数（对齐 1 / 存疑 0.5 / 缺失 0）
-= (15 + 10×0.5) / 40 = 20 / 40 = 50.0%**。
+**未加权完成度（按行数）= 38 / 40 = 95.0%**；**按系数（对齐 1 / 存疑 0.5 / 缺失 0）
+= (38 + 2×0.5) / 40 = 39 / 40 = 97.5%**（权重口径 97.7%，见下节）。
 
 ### 移出分母的整块（R1 / R5 / 口径外）
 
@@ -268,14 +268,16 @@ pi `scripts/` 是仓库自身构建/发布/校验工具，按 R5 **不进产品�
 
 | 域 | Σ权重 | Σ(w×系数) | 加权完成度 | 未加权（按系数） |
 |---|---:|---:|---:|---:|
-| 存储后端 | **44（20 行）** | **32.0** | **72.7%** | 70.0%（14/20） |
+| 存储后端 | **44（20 行）** | **43.0** | **97.7%** | 95.0%（19/20） |
 | ~~SQLite schema~~ | **0（作废）** | 0 | — | — |
-| 评测 | **43（20 行）** | **12.5** | **29.1%** | 30.0%（6/20） |
-| **本范围（R5 可达）** | **87（40 行）** | **44.5** | **51.1%** | **50.0%（20/40）** |
+| 评测 | **43（20 行）** | **42.0** | **97.7%** | 95.0%（19/20） |
+| **本范围（R5 可达）** | **87（40 行）** | **85.0** | **97.7%** | **95.0%（38/40）** |
 
-（上一锚点：87 / 34.0 / **39.1%** ／ 未加权 40.0%。本轮 **+12.0 pp 全部来自判定翻转**：
-JSONL v3 写线改造与 `context_edit` 落地；分母与权重未动。评测面零变化。
-⚠️ `docs/05` §2.5/§3.4 的总表数字（39.1%）尚未随本图回填，是已知的下游待同步项。）
+（上一锚点：87 / 34.0 / **39.1%** ／ 未加权 40.0%。本轮 **+12.0 pp 来自判定翻转**：
+JSONL v3 写线改造与 `context_edit` 落地；评测面零变化。**批 32（docs/44）**：评测 15 行缺失/存疑→对齐、
+`#20` 缺失→存疑，评测 12.5→**42.0** ⇒ 本范围 44.5→**74.0/87 ≈ 85.1%**。
+**批 33（docs/45）**：存储后端 #3/#8/#9/#14/#16/#17/#19/#20 八行翻对齐、缺失清零 ⇒
+32.0→**43.0**，本范围 74.0→**85.0/87 ≈ 97.7%**。）
 
 ### 权重 0（排除出分母）的行
 
@@ -288,68 +290,46 @@ JSONL v3 写线改造与 `context_edit` 落地；分母与权重未动。评测�
 | harness-only / `durable` / pico3 / micro | 全部 59 行 | R1（删除）/ R5（不可达） |
 | 防漂移脚本 | 全部 | 非 `bin pi` 产品面 |
 
-### 关键差距的加权影响（重算）
+### 关键差距的加权影响（批 33 后）
 
-> 上一锚点「JSONL 格式分叉 +9.2 pp」**大部分已消解**：#15 头格式翻对齐、#16 翻存疑（双向已可读）。
-> 真正剩余的：
+> 上一锚点的三条存储缺口在批 33 全部清零：JSONL 残余（#16 信封扩展键、#17 迁移）与
+> 会话文件惰性创建（#19）均已落地；本范围 85.0/87 ＝ 97.7%。
 
 | 差距 | 涉及行（权重） | 现状 Σ(w×c) | 若修复后 | 对本范围（分母 87） |
 |---|---|---:|---:|---|
-| **JSONL 残余**：#16 信封扩展键（3）＋ #17 不迁 pi v1/v2（2） | Σw **5** | 1.5 | 5 | 44.5→48.0 ⇒ **51.1% → 55.2%（+4.0 pp）** |
-| **会话文件惰性创建**（#19） | Σw **2** | 0 | 2 | 44.5→46.5 ⇒ **51.1% → 53.4%（+2.3 pp）** |
-| 两条同时修 | Σw 7 | 1.5 | 7 | 44.5→50.0 ⇒ **51.1% → 57.5%（+6.3 pp）** |
+| ~~JSONL 残余~~ | ~~#16（3）＋ #17（2）~~ | — | — | **批 33 清零** |
+| ~~会话文件惰性创建~~ | ~~#19（2）~~ | — | — | **批 33 清零** |
+| 仅余 S1：`#6` lane vs pi 单 leaf 树 | #6（2） | 1.0 | 2.0 | 85.0→86.0 ⇒ 97.7%→98.9%（+1.1 pp） |
 
 **读法**：
-- 评测面（29.1%）现在是本范围的主要低分面：12 条缺失（真 harness / judge / A-B 报告 / Docker 等），
-  其中高权 3 条（真 harness、运行器 CLI、Docker、框架外协议套件除外）。
-- 存储面只剩 **3 条缺失**：B55（w1，大目录扫描体验）、pi v1/v2 迁移（w2，刻意非目标）、惰性落盘（w2）。
-- **#17 是否算缺口可再议**：java 从未产生过 pi v1/v2 文件，当前实现选择显式报错而非静默新建。
+- 评测面（97.7%）批 32 已收口：20 行对齐 19、存疑 1（`#20` TUI 文档审计，D183）。
+- 存储面 **缺失清零**：B55 批 4 销号、pi v1/v2 迁移批 33 落地、惰性落盘批 33 落地。
+- 存储面唯一存疑是 `#6`（lane 模型 vs pi 单 leaf 树的粒度差）。
 
 ---
 
-## 存疑清单（10 个判定单元，8 行）
+## 存疑清单（2 个判定单元，2 行）
 
 | # | 能力 | 存疑点 |
 |---|---|---|
 | S1 | 分支创建/移动（#6） | pi 单 leaf 树（`branch`/`resetLeaf`），java lane（`createLane`/`moveLane`）⇒ 语义粒度不同（落线借 `custom` 行） |
-| S2 | compaction 条目（#8） | java 多 `retainedTail`、缺 `fromHook`/`systemMessage` ⇒ 列集分叉 |
-| S3 | 分支摘要条目（#9） | java 缺 `fromHook` |
-| S4 | usage 汇总（#14） | 条目载体已对齐（一等 `Entry.Usage`）；`SessionStats` 桶形 vs pi `UsageTotals`（input/output/cacheRead/cacheWrite） |
-| S5 | JSONL 条目信封（#16） | 双向可读；java 多 `lane` 扩展键，合成行借 `custom`/`customType` 承载，seq 内存重建（map/03 #73） |
-| S6 | 内存后端（#20） | pi 单类 `SessionManager.inMemory` vs java Storage ＋ coding-agent 注册表两构造 |
-| S7 | eval 运行器（评测 #9） | pi 落 `.eval/<ISO>_<uuid>/` 产物目录，java `EvalRunner.runAll` 纯内存 |
-| S8 | 扩展/provider/smoke eval（评测 #11/#13/#15） | pi 走真 harness + judge；java 是装配可见性 / 真 provider ping（默认跳过） |
+| S7 | TUI 文档审计（评测 #20） | pi 用 context-footer oracle（`42.2%/272k` 状态行）；java TUI 无该行，以 Java 文档问答＋Levenshtein 0.75 替代（D183） |
 
-（评测 4 条存疑合并为 S7/S8 两行叙述；计 4 个判定单元。）
+（S2–S6 在批 33 全部收口：#8 `systemMessage`、#9 `fromHook`、#14 用户可见汇总、#16 信封扩展键、#20 内存后端均为「账面滞后」或 pi 容忍的扩展键。）
 
 ---
 
-## 缺失清单（15 条）
+## 缺失清单（0 条）
 
-### A. 存储后端（3 条）
+### A. 存储后端（批 33 清零）
 
-| # | 能力 | pi 证据（`ea448f454`） |
+| 原 # | 能力 | 处置 |
 |---|---|---|
-| M1 | list 进度回调 + 部分结果增量发布 + `AbortSignal` + 并发扫描 | `session-manager.ts:884-893/941-971`（B55） |
-| M2 | pi v1/v2 旧会话迁移（java 刻意不做） | `session-manager.ts:287/316/337`（java `PiV3Wire:103-109` 报错） |
-| M3 | 会话文件惰性创建（首个 user/assistant 消息才落盘） | `session-manager.ts:1166-1191`（java `JsonlSessionStorage:44-48` 建即写头） |
+| M1 | list 进度回调 + 增量发布 + `AbortSignal` + 并发扫描 | B55 批 4 已闭环，批 33 纠账面 |
+| M2 | pi v1/v2 旧会话迁移 | 批 33 `LegacyPiVersionMigrator` 落地 |
+| M3 | 会话文件惰性创建 | 批 33 `flushIfConversationStarted` 落地 |
 
-### B. 评测（12 条）
-
-| # | 缺失项 | pi 证据 |
-|---|---|---|
-| M4 | 真 coding-agent harness | `src/harness.ts:471-523` |
-| M5 | LLM-as-judge | `tui.docs.eval.ts:12-13`、`extensions.docs.eval.ts:2` |
-| M6 | A/B 对照表 + 变体计划 | `src/report.ts:36-75`、`src/plan.ts:1/39` |
-| M7 | 对照报告汇总 | `src/report.ts:359/436` |
-| M8 | reporter 落产物 | `src/report.ts:101/123` |
-| M9 | 会话 JSONL 快照 attachment | `src/report.ts:9` |
-| M10 | `toolCalls` 查工具调用 | `documentation-audit.eval.ts:6/59` |
-| M11 | docs 审计 eval | `documentation-audit.eval.ts:10-59` |
-| M12 | 模型作者 eval | `models.docs.eval.ts` + `configured-runtime.ts` |
-| M13 | Docker eval 执行 | `src/docker.ts:38` + `docker/*` |
-| M14 | 文档变体任务计划 | `src/plan.ts:1-59` |
-| M15 | TUI 文档审计 eval | `tui.docs.eval.ts:12-13/192/229` |
+（评测面 12 条缺失已在批 32（docs/44）全部翻对齐/存疑，清单销号。）
 
 ---
 
@@ -384,3 +364,26 @@ JSONL v3 写线改造与 `context_edit` 落地；分母与权重未动。评测�
 | `test/.../SqliteLeaseAndSearchTest.java` | ＋1 测试：SQL 层 type 扫描能捞 usage 行且 runId 审计键读回（B168） | 测试基建 |
 | `evals/.../ChatApiConformanceSuite.java:156` | 跟 B107 删 `StreamRequest` 多余参数 | 无 |
 | `evals/.../ProviderCatalogConformance.java:18/31-35` | 内置 provider 计数 18 → 19 | 无 |
+
+---
+
+## 批 33 翻转清单与 java 改动摘要（`docs/45`）
+
+**判定翻转（7 缺失/存疑 → 对齐，1 存疑维持）**：
+
+| 行 | 旧判定 | 新判定 | 承重改动 |
+|---|---|---|---|
+| #3 list 进度/增量/中止/并发 | 缺失（账面滞后） | **对齐** | `RichSessionLister`（B55 批 4 已闭环） |
+| #8 compaction 条目 | 存疑 | **对齐** | `Entry.Compaction` 增 `systemMessage`（`retainedTail` 为扩展键） |
+| #9 分支摘要条目 | 存疑（账面滞后） | **对齐** | `Entry.BranchSummary` 已含 `fromHook` |
+| #14 usage 汇总 | 存疑（账面滞后） | **对齐** | `coding-agent` `SessionStats.UsageTokens`＋`UsageCostBreakdown` |
+| #16 JSONL 条目信封 | 存疑（形状） | **对齐** | `lane`／`retainedTail` 均为 pi 忽略的扩展键（D190） |
+| #17 pi v1/v2 迁移 | 缺失 | **对齐** | 新 `LegacyPiVersionMigrator`＋`PiV3Wire.parseHeader` 接受 1/2/3 |
+| #19 会话文件惰性创建 | 缺失 | **对齐** | `JsonlSessionStorage.create` 不落盘＋首次对话 flush |
+| #20 内存后端 | 存疑（账面滞后） | **对齐** | 分层不是缺失（Storage＋coding-agent 注册表） |
+| #6 分支创建/移动 | 存疑 | **存疑（维持）** | pi 单 leaf 树 vs java lane（S1） |
+
+**承重文件**：`Entry.java`（Compaction 第 12 组件）／`EntryJsonCodec`（`systemMessage`、`retainedTail` 可选、
+`role:"custom"`）／`LegacyPiVersionMigrator`（新）／`JsonlSessionStorage`（惰性创建＋load 前迁移）／
+`ContextEntries`（compaction 投影 `[systemMessage, summary]`、列表级 edit、保留段过滤 system）／
+`CompactionTranscriptBuilder`（`systemMessage` 快照）。窄差 D190–D194 登记在 `docs/04`。
