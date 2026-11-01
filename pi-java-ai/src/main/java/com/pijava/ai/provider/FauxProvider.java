@@ -5,6 +5,7 @@ import java.util.Set;
 import java.util.concurrent.SubmissionPublisher;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.ChatApi;
 import com.pijava.ai.api.ProviderApi;
@@ -24,6 +25,8 @@ import com.pijava.ai.stream.StreamEvent;
  * responses, tool calls, errors, and configurable inter-event delay.</p>
  */
 public final class FauxProvider implements Provider {
+
+    private static final ObjectMapper JSON = new ObjectMapper();
 
     private final String name;
     private final List<List<StreamEvent>> responses;
@@ -109,10 +112,20 @@ public final class FauxProvider implements Provider {
                 new StreamEvent.ToolCallStart(0, AssistantMessage.empty()
                         .withContent(List.of(new ContentBlock.ToolUseContent(
                             callId, toolName, java.util.Map.of())))),
+                new StreamEvent.ToolCallDelta(0, callId, json(args),
+                    finalMsg.withStopReason((StopReason) null)),
                 new StreamEvent.ToolCallEnd(0, callId, toolName, args,
                     finalMsg.withStopReason((StopReason) null)),
                 StreamEvent.StreamDone.settle(StopReason.TOOL_USE, finalMsg)
         ), 0);
+    }
+
+    private static String json(java.util.Map<String, Object> args) {
+        try {
+            return JSON.writeValueAsString(args);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            throw new IllegalArgumentException("Faux tool arguments must be JSON values", e);
+        }
     }
 
     /**

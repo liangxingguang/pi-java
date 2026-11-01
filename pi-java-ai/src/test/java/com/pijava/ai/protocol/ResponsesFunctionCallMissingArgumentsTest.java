@@ -104,6 +104,76 @@ class ResponsesFunctionCallMissingArgumentsTest {
         assertThat(toolCall.arguments()).isEqualTo(Map.of("path", "docs"));
     }
 
+    @Test
+    void initialDeltaAndAuthoritativeDonePublishOnlyNewTextOnce() throws Exception {
+        var initial = functionItem("call_1", "fc_1", "tool", "{\"a\":\"x", null);
+        var terminal = functionItem("call_1", "fc_1", "tool", "{\"a\":\"xyz\"}", null);
+        var events = collect(sse(
+            created(),
+            itemEvent("added", 0, initial),
+            event("{\"type\":\"response.function_call_arguments.delta\",\"output_index\":0,"
+                + "\"delta\":\"y\"}"),
+            event("{\"type\":\"response.function_call_arguments.done\",\"output_index\":0,"
+                + "\"arguments\":\"{\\\"a\\\":\\\"xyz\\\"}\"}"),
+            itemEvent("done", 0, terminal),
+            completed(terminal, "resp_terminal")));
+
+        var start = last(events, StreamEvent.ToolCallStart.class);
+        assertThat(start.partial().responseId()).isEqualTo("resp_1");
+        var startBlock = (ContentBlock.ToolUseContent) start.partial().content().get(0);
+        assertThat(startBlock.arguments()).isEqualTo(Map.of("a", "x"));
+        assertThat(events).filteredOn(StreamEvent.ToolCallDelta.class::isInstance)
+            .map(StreamEvent.ToolCallDelta.class::cast)
+            .extracting(StreamEvent.ToolCallDelta::jsonDelta)
+            .containsExactly("y", "z\"}");
+        assertThat(last(events, StreamEvent.ToolCallEnd.class).arguments())
+            .isEqualTo(Map.of("a", "xyz"));
+        assertThat(last(events, StreamEvent.StreamDone.class).partial().responseId())
+            .isEqualTo("resp_terminal");
+    }
+
+    @Test
+    void interleavedOutputIndexesKeepArgumentsIdentityAndNamespace() throws Exception {
+        var a = functionItem("call_a", "fc_a", "tool-a", "", "ns-a");
+        var b = functionItem("call_b", "fc_b", "tool-b", "", "ns-b");
+        var aDone = functionItem("call_a", "fc_a", "tool-a", "{\"a\":1}", null);
+        var bDone = functionItem("call_b", "fc_b", "tool-b", "{\"b\":2}", "ns-b-final");
+        var events = collect(sse(
+            created(), itemEvent("added", 0, a), itemEvent("added", 1, b),
+            argumentDelta(0, "{\"a\":1}"), argumentDelta(1, "{\"b\":2}"),
+            itemEvent("done", 1, bDone), itemEvent("done", 0, aDone),
+            completed(aDone + "," + bDone)));
+
+        assertThat(events).filteredOn(StreamEvent.ToolCallEnd.class::isInstance)
+            .map(StreamEvent.ToolCallEnd.class::cast)
+            .extracting(StreamEvent.ToolCallEnd::contentIndex)
+            .containsExactly(1, 0);
+        assertThat(last(events, StreamEvent.StreamDone.class).partial().content()).containsExactly(
+            new ContentBlock.ToolUseContent("call_a|fc_a", "tool-a", Map.of("a", 1),
+                null, "ns-a", null),
+            new ContentBlock.ToolUseContent("call_b|fc_b", "tool-b", Map.of("b", 2),
+                null, "ns-b-final", null));
+    }
+
+    private static String functionItem(
+            String callId, String itemId, String name, String arguments, String namespace) {
+        return "{\"id\":\"" + itemId + "\",\"type\":\"function_call\",\"call_id\":\""
+            + callId + "\",\"name\":\"" + name + "\",\"status\":\"completed\","
+            + "\"arguments\":\"" + arguments.replace("\\", "\\\\").replace("\"", "\\\"")
+            + "\"" + (namespace == null ? "" : ",\"namespace\":\"" + namespace + "\"") + "}";
+    }
+
+    private static String itemEvent(String phase, int index, String item) {
+        return event("{\"type\":\"response.output_item." + phase + "\",\"output_index\":"
+            + index + ",\"item\":" + item + "}");
+    }
+
+    private static String argumentDelta(int index, String delta) {
+        return event("{\"type\":\"response.function_call_arguments.delta\",\"output_index\":"
+            + index + ",\"delta\":\"" + delta.replace("\\", "\\\\").replace("\"", "\\\"")
+            + "\"}");
+    }
+
     /** 收尾项带完整 arguments 的形状。 */
     private static String functionCallWithArguments() {
         return "{\"id\":\"fc_1\",\"type\":\"function_call\",\"call_id\":\"call_1\","
@@ -166,7 +236,11 @@ class ResponsesFunctionCallMissingArgumentsTest {
     }
 
     private static String completed(String outputItem) {
-        return event("{\"type\":\"response.completed\",\"response\":{\"id\":\"resp_1\","
+        return completed(outputItem, "resp_1");
+    }
+
+    private static String completed(String outputItem, String responseId) {
+        return event("{\"type\":\"response.completed\",\"response\":{\"id\":\"" + responseId + "\","
             + "\"status\":\"completed\",\"model\":\"gpt-4o\",\"output\":[" + outputItem + "],"
             + "\"parallel_tool_calls\":true,\"tools\":[],"
             + "\"usage\":{\"input_tokens\":1,\"output_tokens\":1,\"total_tokens\":2,"

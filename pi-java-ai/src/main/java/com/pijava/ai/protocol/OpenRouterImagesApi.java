@@ -75,7 +75,7 @@ public final class OpenRouterImagesApi implements ImageApi {
                     message._additionalProperties().get("images")));
             }
             return new ImageResult(request.model().provider(), request.model().modelName(),
-                output, ImageStopReason.STOP, null, timestamp);
+                output, ImageStopReason.STOP, null, timestamp, response.id());
         } catch (Exception e) {
             var aborted = options != null && isAborted(options);
             // pi openrouter-images.ts:113-115 同样过 normalize/format（无 metadata 追加）。

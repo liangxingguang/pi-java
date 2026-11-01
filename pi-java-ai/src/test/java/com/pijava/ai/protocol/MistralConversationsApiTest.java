@@ -187,6 +187,25 @@ class MistralConversationsApiTest {
         assertThat(dones(events)).isEmpty();
     }
 
+    @Test
+    void indexedToolCallsAndFirstResponseIdStayIsolated() throws Exception {
+        var events = collect(
+            data("\"id\":\"\",\"choices\":[]"),
+            data("\"id\":\"resp-first\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":["
+                + "{\"index\":0,\"id\":\"call-a\",\"function\":{\"name\":\"tool-a\"}},"
+                + "{\"index\":1,\"id\":\"call-b\",\"function\":{\"name\":\"tool-b\"}}]}}]"),
+            data("\"id\":\"resp-later\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":["
+                + "{\"index\":0,\"function\":{\"arguments\":\"{\\\"a\\\":1}\"}},"
+                + "{\"index\":1,\"function\":{\"arguments\":\"{\\\"b\\\":2}\"}}]}}]"),
+            finish("tool_calls"));
+
+        var done = last(events, StreamEvent.StreamDone.class);
+        assertThat(done.partial().responseId()).isEqualTo("resp-first");
+        assertThat(done.partial().content()).containsExactly(
+            new ContentBlock.ToolUseContent("call-a", "tool-a", Map.of("a", 1)),
+            new ContentBlock.ToolUseContent("call-b", "tool-b", Map.of("b", 2)));
+    }
+
     // ── 夹具脚手架 ──────────────────────────────────────────────────────
 
     /**

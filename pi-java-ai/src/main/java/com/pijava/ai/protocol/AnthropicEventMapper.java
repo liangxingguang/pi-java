@@ -37,6 +37,7 @@ final class AnthropicEventMapper {
         try {
             if (event.isMessageStart()) {
                 var startMessage = event.asMessageStart().message();
+                builder.assignResponseId(startMessage.id());
                 // B148（pi :666-690）：responseModel/fallback 计价/input_transformations
                 // 三件流内触点收敛在 AnthropicResponseExtras；定价切换必须在本次
                 // onMessageStart（首次计价）之前。

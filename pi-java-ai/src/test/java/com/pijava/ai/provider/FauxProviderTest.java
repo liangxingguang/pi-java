@@ -64,14 +64,17 @@ class FauxProviderTest {
             }
         }
 
-        // Phase 2a: 4 events: Start → ToolCallStart → ToolCallEnd → StreamDone
-        assertThat(events).hasSize(4);
+        // Start → ToolCallStart → ToolCallDelta → ToolCallEnd → StreamDone
+        assertThat(events).hasSize(5);
         assertThat(events.get(0)).isInstanceOf(StreamEvent.Start.class);
         assertThat(events.get(1)).isInstanceOf(StreamEvent.ToolCallStart.class);
-        assertThat(events.get(2)).isInstanceOf(StreamEvent.ToolCallEnd.class);
-        assertThat(events.get(3)).isInstanceOf(StreamEvent.StreamDone.class);
+        assertThat(events.get(2)).isInstanceOf(StreamEvent.ToolCallDelta.class);
+        assertThat(events.get(3)).isInstanceOf(StreamEvent.ToolCallEnd.class);
+        assertThat(events.get(4)).isInstanceOf(StreamEvent.StreamDone.class);
 
-        var end = (StreamEvent.ToolCallEnd) events.get(2);
+        var delta = (StreamEvent.ToolCallDelta) events.get(2);
+        assertThat(delta.jsonDelta()).isEqualTo("{\"path\":\"/src/main.java\"}");
+        var end = (StreamEvent.ToolCallEnd) events.get(3);
         assertThat(end.name()).isEqualTo("read");
         assertThat(end.arguments()).containsEntry("path", "/src/main.java");
     }

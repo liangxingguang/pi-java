@@ -1,5 +1,7 @@
 package com.pijava.ai.protocol;
 
+import com.pijava.ai.stream.ToolCallSlotKey;
+
 /**
  * responses 输出项生命周期处理：output_item.added/done 的四种类型分支
  * （pi {@code openai-responses-shared.ts:463-527/700-740}），从
@@ -53,12 +55,10 @@ final class ResponseItemHandlers {
             }
             ctx.slotTypes.put(outputIndex, ResponsesStreamProcessor.TOOLCALL);
             ctx.toolCalls.put(outputIndex,
-                new ResponsesStreamProcessor.FunctionCallState(
-                    compositeId, fc.name(), initialArguments(fc)));
-            // 包⑥：起点即带身份。批 30（ai#8，pi shared :492）：起点 item 的
-            // namespace 直接写进块。
-            ctx.publisher.submit(ctx.builder.emitToolCallStart(compositeId, fc.name(),
-                fc.namespace().orElse(null)));
+                new ResponsesStreamProcessor.FunctionCallState(compositeId, fc.name()));
+            var key = ToolCallSlotKey.indexed(outputIndex);
+            ctx.publisher.submit(ctx.builder.emitSeededToolCallStart(key, compositeId, fc.name(),
+                fc.namespace().orElse(null), initialArguments(fc)));
         } else if (item.customToolCall().isPresent()) {
             // 原 docs/69（pi shared :504-527）。
             ctx.slotTypes.put(outputIndex, ResponsesCustomCalls.CUSTOM);
@@ -67,7 +67,8 @@ final class ResponseItemHandlers {
                 custom, ctx.grammarProperties);
             ctx.customCalls.put(outputIndex, state);
             ctx.publisher.submit(ctx.builder.emitToolCallStart(
-                state.compositeId, state.name, custom.namespace().orElse(null)));
+                ToolCallSlotKey.indexed(outputIndex), state.compositeId, state.name,
+                custom.namespace().orElse(null), state.initialArguments()));
         }
     }
 
@@ -86,22 +87,6 @@ final class ResponseItemHandlers {
             com.openai.models.responses.ResponseFunctionToolCall fc) {
         var field = fc._arguments();
         return field.isMissing() || field.isNull() ? "" : fc.arguments();
-    }
-
-    /**
-     * pi {@code openai-responses-shared.ts:710} 的
-     * {@code item.arguments || slot.block.partialJson || "{}"}：收尾项里的参数**优先**，
-     * 其次才是流式累积的草稿，都没有才给 {@code "{}"}。
-     *
-     * <p>注意 {@code ||} 的语义：收尾项给的是**空串**时同样落回草稿（与 {@code ??} 不同）。</p>
-     */
-    private static String authoritativeArguments(
-            com.openai.models.responses.ResponseFunctionToolCall fc, String accumulated) {
-        var fromItem = initialArguments(fc);
-        if (!fromItem.isEmpty()) {
-            return fromItem;
-        }
-        return accumulated == null || accumulated.isEmpty() ? "{}" : accumulated;
     }
 
     /** 本轮的 function_call 槽里是否已有同一个复合 id（docs/05 B152 的去重判据）。 */
@@ -146,26 +131,25 @@ final class ResponseItemHandlers {
                     ctx.slotTypes, outputIndex, ResponsesStreamProcessor.TOOLCALL)) {
             var state = ctx.toolCalls.remove(outputIndex);
             if (state != null) {
-                // pi :710 的 `item.arguments || partialJson || "{}"`：**收尾项里的参数是权威值**，
-                // 流式 delta 只是草稿（可能更短，也可能一个都没有）。
-                ctx.builder.replaceToolArguments(authoritativeArguments(
-                    item.functionCall().get(), state.args));
-                // 批 30（ai#8，pi :717）：收尾 item 的 namespace 回填（缺席保留起点值）。
-                ctx.publisher.submit(ctx.builder.emitToolCallEnd(
-                    state.callId, state.name, null,
-                    item.functionCall().get().namespace().orElse(null)));
+                var key = ToolCallSlotKey.indexed(outputIndex);
+                var fc = item.functionCall().get();
+                // A non-empty done item is authoritative; an empty value retains the accumulated raw stream.
+                if (!initialArguments(fc).isEmpty()) {
+                    ctx.builder.replaceToolArguments(key, initialArguments(fc));
+                }
+                ctx.publisher.submit(ctx.builder.emitToolCallEnd(key,
+                    state.callId, state.name, null, fc.namespace().orElse(null)));
             }
         } else if (item.customToolCall().isPresent()
                 && ResponsesStreamProcessor.isSlot(
                     ctx.slotTypes, outputIndex, ResponsesCustomCalls.CUSTOM)) {
             var state = ctx.customCalls.remove(outputIndex);
             if (state != null) {
-                ResponsesCustomCalls.itemDone(state,
+                ResponsesCustomCalls.itemDone(outputIndex, state,
                     item.customToolCall().get().input(),
                     ctx.publisher::submit, ctx.builder);
-                // 批 30（ai#8，pi :733）：custom 收尾同形回填。
                 ctx.publisher.submit(ctx.builder.emitToolCallEnd(
-                    state.compositeId, state.name, null,
+                    ToolCallSlotKey.indexed(outputIndex), state.compositeId, state.name, null,
                     item.customToolCall().get().namespace().orElse(null)));
             }
         }

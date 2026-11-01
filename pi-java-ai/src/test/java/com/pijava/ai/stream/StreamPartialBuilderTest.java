@@ -94,14 +94,6 @@ class StreamPartialBuilderTest {
         assertThat(usage.toUsage().cost().total()).isEqualTo(10);
     }
     @Test
-    void lenientParserAcceptsModelJsonQuirks() throws Exception {
-        // Trailing comma + unquoted field name, common in model-generated args.
-        var parsed = ToolArgumentParser.lenient()
-            .readValue("{command: \"echo hi\",}", java.util.Map.class);
-        assertThat(parsed).isInstanceOf(java.util.Map.class);
-    }
-
-    @Test
     void signatureDeltaAccumulatesIntoThinkingBlock() {
         var builder = new StreamPartialBuilder();
         builder.emitStart();

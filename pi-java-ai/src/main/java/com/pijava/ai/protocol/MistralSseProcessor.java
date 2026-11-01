@@ -12,7 +12,6 @@ import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.StopReason;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.stream.StreamPartialBuilder;
-import com.pijava.ai.stream.ToolCallBuilder;
 import com.pijava.ai.utils.SanitizeUnicode;
 
 /**
@@ -116,7 +115,7 @@ final class MistralSseProcessor {
     void processSseData(String data,
                           SubmissionPublisher<StreamEvent> publisher,
                           StreamPartialBuilder builder,
-                          Map<String, ToolCallBuilder> toolBuilders,
+                          ToolCallAccumulator toolCalls,
                           ContentState contentState,
                           StopState stop,
                           ModelInfo model) {
@@ -127,6 +126,8 @@ final class MistralSseProcessor {
             if (streamEventHook != null) {
                 streamEventHook.onEvent(json, model);
             }
+
+            builder.noteResponseIdFirstNonBlank((String) json.get("id"));
 
             // Usage —— 位置照 pi：usage 应用（{@code :596-611}）在「choices 空帧早退」
             // （{@code :613} 的 `if (!choice) continue`）**之前**。两个后果：
@@ -181,10 +182,10 @@ final class MistralSseProcessor {
 
                 // Tool call delta —— pi :712-715：**首个**工具调用到达即关当前文本/思考块
                 // （关闭在 toolCall 循环体内，空列表不触发 ⇒ 不能无条件 finish）。
-                var toolCalls = (List<Map<String, Object>>) delta.get("tool_calls");
-                if (toolCalls != null && !toolCalls.isEmpty()) {
+                var wireToolCalls = (List<Map<String, Object>>) delta.get("tool_calls");
+                if (wireToolCalls != null && !wireToolCalls.isEmpty()) {
                     contentState.finish(builder, publisher);
-                    for (var tc : toolCalls) {
+                    for (var tc : wireToolCalls) {
                         var index = String.valueOf(tc.getOrDefault("index", "0"));
                         var tcId = (String) tc.get("id");
                         var function = (Map<String, Object>) tc.get("function");
@@ -193,19 +194,9 @@ final class MistralSseProcessor {
                         var name = (String) function.get("name");
                         var args = (String) function.get("arguments");
 
-                        var toolBuilder = toolBuilders.computeIfAbsent(index,
-                                k -> new ToolCallBuilder());
-
-                        if (tcId != null && name != null && !toolBuilder.isStarted()) {
-                            toolBuilder.start(tcId, name);
-                            // 包⑥：起点即带身份（上行的 null 判定已保证两者非空）。
-                            publisher.submit(builder.emitToolCallStart(tcId, name));
-                        }
-                        if (args != null) {
-                            toolBuilder.append(args);
-                            publisher.submit(builder.emitToolCallDelta(
-                                    toolBuilder.id(), args));
-                        }
+                        toolCalls.update(Long.parseLong(index), tcId,
+                            name == null || name.isEmpty() ? null : name, args,
+                            publisher::submit, builder);
                     }
                 }
             }
@@ -221,12 +212,7 @@ final class MistralSseProcessor {
                 stop.reason = mapped.reason();
                 stop.errorMessage = mapped.errorMessage();
                 if (stop.reason == StopReason.TOOL_USE) {
-                    for (var tb : toolBuilders.values()) {
-                        if (tb.isComplete()) {
-                            publisher.submit(builder.emitToolCallEnd(
-                                    tb.id(), tb.name()));
-                        }
-                    }
+                    toolCalls.finish(publisher::submit, builder);
                 }
             }
 

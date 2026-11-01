@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.SubmissionPublisher;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.genai.Client;
 import com.google.genai.ResponseStream;
 import com.google.genai.types.Content;
@@ -33,6 +34,7 @@ import com.pijava.ai.http.ProviderRetry;
 import com.pijava.ai.model.CostCalculator;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.stream.StreamPartialBuilder;
+import com.pijava.ai.stream.ToolCallSlotKey;
 import com.pijava.ai.utils.SanitizeUnicode;
 
 /**
@@ -74,6 +76,7 @@ public final class GoogleGenerativeAiApi extends AbstractChatApi {
     }
 
     private static final String DEFAULT_BASE_URL = "https://generativelanguage.googleapis.com";
+    private static final ObjectMapper JSON = new ObjectMapper();
 
     private final Client client;
 
@@ -179,6 +182,7 @@ public final class GoogleGenerativeAiApi extends AbstractChatApi {
                     ProviderRetry::ofGoogle, providerRetry);
             try (stream) {
                 for (var response : stream) {
+                    builder.noteResponseIdFirstNonBlank(response.responseId().orElse(null));
                     // docs/17（pi :107）：原始响应块、归一化前。
                     if (streamEventHook != null) {
                         streamEventHook.onEvent(response, request.model());
@@ -274,10 +278,12 @@ public final class GoogleGenerativeAiApi extends AbstractChatApi {
                                             .orElse(null);
 
                                     toolCallSeen = true;
-                                    // 包⑥：起点即带身份（Google 一次给全，无 delta）。
-                                    publisher.submit(builder.emitToolCallStart(id, name));
-                                    publisher.submit(builder.emitToolCallDelta(id, ""));
-                                    publisher.submit(builder.emitToolCallEnd(id, name, thoughtSignature));
+                                    var key = ToolCallSlotKey.fallback(id);
+                                    publisher.submit(builder.emitToolCallStart(key, id, name, null));
+                                    publisher.submit(builder.emitToolCallDelta(key, id,
+                                        JSON.writeValueAsString(args)));
+                                    publisher.submit(builder.emitToolCallEnd(
+                                        key, id, name, thoughtSignature, null));
                                 }
                             }
                         }

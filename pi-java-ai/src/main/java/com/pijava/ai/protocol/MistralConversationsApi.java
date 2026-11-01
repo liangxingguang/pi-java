@@ -24,7 +24,6 @@ import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.ModelCapability;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.stream.StreamPartialBuilder;
-import com.pijava.ai.stream.ToolCallBuilder;
 import com.pijava.ai.utils.ProviderErrors;
 
 /**
@@ -177,7 +176,7 @@ public final class MistralConversationsApi extends AbstractChatApi {
                     http.postSse(baseUrl + "/chat/completions", jsonBody, headers, null,
                         headerTimeout, responseObserver);
 
-            var toolCallBuilders = new HashMap<String, ToolCallBuilder>();
+            var toolCalls = new ToolCallAccumulator();
             // B80：pi :583 的 currentBlock（NONE/TEXT/THINKING），换型先关旧块再开新块。
             var contentState = new MistralSseProcessor.ContentState();
             var stop = new MistralSseProcessor.StopState();
@@ -191,10 +190,11 @@ public final class MistralConversationsApi extends AbstractChatApi {
                     break;
                 }
                 processSseData(sse.data(), publisher, builder,
-                        toolCallBuilders, contentState, stop, request.model());
+                        toolCalls, contentState, stop, request.model());
             }
             // pi :759 的 finishCurrentBlock(currentBlock)（此前只有单一文本槽）。
             contentState.finish(builder, publisher);
+            toolCalls.finish(publisher::submit, builder);
             // ⚠️ pi 的 abort 检查（:150）在车道层**结构上不可达** —— `StreamRequest` 没有
             // signal，中止由宿主 `PiLoopRunner.markAborted` 在流外处理（§8.35.14 第三节 ③）。
             if (stop.reason == StopReason.PENDING) {
@@ -231,11 +231,11 @@ public final class MistralConversationsApi extends AbstractChatApi {
     private void processSseData(String data,
                                   SubmissionPublisher<StreamEvent> publisher,
                                   StreamPartialBuilder builder,
-                                  Map<String, ToolCallBuilder> toolBuilders,
+                                  ToolCallAccumulator toolCalls,
                                   MistralSseProcessor.ContentState contentState,
                                   MistralSseProcessor.StopState stop,
                                   ModelInfo model) {
-        sseProcessor.processSseData(data, publisher, builder, toolBuilders,
+        sseProcessor.processSseData(data, publisher, builder, toolCalls,
                 contentState, stop, model);
     }
 

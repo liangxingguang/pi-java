@@ -147,6 +147,7 @@ class PiMessagesApiTest {
         assertThat(events).anyMatch(e -> e instanceof StreamEvent.StreamError);
         var error = last(events, StreamEvent.StreamError.class);
         assertThat(error.reason()).isEqualTo(StopReason.ERROR);
+        assertThat(error.partial().responseId()).isEqualTo("r");
     }
 
     /**
@@ -191,6 +192,59 @@ class PiMessagesApiTest {
         assertEventSequence(events, StreamEvent.Start.class,
             StreamEvent.TextStart.class, StreamEvent.TextDelta.class,
             StreamEvent.TextEnd.class, StreamEvent.StreamDone.class);
+    }
+
+    @Test
+    void terminalToolCallAuthoritativelyReplacesEveryField() throws Exception {
+        var sse = event("{\"type\":\"start\"}")
+            + event("{\"type\":\"toolcall_start\",\"contentIndex\":0,"
+                + "\"id\":\"old-id\",\"toolName\":\"old-name\"}")
+            + event("{\"type\":\"toolcall_delta\",\"contentIndex\":0,"
+                + "\"delta\":\"{\\\"old\\\":1}\"}")
+            + event("{\"type\":\"toolcall_end\",\"contentIndex\":0,\"toolCall\":{"
+                + "\"id\":\"new-id\",\"name\":\"new-name\",\"arguments\":{\"fresh\":2},"
+                + "\"thoughtSignature\":\"sig\",\"namespace\":\"ns\"}}")
+            + event("{\"type\":\"done\",\"reason\":\"toolUse\",\"usage\":null,"
+                + "\"responseId\":\"resp-done\"}");
+        var events = collect(api(startServer(sse)), "write");
+
+        assertThat(events).filteredOn(StreamEvent.ToolCallDelta.class::isInstance).hasSize(1);
+        var end = last(events, StreamEvent.ToolCallEnd.class);
+        assertThat(end.id()).isEqualTo("new-id");
+        assertThat(end.name()).isEqualTo("new-name");
+        assertThat(end.arguments()).isEqualTo(Map.of("fresh", 2));
+        assertThat(end.namespace()).isEqualTo("ns");
+        assertThat(end.partial().content().getFirst()).isEqualTo(
+            new ContentBlock.ToolUseContent("new-id", "new-name", Map.of("fresh", 2),
+                "sig", "ns", null));
+        assertThat(last(events, StreamEvent.StreamDone.class).partial().responseId())
+            .isEqualTo("resp-done");
+    }
+
+    @Test
+    void malformedTerminalErrorIsAuthoritativeAndOpenCallsFinishEmpty() throws Exception {
+        var malformed = event("{\"type\":\"start\"}")
+            + event("{\"type\":\"toolcall_start\",\"contentIndex\":0,"
+                + "\"id\":\"bad\",\"toolName\":\"bad\"}")
+            + event("{\"type\":\"toolcall_delta\",\"contentIndex\":0,"
+                + "\"delta\":\"{\\\"valid\\\":true} broken\"}")
+            + event("{\"type\":\"toolcall_end\",\"contentIndex\":0,\"toolCall\":{"
+                + "\"id\":\"bad\",\"name\":\"bad\",\"arguments\":{},"
+                + "\"argumentsError\":\"terminal-error\"}}")
+            + event("{\"type\":\"done\",\"reason\":\"toolUse\",\"usage\":null}");
+        var malformedEvents = collect(api(startServer(malformed)), "bad");
+        assertThat(last(malformedEvents, StreamEvent.ToolCallEnd.class).argumentsError())
+            .isEqualTo("terminal-error");
+
+        tearDown();
+        var open = event("{\"type\":\"start\"}")
+            + event("{\"type\":\"toolcall_start\",\"contentIndex\":0,"
+                + "\"id\":\"empty\",\"toolName\":\"empty\"}")
+            + event("{\"type\":\"done\",\"reason\":\"toolUse\",\"usage\":null}");
+        var openEvents = collect(api(startServer(open)), "empty");
+        var end = last(openEvents, StreamEvent.ToolCallEnd.class);
+        assertThat(end.arguments()).isEmpty();
+        assertThat(end.argumentsError()).isNull();
     }
 
     @Test

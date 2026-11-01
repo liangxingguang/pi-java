@@ -1,7 +1,5 @@
 package com.pijava.ai.stream;
 
-import java.util.Map;
-
 import com.pijava.ai.message.AssistantMessage;
 
 /**
@@ -20,14 +18,14 @@ public final class ToolCallBuilder {
 
     private String id = "";
     private String name = "";
-    private final StringBuilder arguments = new StringBuilder();
+    private ToolCallArgumentsStream arguments = new ToolCallArgumentsStream();
     private boolean started;
 
     /** Record the start of a tool call. */
     public void start(String toolCallId, String toolName) {
         this.id = toolCallId;
         this.name = toolName;
-        this.arguments.setLength(0);
+        this.arguments = new ToolCallArgumentsStream();
         this.started = true;
     }
 
@@ -43,7 +41,7 @@ public final class ToolCallBuilder {
 
     /** Returns {@code true} if the accumulated JSON is parseable. */
     public boolean isComplete() {
-        return started && !arguments.isEmpty();
+        return started && !arguments.text().isEmpty();
     }
 
     /** The tool call ID assigned at start. */
@@ -58,7 +56,7 @@ public final class ToolCallBuilder {
 
     /** The accumulated arguments as a JSON string. */
     public String argumentsJson() {
-        return arguments.toString();
+        return arguments.text();
     }
 
     /**
@@ -66,8 +64,8 @@ public final class ToolCallBuilder {
      * Phase 2a: requires contentIndex and partial snapshot.
      */
     public StreamEvent.ToolCallEnd toEnd(int contentIndex, AssistantMessage partial) {
-        // Same lenient parse as streamed tool calls (verbatim _raw on failure).
-        Map<String, Object> parsed = ToolArgumentParser.parse(arguments.toString());
-        return new StreamEvent.ToolCallEnd(contentIndex, id, name, parsed, partial);
+        var finish = arguments.finish();
+        return new StreamEvent.ToolCallEnd(contentIndex, id, name, finish.arguments(),
+            null, finish.argumentsError(), partial);
     }
 }
