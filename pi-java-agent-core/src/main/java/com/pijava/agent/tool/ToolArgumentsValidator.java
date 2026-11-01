@@ -36,6 +36,16 @@ public final class ToolArgumentsValidator {
      *         field does not match its declared type
      */
     public static void validate(Map<String, Object> schema, Map<String, Object> args) {
+        validate(schema, args, null, null);
+    }
+
+    /** Reject a terminal stream parse error before applying any schema rules. */
+    public static void validate(Map<String, Object> schema, Map<String, Object> args,
+                                String toolName, String argumentsError) {
+        if (argumentsError != null) {
+            throw new IllegalArgumentException(
+                "Invalid arguments for tool \"" + toolName + "\": " + argumentsError);
+        }
         if (schema == null) {
             return; // No schema means no constraints.
         }
@@ -50,15 +60,9 @@ public final class ToolArgumentsValidator {
         if (!(requiredObj instanceof List<?> required)) {
             return;
         }
-        // Stream adapters fall back to {"_raw": "<raw json>"} when the model's
-        // tool arguments are truncated or malformed (BashTool.prepareArguments).
-        // Those recover the command themselves, so schema enforcement is
-        // deliberately skipped to preserve the recovery path.
-        boolean hasRawFallback = args != null && args.containsKey("_raw");
         for (Object name : required) {
             if (name instanceof String key
-                    && (args == null || !args.containsKey(key) || args.get(key) == null)
-                    && !hasRawFallback) {
+                    && (args == null || !args.containsKey(key) || args.get(key) == null)) {
                 throw new IllegalArgumentException(
                     "missing required argument \"" + key + "\"");
             }

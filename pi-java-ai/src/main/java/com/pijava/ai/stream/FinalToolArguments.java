@@ -7,7 +7,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pijava.ai.utils.EcmaWhitespace;
 
 /** Strict complete-document parsing with pi's narrow malformed-string repair family. */
-final class FinalToolArguments {
+public final class FinalToolArguments {
 
     private static final ObjectMapper MAPPER = new ObjectMapper()
             .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
@@ -15,7 +15,8 @@ final class FinalToolArguments {
     private FinalToolArguments() {
     }
 
-    static ToolCallArgumentsStream.Finish parse(String json) {
+    /** Parse one complete argument document, returning empty arguments plus an error on failure. */
+    public static ToolCallArgumentsStream.Finish parse(String json) {
         if (EcmaWhitespace.isEmpty(json)) {
             return new ToolCallArgumentsStream.Finish(Map.of(), null);
         }

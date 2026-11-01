@@ -93,11 +93,15 @@ final class ShellToolSupport {
             @Override
             public BashTool.BashInput prepareArguments(Map<String, Object> raw) {
                 String command = (String) raw.get("command");
-                if (command == null && raw.get("_raw") instanceof String rawJson) {
-                    // Stream adapters fall back to {"_raw": "<raw json>"} when the
-                    // model tool arguments are truncated or malformed; recover the
-                    // command so the call still runs instead of silently failing.
-                    command = extractCommand(rawJson);
+                if (command == null) {
+                    var recovered = BashTool.recoverLegacyArguments(raw);
+                    if (recovered != null) {
+                        if (recovered.argumentsError() != null) {
+                            throw new IllegalArgumentException("Invalid arguments for tool \"bash\": "
+                                + recovered.argumentsError());
+                        }
+                        command = (String) recovered.arguments().get("command");
+                    }
                 }
                 Optional<Double> timeout = Optional.empty();
                 Object timeoutObj = raw.get("timeout");
@@ -258,28 +262,6 @@ final class ShellToolSupport {
         int idx = fullOutput.lastIndexOf('\n');
         String last = idx < 0 ? fullOutput : fullOutput.substring(idx + 1);
         return TruncationUtils.formatSize(last.getBytes(java.nio.charset.StandardCharsets.UTF_8).length);
-    }
-
-    /** Best-effort command extraction from a raw (possibly malformed) JSON argument. */
-    private static String extractCommand(String rawJson) {
-        try {
-            Object parsed = new com.fasterxml.jackson.databind.ObjectMapper()
-                .enable(com.fasterxml.jackson.core.JsonParser.Feature.ALLOW_COMMENTS)
-                .enable(com.fasterxml.jackson.core.JsonParser.Feature.ALLOW_SINGLE_QUOTES)
-                .enable(com.fasterxml.jackson.core.JsonParser.Feature.ALLOW_UNQUOTED_FIELD_NAMES)
-                .enable(com.fasterxml.jackson.core.JsonParser.Feature.ALLOW_TRAILING_COMMA)
-                .readValue(rawJson, Object.class);
-            if (parsed instanceof Map<?, ?> map && map.get("command") instanceof String cmd) {
-                return cmd;
-            }
-        } catch (Exception ignored) {
-            // fall through to regex extraction
-        }
-        var matcher = java.util.regex.Pattern.compile(
-            "\"command\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"").matcher(rawJson);
-        return matcher.find()
-            ? matcher.group(1).replace("\\\"", "\"").replace("\\\\", "\\")
-            : null;
     }
 
     /**

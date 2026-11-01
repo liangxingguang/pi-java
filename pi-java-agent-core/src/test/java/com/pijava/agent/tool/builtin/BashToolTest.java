@@ -211,16 +211,18 @@ class BashToolTest {
     }
 
     @Test
-    void rawArgumentsFallbackRecoversCommand() {
+    void rawArgumentsUseTheStrictFinalParser() {
         var tool = BashTool.create();
 
         var nested = tool.prepareArguments(Map.of("_raw",
             "{\"command\": \"echo hi\"}"));
         assertThat(nested.command()).isEqualTo("echo hi");
 
-        var truncated = tool.prepareArguments(Map.of("_raw",
-            "{\"command\": \"echo \\\"hi\\\" --max-time 15\", \"timeout\": 30"));
-        assertThat(truncated.command()).isEqualTo("echo \"hi\" --max-time 15");
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> tool.prepareArguments(
+            Map.of("_raw", "{\"command\": \"echo hi\"} broken")))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("Invalid arguments for tool \"bash\":")
+            .hasMessageContaining("Received arguments:\n{\"command\": \"echo hi\"} broken");
     }
 
     // ── PI_* 会话环境变量面（B242；pi bash.ts:45-48,186-212,250,257）──

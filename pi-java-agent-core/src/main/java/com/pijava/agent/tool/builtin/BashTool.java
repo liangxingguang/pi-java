@@ -1,11 +1,16 @@
 package com.pijava.agent.tool.builtin;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
 
 import com.pijava.agent.tool.AgentTool;
 import com.pijava.agent.tool.TruncationUtils;
+import com.pijava.ai.stream.FinalToolArguments;
+import com.pijava.ai.stream.ToolCallArgumentsStream.Finish;
+
+import org.jspecify.annotations.Nullable;
 
 /**
  * Shell command execution tool.
@@ -36,6 +41,15 @@ public final class BashTool {
 
     public record BashInput(String command, Optional<Double> timeoutSeconds) {}
     public record BashDetails(TruncationUtils.TruncationResult truncation, String fullOutputPath) {}
+
+    /** Recover only the exact legacy Bash singleton {@code {"_raw":"..."}} shape. */
+    @Nullable
+    public static Finish recoverLegacyArguments(Map<String, Object> args) {
+        if (args.size() == 1 && args.get("_raw") instanceof String raw) {
+            return FinalToolArguments.parse(raw);
+        }
+        return null;
+    }
 
     /** Create the bash tool with no command prefix. */
     public static AgentTool<BashInput, BashDetails> create() {
