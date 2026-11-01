@@ -64,6 +64,9 @@ public final class StreamPartialBuilder {
      */
     private String responseModel;
 
+    /** Provider response metadata, distinct from the local message id. */
+    private String responseId;
+
     /**
      * B148：provider/运行时诊断（pi {@code output.diagnostics}）。
      * 默认 null（≙ undefined，键省略）；{@link #appendDiagnostic} 按需建表追加。
@@ -104,7 +107,7 @@ public final class StreamPartialBuilder {
         return new AssistantMessage(messageId, List.copyOf(blocks), usage, stopReason,
             null, null, null, responseModel, providerThinkingLevel,
             diagnostics == null ? null : List.copyOf(diagnostics),
-            null, null, rawStopReason, null);
+            null, null, rawStopReason, null, responseId);
     }
 
     /**
@@ -127,6 +130,18 @@ public final class StreamPartialBuilder {
     public void noteResponseModel(String model) {
         if (this.responseModel == null && model != null && !model.isEmpty()) {
             this.responseModel = model;
+        }
+    }
+
+    /** Assign a provider response id, allowing a terminal authoritative value to replace the created value. */
+    public void assignResponseId(String responseId) {
+        this.responseId = responseId;
+    }
+
+    /** Retain the first non-empty provider response id, matching the lanes' fixed {@code ||=} timing. */
+    public void noteResponseIdFirstNonBlank(String responseId) {
+        if (this.responseId == null && responseId != null && !responseId.isEmpty()) {
+            this.responseId = responseId;
         }
     }
 

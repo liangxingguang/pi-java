@@ -12,6 +12,7 @@ import com.pijava.ai.message.StopReason;
 
 import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
 /**
  * package 3b 的估算器判据（pi {@code compaction.ts:164-310} 逐条，
@@ -162,11 +163,18 @@ class ContextUsageEstimatorTest {
     }
 
     @Test
-    void unserializableArgumentsFallBackToSentinel() {
+    void cyclicArgumentsAreRejectedInsteadOfCopiedForever() {
         var cyclic = new LinkedHashMap<String, Object>();
-        cyclic.put("self", cyclic); // Jackson 序列化抛错
+        cyclic.put("self", cyclic);
+        assertThatIllegalArgumentException()
+            .isThrownBy(() -> new ContentBlock.ToolUseContent("id-1", "e", cyclic))
+            .withMessage("JSON arguments must not contain cycles");
+    }
+
+    @Test
+    void unserializableArgumentsFallBackToSentinel() {
         var call = new Message.AssistantMessage(
-            List.of(new ContentBlock.ToolUseContent("id-1", "e", cyclic)),
+            List.of(new ContentBlock.ToolUseContent("id-1", "e", Map.of("value", new Object()))),
             StopReason.TOOL_USE, null, null, null, null, null, null, null, null);
         assertThat(ContextUsageEstimator.estimateTokens(call))
             .isEqualTo((int) Math.ceil((1 + "[unserializable]".length()) / 4.0)); // ceil(17/4)=5

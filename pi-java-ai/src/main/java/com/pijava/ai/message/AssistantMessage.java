@@ -81,7 +81,8 @@ public record AssistantMessage(
     Instant timestamp,
     String errorMessage,
     String rawStopReason,
-    Long durationMs
+    Long durationMs,
+    @org.jspecify.annotations.Nullable String responseId
 ) {
     /** Compact constructor that defensively copies the content blocks. */
     public AssistantMessage {
@@ -89,12 +90,21 @@ public record AssistantMessage(
         diagnostics = diagnostics == null ? null : List.copyOf(diagnostics);
     }
 
+    /** Backwards-compatible full pre-responseId shape. */
+    public AssistantMessage(String id, List<ContentBlock> content, StreamEvent.UsageInfo usage,
+            StopReason stopReason, String api, String provider, String model, String responseModel,
+            String providerThinkingLevel, List<AssistantMessageDiagnostic> diagnostics,
+            Instant timestamp, String errorMessage, String rawStopReason, Long durationMs) {
+        this(id, content, usage, stopReason, api, provider, model, responseModel,
+            providerThinkingLevel, diagnostics, timestamp, errorMessage, rawStopReason, durationMs, null);
+    }
+
     /** Constructor for pre-3a snapshots without identity fields. */
     public AssistantMessage(
             String id, List<ContentBlock> content, StreamEvent.UsageInfo usage,
             StopReason stopReason) {
         this(id, content, usage, stopReason, null, null, null, null, null, null,
-            null, null, null, null);
+            null, null, null, null, null);
     }
 
     /**
@@ -109,7 +119,7 @@ public record AssistantMessage(
             Instant timestamp, String errorMessage, String rawStopReason) {
         this(id, content, usage, stopReason,
             api, provider, model, null, null, null,
-            timestamp, errorMessage, rawStopReason, null);
+            timestamp, errorMessage, rawStopReason, null, null);
     }
 
     /** Create an empty initial snapshot. */
@@ -126,28 +136,28 @@ public record AssistantMessage(
     public AssistantMessage withId(String newId) {
         return new AssistantMessage(newId, content, usage, stopReason,
             api, provider, model, responseModel, providerThinkingLevel, diagnostics,
-            timestamp, errorMessage, rawStopReason, durationMs);
+            timestamp, errorMessage, rawStopReason, durationMs, responseId);
     }
 
     /** Create a copy with updated content blocks. */
     public AssistantMessage withContent(List<ContentBlock> newContent) {
         return new AssistantMessage(id, newContent, usage, stopReason,
             api, provider, model, responseModel, providerThinkingLevel, diagnostics,
-            timestamp, errorMessage, rawStopReason, durationMs);
+            timestamp, errorMessage, rawStopReason, durationMs, responseId);
     }
 
     /** Create a copy with updated usage. */
     public AssistantMessage withUsage(StreamEvent.UsageInfo newUsage) {
         return new AssistantMessage(id, content, newUsage, stopReason,
             api, provider, model, responseModel, providerThinkingLevel, diagnostics,
-            timestamp, errorMessage, rawStopReason, durationMs);
+            timestamp, errorMessage, rawStopReason, durationMs, responseId);
     }
 
     /** Create a copy with an updated stop reason. */
     public AssistantMessage withStopReason(StopReason newStopReason) {
         return new AssistantMessage(id, content, usage, newStopReason,
             api, provider, model, responseModel, providerThinkingLevel, diagnostics,
-            timestamp, errorMessage, rawStopReason, durationMs);
+            timestamp, errorMessage, rawStopReason, durationMs, responseId);
     }
 
     /** Create a copy with the provider identity + creation time attached. */
@@ -155,7 +165,7 @@ public record AssistantMessage(
                                          Instant newTimestamp) {
         return new AssistantMessage(id, content, usage, stopReason,
             newApi, newProvider, newModel, responseModel, providerThinkingLevel, diagnostics,
-            newTimestamp, errorMessage, rawStopReason, durationMs);
+            newTimestamp, errorMessage, rawStopReason, durationMs, responseId);
     }
 
     /**
@@ -166,7 +176,7 @@ public record AssistantMessage(
     public AssistantMessage withProviderThinkingLevel(String newProviderThinkingLevel) {
         return new AssistantMessage(id, content, usage, stopReason,
             api, provider, model, responseModel, newProviderThinkingLevel, diagnostics,
-            timestamp, errorMessage, rawStopReason, durationMs);
+            timestamp, errorMessage, rawStopReason, durationMs, responseId);
     }
 
     /**
@@ -176,21 +186,21 @@ public record AssistantMessage(
     public AssistantMessage withResponseModel(String newResponseModel) {
         return new AssistantMessage(id, content, usage, stopReason,
             api, provider, model, newResponseModel, providerThinkingLevel, diagnostics,
-            timestamp, errorMessage, rawStopReason, durationMs);
+            timestamp, errorMessage, rawStopReason, durationMs, responseId);
     }
 
     /** B148：盖上诊断列表的<b>当前快照</b>（builder 持可变累加器，每帧不可变拷贝）。 */
     public AssistantMessage withDiagnostics(List<AssistantMessageDiagnostic> newDiagnostics) {
         return new AssistantMessage(id, content, usage, stopReason,
             api, provider, model, responseModel, providerThinkingLevel, newDiagnostics,
-            timestamp, errorMessage, rawStopReason, durationMs);
+            timestamp, errorMessage, rawStopReason, durationMs, responseId);
     }
 
     /** Create a copy with an error-path message text attached (pi {@code errorMessage}). */
     public AssistantMessage withErrorMessage(String newErrorMessage) {
         return new AssistantMessage(id, content, usage, stopReason,
             api, provider, model, responseModel, providerThinkingLevel, diagnostics,
-            timestamp, newErrorMessage, rawStopReason, durationMs);
+            timestamp, newErrorMessage, rawStopReason, durationMs, responseId);
     }
 
     /**
@@ -205,7 +215,7 @@ public record AssistantMessage(
     public AssistantMessage withRawStopReason(String newRawStopReason) {
         return new AssistantMessage(id, content, usage, stopReason,
             api, provider, model, responseModel, providerThinkingLevel, diagnostics,
-            timestamp, errorMessage, newRawStopReason, durationMs);
+            timestamp, errorMessage, newRawStopReason, durationMs, responseId);
     }
 
     /**
@@ -215,6 +225,6 @@ public record AssistantMessage(
     public AssistantMessage withDurationMs(Long newDurationMs) {
         return new AssistantMessage(id, content, usage, stopReason,
             api, provider, model, responseModel, providerThinkingLevel, diagnostics,
-            timestamp, errorMessage, rawStopReason, newDurationMs);
+            timestamp, errorMessage, rawStopReason, newDurationMs, responseId);
     }
 }

@@ -440,8 +440,9 @@ final class SessionWiring {
                         case StreamEvent.StreamError error -> finalMessage =
                             new com.pijava.ai.message.Message.AssistantMessage(List.of(),
                                 com.pijava.ai.message.StopReason.ERROR, null, null, null, null,
-                                null, Instant.now(),
-                                error.error() == null ? null : error.error().getMessage(), null);
+                                null, null, null, null, null, Instant.now(),
+                                error.error() == null ? null : error.error().getMessage(), null,
+                                null, error.partial() == null ? null : error.partial().responseId());
                         default -> { /* 中间帧不消费（maxTokens=1 重放只有增量帧）。 */ }
                     }
                 }

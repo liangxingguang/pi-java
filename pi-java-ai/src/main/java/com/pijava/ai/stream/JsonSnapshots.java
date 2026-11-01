@@ -2,6 +2,7 @@ package com.pijava.ai.stream;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -31,14 +32,20 @@ public final class JsonSnapshots {
         Object copy = emptyContainer(value);
         CopyFrame root = CopyFrame.root(value, copy);
         List<CopyFrame> stack = new ArrayList<>();
+        IdentityHashMap<Object, Boolean> active = new IdentityHashMap<>();
+        active.put(value, Boolean.TRUE);
         stack.add(root);
         while (!stack.isEmpty()) {
             CopyFrame frame = stack.getLast();
             if (frame.hasNext()) {
                 Object child = frame.next();
                 if (child instanceof Map<?, ?> || child instanceof List<?>) {
+                    if (active.containsKey(child)) {
+                        throw new IllegalArgumentException("JSON arguments must not contain cycles");
+                    }
                     Object childCopy = emptyContainer(child);
                     frame.attach(childCopy);
+                    active.put(child, Boolean.TRUE);
                     stack.add(CopyFrame.child(child, childCopy, frame, frame.lastSlot));
                 } else {
                     frame.attach(child);
@@ -46,6 +53,7 @@ public final class JsonSnapshots {
                 continue;
             }
             Object sealed = sealContainer(frame.copy);
+            active.remove(frame.original);
             stack.removeLast();
             if (frame.parent == null) {
                 return sealed;

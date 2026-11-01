@@ -268,8 +268,10 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
     /** pi 的 {@code {...rest, stopReason:"aborted"}} 且剥掉 errorMessage（:217-218）。 */
     private static Message.AssistantMessage normalizeAborted(Message.AssistantMessage response) {
         return new Message.AssistantMessage(response.content(), StopReason.ABORTED, response.deferred(),
-            response.api(), response.provider(), response.model(), response.usage(),
-            response.timestamp(), null, response.rawStopReason());
+            response.api(), response.provider(), response.model(), response.responseModel(),
+            response.providerThinkingLevel(), response.thinkingLevel(), response.diagnostics(),
+            response.usage(), response.timestamp(), null, response.rawStopReason(),
+            response.durationMs(), response.responseId());
     }
 
     /** pi 的 {@code message.errorMessage || "Unknown error"}（空串 ≙ falsy）。 */
@@ -383,7 +385,7 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
                 } else if (event instanceof StreamEvent.ToolCallEnd tc) {
                     // 批 30（ai#8）：namespace 随块携带（pi frame 终局写回对位）。
                     toolCalls.add(new ContentBlock.ToolUseContent(tc.id(), tc.name(),
-                        tc.arguments(), null, tc.namespace()));
+                        tc.arguments(), null, tc.namespace(), tc.argumentsError()));
                 } else if (event instanceof StreamEvent.UsageInfo ui) {
                     usage[0] = ui.usage() != null ? ui.usage() : synthesizeUsage(ui);
                 } else if (event instanceof StreamEvent.StreamDone done) {
@@ -432,11 +434,11 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
             if (backfillUsage || backfillError) {
                 projected = new Message.AssistantMessage(projected.content(),
                     projected.stopReason(), projected.deferred(), projected.api(),
-                    projected.provider(), projected.model(),
-                    backfillUsage ? usage : projected.usage(),
-                    projected.timestamp(),
-                    backfillError ? errorMessage : projected.errorMessage(),
-                    projected.rawStopReason());
+                    projected.provider(), projected.model(), projected.responseModel(),
+                    projected.providerThinkingLevel(), projected.thinkingLevel(), projected.diagnostics(),
+                    backfillUsage ? usage : projected.usage(), projected.timestamp(),
+                    backfillError ? errorMessage : projected.errorMessage(), projected.rawStopReason(),
+                    projected.durationMs(), projected.responseId());
             }
             return projected;
         }

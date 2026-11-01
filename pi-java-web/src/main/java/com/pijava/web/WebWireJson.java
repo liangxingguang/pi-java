@@ -109,6 +109,9 @@ final class WebWireJson {
             if (assistant.durationMs() != null) {
                 node.put("durationMs", assistant.durationMs());
             }
+            if (assistant.responseId() != null) {
+                node.put("responseId", assistant.responseId());
+            }
         }
         return node;
     }
@@ -120,6 +123,9 @@ final class WebWireJson {
         var content = node.putArray("content");
         for (var block : partial.content()) {
             content.add(blockNode(block));
+        }
+        if (partial.responseId() != null) {
+            node.put("responseId", partial.responseId());
         }
         return node;
     }
@@ -146,6 +152,9 @@ final class WebWireJson {
                 node.put("id", t.id());
                 node.put("name", t.name());
                 node.set("arguments", MAPPER.valueToTree(t.arguments()));
+                if (t.argumentsError() != null) {
+                    node.put("argumentsError", t.argumentsError());
+                }
             }
             // 内层 tool_result 拍平为 text：前端 renderTool 只读 content[].text
             case ContentBlock.ToolResultContent t -> {

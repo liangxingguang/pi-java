@@ -337,7 +337,8 @@ class ContextEntriesTest {
         var timestamp = Instant.ofEpochMilli(42);
         var assistant = new Message.AssistantMessage(
             List.of(new ContentBlock.TextContent("original")), StopReason.STOP, null,
-            "faux", "faux", "faux", usage, timestamp, null, null);
+            "faux", "faux", "faux", null, null, null, null,
+            usage, timestamp, null, null, null, "response-context");
         var path = List.<Entry>of(
             new Entry.Message("a", 0, null, timestamp, assistant, null),
             replacement("e1", "a", "a", com.pijava.agent.entry.CustomMessageContent.of(
@@ -354,6 +355,7 @@ class ContextEntriesTest {
             .isSameAs(usage);
         assertThat(projected.timestamp()).isSameAs(timestamp);
         assertThat(projected.stopReason()).isEqualTo(StopReason.STOP);
+        assertThat(projected.responseId()).isEqualTo("response-context");
     }
 
     @Test

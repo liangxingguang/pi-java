@@ -251,7 +251,7 @@ public final class TransformMessages {
             msg.responseModel(), msg.providerThinkingLevel(), msg.thinkingLevel(),
             msg.diagnostics(),
             msg.usage(), msg.timestamp(),
-            msg.errorMessage(), msg.rawStopReason(), msg.durationMs());
+            msg.errorMessage(), msg.rawStopReason(), msg.durationMs(), msg.responseId());
     }
 
     /**
@@ -286,7 +286,7 @@ public final class TransformMessages {
             if (same || normalize == null) {
                 return stripSignature
                     ? new ContentBlock.ToolUseContent(tu.id(), tu.name(), tu.arguments(), null,
-                        tu.namespace())
+                        tu.namespace(), tu.argumentsError())
                     : block;
             }
             var normalizedId = normalize.normalize(tu.id(), target, msg);
@@ -302,7 +302,7 @@ public final class TransformMessages {
             // pi 的 `{ ...toolCall }` 展开保留 namespace（transform-messages.ts:129-144：
             // 只 delete thoughtSignature）；批 30/ai#8 同。
             return new ContentBlock.ToolUseContent(
-                normalizedId, tu.name(), tu.arguments(), signature, tu.namespace());
+                normalizedId, tu.name(), tu.arguments(), signature, tu.namespace(), tu.argumentsError());
         }
         if (!(block instanceof ContentBlock.ThinkingContent th)) {
             return block;
