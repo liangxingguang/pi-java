@@ -286,6 +286,38 @@ class AnthropicImageContentTest {
         }
     }
 
+    @Test
+    void errorToolImagesMoveAfterTheConsecutiveGroupWithDeduplicatedPlaceholder() throws Exception {
+        String placeholder = "(image attached after the tool results)";
+        var messages = List.<Message>of(
+            new Message.ToolResultMessage("call_one", "read",
+                List.of(new ContentBlock.TextContent("one")), false),
+            new Message.ToolResultMessage("call_img", "read",
+                List.of(image()), true),
+            new Message.ToolResultMessage("call_img2", "read",
+                List.of(new ContentBlock.TextContent(placeholder),
+                    new ContentBlock.ImageContent("image/jpeg", "BBBB")), true),
+            new Message.ToolResultMessage("call_four", "read",
+                List.of(new ContentBlock.TextContent("four")), false));
+
+        assertThat(wire(messages)).containsExactly(
+            "tool_text:one",
+            "tool_text:" + placeholder,
+            "tool_text:" + placeholder,
+            "tool_text:four",
+            "text:Images from the error result of tool call call_img (read):",
+            "image:image/png:" + PNG_B64,
+            "text:Images from the error result of tool call call_img2 (read):",
+            "image:image/jpeg:BBBB");
+    }
+
+    @Test
+    void errorToolResultWithoutImagesKeepsTheJoinedTextShape() throws Exception {
+        assertThat(wire(List.of(new Message.ToolResultMessage("call_text", "read",
+            List.of(new ContentBlock.TextContent("a"), new ContentBlock.TextContent("b")),
+            true)))).containsExactly("tool_text:a\nb");
+    }
+
     // ----------------------------------------------------------- 回归门（今天就绿）
 
     /** <b>回归门</b> 纯文本 toolResult 落成**一个**文本块（join 的退化情形，无图片）。 */

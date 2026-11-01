@@ -220,7 +220,7 @@ final class GoogleMessageConverter {
                 ? msg.content().stream().filter(GoogleMessageConverter::isImageBlock).toList()
                 : List.<ContentBlock>of();
 
-        boolean hasText = !text.isEmpty();
+        boolean hasText = !com.pijava.ai.utils.EcmaWhitespace.isEmpty(text);
         boolean hasImages = !images.isEmpty();
         boolean multimodal = supportsMultimodalFunctionResponse(modelId.modelName());  // pi :298
 

@@ -172,6 +172,15 @@ class GoogleToolResultRoutingTest {
             .isEqualTo("(see attached image)");
     }
 
+    @Test
+    void whitespaceOnlyToolResultUsesAnEmptyResponseValue() throws Exception {
+        var contents = GoogleWireBody.contents(vision(GEMINI_25),
+            List.of(toolResult("call_a", text(" ﻿　"))));
+
+        assertThat(GoogleWireBody.parts(contents, 0).get(0)
+            .path("functionResponse").path("response").path("output").asText()).isEmpty();
+    }
+
     /** 多个文本块 ⇒ {@code join("\n")}（pi {@code :287}）。 */
     @Test
     void multipleTextBlocksAreJoinedWithNewlines() throws Exception {

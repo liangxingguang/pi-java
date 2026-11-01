@@ -150,7 +150,7 @@ final class ResponsesMessageItems {
         var images = content.stream()
                 .filter(ResponsesMessageItems::isImageBlock)
                 .toList();
-        boolean hasText = !text.isEmpty();
+        boolean hasText = !com.pijava.ai.utils.EcmaWhitespace.isEmpty(text);
 
         if (images.isEmpty() || !model.supportsImageInput()) {
             // pi :92/:97 —— 净化的是**选中之后**的串（含占位串；占位串是纯 ASCII，

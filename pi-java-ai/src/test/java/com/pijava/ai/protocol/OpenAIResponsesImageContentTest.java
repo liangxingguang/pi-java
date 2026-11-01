@@ -130,6 +130,15 @@ class OpenAIResponsesImageContentTest {
                 .containsExactly("image:https://example.test/a.png:auto");
     }
 
+    @Test
+    void whitespaceOnlyToolTextUsesEcmaWhitespace() throws Exception {
+        var blank = new ContentBlock.TextContent(" ﻿　");
+        assertThat(toolOutput(VISION, tool(blank)))
+            .containsExactly("string:(no tool output)");
+        assertThat(toolOutput(VISION, tool(blank, image())))
+            .containsExactly("image:" + DATA_URL + ":auto");
+    }
+
     // ----------------------------------------------------------- 回归门（今天就绿）
 
     /** <b>回归门</b> 无图片的文本工具结果仍是**字符串**形态（pi {@code :91-93} 的第一分支）。 */
