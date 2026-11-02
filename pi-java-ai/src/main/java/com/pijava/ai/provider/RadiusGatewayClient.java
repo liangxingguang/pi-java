@@ -18,6 +18,11 @@ public class RadiusGatewayClient {
         this.http = http;
     }
 
+    /** Normalized gateway URL (default gateway decides whether the public baseline applies). */
+    public String gateway() {
+        return gateway;
+    }
+
     /** Load and validate the current account catalog. */
     public RadiusGatewayConfig load(String bearer) throws IOException {
         var builder = HttpRequest.newBuilder(URI.create(gateway + "/v1/config"))

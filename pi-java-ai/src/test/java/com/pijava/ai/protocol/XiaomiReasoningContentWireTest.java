@@ -37,8 +37,8 @@ class XiaomiReasoningContentWireTest {
     @Test
     void xiaomiAssistantHistoryCarriesAnEmptyReasoningContent() throws Exception {
         var model = BuiltinModelCatalogs.catalog("xiaomi")
-            .find(ModelId.of("xiaomi", "mimo-v2.5-pro")).orElseThrow();
-        var body = requestBody(model, "xiaomi", "mimo-v2.5-pro");
+            .find(ModelId.of("xiaomi", "mimo-v2.6-pro")).orElseThrow();
+        var body = requestBody(model, "xiaomi", "mimo-v2.6-pro");
 
         JsonNode assistant = null;
         for (var message : body.path("messages")) {

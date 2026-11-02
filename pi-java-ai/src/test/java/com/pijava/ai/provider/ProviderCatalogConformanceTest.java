@@ -39,9 +39,7 @@ class ProviderCatalogConformanceTest {
         for (var provider : ProviderCatalog.all()) {
             assertThat(provider.name()).isNotBlank();
             assertThat(provider.displayName()).isNotBlank();
-            if (!"radius".equals(provider.name())) {
-                assertThat(provider.builtinModels().listModels()).isNotEmpty();
-            }
+            assertThat(provider.builtinModels().listModels()).isNotEmpty();
             assertThat(provider).isInstanceOf(ConfigurableProvider.class);
 
             var config = ((ConfigurableProvider) provider).providerConfig();

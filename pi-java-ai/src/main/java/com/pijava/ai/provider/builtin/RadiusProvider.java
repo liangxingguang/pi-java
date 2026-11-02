@@ -15,6 +15,7 @@ import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.catalog.ModelsPublication;
 import com.pijava.ai.catalog.ModelsStoreEntry;
 import com.pijava.ai.catalog.RefreshModelsContext;
+import com.pijava.ai.provider.BuiltinModelCatalogs;
 import com.pijava.ai.provider.ConfigurableProvider;
 import com.pijava.ai.provider.Protocol;
 import com.pijava.ai.provider.ProviderConfig;
@@ -26,8 +27,7 @@ public final class RadiusProvider extends ConfigurableProvider {
 
     public static final String DEFAULT_GATEWAY = "https://radius.pi.dev";
 
-    private final ProviderConfig config = ProviderConfig.single(
-        "radius", "Radius", DEFAULT_GATEWAY, "RADIUS_API_KEY", Protocol.PI_MESSAGES, ModelCatalog.empty());
+    private final ProviderConfig config;
     private final RadiusGatewayClient gateway;
     private final Supplier<Optional<String>> credential;
     private volatile List<ModelInfo> dynamicModels;
@@ -43,6 +43,20 @@ public final class RadiusProvider extends ConfigurableProvider {
     RadiusProvider(RadiusGatewayClient gateway, Supplier<Optional<String>> credential) {
         this.gateway = gateway;
         this.credential = credential;
+        this.config = ProviderConfig.single(
+            "radius", "Radius", DEFAULT_GATEWAY, "RADIUS_API_KEY", Protocol.PI_MESSAGES,
+            baselineFor(gateway.gateway()));
+    }
+
+    /**
+     * 默认网关随包携带公共基线；自定义网关的账号目录未知，基线为空。
+     * 一旦账号目录到达，它整体替换基线（组织禁用的模型不会从基线复活）。
+     */
+    private static ModelCatalog baselineFor(String gateway) {
+        return RadiusGatewayClient.normalizeGateway(gateway)
+                .equals(RadiusGatewayClient.normalizeGateway(DEFAULT_GATEWAY))
+            ? BuiltinModelCatalogs.catalog("radius")
+            : ModelCatalog.empty();
     }
 
     @Override

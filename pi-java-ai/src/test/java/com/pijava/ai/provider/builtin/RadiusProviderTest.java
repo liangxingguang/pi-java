@@ -46,10 +46,10 @@ class RadiusProviderTest {
     }
 
     @Test
-    void defaultProviderStartsWithEmptyBaseline() {
+    void defaultProviderStartsWithThePublicBaseline() {
         var provider = new RadiusProvider();
 
-        assertThat(provider.getModels()).isEmpty();
+        assertThat(provider.getModels()).hasSize(28);
         assertThat(provider.providerConfig().apiKeyEnvVar()).isEqualTo("RADIUS_API_KEY");
         assertThat(provider.providerConfig().defaultBaseUrl()).isEqualTo(RadiusProvider.DEFAULT_GATEWAY);
     }

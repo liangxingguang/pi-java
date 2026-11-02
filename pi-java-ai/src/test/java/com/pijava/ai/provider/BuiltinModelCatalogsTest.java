@@ -38,43 +38,44 @@ class BuiltinModelCatalogsTest {
         Map<String, Integer> expected = Map.ofEntries(
             Map.entry("anthropic", 17),
             Map.entry("openai", 44),
-            Map.entry("google", 22),
+            Map.entry("google", 23),
             Map.entry("deepseek", 2),
-            Map.entry("mistral", 40),
-            Map.entry("moonshotai", 4),
-            Map.entry("moonshotai-cn", 4),
+            Map.entry("mistral", 34),
+            Map.entry("moonshotai", 6),
+            Map.entry("moonshotai-cn", 6),
             Map.entry("zai", 7),
             Map.entry("zai-coding-cn", 4),
-            Map.entry("qwen-token-plan-cn", 20),
-            Map.entry("xiaomi", 6),
-            Map.entry("xiaomi-token-plan-cn", 4),
-            Map.entry("minimax", 3),
-            Map.entry("minimax-cn", 3),
+            Map.entry("qwen-token-plan-cn", 21),
+            Map.entry("xiaomi", 3),
+            Map.entry("xiaomi-token-plan-cn", 2),
+            Map.entry("minimax", 4),
+            Map.entry("minimax-cn", 4),
             Map.entry("ant-ling", 3),
-            Map.entry("openrouter", 401),
-            Map.entry("xai", 4));
+            Map.entry("openrouter", 388),
+            Map.entry("xai", 4),
+            Map.entry("radius", 28));
         int total = 0;
         for (var e : expected.entrySet()) {
             int actual = BuiltinModelCatalogs.catalog(e.getKey()).listModels().size();
             assertThat(actual).as("%s chat count", e.getKey()).isEqualTo(e.getValue());
             total += actual;
         }
-        assertThat(total).as("17 shards carry 588 chat models").isEqualTo(588);
+        assertThat(total).as("18 shards carry 600 chat models").isEqualTo(600);
     }
 
     @Test
     void aggregateCatalogAddsImagesAndOllama() {
-        // 588 chat + 8 OpenRouter image models + 2 ollama = 598（provider 数 19 不变）。
-        assertThat(ProviderCatalog.allModels().listModels()).hasSize(598);
+        // 600 chat（含 radius 28）+ 64 OpenRouter image models + 2 ollama = 666。
+        assertThat(ProviderCatalog.allModels().listModels()).hasSize(666);
     }
 
     @Test
     void fileOrderIsPreservedByTheFlatten() {
         var anthropic = BuiltinModelCatalogs.catalog("anthropic").listModels();
-        assertThat(anthropic.getFirst().id().modelName()).isEqualTo("claude-fable-5");
+        assertThat(anthropic.getFirst().id().modelName()).isEqualTo("claude-haiku-4-5");
         var openrouter = BuiltinModelCatalogs.catalog("openrouter").listModels();
         // 组序 anthropic-messages 在 openai-completions 前。
-        assertThat(openrouter.getFirst().id().modelName()).isEqualTo("anthropic/claude-fable-5");
+        assertThat(openrouter.getFirst().id().modelName()).isEqualTo("anthropic/claude-haiku-5.5");
     }
 
     @Test
@@ -176,8 +177,8 @@ class BuiltinModelCatalogsTest {
         var or = BuiltinModelCatalogs.catalog("openrouter").listModels();
         var anthropicLane = or.stream().filter(m -> "anthropic-messages".equals(m.api())).toList();
         var completionsLane = or.stream().filter(m -> "openai-completions".equals(m.api())).toList();
-        assertThat(anthropicLane).hasSize(16);
-        assertThat(completionsLane).hasSize(385);
+        assertThat(anthropicLane).hasSize(19);
+        assertThat(completionsLane).hasSize(369);
         assertThat(anthropicLane).allSatisfy(m -> {
             assertThat(m.api()).isEqualTo("anthropic-messages");
             assertThat(m.baseUrl()).isEqualTo("https://openrouter.ai/api");
@@ -203,13 +204,13 @@ class BuiltinModelCatalogsTest {
 
     @Test
     void imageClassifierAndEmbeddingEntriesAreNotCarried() {
-        // 61 image 与 15 classifier 出分母（#33/#94 R5）；两条 Java 独有的 embedding 不载（B97）。
+        // 图像条目走独立 imageCatalog；chat 装载器不携带（#33/#94 R5）。
+        // 两条 Java 独有的 embedding 不载（B97）。
         var openrouter = BuiltinModelCatalogs.catalog("openrouter");
         assertThat(openrouter.find(ModelId.of("openrouter", "black-forest-labs/flux.2-flex")))
             .as("image-generation entries (openrouter-images group) are not carried").isEmpty();
-        // openai 分片含 45 条目（44 chat ＋ 1 openai-decisions classifier）；chat 计数 44
-        // 已在 chatCountsPerShard 钉住 classifier 未载（classifier 与某 chat 模型同 id，
-        // 故这里不能按 id 探针）。
+        // openai 分片的 chat 计数 44 已在 chatCountsPerShard 钉住 classifier 未载
+        // （classifier 与某 chat 模型同 id，故这里不能按 id 探针）。
         assertThat(BuiltinModelCatalogs.catalog("openai")
             .find(ModelId.of("openai", "text-embedding-3-small")))
             .as("Java-only embedding ids are gone (B97)").isEmpty();
@@ -226,7 +227,7 @@ class BuiltinModelCatalogsTest {
             .collect(java.util.stream.Collectors.toSet());
         assertThat(apis).containsExactlyInAnyOrder(
             "anthropic-messages", "openai-responses", "openai-completions",
-            "google-generative-ai", "mistral-conversations");
+            "google-generative-ai", "mistral-conversations", "pi-messages");
     }
 
     @Test
@@ -276,7 +277,7 @@ class BuiltinModelCatalogsTest {
         assertThatThrownBy(() -> BuiltinModelCatalogs.catalog("amazon-bedrock"))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("not a builtin catalog provider");
-        // 未列名 id 的模型不造：只有 17 家可装载。
+        // 未列名 id 的模型不造：只有 18 家可装载。
         assertThat(BuiltinModelCatalogs.shardIds())
             .doesNotContain("amazon-bedrock", "azure", "vercel-ai-gateway");
     }

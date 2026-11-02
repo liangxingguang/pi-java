@@ -21,7 +21,7 @@ public final class DefaultModelIds {
 
     private static final Map<String, String> BY_PROVIDER = Map.ofEntries(
         Map.entry("anthropic", "claude-opus-4-8"),
-        Map.entry("openai", "gpt-5.5"),
+        Map.entry("openai", "gpt-6.1-sol"),
         Map.entry("google", "gemini-3.1-pro-preview"),
         Map.entry("deepseek", "deepseek-v4-pro"),
         Map.entry("mistral", "devstral-medium-latest"),
@@ -33,8 +33,8 @@ public final class DefaultModelIds {
         Map.entry("zai", "glm-5.3"),
         Map.entry("zai-coding-cn", "glm-5.3"),
         Map.entry("qwen-token-plan-cn", "qwen3.7-max"),
-        Map.entry("xiaomi", "mimo-v2.5-pro"),
-        Map.entry("xiaomi-token-plan-cn", "mimo-v2.5-pro"),
+        Map.entry("xiaomi", "mimo-v2.6-pro"),
+        Map.entry("xiaomi-token-plan-cn", "mimo-v2.6-pro"),
         Map.entry("ant-ling", "Ring-2.6-1T"),
         Map.entry("openrouter", "moonshotai/kimi-k2.6"),
         Map.entry("radius", "balanced"));

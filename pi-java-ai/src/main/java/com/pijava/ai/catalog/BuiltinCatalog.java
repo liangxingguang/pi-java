@@ -4,18 +4,15 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 
-import com.pijava.ai.model.ModelCapability;
 import com.pijava.ai.model.ModelId;
-import com.pijava.ai.model.PricingInfo;
 
 /**
  * Map-backed {@link ModelCatalog} for built-in models.
  *
- * <p>批 3a 起，主流 17 provider 的 chat 目录来自 npm {@code @earendil-works/pi-ai@1.1.0}
- * 生成分片（见 {@code provider.BuiltinModelCatalogs}）；本类只保留 Map 支撑、
- * OpenRouter 图像模型（#33 R5 面维持手写）与各种装配链共用的 {@link #of} 工厂。</p>
+ * <p>主流 18 provider 的 chat 目录与 OpenRouter 图片目录都来自
+ * {@code catalog-generator/} 生成的分片（见 {@code provider.BuiltinModelCatalogs}）；
+ * 本类只保留 Map 支撑与各种装配链共用的 {@link #of} 工厂。</p>
  */
 public final class BuiltinCatalog implements ModelCatalog {
 
@@ -28,20 +25,6 @@ public final class BuiltinCatalog implements ModelCatalog {
         for (var m : models) {
             modelsById.put(m.id().provider() + "/" + m.id().modelName(), m);
         }
-    }
-
-    /** OpenRouter image generation models (P6-28，对齐 pi {@code image-models.generated.ts}). */
-    public static ModelCatalog openRouterImageModels() {
-        return new BuiltinCatalog(List.of(
-            imageModel("black-forest-labs/flux.2-flex", "Black Forest Labs: FLUX.2 Flex"),
-            imageModel("black-forest-labs/flux.2-klein-4b", "Black Forest Labs: FLUX.2 Klein 4B"),
-            imageModel("black-forest-labs/flux.2-max", "Black Forest Labs: FLUX.2 Max"),
-            imageModel("black-forest-labs/flux.2-pro", "Black Forest Labs: FLUX.2 Pro"),
-            imageModel("bytedance-seed/seedream-4.5", "Bytedance Seed: Seedream 4.5"),
-            imageModel("google/gemini-2.5-flash-image", "Google: Gemini 2.5 Flash Image"),
-            imageModel("google/gemini-3-pro-image", "Google: Gemini 3 Pro Image"),
-            imageModel("google/gemini-3-pro-image-preview", "Google: Gemini 3 Pro Image Preview")
-        ));
     }
 
     /** Build a catalog from an explicit model list. */
@@ -71,13 +54,4 @@ public final class BuiltinCatalog implements ModelCatalog {
             .toList();
     }
 
-    // ── Helpers ───────────────────────────────────────────────
-
-    /** OpenRouter image-generation model（provider 固定 openrouter-images）。 */
-    private static ModelInfo imageModel(String id, String display) {
-        return new ModelInfo(
-            ModelId.of("openrouter-images", id), display,
-            Set.of(ModelCapability.IMAGE_INPUT, ModelCapability.IMAGE_OUTPUT),
-            0, 0, false, PricingInfo.UNKNOWN);
-    }
 }

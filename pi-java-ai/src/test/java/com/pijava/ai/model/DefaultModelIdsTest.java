@@ -19,7 +19,7 @@ class DefaultModelIdsTest {
     void everyDefaultIdExistsInItsShard() {
         Map<String, String> expected = Map.ofEntries(
             Map.entry("anthropic", "claude-opus-4-8"),
-            Map.entry("openai", "gpt-5.5"),
+            Map.entry("openai", "gpt-6.1-sol"),
             Map.entry("google", "gemini-3.1-pro-preview"),
             Map.entry("deepseek", "deepseek-v4-pro"),
             Map.entry("mistral", "devstral-medium-latest"),
@@ -31,8 +31,8 @@ class DefaultModelIdsTest {
             Map.entry("zai", "glm-5.3"),
             Map.entry("zai-coding-cn", "glm-5.3"),
             Map.entry("qwen-token-plan-cn", "qwen3.7-max"),
-            Map.entry("xiaomi", "mimo-v2.5-pro"),
-            Map.entry("xiaomi-token-plan-cn", "mimo-v2.5-pro"),
+            Map.entry("xiaomi", "mimo-v2.6-pro"),
+            Map.entry("xiaomi-token-plan-cn", "mimo-v2.6-pro"),
             Map.entry("ant-ling", "Ring-2.6-1T"),
             Map.entry("openrouter", "moonshotai/kimi-k2.6"));
         assertThat(DefaultModelIds.forProvider("ollama")).as("ollama has no pi default").isEmpty();

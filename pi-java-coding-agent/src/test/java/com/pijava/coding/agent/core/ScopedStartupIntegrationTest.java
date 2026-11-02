@@ -125,8 +125,12 @@ class ScopedStartupIntegrationTest {
                     scoped, fauxProviders(), toolContext(Path.of(cwd)))) {
                 assertThat(resumed.harness().getModel().provider()).isEqualTo("google");
                 assertThat(resumed.scopedModels()).isNotEmpty();
-                assertThat(resumed.scopedModels()).allSatisfy(sm ->
+                // Radius 公共基线也携带裸 claude-* id（默认网关的账号目录），
+                // 故 scope 现在合法地跨 anthropic ＋ radius。
+                assertThat(resumed.scopedModels()).anySatisfy(sm ->
                     assertThat(sm.model().id().provider()).isEqualTo("anthropic"));
+                assertThat(resumed.scopedModels()).allSatisfy(sm ->
+                    assertThat(sm.model().id().provider()).isIn("anthropic", "radius"));
             }
         });
     }
