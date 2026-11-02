@@ -12,6 +12,9 @@ import com.pijava.coding.agent.extension.ExtensionEventBus;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.AfterProviderResponseEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.ProviderStreamEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEventSpec;
+import com.pijava.telemetry.InMemoryTelemetryContext;
+import com.pijava.telemetry.SpanOptions;
+import com.pijava.telemetry.TelemetrySpan;
 
 import org.junit.jupiter.api.Test;
 
@@ -26,6 +29,9 @@ class ProviderEventBridgeTest {
 
     private static final ModelInfo MODEL =
         ModelInfo.minimal(ModelId.of("anthropic", "claude-sonnet-5"));
+
+    private static final TelemetrySpan TELEMETRY =
+        new InMemoryTelemetryContext().openSpan(new SpanOptions("sentinel"));
 
     /** ① hasHandlers 门：无订阅 ⇒ 四方法全空走（pi sdk.ts:361/384/389/401 逐字）。 */
     @Test
@@ -175,7 +181,8 @@ class ProviderEventBridgeTest {
 
         var options = new com.pijava.ai.api.ApiOptions("http://x", "k",
             java.time.Duration.ofSeconds(5), 0,
-            Map.of("headers", Map.of("x-model", "m")));
+            Map.of("headers", Map.of("x-model", "m")),
+            com.pijava.ai.api.AuthKind.API_KEY, TELEMETRY);
 
         var transformed = bridge.applyHeaderTransform(options);
 
@@ -184,6 +191,7 @@ class ProviderEventBridgeTest {
         assertThat(headers).containsEntry("x-model", "m").containsEntry("x-hook", "yes");
         // pi 测试对位：transformHeaders 钩本体不出现在 options 里。
         assertThat(transformed.extra()).doesNotContainKey("transformHeaders");
+        assertThat(transformed.telemetry()).isSameAs(TELEMETRY);
 
         // 无订阅 ⇒ 原样返回（同一个对象）。
         var quiet = new ProviderEventBridge();
@@ -196,7 +204,8 @@ class ProviderEventBridgeTest {
     void withRequestHooksInjectsThreeKeys() {
         var bridge = new ProviderEventBridge();
         var options = new com.pijava.ai.api.ApiOptions("http://x", "k",
-            java.time.Duration.ofSeconds(5), 0, Map.of());
+            java.time.Duration.ofSeconds(5), 0, Map.of(),
+            com.pijava.ai.api.AuthKind.API_KEY, TELEMETRY);
 
         var withHooks = bridge.withRequestHooks(options);
 
@@ -205,6 +214,7 @@ class ProviderEventBridgeTest {
         assertThat(com.pijava.ai.api.ProviderHooks.payloadHookOf(withHooks)).isNotNull();
         assertThat(com.pijava.ai.api.ProviderHooks.responseHookOf(withHooks)).isNotNull();
         assertThat(com.pijava.ai.api.ProviderHooks.streamEventHookOf(withHooks)).isNotNull();
+        assertThat(withHooks.telemetry()).isSameAs(TELEMETRY);
     }
 
     /** ⑩ 运行期订阅生效（hasHandlers 调用时现查，pi 逐字）。 */

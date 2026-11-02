@@ -36,8 +36,8 @@ public final class ProviderAttribution {
 
     /**
      * pi {@code mergeProviderAttributionHeaders}（:79-97）的 java 落点：把合并结果
-     * 写进 {@code extra["headers"]}（{@link ApiOptions} 六参重建，authKind 保真——
-     * B138 同族教训）。
+     * 写进 {@code extra["headers"]}（{@link ApiOptions} 七参重建，authKind 与
+     * telemetry 保真——B138 同族教训＋docs/13 §3.7）。
      *
      * @param options                 当前请求选项（{@code extra["sessionId"]} 与
      *                                {@code extra["headers"]} 可缺席）
@@ -67,7 +67,7 @@ public final class ProviderAttribution {
         var extra = new LinkedHashMap<String, Object>(options.extra());
         extra.put("headers", merged);
         return new ApiOptions(options.baseUrl(), options.apiKey(), options.timeout(),
-            options.maxRetries(), extra, options.authKind());
+            options.maxRetries(), extra, options.authKind(), options.telemetry());
     }
 
     /** pi {@code getSessionHeaders}（:67-77 逐字）——<b>不过遥测门</b>。 */

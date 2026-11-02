@@ -200,15 +200,17 @@ public final class DefaultProviders {
      * D-P1：把 per-model {@code baseUrl} 与 {@code headers} 投影到请求选项
      * （pi {@code Model.baseUrl/headers} 在车道构造期生效）。baseUrl 缺席 ⇒
      * 保留 CLI/settings 原值；headers 经 {@code extra["headers"]} 交给 SDK client builder。
+     *
+     * <p>包可见是为了夹具：docs/13 §3.7 要求逐点断言 {@code telemetry} 在重建时不丢。</p>
      */
-    private static ApiOptions withPerModelOverrides(ApiOptions options, ModelInfo modelInfo) {
+    static ApiOptions withPerModelOverrides(ApiOptions options, ModelInfo modelInfo) {
         String baseUrl = modelInfo.baseUrl() != null ? modelInfo.baseUrl() : options.baseUrl();
         var extra = new java.util.LinkedHashMap<String, Object>(options.extra());
         if (modelInfo.headers() != null && !modelInfo.headers().isEmpty()) {
             extra.put("headers", modelInfo.headers());
         }
         return new ApiOptions(baseUrl, options.apiKey(), options.timeout(),
-            options.maxRetries(), extra, options.authKind());
+            options.maxRetries(), extra, options.authKind(), options.telemetry());
     }
 
     /**
@@ -267,9 +269,18 @@ public final class DefaultProviders {
         }
         var extra = new java.util.LinkedHashMap<>(options.extra());
         extra.put("protocol", api);
-        // 六参构造：authKind 保真（B138 的同族教训）。
+        // 七参构造：authKind 与 telemetry 保真（B138 同族教训＋docs/13 §3.7）。
         return new ApiOptions(options.baseUrl(), options.apiKey(), options.timeout(),
-            options.maxRetries(), extra, options.authKind());
+            options.maxRetries(), extra, options.authKind(), options.telemetry());
+    }
+
+    /**
+     * 暖请求的 maxRetries 覆盖（pi cache-warmer.ts:332-338 的 {@code maxRetries: 0}）。
+     * 包可见是为了夹具：docs/13 §3.7 的重建点之一。
+     */
+    static ApiOptions withMaxRetries(ApiOptions options, int maxRetries) {
+        return new ApiOptions(options.baseUrl(), options.apiKey(), options.timeout(),
+            maxRetries, options.extra(), options.authKind(), options.telemetry());
     }
 
     /**
@@ -297,9 +308,8 @@ public final class DefaultProviders {
             });
             var resolved = apiOptions(args, model.provider(), settings,
                 Credentials::resolveCredential, requestExtra(options, sessionId));
-            // ①：六参重建，maxRetries 钉 0（authKind 保真，B138 同族教训）。
-            resolved = new ApiOptions(resolved.baseUrl(), resolved.apiKey(),
-                resolved.timeout(), 0, resolved.extra(), resolved.authKind());
+            // ①：maxRetries 钉 0（authKind 与 telemetry 保真；docs/13 §3.7）。
+            resolved = withMaxRetries(resolved, 0);
             return streamBlocking(provider, model, context, options, resolved, bridge,
                 settings, true);
         };

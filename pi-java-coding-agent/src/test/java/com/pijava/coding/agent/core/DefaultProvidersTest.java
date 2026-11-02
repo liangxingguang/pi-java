@@ -9,6 +9,7 @@ import java.util.concurrent.Flow;
 import com.pijava.agent.harness.Context;
 import com.pijava.agent.harness.StreamOptions;
 import com.pijava.ai.api.ApiOptions;
+import com.pijava.ai.api.AuthKind;
 import com.pijava.ai.api.ChatApi;
 import com.pijava.ai.api.ProviderApi;
 import com.pijava.ai.api.StreamIterator;
@@ -27,6 +28,8 @@ import com.pijava.ai.provider.ProviderRegistry;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.thinking.ThinkingLevelMap;
 import com.pijava.coding.agent.cli.ArgsParser;
+import com.pijava.telemetry.InMemoryTelemetryContext;
+import com.pijava.telemetry.SpanOptions;
 
 import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -486,6 +489,27 @@ class DefaultProvidersTest {
         // ⚠️ 缺席必须**空着**：车道据此回落到 PI_CACHE_RETENTION 与 "short"。
         // 在这里塞一个默认值会把环境变量静默屏蔽（原 docs/54 §4.4）。
         assertThat(DefaultProviders.cacheExtra(StreamOptions.defaults())).isEmpty();
+    }
+
+    /**
+     * docs/13 §3.7：宿主侧三个重建点（per-model、protocol、暖请求 maxRetries）
+     * 必须把 {@code telemetry} 带到车道；漏传不编译失败，只能逐点断言。
+     */
+    @Test
+    void requestOptionRebuildsPreserveTelemetry() {
+        var span = new InMemoryTelemetryContext().openSpan(new SpanOptions("sentinel"));
+        var base = new ApiOptions("", "sk", java.time.Duration.ofSeconds(1), 0,
+            Map.of(), AuthKind.API_KEY, span);
+        var model = new ModelInfo(ModelId.of("alpha", "anthropic/claude-x"), "X",
+            Set.of(), 128_000, 16_384, false, PricingInfo.UNKNOWN,
+            ThinkingLevelMap.empty(), Map.of(), Map.of(), ModelCompat.NONE, "anthropic-messages");
+
+        assertThat(DefaultProviders.withPerModelOverrides(base, model).telemetry())
+            .isSameAs(span);
+        assertThat(DefaultProviders.withModelProtocol(base, model).telemetry())
+            .isSameAs(span);
+        assertThat(DefaultProviders.withMaxRetries(base, 0).telemetry())
+            .isSameAs(span);
     }
 
     private static StreamOptions options(CacheRetention retention) {

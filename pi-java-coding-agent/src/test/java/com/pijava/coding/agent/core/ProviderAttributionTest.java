@@ -13,6 +13,8 @@ import com.pijava.ai.model.ModelCapability;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.model.PricingInfo;
 import com.pijava.ai.thinking.ThinkingLevelMap;
+import com.pijava.telemetry.InMemoryTelemetryContext;
+import com.pijava.telemetry.SpanOptions;
 
 import org.junit.jupiter.api.Test;
 
@@ -40,6 +42,20 @@ class ProviderAttributionTest {
     @SuppressWarnings("unchecked") // 测试读回自己写入的 extra["headers"]
     private static Map<String, String> headers(ApiOptions options) {
         return (Map<String, String>) options.extra().get("headers");
+    }
+
+    /** docs/13 §3.7：归因头重建不得丢 telemetry。 */
+    @Test
+    void applyPreservesTelemetry() {
+        var span = new InMemoryTelemetryContext().openSpan(new SpanOptions("sentinel"));
+        var options = new ApiOptions("https://req.example/v1", "k", Duration.ofSeconds(30),
+            2, Map.of("sessionId", "session-1"), com.pijava.ai.api.AuthKind.API_KEY, span);
+
+        var result = ProviderAttribution.apply(
+            options, model("opencode", "https://opencode.ai"), null, false);
+
+        assertThat(result.telemetry()).isSameAs(span);
+        assertThat(headers(result)).containsEntry("x-opencode-session", "session-1");
     }
 
     // ── 遥测门（pi telemetry.ts:3-13 逐字）──
