@@ -78,6 +78,14 @@ final class AiTelemetryFixtures {
             errorMessage, null, null, "response");
     }
 
+    /** 只有终局事件携带 usage／错误文本的车道形状（docs/13 §4.5 的回退输入）。 */
+    static AssistantMessage partialWithoutUsage(StopReason stop) {
+        return new AssistantMessage(
+            "msg", List.of(), null, stop, "telemetry-test", "test", "model",
+            null, null, null, Instant.ofEpochMilli(1_700_000_000_000L),
+            null, null, null, "response");
+    }
+
     static List<StreamEvent> events(StreamEvent terminal) {
         var result = partial(StopReason.STOP, null);
         return List.of(

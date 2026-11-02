@@ -307,16 +307,32 @@ final class AiRequestTelemetry {
         if (event instanceof StreamEvent.StreamDone done) {
             var partial = done.partial();
             if (partial == null) {
-                return AssistantMessage.empty().withStopReason(done.reason());
+                partial = AssistantMessage.empty().withStopReason(done.reason());
+            } else if (partial.stopReason() == null) {
+                partial = partial.withStopReason(done.reason());
             }
-            return partial.stopReason() != null ? partial : partial.withStopReason(done.reason());
+            // docs/13 §4.5：终局事件可能只把 usage 放在事件上（ConformanceFixtures 的形状）；
+            // 观察者订阅的是原始 publisher，看不到下游 IdentitySubscriber 的零值兜底。
+            if (partial.usage() == null && done.usage() != null) {
+                partial = partial.withUsage(done.usage());
+            }
+            return partial;
         }
         if (event instanceof StreamEvent.StreamError error) {
             var partial = error.partial();
             if (partial == null) {
-                return AssistantMessage.empty().withStopReason(error.reason());
+                partial = AssistantMessage.empty().withStopReason(error.reason());
+            } else if (partial.stopReason() == null) {
+                partial = partial.withStopReason(error.reason());
             }
-            return partial.stopReason() != null ? partial : partial.withStopReason(error.reason());
+            // docs/13 §4.5：正文优先取消息；缺失时走全仓唯一错误文本读取入口（B114）。
+            if (partial.errorMessage() == null) {
+                var text = StreamEvent.StreamError.textOf(error);
+                if (text != null) {
+                    partial = partial.withErrorMessage(text);
+                }
+            }
+            return partial;
         }
         return null;
     }

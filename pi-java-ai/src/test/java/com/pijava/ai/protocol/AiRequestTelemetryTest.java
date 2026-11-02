@@ -176,6 +176,62 @@ class AiRequestTelemetryTest {
             .containsExactly(0.0, 0.0, 0.0, 0.0, 0.0);
     }
 
+    /**
+     * docs/13 §4.5：{@code StreamDone} 的 usage 回退顺序是
+     * {@code partial.usage()} → {@code done.usage()} → 零。
+     * ConformanceFixtures 等夹具只在终局事件上带 usage。
+     */
+    @Test
+    void usesTerminalEventUsageWhenPartialCarriesNone() {
+        var telemetry = new InMemoryTelemetryContext();
+        var caller = telemetry.openSpan(new SpanOptions("caller"));
+        var result = AiTelemetryFixtures.partialWithoutUsage(StopReason.STOP);
+        var terminal = new StreamEvent.StreamDone(
+            StopReason.STOP, new StreamEvent.UsageInfo(3, 5, null), result);
+        var api = new AiTelemetryFixtures.ReplayApi(
+            List.of(new StreamEvent.Start(result), terminal));
+
+        drain(api, request(), options(caller));
+        caller.close();
+        awaitSettled(telemetry);
+
+        var span = telemetry.getSpans().get(1);
+        assertThat(span.attributes()).containsEntry("usage.input", 3.0)
+            .containsEntry("usage.output", 5.0)
+            .containsEntry("usage.cache_read", 0.0)
+            .containsEntry("usage.cache_write", 0.0)
+            .containsEntry("cost.total", 0.0);
+        assertThat(telemetry.getMetrics().stream()
+            .filter(m -> m.name().equals("pi.ai.tokens")))
+            .extracting(RecordedTelemetryMeasurement::value)
+            .containsExactly(3.0, 5.0, 0.0, 0.0);
+    }
+
+    /**
+     * docs/13 §4.5：{@code StreamError} 的错误文本回退顺序是
+     * {@code partial.errorMessage()} → {@code StreamEvent.StreamError.textOf(err)}。
+     */
+    @Test
+    void usesTerminalEventErrorTextWhenPartialCarriesNone() {
+        var telemetry = new InMemoryTelemetryContext();
+        var caller = telemetry.openSpan(new SpanOptions("caller"));
+        var result = AiTelemetryFixtures.partialWithoutUsage(StopReason.ERROR);
+        var terminal = new StreamEvent.StreamError(
+            StopReason.ERROR, new IllegalStateException("event-secret"), result);
+        var api = new AiTelemetryFixtures.ReplayApi(
+            List.of(new StreamEvent.Start(result), terminal));
+
+        drain(api, request(), options(caller));
+        caller.close();
+        awaitSettled(telemetry);
+
+        var span = telemetry.getSpans().get(1);
+        assertThat(span.status()).isEqualTo(
+            new SpanStatus.Error("provider_error", "event-secret"));
+        assertThat(json(span.attributes())).doesNotContain("event-secret");
+        assertThat(json(span.events())).doesNotContain("event-secret");
+    }
+
     @Test
     void nullTelemetryIsNoOp() {
         var api = new AiTelemetryFixtures.ReplayApi(events(done()));
