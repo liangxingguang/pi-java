@@ -61,6 +61,15 @@ public interface Provider {
     }
 
     /**
+     * 注册时生效的 provider baseUrl（pi {@code Provider.baseUrl}）；{@code null} 表示
+     * 该 provider 没有固定端点。刷新上下文用它给 {@code /models/user} 之类的
+     * provider 专属端点定基。
+     */
+    default String baseUrl() {
+        return null;
+    }
+
+    /**
      * Protocols this provider can serve.
      *
      * <p>{@link ConfigurableProvider} overrides this from

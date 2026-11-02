@@ -51,6 +51,11 @@ public abstract class ConfigurableProvider implements Provider {
         return config().builtinModels();
     }
 
+    @Override
+    public String baseUrl() {
+        return config().defaultBaseUrl();
+    }
+
     /**
      * Unified ApiOptions normalization + protocol routing.
      *

@@ -30,6 +30,7 @@ public final class OverrideProvider implements Provider {
         return delegate.createApi(apiType, options);
     }
     @Override public ModelCatalog builtinModels() { return catalog; }
+    @Override public String baseUrl() { return delegate.baseUrl(); }
     @Override public Set<Protocol> supportedProtocols() {
         return delegate.supportedProtocols();
     }
