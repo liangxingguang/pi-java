@@ -135,6 +135,9 @@ public final class RemoteCatalogProvider implements Provider {
         if (!context.allowNetwork()) {
             return; // 离线相：只恢复缓存
         }
+        if (context.signal().isAborted()) {
+            return;
+        }
         if (!context.force() && isFresh(stored)) {
             return;
         }
@@ -156,6 +159,9 @@ public final class RemoteCatalogProvider implements Provider {
             builder.header("If-None-Match", validator);
         }
         var response = send(builder.build());
+        if (context.signal().isAborted()) {
+            return;
+        }
         var checkedAt = Instant.now();
         var status = response.statusCode();
 
