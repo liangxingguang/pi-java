@@ -56,37 +56,8 @@ public final class DefaultProviders {
         registry.loadBuiltinProviders();
         registry.discoverFromServiceLoader();
         registerModelsJsonProviders(registry);
-        wrapRemoteCatalogs(registry, catalogBaseUrl);
+        CatalogProviderWiring.wrapRemoteCatalogs(registry, catalogBaseUrl);
         return registry;
-    }
-
-    /**
-     * 不包远程目录的内置 provider。pi 排除 radius；本仓的等价项是图片 provider ——
-     * pi 的图片目录在独立的 {@code images-models.ts}，不对应
-     * {@code /api/models/providers/<id>}。
-     *
-     * <p>第三方 ServiceLoader provider 与 models.json 自定义 provider 也不包：
-     * pi 的 {@code withRemoteCatalog} 只套在生成的内置目录上。</p>
-     */
-    private static final java.util.Set<String> REMOTE_CATALOG_EXCLUDED =
-        java.util.Set.of("openrouter-images", "radius");
-
-    private static void wrapRemoteCatalogs(ProviderRegistry registry, String catalogBaseUrl) {
-        var builtinIds = com.pijava.ai.provider.builtin.ProviderCatalog.all().stream()
-            .map(com.pijava.ai.provider.Provider::name)
-            .collect(java.util.stream.Collectors.toSet());
-        // 整批共用一个 HttpClient（否则一次刷新会拉起 N 个选择器线程）。
-        var http = RemoteCatalogProvider.defaultHttpClient();
-        var generatedAt = java.util.Optional.of(
-            com.pijava.ai.provider.builtin.ModelData.generatedAt());
-        for (var provider : registry.listAll()) {
-            if (!builtinIds.contains(provider.name())
-                    || REMOTE_CATALOG_EXCLUDED.contains(provider.name())) {
-                continue;
-            }
-            registry.register(RemoteCatalogProvider.wrap(
-                provider, catalogBaseUrl, generatedAt, http));
-        }
     }
 
     private static void registerModelsJsonProviders(ProviderRegistry registry) {
@@ -141,7 +112,7 @@ public final class DefaultProviders {
         registry.loadBuiltinProviders();
         registry.discoverFromServiceLoader();
         registerModelsJsonProviders(registry);
-        wrapRemoteCatalogs(registry, catalogBaseUrl);
+        CatalogProviderWiring.wrapRemoteCatalogs(registry, catalogBaseUrl);
         kept.values().forEach(registry::register);
     }
 
