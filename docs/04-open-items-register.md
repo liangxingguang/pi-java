@@ -27,7 +27,7 @@ Chord plugin 已按 R5 决定不做，不再是待拍板项。
 | 编号 | 当前结论 | 所属层 |
 |---|---|---|
 | B263 | AI 缺少 `AI_TELEMETRY_SCHEMA`、`pi.ai.request`/`pi.ai.poll`、content-free block events、request/first-chunk histogram、四类 token counter、cost counter、`provider_error` 500 个 UTF-16 单元上限及 abort 保持 ok 的行为；L1 单独设计。 | L1 AI |
-| B265 | models.dev v2 目录数据、图像目录、OpenRouter/Radius 运行时目录、跨模型 transform、transcript tools 与 ModelsStore 输入裁决未完成；目录复现输入须先审定。 | L1 AI |
+| B265b | models.dev v2 目录数据、图像目录、OpenRouter/Radius 运行时目录未完成；目录复现输入已定为「仓内 vendor 锚点生成器＋提交输入快照」。 | L1 AI（docs/12） |
 | B266 | 缺少 ClientIdentity 的 tri-state merge、User-Agent/归因头、Models wrapper 与上层 identity 输入。 | L1 AI |
 | B267 | Provider wire、usage、retry/overflow、OAuth/device/env、pi-ai CLI 权限与 Faux 余量未对齐；须按依赖继续拆设计。 | L1 AI |
 | B116 | 对外 JSON 的 usage 已改为 pi 扁平形状；Java 内部 `StreamDone` 仍保留嵌套方言，AI 重测时决定是否继续保留。 | L1 AI |
@@ -36,7 +36,9 @@ Chord plugin 已按 R5 决定不做，不再是待拍板项。
 | E5-31 | 扩展 UI 仍有 working 指示器、终端输入、补全、编辑器替换等 TUI 成员未收口；与 D′ 旧行去重重测。 | L7 TUI |
 | examples | 旧 16/102 不是新基线分母。必须在 L8 按 `56cae7823` 重新清点，主流示例继续全部做 Java 移植与验收测试。 | L8 examples |
 
-B264 已于 2026-11-02 按 docs/10 实施并闭环：流式工具参数、malformed final、grammar、responseId、消息形状、`argumentsError` 传播与执行前拒绝均有 RED→GREEN 和全仓验证证据；L1 账面见 `docs/map/02-ai.md`。B263/B265/B266/B267 仍开放。
+B264 已于 2026-11-02 按 docs/10 实施并闭环：流式工具参数、malformed final、grammar、responseId、消息形状、`argumentsError` 传播与执行前拒绝均有 RED→GREEN 和全仓验证证据；L1 账面见 `docs/map/02-ai.md`。
+
+B265 行为面（#31/#61/#83/#84）已于 2026-11-02 按 docs/11 实施并闭环：跨模型 thinking 丢弃与 textSignature 剥离、`normalizeContext` 无条件前置、transcript tools 三态＋`foldedSystemMessages`、`ModelsStore` operation signal。L1 账面 187.0/240＝77.9%。B263/B265b/B266/B267 仍开放。
 
 ## 3. MCP 开放项与复核项
 
@@ -132,4 +134,4 @@ SQLite 后端是 pi-java 独立实现，保留模块，不对齐已删除 schema
 3. 条目关闭后从开放表移除，历史由 git 保存，编号不复用。
 4. 每层重测后同步更新对应地图；全部层完成前不发布新全仓百分比。
 5. 每个实施工作包仍需独立设计稿和用户审核。
-6. 下一新文档号为 **docs/11**。
+6. 下一新文档号为 **docs/12**；`docs/11` 为 B265 行为面设计，待审核。
