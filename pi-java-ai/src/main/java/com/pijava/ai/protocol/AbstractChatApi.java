@@ -98,8 +98,14 @@ public abstract class AbstractChatApi implements ChatApi {
         // 流对象创建起算，终局消息盖 durationMs。每订阅者一把同起点的钟。
         long startNano = System.nanoTime();
         return subscriber -> {
+            boolean first = started.compareAndSet(false, true);
+            if (first) {
+                // docs/13 B263：观察者必须在生产线程启动前挂上；它跟随生产端终止，
+                // 不跟随单个消费者。telemetry 缺席时 attach 是纯 no-op。
+                AiRequestTelemetry.attach(publisher, request, options, apiName());
+            }
             publisher.subscribe(new IdentitySubscriber(subscriber, effective, timestamp, startNano));
-            if (started.compareAndSet(false, true)) {
+            if (first) {
                 Thread.startVirtualThread(() -> {
                     try {
                         streamInternal(effective, publisher);
