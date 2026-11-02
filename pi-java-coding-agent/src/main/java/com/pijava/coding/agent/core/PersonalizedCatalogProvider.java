@@ -88,7 +88,7 @@ public final class PersonalizedCatalogProvider implements Provider {
     @Override
     public void refreshModels(RefreshModelsContext context) {
         var restored = context.stored()
-            .map(entry -> providerModels(entry.models()))
+            .map(entry -> restoreStored(providerModels(entry.models())))
             .orElse(List.of());
         if (!context.publish().publish(ModelsPublication.updateOnly(
                 () -> personalModels = restored))) {
@@ -132,5 +132,41 @@ public final class PersonalizedCatalogProvider implements Provider {
         return models.stream()
             .filter(model -> model.id().provider().equals(delegate.name()))
             .toList();
+    }
+
+    /**
+     * 离线恢复时把存储条目的账号限额/价格叠回内置目录的完整元数据。
+     *
+     * <p>pi 的 ModelsStore 直接持久化完整 {@code Model}；本仓的
+     * {@link com.pijava.ai.catalog.RemoteModelWire} 只承载子集，旧存储里可能缺
+     * {@code api}/{@code baseUrl}/compat/inputLimits。若不叠回，离线重启会把
+     * OpenRouter 的 anthropic 车道退回 provider 默认协议。内置目录里不存在的
+     * 远端新增模型保持存储原样。</p>
+     */
+    private List<ModelInfo> restoreStored(List<ModelInfo> stored) {
+        if (stored.isEmpty()) {
+            return stored;
+        }
+        var builtin = new java.util.HashMap<String, ModelInfo>();
+        for (var model : delegate.builtinModels().listModels()) {
+            builtin.put(model.id().modelName(), model);
+        }
+        var restored = new java.util.ArrayList<ModelInfo>(stored.size());
+        for (var model : stored) {
+            var base = builtin.get(model.id().modelName());
+            restored.add(base == null ? model : mergeStoredOntoBase(base, model));
+        }
+        return List.copyOf(restored);
+    }
+
+    private static ModelInfo mergeStoredOntoBase(ModelInfo base, ModelInfo stored) {
+        // 账号价格若与内置一致，用内置的完整价格（旧存储丢了 cache/tiers）。
+        var storedPricing = stored.pricing();
+        var basePricing = base.pricing();
+        var pricing = Double.compare(storedPricing.inputPrice(), basePricing.inputPrice()) == 0
+                && Double.compare(storedPricing.outputPrice(), basePricing.outputPrice()) == 0
+            ? basePricing : storedPricing;
+        return base.withLimitsAndPricing(
+            stored.maxInputTokens(), stored.maxOutputTokens(), pricing);
     }
 }

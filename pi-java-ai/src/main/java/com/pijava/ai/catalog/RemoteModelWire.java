@@ -27,6 +27,8 @@ import java.util.Map;
 public record RemoteModelWire(
     @JsonProperty("id") String id,
     @JsonProperty("name") String name,
+    @JsonProperty("api") String api,
+    @JsonProperty("baseUrl") String baseUrl,
     @JsonProperty("contextWindow") int contextWindow,
     @JsonProperty("maxTokens") int maxTokens,
     @JsonProperty("reasoning") Boolean reasoning,
@@ -46,6 +48,11 @@ public record RemoteModelWire(
             capabilities.add(ModelCapability.IMAGE_INPUT);
         }
         var rates = cost != null ? cost : RemoteCostWire.FREE;
+        var tiers = new java.util.ArrayList<PricingInfo.CostTier>();
+        for (var tier : rates.tiers()) {
+            tiers.add(new PricingInfo.CostTier(tier.inputTokensAbove(), tier.input(),
+                tier.output(), tier.cacheRead(), tier.cacheWrite()));
+        }
         return new ModelInfo(
             ModelId.of(providerId, id),
             name != null && !name.isBlank() ? name : id,
@@ -53,23 +60,37 @@ public record RemoteModelWire(
             contextWindow,
             maxTokens,
             false,
-            new PricingInfo(rates.input(), rates.output()),
-            thinkingMap());
+            new PricingInfo(rates.input(), rates.output(), rates.cacheRead(),
+                rates.cacheWrite(), tiers),
+            thinkingMap(),
+            Map.of(),
+            Map.of(),
+            com.pijava.ai.catalog.ModelCompat.NONE,
+            api,
+            baseUrl);
     }
 
     /** 反向：{@link ModelInfo} ⇒ pi wire（缓存写入方向）。 */
     static RemoteModelWire fromModelInfo(ModelInfo info) {
         boolean imageInput = info.capabilities().contains(ModelCapability.IMAGE_INPUT);
         var modalities = imageInput ? List.of("text", "image") : List.of("text");
+        var tiers = new java.util.ArrayList<RemoteCostWire.Tier>();
+        for (var tier : info.pricing().tiers()) {
+            tiers.add(new RemoteCostWire.Tier(tier.inputTokensAbove(), tier.inputPrice(),
+                tier.outputPrice(), tier.cacheReadPrice(), tier.cacheWritePrice()));
+        }
         return new RemoteModelWire(
             info.id().modelName(),
             info.displayName(),
+            info.api(),
+            info.baseUrl(),
             info.maxInputTokens(),
             info.maxOutputTokens(),
             info.capabilities().contains(ModelCapability.THINKING),
             modalities,
             new RemoteCostWire(
-                info.pricing().inputPrice(), info.pricing().outputPrice(), 0, 0),
+                info.pricing().inputPrice(), info.pricing().outputPrice(),
+                info.pricing().cacheReadPrice(), info.pricing().cacheWritePrice(), tiers),
             fromThinkingMap(info.thinkingLevelMap()));
     }
 

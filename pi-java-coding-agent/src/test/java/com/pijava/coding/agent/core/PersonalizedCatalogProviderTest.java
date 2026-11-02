@@ -6,9 +6,11 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.http.HttpClient;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -21,6 +23,8 @@ import com.pijava.ai.api.ProviderApi;
 import com.pijava.ai.auth.RecordedCredential;
 import com.pijava.ai.catalog.BuiltinCatalog;
 import com.pijava.ai.catalog.CatalogPublisherPort;
+import com.pijava.ai.catalog.FileModelsStore;
+import com.pijava.ai.catalog.InputLimits;
 import com.pijava.ai.catalog.ModelCatalog;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.catalog.ModelsPublication;
@@ -34,6 +38,7 @@ import com.sun.net.httpserver.HttpServer;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -44,6 +49,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class PersonalizedCatalogProviderTest {
 
     private static final Instant LOCAL_GENERATED_AT = Instant.parse("2026-01-01T00:00:00Z");
+
+    @TempDir
+    Path tmp;
 
     private final AtomicInteger userCalls = new AtomicInteger();
     private final List<String> authorizations = new CopyOnWriteArrayList<>();
@@ -175,6 +183,43 @@ class PersonalizedCatalogProviderTest {
         assertThat(port.persisted).extracting(m -> m.id().modelName())
             .containsExactly("remote");
         assertThat(authorizations).containsExactly("Bearer sk-or");
+    }
+
+    @Test
+    void offlineRestoreRebuildsMetadataLostByTheStoreWire() throws Exception {
+        // 远端目录为空 ⇒ merge 保留内置条目的完整元数据；根因是 store wire 子集。
+        catalogBody = "[]";
+        userBody = "{\"data\":[{\"id\":\"claude-lane\"}]}";
+        var base = startServer();
+        var builtin = new ModelInfo(
+            ModelId.of("openrouter", "claude-lane"), "Claude Lane",
+            Set.of(ModelCapability.TEXT, ModelCapability.TOOL_USE),
+            1_000, 100, false,
+            new PricingInfo(1, 2, 0.1, 0.2,
+                List.of(new PricingInfo.CostTier(1_000, 3, 4, 5, 6))),
+            com.pijava.ai.thinking.ThinkingLevelMap.empty(),
+            Map.of("x-test", "1"), Map.of(),
+            com.pijava.ai.catalog.ModelCompat.NONE,
+            "anthropic-messages", "https://openrouter.ai/api",
+            null, new InputLimits(123, null), Map.of());
+        var provider = wrap(base, List.of(builtin));
+        var port = new TestPort();
+        provider.refreshModels(online(provider, Optional.empty(), port));
+
+        // 真实 store 往返：旧存储只保留了 wire 子集。
+        var store = new FileModelsStore(tmp);
+        store.write("openrouter", ModelsStoreEntry.of(port.persisted));
+        var stored = store.read("openrouter").orElseThrow();
+
+        var restarted = wrap(base, List.of(builtin));
+        restarted.refreshModels(RefreshModelsContext.offline(Optional.of(stored), new TestPort()));
+
+        var restored = restarted.getModels().getFirst();
+        assertThat(restored.api()).isEqualTo("anthropic-messages");
+        assertThat(restored.baseUrl()).isEqualTo("https://openrouter.ai/api");
+        assertThat(restored.headers()).containsEntry("x-test", "1");
+        assertThat(restored.inputLimits().maxRequestBytes()).isEqualTo(123);
+        assertThat(restored.pricing().tiers()).hasSize(1);
     }
 
     @Test
