@@ -64,6 +64,13 @@ class BuiltinModelCatalogsTest {
     }
 
     @Test
+    void modelsAddedByTheNewSnapshotAreVisible() {
+        // 2026-11-02 快照相对旧 npm 分片的两个漂移样本（docs/12 §3.1）。
+        assertThat(model("openai", "gpt-6.1-terra")).isNotNull();
+        assertThat(model("minimax", "MiniMax-M3.1-Flash")).isNotNull();
+    }
+
+    @Test
     void aggregateCatalogAddsImagesAndOllama() {
         // 600 chat（含 radius 28）+ 64 OpenRouter image models + 2 ollama = 666。
         assertThat(ProviderCatalog.allModels().listModels()).hasSize(666);
