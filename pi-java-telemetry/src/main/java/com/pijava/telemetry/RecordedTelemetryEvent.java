@@ -10,6 +10,6 @@ public record RecordedTelemetryEvent(String name, Map<String, Object> attributes
 
     /** Defensively copy attributes. */
     public RecordedTelemetryEvent {
-        attributes = attributes == null ? Map.of() : Map.copyOf(attributes);
+        attributes = TelemetryAttributes.copy(attributes);
     }
 }

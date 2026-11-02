@@ -19,6 +19,8 @@ import java.util.OptionalLong;
 public record RecordedTelemetrySpan(
     long id,
     Long parentId,
+    Map<String, String> context,
+    Map<String, String> parentContext,
     String name,
     Map<String, Object> attributes,
     List<RecordedTelemetryEvent> events,
@@ -29,7 +31,11 @@ public record RecordedTelemetrySpan(
 
     /** Defensively copy attributes and events. */
     public RecordedTelemetrySpan {
-        attributes = attributes == null ? Map.of() : Map.copyOf(attributes);
-        events = events == null ? List.of() : List.copyOf(events);
+        context = context == null ? Map.of() : Map.copyOf(context);
+        parentContext = parentContext == null ? null : Map.copyOf(parentContext);
+        attributes = TelemetryAttributes.copy(attributes);
+        events = events == null ? List.of() : events.stream()
+            .map(event -> new RecordedTelemetryEvent(event.name(), event.attributes()))
+            .toList();
     }
 }

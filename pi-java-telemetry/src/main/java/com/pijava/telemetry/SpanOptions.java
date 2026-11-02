@@ -17,6 +17,6 @@ public record SpanOptions(String name, Map<String, Object> attributes) {
 
     /** Defensively copy attributes. */
     public SpanOptions {
-        attributes = Map.copyOf(attributes);
+        attributes = TelemetryAttributes.copy(attributes);
     }
 }

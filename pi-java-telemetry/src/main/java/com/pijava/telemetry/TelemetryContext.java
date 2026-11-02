@@ -69,11 +69,20 @@ public interface TelemetryContext {
         return holder.span;
     }
 
-    /** Increment a counter metric. Default no-op. */
-    default void incrementCounter(String name, long delta) { }
+    /** Return the generic metrics capability; unsupported adapters share a noop. */
+    default TelemetryMetrics metrics() {
+        return NoopTelemetryMetrics.INSTANCE;
+    }
 
-    /** Record a timing metric in milliseconds. Default no-op. */
-    default void recordTiming(String name, long durationMs) { }
+    /** Increment a counter metric through the generic metrics capability. */
+    default void incrementCounter(String name, long delta) {
+        metrics().counter(name).add(delta);
+    }
+
+    /** Record a timing metric in milliseconds through the generic metrics capability. */
+    default void recordTiming(String name, long durationMs) {
+        metrics().histogram(name).record(durationMs);
+    }
 
     /** Return a child context with an additional dimension. Default returns {@code this}. */
     default TelemetryContext with(String key, String value) {

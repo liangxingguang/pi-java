@@ -169,6 +169,42 @@ class JsonlFileTelemetryTest {
     }
 
     @Test
+    void genericMetricsWriteIndependentLinesWithMetadataAndExemplar() throws IOException {
+        var telemetry = JsonlFileTelemetry.create(tempDir);
+
+        telemetry.metrics().counter("bytes", new InstrumentOptions("Encoded bytes", "By"))
+            .add(12, Map.of("direction", "out"));
+        var histogram = telemetry.metrics().histogram(
+            "duration", new HistogramOptions("Duration", "ms", List.of(1.0, 10.0)));
+        telemetry.startSpan(new SpanOptions("measured"), span -> {
+            histogram.record(5, Map.of("method", "read"), span);
+            return null;
+        });
+
+        var lines = readLines(onlyTraceFile());
+        var metrics = lines.stream().filter(line -> "metric".equals(line.get("kind").asText())).toList();
+        assertThat(metrics).hasSize(2);
+        assertThat(metrics.get(0).get("metricKind").asText()).isEqualTo("counter");
+        assertThat(metrics.get(0).get("name").asText()).isEqualTo("bytes");
+        assertThat(metrics.get(0).get("value").asDouble()).isEqualTo(12.0);
+        assertThat(metrics.get(0).get("description").asText()).isEqualTo("Encoded bytes");
+        assertThat(metrics.get(0).get("unit").asText()).isEqualTo("By");
+        assertThat(metrics.get(0).get("attrs").get("direction").asText()).isEqualTo("out");
+        assertThat(metrics.get(0).has("exemplar")).isFalse();
+
+        var histogramLine = metrics.get(1);
+        var spanStart = lines.stream()
+            .filter(line -> "span_start".equals(line.get("kind").asText())).findFirst().orElseThrow();
+        assertThat(histogramLine.get("metricKind").asText()).isEqualTo("histogram");
+        assertThat(histogramLine.get("boundaries").get(1).asDouble()).isEqualTo(10.0);
+        assertThat(histogramLine.get("attrs").get("method").asText()).isEqualTo("read");
+        assertThat(histogramLine.get("exemplar").get("traceId").asText())
+            .isEqualTo(spanStart.get("traceId").asText());
+        assertThat(histogramLine.get("exemplar").get("spanId").asText())
+            .isEqualTo(spanStart.get("spanId").asText());
+    }
+
+    @Test
     void recordEventWritesEventLineWithCurrentSpanContext() throws IOException {
         var telemetry = JsonlFileTelemetry.create(tempDir).withPayloads(true);
 
@@ -185,6 +221,21 @@ class JsonlFileTelemetryTest {
         assertThat(event.get("traceId").asText()).isEqualTo(lines.get(0).get("traceId").asText());
         assertThat(event.get("spanId").asText()).isEqualTo(lines.get(0).get("spanId").asText());
         assertThat(event.get("payload").get("messages").asInt()).isEqualTo(14);
+    }
+
+    @Test
+    void recordEventPreservesNullElementsInsidePayloadLists() throws IOException {
+        var telemetry = JsonlFileTelemetry.create(tempDir).withPayloads(true);
+        var messages = new java.util.ArrayList<>(List.of("first"));
+        messages.add(null);
+
+        assertThatNoException().isThrownBy(() ->
+            telemetry.recordEvent("llm.payload.request", Map.of("messages", messages)));
+
+        var lines = readLines(onlyTraceFile());
+        var payload = lines.get(0).get("payload");
+        assertThat(payload.get("messages").get(0).asText()).isEqualTo("first");
+        assertThat(payload.get("messages").get(1).isNull()).isTrue();
     }
 
     @Test

@@ -2,8 +2,10 @@ package com.pijava.telemetry.testing;
 
 import java.util.List;
 
+import com.pijava.telemetry.RecordedTelemetryMeasurement;
 import com.pijava.telemetry.RecordedTelemetrySpan;
 import com.pijava.telemetry.TelemetryContext;
+import com.pijava.telemetry.TelemetryMetrics;
 
 /**
  * pi {@code testing/types.ts:5-9}：一个一致性用例独占的 adapter 实例与
@@ -17,6 +19,16 @@ public interface TelemetryAdapterFixture extends AutoCloseable {
 
     /** Normalized span snapshots in span-start order. */
     List<RecordedTelemetrySpan> getSpans() throws Exception;
+
+    /** Optional normalized metrics capability; null skips metrics cases. */
+    default TelemetryMetrics metrics() {
+        return null;
+    }
+
+    /** Normalized raw measurements; required when {@link #metrics()} is non-null. */
+    default List<RecordedTelemetryMeasurement> getMetrics() throws Exception {
+        throw new UnsupportedOperationException("Metrics fixtures require a measurement reader");
+    }
 
     /** Release adapter resources. Default no-op. */
     @Override

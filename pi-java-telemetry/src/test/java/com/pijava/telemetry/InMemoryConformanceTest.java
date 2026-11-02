@@ -29,6 +29,16 @@ class InMemoryConformanceTest {
                     public List<RecordedTelemetrySpan> getSpans() {
                         return context.getSpans();
                     }
+
+                    @Override
+                    public TelemetryMetrics metrics() {
+                        return context.metrics();
+                    }
+
+                    @Override
+                    public List<RecordedTelemetryMeasurement> getMetrics() {
+                        return context.getMetrics();
+                    }
                 };
             })
             .stream()
