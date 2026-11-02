@@ -24,7 +24,15 @@ final class ToolCallAccumulator {
     /** Apply one indexed chunk's optional function fields. */
     void update(long index, String chunkId, String chunkName, String chunkArguments,
                 Consumer<StreamEvent> emit, StreamPartialBuilder builder) {
-        var key = ToolCallSlotKey.indexed(index);
+        update(ToolCallSlotKey.indexed(index), chunkId, chunkName, chunkArguments, emit, builder);
+    }
+
+    /**
+     * Apply one chunk keyed by an explicit slot — Mistral falls back to the call id when the
+     * wire omits {@code index} (pi {@code key = toolCall.index ?? callId}).
+     */
+    void update(ToolCallSlotKey key, String chunkId, String chunkName, String chunkArguments,
+                Consumer<StreamEvent> emit, StreamPartialBuilder builder) {
         seen = true;
         Slot slot = slots.get(key);
         if (slot == null) {
@@ -101,7 +109,8 @@ final class ToolCallAccumulator {
         }
 
         private void identify(String chunkId, String chunkName) {
-            if (chunkId != null) {
+            // pi 只在槽创建时读 id：后续分片（含 Mistral 派生的占位 id）不得覆盖首个身份。
+            if (chunkId != null && id.isEmpty()) {
                 id = chunkId;
             }
             if (chunkName != null) {

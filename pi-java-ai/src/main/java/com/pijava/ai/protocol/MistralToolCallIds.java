@@ -48,6 +48,17 @@ public final class MistralToolCallIds {
     }
 
     /**
+     * 入站 id 的 pi 规则（{@code mistral-conversations.ts:712-716}）：缺失、空串或字面
+     * {@code "null"} 时用 {@code derive("toolcall:" + index, 0)} 派生；否则原样保留。
+     */
+    static String deriveForWire(String id, long index) {
+        if (id != null && !id.isEmpty() && !"null".equals(id)) {
+            return id;
+        }
+        return derive("toolcall:" + index, 0);
+    }
+
+    /**
      * pi {@code mistral-conversations.ts:246-260} 的 {@code deriveMistralToolCallId}。
      *
      * <p>⚠️ 三处易走样（原 docs/47 §5）：① {@code normalized.length() === 9} 是**精确等于**；

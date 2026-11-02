@@ -7,6 +7,7 @@ import com.pijava.ai.catalog.AllowedFallbackModel;
 import com.pijava.ai.message.StopReason;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.stream.StreamPartialBuilder;
+import com.pijava.ai.stream.ToolCallSlotKey;
 
 /**
  * Anthropic 车道的 SDK 流事件 → {@link StreamEvent} 映射（从
@@ -14,6 +15,15 @@ import com.pijava.ai.stream.StreamPartialBuilder;
  * 唯一实例依赖（{@code oauth} 身份门）经构造器注入。
  */
 final class AnthropicEventMapper {
+
+    /** 已打开 content block 的种类（pi {@code openBlocks} 按块种类路由 delta/stop）。 */
+    enum BlockKind { TEXT, THINKING, TOOL }
+
+    /**
+     * 一个打开中的 content block：B264 评审回归——pi 按 {@code content_block.index}
+     * 记录每块状态（anthropic-messages.ts:730-815），并行 tool_use 块互不覆盖参数槽。
+     */
+    record OpenBlock(BlockKind kind, String toolId, String toolName) {}
 
     /** B81：Claude Code 伪装门（pi {@code isOAuthToken}）——入站工具名 demap 用。 */
     private final boolean oauth;
@@ -25,10 +35,7 @@ final class AnthropicEventMapper {
     StreamEvent mapEvent(RawMessageStreamEvent event,
                           StreamRequest request,
                           StreamPartialBuilder builder,
-                          boolean[] isToolBlock,
-                          boolean[] isThinkingBlock,
-                          String[] pendingToolName,
-                          String[] pendingToolId,
+                          java.util.Map<Long, OpenBlock> openBlocks,
                           AnthropicStreamSupport.StopState stop,
                           AnthropicUsageState usageState,
                           java.util.List<AllowedFallbackModel> fallbacks,
@@ -61,7 +68,9 @@ final class AnthropicEventMapper {
                 return null;
             }
             if (event.isContentBlockStart()) {
-                var block = event.asContentBlockStart().contentBlock();
+                var startEvent = event.asContentBlockStart();
+                long index = startEvent.index();
+                var block = startEvent.contentBlock();
                 // B148（pi :690-694，探针 AnthropicFallbackBlockProbeTest 已 settle
                 // 访问面）：SDK 联合无 "fallback" typed 变体，经 _json() 逃生槽判别。
                 // 无已有内容 ⇒ continue（块不入 content、不发事件）；已有内容 ⇒ 抛错，
@@ -75,27 +84,25 @@ final class AnthropicEventMapper {
                 }
                 if (block.isToolUse()) {
                     var tu = block.toolUse().orElseThrow();
-                    isToolBlock[0] = true;
-                    isThinkingBlock[0] = false;
                     // B20：这里原来还置一个 `toolCallSeen` 标志，收尾据此二选一
                     // （`tool_use` / `end_turn`）。pi 不看工具块、只看
                     // `message_delta.stop_reason` ⇒ 该标志随本包一并删除。
                     // B81（pi :725-730）：OAuth 车道模型回的是 CC 规范名（Read…），
                     // 在当前工具集内大小写不敏感 demap 回本仓真名；不命中原样透传。
-                    pendingToolName[0] = oauth
+                    var toolName = oauth
                         ? ClaudeCodeNames.fromWire(tu.name(), currentTools) : tu.name();
-                    pendingToolId[0] = tu.id();
                     // 包⑥：起点即带身份 —— pi 在此刻块已带 id/name 入 content
                     // （anthropic-messages.ts:648-660），两个值上一行刚取到。
-                    return builder.emitToolCallStart(pendingToolId[0], pendingToolName[0]);
+                    openBlocks.put(index, new OpenBlock(BlockKind.TOOL, tu.id(), toolName));
+                    return builder.emitToolCallStart(
+                            ToolCallSlotKey.indexed(index), tu.id(), toolName, null);
                 }
                 if (block.isRedactedThinking()) {
                     // B7（原 docs/31 §8.33）：pi 把 redacted 映射成 thinking 块 ——
                     // 文本固定 "[Reasoning redacted]"、thinkingSignature = data、redacted: true
                     // （anthropic-messages.ts:638-647），且同样「先入 content、后 push 事件」。
                     // 落到 text 分支会留下一个空 TextContent，那个空块会被原样发给 Anthropic。
-                    isToolBlock[0] = false;
-                    isThinkingBlock[0] = true;
+                    openBlocks.put(index, new OpenBlock(BlockKind.THINKING, null, null));
                     // pi 在 :642 是 `thinkingSignature: event.content_block.data` 直取 ——
                     // TS 类型谎报 required，缺字段会拼出字面量 "undefined"。此处**故意不复刻**，
                     // 用非抛异常的 _data()（与下面的 signature 同一口径）。
@@ -115,31 +122,41 @@ final class AnthropicEventMapper {
                     // B6/B9：初始**文本**同签名一道随首个 ThinkingStart.partial 投影
                     // （pi :630-637 是先建好带初值的块、再 push 事件）。此前只补了签名，
                     // 且是在 snapshot() 之后补的 —— 既丢了文本，签名也进不了首个 partial。
-                    isToolBlock[0] = false;
-                    isThinkingBlock[0] = true;
+                    openBlocks.put(index, new OpenBlock(BlockKind.THINKING, null, null));
                     var tb = block.thinking().orElseThrow();
                     return builder.emitThinkingStart(
                             tb._thinking().asString().orElse(""),
                             tb._signature().asString().orElse(""),
                             false);
                 }
-                isToolBlock[0] = false;
-                isThinkingBlock[0] = false;
+                openBlocks.put(index, new OpenBlock(BlockKind.TEXT, null, null));
                 return builder.emitTextStart();
             }
             if (event.isContentBlockDelta()) {
-                var delta = event.asContentBlockDelta().delta();
+                var deltaEvent = event.asContentBlockDelta();
+                var open = openBlocks.get(deltaEvent.index());
+                var delta = deltaEvent.delta();
                 if (delta.isText()) {
-                    return builder.emitTextDelta(delta.asText().text());
+                    // pi `:780-789`：只有 index 对应块确实是 text 时才累加。
+                    return open != null && open.kind() == BlockKind.TEXT
+                        ? builder.emitTextDelta(delta.asText().text()) : null;
                 }
                 if (delta.isInputJson()) {
-                    return builder.emitToolCallDelta(pendingToolId[0],
-                            delta.asInputJson().partialJson());
+                    // B264：参数 delta 按 content_block.index 投递到各自工具槽。
+                    return open != null && open.kind() == BlockKind.TOOL
+                        ? builder.emitToolCallDelta(
+                            ToolCallSlotKey.indexed(deltaEvent.index()),
+                            open.toolId(), delta.asInputJson().partialJson())
+                        : null;
                 }
                 if (delta.isThinking()) {
-                    return builder.emitThinkingDelta(delta.asThinking().thinking());
+                    return open != null && open.kind() == BlockKind.THINKING
+                        ? builder.emitThinkingDelta(delta.asThinking().thinking()) : null;
                 }
                 if (delta.isSignature()) {
+                    if (open == null || open.kind() != BlockKind.THINKING) {
+                        return null;
+                    }
                     // 同上的容忍规则（P2，原 docs/31 §8.31）：缺字段 ⇒ 空串，不抛。
                     // pi 的 `block.thinkingSignature += event.delta.signature`（anthropic-messages.ts:773-779）
                     // 在 JS 里会把 undefined 拼成字面量 "undefined" —— 那是 pi 的事故
@@ -154,14 +171,18 @@ final class AnthropicEventMapper {
                 return null;
             }
             if (event.isContentBlockStop()) {
-                if (isToolBlock[0]) {
-                    return builder.emitToolCallEnd(
-                            pendingToolId[0], pendingToolName[0]);
+                long index = event.asContentBlockStop().index();
+                var open = openBlocks.remove(index);
+                if (open == null) {
+                    // pi `:806-807`：未知 index 的 stop 直接丢弃。
+                    return null;
                 }
-                if (isThinkingBlock[0]) {
-                    return builder.emitThinkingEnd();
-                }
-                return builder.emitTextEnd();
+                return switch (open.kind()) {
+                    case TOOL -> builder.emitToolCallEnd(
+                            ToolCallSlotKey.indexed(index), open.toolId(), open.toolName());
+                    case THINKING -> builder.emitThinkingEnd();
+                    case TEXT -> builder.emitTextEnd();
+                };
             }
             if (event.isMessageDelta()) {
                 // B148（pi :815-817）：input_transformations 在事件**顶层**（不在 delta 里），

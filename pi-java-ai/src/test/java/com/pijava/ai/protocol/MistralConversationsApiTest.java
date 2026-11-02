@@ -118,6 +118,55 @@ class MistralConversationsApiTest {
     }
 
     /**
+     * B264 评审回归：并行工具调用**没有 index** 时按 id 分槽（pi
+     * {@code key = toolCall.index ?? callId}，mistral-conversations.ts:712-718）。
+     *
+     * <p>修复前缺省 index 一律变 {@code "0"} ⇒ 两个调用合进同一槽，参数被拼成非法 JSON。</p>
+     */
+    @Test
+    void parallelToolCallsWithoutIndexUseTheirIdsAsSlots() throws Exception {
+        var events = collect(
+            data("\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":["
+                + "{\"id\":\"call-a\",\"function\":{\"name\":\"write\","
+                + "\"arguments\":\"{\\\"a\\\":1}\"}},"
+                + "{\"id\":\"call-b\",\"function\":{\"name\":\"write\","
+                + "\"arguments\":\"{\\\"b\\\":2}\"}}]}}]"),
+            finish("tool_calls"));
+
+        var ends = toolCallEnds(events);
+        assertThat(errors(events)).isEmpty();
+        assertThat(ends).hasSize(2);
+        assertThat(ends.get(0).id()).isEqualTo("call-a");
+        assertThat(ends.get(0).arguments()).containsEntry("a", 1);
+        assertThat(ends.get(1).id()).isEqualTo("call-b");
+        assertThat(ends.get(1).arguments()).containsEntry("b", 2);
+    }
+
+    /**
+     * B264 评审回归：缺失或字面 {@code "null"} 的 id 按 pi 的
+     * {@code deriveMistralToolCallId(`toolcall:${index ?? 0}`)} 派生。
+     *
+     * <p>{@code "toolcall:2"} 去非字母数字后恰为 9 字符 ⇒ 原样返回（pi 的精确等于规则），
+     * 因此这里的期望值不是哈希魔数。</p>
+     */
+    @Test
+    void missingOrNullToolCallIdsAreDerivedFromTheIndex() throws Exception {
+        var events = collect(
+            data("\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":["
+                + "{\"index\":2,\"function\":{\"name\":\"write\","
+                + "\"arguments\":\"{\\\"a\\\":1}\"}},"
+                + "{\"index\":3,\"id\":\"null\",\"function\":{\"name\":\"write\","
+                + "\"arguments\":\"{\\\"b\\\":2}\"}}]}}]"),
+            finish("tool_calls"));
+
+        var ends = toolCallEnds(events);
+        assertThat(errors(events)).isEmpty();
+        assertThat(ends).hasSize(2);
+        assertThat(ends.get(0).id()).isEqualTo("toolcall2");
+        assertThat(ends.get(1).id()).isEqualTo("toolcall3");
+    }
+
+    /**
      * {@code error} ⇒ error + {@code "Provider stopped with: error (server error)"}。
      *
      * <p>⚠️ 旧实现把线格的 {@code "error"} **当成 stop reason 发成 {@code done("error")}** ——
@@ -207,6 +256,13 @@ class MistralConversationsApiTest {
     }
 
     // ── 夹具脚手架 ──────────────────────────────────────────────────────
+
+    private static List<StreamEvent.ToolCallEnd> toolCallEnds(List<StreamEvent> events) {
+        return events.stream()
+            .filter(StreamEvent.ToolCallEnd.class::isInstance)
+            .map(StreamEvent.ToolCallEnd.class::cast)
+            .toList();
+    }
 
     /**
      * 收一条流的**全部**事件。

@@ -186,15 +186,23 @@ final class MistralSseProcessor {
                 if (wireToolCalls != null && !wireToolCalls.isEmpty()) {
                     contentState.finish(builder, publisher);
                     for (var tc : wireToolCalls) {
-                        var index = String.valueOf(tc.getOrDefault("index", "0"));
-                        var tcId = (String) tc.get("id");
+                        // pi `:712-718`：id 缺失/"null" 时按 `toolcall:<index ?? 0>` 派生；
+                        // 槽键是 `index ?? callId` —— 并行调用没有 index 时不能一律塌成 0。
+                        var rawIndex = tc.get("index");
+                        long index = rawIndex instanceof Number n ? n.longValue() : 0;
+                        var hasIndex = rawIndex instanceof Number;
+                        var callId = MistralToolCallIds.deriveForWire(
+                            (String) tc.get("id"), index);
+                        var key = hasIndex
+                            ? com.pijava.ai.stream.ToolCallSlotKey.indexed(index)
+                            : com.pijava.ai.stream.ToolCallSlotKey.fallback(callId);
                         var function = (Map<String, Object>) tc.get("function");
                         if (function == null) continue;
 
                         var name = (String) function.get("name");
                         var args = (String) function.get("arguments");
 
-                        toolCalls.update(Long.parseLong(index), tcId,
+                        toolCalls.update(key, callId,
                             name == null || name.isEmpty() ? null : name, args,
                             publisher::submit, builder);
                     }

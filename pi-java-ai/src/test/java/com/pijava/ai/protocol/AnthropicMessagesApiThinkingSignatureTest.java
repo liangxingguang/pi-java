@@ -67,7 +67,7 @@ class AnthropicMessagesApiThinkingSignatureTest {
                 RawMessageStreamEvent.class,
                 com.pijava.ai.api.StreamRequest.class,
                 StreamPartialBuilder.class,
-                boolean[].class, boolean[].class, String[].class, String[].class,
+                java.util.Map.class,
                 STOP_STATE_TYPE, AnthropicUsageState.class,
                 java.util.List.class, AnthropicResponseExtras.class,
                 // B81：末位新增「当前工具」真名集（OAuth demap 用；本夹具传空表＝恒等）。
@@ -84,10 +84,9 @@ class AnthropicMessagesApiThinkingSignatureTest {
 
         private final AnthropicMessagesApi api = new AnthropicMessagesApi(OPTIONS);
         private final StreamPartialBuilder builder = new StreamPartialBuilder();
-        private final boolean[] isToolBlock = {false};
-        private final boolean[] isThinkingBlock = {false};
-        private final String[] pendingToolName = {""};
-        private final String[] pendingToolId = {""};
+        // B264：块态改为按 content_block.index 的 openBlocks（生产同形）。
+        private final java.util.Map<Long, AnthropicEventMapper.OpenBlock> openBlocks =
+            new java.util.HashMap<>();
         // B20 把 `toolCallSeen` 换成了 stop reason 状态（pi 只看 message_delta.stop_reason）；
         // 本夹具不喂 message_delta，故只需一个空实例。
         private final Object stopState;
@@ -108,7 +107,7 @@ class AnthropicMessagesApiThinkingSignatureTest {
 
         StreamEvent feed(RawMessageStreamEvent event) throws Exception {
             return (StreamEvent) MAP_EVENT.invoke(api, event, null, builder,
-                isToolBlock, isThinkingBlock, pendingToolName, pendingToolId, stopState,
+                openBlocks, stopState,
                 usageState, fallbacks, responseExtras, java.util.List.of());
         }
 
