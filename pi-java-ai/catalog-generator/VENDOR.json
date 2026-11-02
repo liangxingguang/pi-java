@@ -1,0 +1,190 @@
+{
+  "anchor": "56cae782341c339d3bb820081f0f9425d8c5b1ec",
+  "files": [
+    {
+      "path": "vendor/catalog/README.md",
+      "source": "packages/ai/catalog/README.md",
+      "sha256": "b4a7547e51dc76f945e5671d3bebc243b4ee179c5906eecaaa50d8129beef847"
+    },
+    {
+      "path": "vendor/catalog/build.ts",
+      "source": "packages/ai/catalog/build.ts",
+      "sha256": "b26671f56a7774541c48847e30afe5bded49535c5d1e8e91882434b41b78de48"
+    },
+    {
+      "path": "vendor/catalog/define.ts",
+      "source": "packages/ai/catalog/define.ts",
+      "sha256": "966c757cc898028c9eef1971516011928eaa5d5f4d21451a574be69b90bc5a31"
+    },
+    {
+      "path": "vendor/catalog/families/anthropic.ts",
+      "source": "packages/ai/catalog/families/anthropic.ts",
+      "sha256": "f044d99b3970b47e7bf4170160b3b42cdc09748622a45510e739c89cd2c4568c"
+    },
+    {
+      "path": "vendor/catalog/families/deepseek.ts",
+      "source": "packages/ai/catalog/families/deepseek.ts",
+      "sha256": "f8ef46270bda33741d8f6a87649c5e614167665adb14f0ae5d64bf348ad78cf4"
+    },
+    {
+      "path": "vendor/catalog/families/google.ts",
+      "source": "packages/ai/catalog/families/google.ts",
+      "sha256": "201d2ba2da4cd441c3362f5a9c04b0fc3419493dba4f31f63853bd474356084b"
+    },
+    {
+      "path": "vendor/catalog/families/kimi.ts",
+      "source": "packages/ai/catalog/families/kimi.ts",
+      "sha256": "b2a5a8bc64c1979b650c8a09a3ba19d12b2d94a09a18a221bd69db61c135c2de"
+    },
+    {
+      "path": "vendor/catalog/families/openai.ts",
+      "source": "packages/ai/catalog/families/openai.ts",
+      "sha256": "c37baec7f69e053ec46d7a0a4fea908b408f82702b39d1b1f7ad94d32739e549"
+    },
+    {
+      "path": "vendor/catalog/providers/ant-ling.ts",
+      "source": "packages/ai/catalog/providers/ant-ling.ts",
+      "sha256": "013c67590ef8cd19dc199e1d92ef2649ff6a7101bf80912a3852287c24e4ca79"
+    },
+    {
+      "path": "vendor/catalog/providers/anthropic.ts",
+      "source": "packages/ai/catalog/providers/anthropic.ts",
+      "sha256": "7230815973a164578e19246eb3bcd2875a9613ef808facb47ada8169be623bdb"
+    },
+    {
+      "path": "vendor/catalog/providers/deepseek.ts",
+      "source": "packages/ai/catalog/providers/deepseek.ts",
+      "sha256": "2094212cff13c16ca9b2f594439c190cd8696e049a9ec9edabd164d093e3edef"
+    },
+    {
+      "path": "vendor/catalog/providers/google.ts",
+      "source": "packages/ai/catalog/providers/google.ts",
+      "sha256": "9b576fc54123e3264c60dcfd681e31de2476df734c4c1262ca99df658a6f0527"
+    },
+    {
+      "path": "vendor/catalog/providers/minimax-cn.ts",
+      "source": "packages/ai/catalog/providers/minimax-cn.ts",
+      "sha256": "eb17f5c6eeec6736640e3f2bcf9dd8ad57450557a19f40cc5458ced465b2f748"
+    },
+    {
+      "path": "vendor/catalog/providers/minimax.ts",
+      "source": "packages/ai/catalog/providers/minimax.ts",
+      "sha256": "0f3a5bb7b7669c25915bad364617b1c2dfdde50eb19df15d558368453a716566"
+    },
+    {
+      "path": "vendor/catalog/providers/mistral.ts",
+      "source": "packages/ai/catalog/providers/mistral.ts",
+      "sha256": "f5669adb9d9facfb244e8a252f4df812cd4022bd48941d18252ad9273ae2a07d"
+    },
+    {
+      "path": "vendor/catalog/providers/moonshotai-cn.ts",
+      "source": "packages/ai/catalog/providers/moonshotai-cn.ts",
+      "sha256": "5437054d5bc6ce74ada782051a6989073015fe4619da28407cba910d4cd2c9fa"
+    },
+    {
+      "path": "vendor/catalog/providers/moonshotai.ts",
+      "source": "packages/ai/catalog/providers/moonshotai.ts",
+      "sha256": "994d88db4c173b06f54584604314640b07f73f1ff2342b6fb942ba3ee8bd4b00"
+    },
+    {
+      "path": "vendor/catalog/providers/openai.ts",
+      "source": "packages/ai/catalog/providers/openai.ts",
+      "sha256": "8b9f4f3973fa45dad7030a7c54f2fb1e82144ba59733bede8b24818558a43ef6"
+    },
+    {
+      "path": "vendor/catalog/providers/openrouter.ts",
+      "source": "packages/ai/catalog/providers/openrouter.ts",
+      "sha256": "032f47644d3f825d87615f1bc18730a01d258aff09617d6f7e08c9adcd03944d"
+    },
+    {
+      "path": "vendor/catalog/providers/qwen-token-plan-cn.ts",
+      "source": "packages/ai/catalog/providers/qwen-token-plan-cn.ts",
+      "sha256": "2ffe161e63b63e86780b1b668a7d6f4de7c831f5a730429fe2dae41577346e59"
+    },
+    {
+      "path": "vendor/catalog/providers/qwen-token-plan.ts",
+      "source": "packages/ai/catalog/providers/qwen-token-plan.ts",
+      "sha256": "67e1cce48ca567e67d1303afbecdeaae7471ad9fce93bbd961ae1fd966ba5626"
+    },
+    {
+      "path": "vendor/catalog/providers/radius.ts",
+      "source": "packages/ai/catalog/providers/radius.ts",
+      "sha256": "0ee6db47ce94d1ff0f592dcdafc9f8e5c4cfb60f31a3cd8fb5b137e3826ddc91"
+    },
+    {
+      "path": "vendor/catalog/providers/xai.ts",
+      "source": "packages/ai/catalog/providers/xai.ts",
+      "sha256": "1c939eccaedbbf50b5f8ec9c1e86a83c3cb61bfce458e6afd40d1862385cbd08"
+    },
+    {
+      "path": "vendor/catalog/providers/xiaomi-token-plan-cn.ts",
+      "source": "packages/ai/catalog/providers/xiaomi-token-plan-cn.ts",
+      "sha256": "90ecb7dbb8944de3a95588bb72c1a73fa9c554d55a91d596386400e6aa88b98e"
+    },
+    {
+      "path": "vendor/catalog/providers/xiaomi.ts",
+      "source": "packages/ai/catalog/providers/xiaomi.ts",
+      "sha256": "9d5004dc43be1f827cc1318ea3097d5b04c8ed6a671dfac6f76f78f77f8f85b6"
+    },
+    {
+      "path": "vendor/catalog/providers/zai-coding-cn.ts",
+      "source": "packages/ai/catalog/providers/zai-coding-cn.ts",
+      "sha256": "261df5914d6499deffb48b7de8044743d4681d616701fcd4d84772276fcb3a20"
+    },
+    {
+      "path": "vendor/catalog/providers/zai.ts",
+      "source": "packages/ai/catalog/providers/zai.ts",
+      "sha256": "387f6fdca15795e39bf5d8f7f4d6e4a2c624390e4fbf3503ce6d9fb10c7dfa17"
+    },
+    {
+      "path": "vendor/catalog/reasoning.ts",
+      "source": "packages/ai/catalog/reasoning.ts",
+      "sha256": "7060898e78a011e33e3da99c09c6f181e0d0f333d53289b5daf23b4d22282ae3"
+    },
+    {
+      "path": "vendor/catalog/sources/index.ts",
+      "source": "packages/ai/catalog/sources/index.ts",
+      "sha256": "c5f52cbbcdcde8c1561577eaa37af978578ed25e5f4cda1134af17ea43b16400"
+    },
+    {
+      "path": "vendor/catalog/sources/models-dev.ts",
+      "source": "packages/ai/catalog/sources/models-dev.ts",
+      "sha256": "1158bf23507bfdd23a07c8d47230a63efaad0a0bd408feef04722715f86fe3f0"
+    },
+    {
+      "path": "vendor/catalog/sources/openrouter.ts",
+      "source": "packages/ai/catalog/sources/openrouter.ts",
+      "sha256": "76384062de99774492a916a267591cfb8775f3a36a590a4423cdd11a65bc67cc"
+    },
+    {
+      "path": "vendor/catalog/sources/vercel-ai-gateway.ts",
+      "source": "packages/ai/catalog/sources/vercel-ai-gateway.ts",
+      "sha256": "d241984929e65519d35bfb74ebbfedf76c53b81fcd329278a5e4fdda668119ce"
+    },
+    {
+      "path": "vendor/scripts/model-data.ts",
+      "source": "packages/ai/scripts/model-data.ts",
+      "sha256": "f2605a61ad57d8a3edb93e5c36c0f543d051796b8353452a1fd584eec33f02f4"
+    },
+    {
+      "path": "vendor/src/providers/openrouter-api.ts",
+      "source": "packages/ai/src/providers/openrouter-api.ts",
+      "sha256": "1aec6dae5c9e86acec42441e9927e49e68666a7983035ab6a2833979d1c3774f"
+    },
+    {
+      "path": "vendor/src/providers/radius-config.ts",
+      "source": "packages/ai/src/providers/radius-config.ts",
+      "sha256": "0e8c55d29039d760ba4cb8a763e61ea742ac13b3acdf42891c82486a610ab4f4"
+    },
+    {
+      "path": "vendor/src/types.ts",
+      "source": "packages/ai/src/types.ts",
+      "sha256": "e299ef7495e6882baf2d5f3745f26f40c573999ddbeb0e8e0af63f179ec7a23e"
+    },
+    {
+      "path": "vendor/src/utils/text.ts",
+      "source": "packages/ai/src/utils/text.ts",
+      "sha256": "afd14685bef440b184b32c2ddb8bc5c751c542e5114d4384b66befbc6af0cec3"
+    }
+  ]
+}
