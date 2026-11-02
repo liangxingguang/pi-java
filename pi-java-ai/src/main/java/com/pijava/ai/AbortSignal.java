@@ -38,6 +38,17 @@ public class AbortSignal {
         return () -> abortListeners.remove(listener);
     }
 
+    /**
+     * Throw {@link AbortedException} when this signal has fired.
+     *
+     * <p>Corresponds to pi's {@code signal.throwIfAborted()}.</p>
+     */
+    public void throwIfAborted() {
+        if (aborted) {
+            throw new AbortedException();
+        }
+    }
+
     /** Create a fresh signal. */
     public static AbortSignal create() { return new AbortSignal(); }
 }

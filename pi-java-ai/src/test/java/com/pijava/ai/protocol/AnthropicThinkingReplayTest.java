@@ -155,21 +155,18 @@ class AnthropicThinkingReplayTest {
     }
 
     /**
-     * <b>P2 / 闸分支 (e)</b>（跨模型 + 有签名 + 有文本）：降级为 **text**。
+     * <b>P2 / 闸</b>（跨模型 + 有签名 + 有文本）：**整块丢弃**。
      *
-     * <p>pi 的闸 `:109` 只在 `isSameModel` 时保留；落到 `:113-116` 返回
-     * `{type:"text", text: block.thinking}` —— 签名**连同块一起被扔掉**。
-     * pi-java 无闸 ⇒ 带签名的 thinking 块被原样送给另一个模型，
-     * Anthropic 会因签名不匹配而报错（这正是 web 那个
-     * `` `signature` is not set `` 的同一族）：文本留下、签名不能留。</p>
+     * <p>pi {@code transform-messages.ts:128-132}：别的模型的 thinking 不能作为可见文本重放。
+     * 签名也不能留 —— Anthropic 会因签名不匹配而报错。</p>
      */
     @Test
-    void signatureWithTextCrossModelDowngradesToText() throws Exception {
+    void signatureWithTextCrossModelIsDropped() throws Exception {
         var actual = wire(List.of(
             user("hi"),
             foreignModel(new ContentBlock.ThinkingContent("reasoning body", "sig-abc"))));
 
-        assertThat(actual).containsExactly("text:hi", "text:reasoning body");
+        assertThat(actual).containsExactly("text:hi");
     }
 
     /**

@@ -199,20 +199,18 @@ class GoogleAssistantReplayTest {
     }
 
     /**
-     * 跨身份：thinking 块降级为纯文本（无 thought:true、无签名），不是整块丢弃。
-     * pi :260-269。
+     * 跨身份：thinking 块在共享闸里已被丢弃（docs/11 #61）；只剩空内容的助手消息
+     * 被 Google 车道整体省略。
      */
     @Test
-    void crossModelDowngradesThinkingToPlainText() throws Exception {
+    void crossModelThinkingIsDropped() throws Exception {
         var contents = GoogleWireBody.contents(vision(GEMINI_25), List.of(
             user("hi"),
             assistantFrom("anthropic", "claude-sonnet-5",
                 new ContentBlock.ThinkingContent("hmm", "U0lHTg=="))));
 
-        var part = GoogleWireBody.parts(contents, 1).get(0);
-        assertThat(part.path("text").asText()).isEqualTo("hmm");
-        assertThat(part.has("thought")).isFalse();
-        assertThat(part.has("thoughtSignature")).isFalse();
+        assertThat(contents).hasSize(1);
+        assertThat(contents.get(0).path("role").asText()).isEqualTo("user");
     }
 
     /** 负对照：跨模型文本块上不附签名（M2 变异探针的有牙对照）。 */

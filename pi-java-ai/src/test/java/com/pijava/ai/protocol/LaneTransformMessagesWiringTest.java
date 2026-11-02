@@ -48,7 +48,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 于是「先红证毕」变成编译期红、看不到行为红。桩录制的是**请求字节**，
  * 形参怎么改都不影响它，且它证的是端到端（消息 → 预通道 → 落线 → 线格）。</p>
  *
- * <p>判据取自 pi：跨模型重放时带签名的 thinking 块**降级为 text**（`transform-messages.ts:113-116`）
+ * <p>判据取自 pi：跨模型重放时带签名的 thinking 块**整块丢弃**（`transform-messages.ts:128-132`）
  * ⇒ 该文本必须**出现在请求体里**（作为文本），而不是消失。</p>
  */
 class LaneTransformMessagesWiringTest {
@@ -97,7 +97,7 @@ class LaneTransformMessagesWiringTest {
     }
 
     @Test
-    void completionsLaneDowngradesCrossModelThinkingToText() throws Exception {
+    void completionsLaneDropsCrossModelThinking() throws Exception {
         try (var server = new RecordingServer()) {
             var api = new OpenAICompletionsApi(
                 new ApiOptions(server.baseUrl(), "test-key", Duration.ofSeconds(5), 0, Map.of()),
@@ -105,9 +105,8 @@ class LaneTransformMessagesWiringTest {
             drainQuietly(() -> api.streamBlocking(
                 request(ModelId.of("openai", "gpt-4o")), ApiOptions.defaults()));
 
-            // 今天：thinking 块被 addAssistantMessage 收进 reasoning，而 :235 的 provider 门
-            // （"deepseek"）拦下了它 ⇒ 文本不出现在请求体里。
-            assertThat(server.body()).contains(FOREIGN_TEXT);
+            // 共享闸已丢弃跨模型 thinking（docs/11 #61）⇒ 文本不出现在请求体里。
+            assertThat(server.body()).doesNotContain(FOREIGN_TEXT).contains("VISIBLE");
         }
     }
 
@@ -222,33 +221,31 @@ class LaneTransformMessagesWiringTest {
     }
 
     @Test
-    void googleLaneDowngradesCrossModelThinkingToText() throws Exception {
+    void googleLaneDropsCrossModelThinking() throws Exception {
         try (var server = new RecordingServer()) {
             var api = new GoogleGenerativeAiApi(
                 new ApiOptions(server.baseUrl(), "test-key", Duration.ofSeconds(5), 0, Map.of()));
             drainQuietly(() -> api.streamBlocking(
                 request(ModelId.of("google", "gemini-2.5-pro")), ApiOptions.defaults()));
 
-            // 今天：GoogleMessageConverter.blockParts 的 ThinkingContent 分支返回 List.of()（静默丢弃）。
-            assertThat(server.body()).contains(FOREIGN_TEXT);
+            assertThat(server.body()).doesNotContain(FOREIGN_TEXT).contains("VISIBLE");
         }
     }
 
     @Test
-    void mistralLaneDowngradesCrossModelThinkingToText() throws Exception {
+    void mistralLaneDropsCrossModelThinking() throws Exception {
         try (var server = new RecordingServer()) {
             var api = new MistralConversationsApi(
                 new ApiOptions(server.baseUrl(), "test-key", Duration.ofSeconds(5), 0, Map.of()));
             drainQuietly(() -> api.streamBlocking(
                 request(ModelId.of("mistral", "mistral-large")), ApiOptions.defaults()));
 
-            // 今天：extractText 只收 TextContent ⇒ thinking 块无声消失。
-            assertThat(server.body()).contains(FOREIGN_TEXT);
+            assertThat(server.body()).doesNotContain(FOREIGN_TEXT).contains("VISIBLE");
         }
     }
 
     @Test
-    void responsesLaneDowngradesCrossModelThinkingToText() throws Exception {
+    void responsesLaneDropsCrossModelThinking() throws Exception {
         try (var server = new RecordingServer()) {
             var api = new OpenAIResponsesApi(
                 new ApiOptions(server.baseUrl(), "test-key", Duration.ofSeconds(5), 0, Map.of()),
@@ -256,8 +253,7 @@ class LaneTransformMessagesWiringTest {
             drainQuietly(() -> api.streamBlocking(
                 request(ModelId.of("openai", "gpt-4o")), ApiOptions.defaults()));
 
-            // 今天：ResponsesMessageConverter:180 注释写明「v1 不回放 ThinkingContent」⇒ 丢弃。
-            assertThat(server.body()).contains(FOREIGN_TEXT);
+            assertThat(server.body()).doesNotContain(FOREIGN_TEXT).contains("VISIBLE");
         }
     }
 
@@ -268,7 +264,7 @@ class LaneTransformMessagesWiringTest {
      * 就没人拦得住。
      */
     @Test
-    void azureResponsesLaneDowngradesCrossModelThinkingToText() throws Exception {
+    void azureResponsesLaneDropsCrossModelThinking() throws Exception {
         try (var server = new RecordingServer()) {
             var api = new AzureOpenAIResponsesApi(
                 new ApiOptions(server.baseUrl(), "test-key", Duration.ofSeconds(5), 0, Map.of()),
@@ -276,7 +272,7 @@ class LaneTransformMessagesWiringTest {
             drainQuietly(() -> api.streamBlocking(
                 request(ModelId.of("azure", "gpt-4o")), ApiOptions.defaults()));
 
-            assertThat(server.body()).contains(FOREIGN_TEXT);
+            assertThat(server.body()).doesNotContain(FOREIGN_TEXT).contains("VISIBLE");
         }
     }
 

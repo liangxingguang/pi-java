@@ -81,13 +81,11 @@ class TransformMessagesCopilotAnthropicOracleTest {
 
     /**
      * Pi's first oracle: a thinking block from the OpenAI/Copilot source is
-     * downgraded to text when replayed to the different Anthropic model, while
-     * the ordinary text remains. This turns red if the cross-model thinking
-     * gate preserves {@link ContentBlock.ThinkingContent}, drops its text, or
-     * loses the neighboring text block.
+     * dropped when replayed to the different Anthropic model, while the
+     * ordinary text remains ({@code transform-messages.ts:128-132}).
      */
     @Test
-    void crossModelThinkingIsDowngradedToText() {
+    void crossModelThinkingIsDropped() {
         var assistant = foreignAssistant(
             "openai-completions", "gpt-4o", StopReason.STOP,
             new ContentBlock.ThinkingContent("Let me think about this...", "reasoning_content"),
@@ -96,14 +94,8 @@ class TransformMessagesCopilotAnthropicOracleTest {
         var output = apply(List.of(user("hello"), assistant));
         var transformed = (Message.AssistantMessage) output.get(1);
 
-        assertThat(transformed.content().stream()
-            .filter(ContentBlock.ThinkingContent.class::isInstance)
-            .toList())
-            .isEmpty();
         assertThat(transformed.content())
-            .containsExactly(
-                new ContentBlock.TextContent("Let me think about this..."),
-                new ContentBlock.TextContent("Hi there!"));
+            .containsExactly(new ContentBlock.TextContent("Hi there!"));
     }
 
     /**

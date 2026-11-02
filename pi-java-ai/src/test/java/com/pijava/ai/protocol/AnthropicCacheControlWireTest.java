@@ -99,8 +99,12 @@ class AnthropicCacheControlWireTest {
             var api = new AnthropicMessagesApi(
                 new ApiOptions(server.baseUrl(), "test-key", Duration.ofSeconds(5), 0, extra),
                 "ANTHROPIC_API_KEY");
-            var request = new StreamRequest(model, SYSTEM_PROMPT, messages, tools,
-                -1, -1);
+            // docs/11 #83：pi 的 normalizeContext 无条件前置 legacy 提示。本夹具的系统提示
+            // 已经在转录首条里，不再另传；没有前导系统消息时才用 legacy 提示。
+            boolean hasLeadingSystemMessage = !messages.isEmpty()
+                && messages.get(0) instanceof Message.SystemMessage;
+            var request = new StreamRequest(model,
+                hasLeadingSystemMessage ? null : SYSTEM_PROMPT, messages, tools, -1, -1);
             try (var iter = api.streamBlocking(request, ApiOptions.defaults())) {
                 while (iter.hasNext()) {
                     iter.next();

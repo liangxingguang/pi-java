@@ -154,11 +154,11 @@ class MistralReplayWireTest {
     }
 
     /**
-     * 异模型身份（闸在 {@link com.pijava.ai.api.TransformMessages}）：无签名 thinking
-     * 已被降级成 TextContent ⇒ 本车道看到的就是 {@code {type:"text"}} 项，不发 thinking。
+     * 异模型身份（闸在 {@link com.pijava.ai.api.TransformMessages}）：thinking 在闸里
+     * 已被丢弃（docs/11 #61）⇒ 本车道只看到普通文本。
      */
     @Test
-    void crossModelThinkingIsReplayedAsText() throws Exception {
+    void crossModelThinkingIsDropped() throws Exception {
         var foreign = new Message.AssistantMessage(
             List.of(new ContentBlock.ThinkingContent("reason"),
                     new ContentBlock.TextContent("answer")),
@@ -169,7 +169,6 @@ class MistralReplayWireTest {
         var content = messages(List.<Message>of(foreign)).get(0).get("content");
         assertThat(content).isEqualTo(JSON.readTree("""
             [
-              { "type": "text", "text": "reason" },
               { "type": "text", "text": "answer" }
             ]
             """));

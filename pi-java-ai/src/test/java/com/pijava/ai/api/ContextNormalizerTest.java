@@ -44,8 +44,12 @@ class ContextNormalizerTest {
         assertThat(system.toolsAdded()).containsExactly(tool);
     }
 
+    /**
+     * pi {@code transcript.ts:30-34}：legacy 字段**无条件**折成首条系统消息，
+     * 即使调用方的消息已经以系统消息开头。Java 旧实现有一条重复守卫，会丢掉 legacy 字段。
+     */
     @Test
-    void preservesExistingLeadingSystemMessageWithoutInjectingLegacyFields() {
+    void prependsLegacyFieldsEvenWhenMessagesAlreadyStartWithASystemMessage() {
         var existing = new Message.SystemMessage(
             "existing", Instant.EPOCH, Map.of(), List.of(), List.of());
         var user = user("hi");
@@ -53,7 +57,13 @@ class ContextNormalizerTest {
         var normalized = ContextNormalizer.normalize(
             "legacy", List.of(existing, user), List.of(tool("bash")));
 
-        assertThat(normalized.messages()).containsExactly(existing, user);
+        assertThat(normalized.messages()).hasSize(3);
+        var injected = (Message.SystemMessage) normalized.messages().get(0);
+        assertThat(injected.content()).containsExactly(new ContentBlock.TextContent("legacy"));
+        assertThat(injected.timestamp()).isEqualTo(Instant.EPOCH);
+        assertThat(injected.toolsAdded()).containsExactly(tool("bash"));
+        assertThat(normalized.messages().get(1)).isSameAs(existing);
+        assertThat(normalized.messages().get(2)).isEqualTo(user);
     }
 
     @Test

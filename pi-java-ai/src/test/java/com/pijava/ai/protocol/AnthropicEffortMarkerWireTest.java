@@ -102,13 +102,13 @@ class AnthropicEffortMarkerWireTest {
         var transcript = List.<Message>of(
             // provider 不同（openrouter 历史不在 anthropic 端点的前缀里）
             historyAssistant("openrouter", "anthropic-messages", "high",
-                List.of(thinking())),
+                List.of(thinking(), new ContentBlock.TextContent("a"))),
             // api 不同
             historyAssistant("anthropic", "openai-completions", "high",
-                List.of(thinking())),
+                List.of(thinking(), new ContentBlock.TextContent("b"))),
             // 盖章值不在五值白名单
             historyAssistant("anthropic", "anthropic-messages", "medium-well",
-                List.of(thinking())),
+                List.of(thinking(), new ContentBlock.TextContent("c"))),
             // 空块 assistant（即便盖了章也不索引）
             historyAssistant("anthropic", "anthropic-messages", "high", List.of()),
             user("next"));

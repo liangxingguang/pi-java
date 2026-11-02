@@ -139,6 +139,33 @@ class CompletionsToolChangesWireTest {
             "updated guidance\n\nUpdated system prompt section \"rules\":\n\n<rules>\nnew rules\n</rules>");
     }
 
+    /**
+     * pi {@code transcript-tool-changes.test.ts:495-512}（#10940）：删除把顶层边界移动一次；
+     * 之后的纯新增仍以 Kimi 工具消息就地锚定。
+     */
+    @Test
+    void additionsAfterARemovalStayAnchoredAndMoveTheTopLevelBoundaryOnce() throws Exception {
+        var messages = List.<Message>of(
+            new Message.SystemMessage("base prompt", Instant.EPOCH, Map.of(),
+                List.of(BASE_TOOL, tool("drop_tool")), List.of()),
+            user("before"),
+            new Message.SystemMessage("", Instant.ofEpochMilli(1), Map.of(),
+                List.of(), List.of(new com.pijava.ai.api.ToolReference("drop_tool"))),
+            user("after removal"),
+            new Message.SystemMessage("", Instant.ofEpochMilli(2), Map.of(),
+                List.of(LATE_TOOL), List.of()),
+            user("after load"));
+
+        var body = capture(model(true), messages);
+
+        // 顶层只留边界时刻的工具：drop_tool 已被删除，late_tool 走就地锚定。
+        assertThat(toolNames(body.path("tools"))).containsExactly("base_tool");
+        var kimi = firstMessageWithTools(body);
+        assertThat(kimi).as("后续纯新增仍必须锚定").isNotNull();
+        assertThat(toolNames(kimi.path("tools"))).containsExactly("late_tool");
+        assertThat(systemContents(body)).containsExactly("base prompt", null);
+    }
+
     // ── 夹具 ─────────────────────────────────────────────────────────
 
     private static JsonNode capture(ModelInfo model, List<Message> messages) throws Exception {

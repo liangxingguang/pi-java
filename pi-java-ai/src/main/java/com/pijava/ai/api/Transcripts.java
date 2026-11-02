@@ -325,46 +325,63 @@ public final class Transcripts {
      * pi {@code transcript.ts:196-208} —— 这段工具史里存在**删除**或**同名重声明**
      * （即「只加」不足以重放它）。
      *
-     * <p>这是「能不能就地锚定增量」的总闸：一旦为真，车道必须发**完整的当前工具表**。</p>
+     * <p>{@code additions} 模式下，这个结果为真只表示「顶层边界要移动」；
+     * 边界之后的纯新增仍可就地锚定（{@link #resolveTranscriptTools}）。</p>
      */
     public static boolean hasNonAdditiveToolChanges(List<Message> messages) {
+        return findLastNonAdditiveToolChange(messages) >= 0;
+    }
+
+    /**
+     * pi {@code transcript.ts:204-219} —— 返回**最后一次**删除或同名重声明所在的系统消息序号；
+     * 没有则返回 {@code -1}。
+     *
+     * <p>序号只数系统消息，从 0 开始。同名重声明在删除之后仍然算数：Kimi K3 会忽略
+     * 「删除后又声明」的工具（pi 的注释，2026-10 实测）。</p>
+     */
+    static int findLastNonAdditiveToolChange(List<Message> messages) {
         var declared = new HashSet<String>();
+        int last = -1;
+        int systemIndex = 0;
         for (var message : messages) {
             if (!(message instanceof Message.SystemMessage system)) {
                 continue;
             }
             if (!system.toolsRemoved().isEmpty()) {
-                return true;
+                last = systemIndex;
             }
             for (var tool : system.toolsAdded()) {
                 if (!declared.add(tool.name())) {
-                    return true;
+                    last = systemIndex;
                 }
             }
+            systemIndex++;
         }
-        return false;
+        return last;
     }
 
     /**
-     * pi {@code transcript.ts:220-234} —— 把工具声明切分给「顶层请求字段」与「就地锚定」。
+     * pi {@code transcript.ts:252-263} —— 把工具声明切分给「顶层请求字段」与「就地锚定」。
      *
-     * <p>{@code anchorsAdditions = supportsToolAdditions && !hasNonAdditiveToolChanges(messages)}
-     * —— 车道侧还要再与「支持中途系统消息」相与（pi 在三条车道各写一次那个式子）。</p>
-     *
-     * <p>⚠️ {@code anchorsAdditions} 为真时 {@code requestTools} **只是前导消息声明的那一份**，
-     * 后续增量不在请求级字段里 —— 它们靠车道的就地锚定发出去（{@code 原 docs/51 §2 P3}）。</p>
+     * @param messages 请求转录
+     * @param support  承载工具变更的传输形态
+     * @return 顶层工具表与前导折叠数
      */
     public static TranscriptTools resolveTranscriptTools(List<Message> messages,
-                                                         boolean supportsToolAdditions) {
-        boolean anchorsAdditions = supportsToolAdditions && !hasNonAdditiveToolChanges(messages);
-        List<ToolDefinition> requestTools;
-        if (anchorsAdditions) {
-            var head = getInitialSystemMessage(messages);
-            requestTools = head == null ? List.of() : head.toolsAdded();
-        } else {
-            requestTools = getCurrentTools(messages);
-        }
-        return new TranscriptTools(requestTools, anchorsAdditions);
+                                                         TranscriptToolSupport support) {
+        var systemMessages = messages.stream()
+            .filter(Message.SystemMessage.class::isInstance)
+            .toList();
+        return switch (support) {
+            case NONE -> new TranscriptTools(getCurrentTools(messages), systemMessages.size());
+            case CHANGES -> new TranscriptTools(List.of(), 0);
+            case ADDITIONS -> {
+                int folded = Math.max(
+                    getInitialSystemMessage(messages) == null ? 0 : 1,
+                    findLastNonAdditiveToolChange(messages) + 1);
+                yield new TranscriptTools(getCurrentTools(systemMessages.subList(0, folded)), folded);
+            }
+        };
     }
 
     /**

@@ -304,21 +304,23 @@ public final class TransformMessages {
             return new ContentBlock.ToolUseContent(
                 normalizedId, tu.name(), tu.arguments(), signature, tu.namespace(), tu.argumentsError());
         }
+        if (block instanceof ContentBlock.TextContent tc && !same) {
+            // pi :140-146 —— 跨模型的 text 保留文本、剥离 textSignature。
+            return new ContentBlock.TextContent(tc.text(), null);
+        }
         if (!(block instanceof ContentBlock.ThinkingContent th)) {
             return block;
         }
-        if (th.redacted()) {
-            return same ? th : null;
+        // pi :128-132 —— 跨模型 thinking 一律丢弃（不再降级为可见文本）。
+        if (!same) {
+            return null;
         }
-        if (same && !th.signature().isEmpty()) {
+        if (th.redacted() || !th.signature().isEmpty()) {
             return th;
         }
         if (th.text() == null || th.text().trim().isEmpty()) {
             return null;
         }
-        if (same) {
-            return th;
-        }
-        return new ContentBlock.TextContent(th.text());
+        return th;
     }
 }

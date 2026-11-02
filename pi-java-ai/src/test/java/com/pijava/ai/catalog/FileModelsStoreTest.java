@@ -13,6 +13,7 @@ import com.pijava.ai.model.PricingInfo;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * P6-8: FileModelsStore — 读写删 round-trip、ETag 含引号原样存储。
@@ -83,5 +84,26 @@ class FileModelsStoreTest {
         new FileModelsStore(tmp).write("q", ModelsStoreEntry.of(List.of(MODEL)));
         var fresh = new FileModelsStore(tmp).read("q").orElseThrow();
         assertThat(fresh.models()).hasSize(1);
+    }
+
+    /** pi {@code models-store.ts:120-146}：已中止的信号让读写删在入口失败且不落盘。 */
+    @Test
+    void abortedSignalFailsEveryOperationWithoutChangingTheStore() {
+        var store = new FileModelsStore(tmp);
+        store.write("p", ModelsStoreEntry.of(List.of(MODEL)));
+
+        var signal = com.pijava.ai.AbortSignal.create();
+        signal.abort();
+        var options = new ModelsStoreOperationOptions(signal);
+
+        assertThatThrownBy(() -> store.read("p", options))
+            .isInstanceOf(com.pijava.ai.AbortedException.class);
+        assertThatThrownBy(() -> store.write("q", ModelsStoreEntry.of(List.of(MODEL)), options))
+            .isInstanceOf(com.pijava.ai.AbortedException.class);
+        assertThatThrownBy(() -> store.delete("p", options))
+            .isInstanceOf(com.pijava.ai.AbortedException.class);
+
+        assertThat(store.read("p")).isPresent();
+        assertThat(store.read("q")).isEmpty();
     }
 }

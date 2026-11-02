@@ -22,6 +22,7 @@ import com.openai.models.chat.completions.ChatCompletionUserMessageParam;
 import com.pijava.ai.api.GrammarInputProperties;
 import com.pijava.ai.api.SimpleOptions;
 import com.pijava.ai.api.StreamRequest;
+import com.pijava.ai.api.TranscriptToolSupport;
 import com.pijava.ai.api.Transcripts;
 import com.pijava.ai.message.MessageTexts;
 import com.pijava.ai.api.TransformMessages;
@@ -134,24 +135,27 @@ final class OpenAICompletionsMessageConverter {
         }
 
         // 共享预通道必须先于本车道的映射跑（pi openai-completions.ts:1212 在
-        // convertMessages 之前调 transformMessages）：跨模型重放的带签名 thinking 块
-        // 在此降级为文本，本车道才看得见那段文本。
+        // convertMessages 之前调 transformMessages）：跨模型的 thinking 在此已被丢弃
+        // （docs/11 #61）。
         var messages = TransformMessages.apply(transcript.messages(), request.modelId(), apiName,
                 request.model(), CompletionsToolCallIds.create());
         // 包 A3（R7）：`requireOnlyLeadingSystemMessage` 已删 —— 中途系统消息现在有落线支（见下）。
 
         // 包 A3（原 docs/51 §4.4）：**两个标志都要**（pi :1223 的同式 —— 后者注释明写
         // *Requires* 前者），且判据是 `=== true` ⇒ 缺席与 false 同义。
-        var transcriptTools = Transcripts.resolveTranscriptTools(transcript.messages(),
-            Boolean.TRUE.equals(compat.supportsMidConvoSystemMessages())
-                && Boolean.TRUE.equals(compat.supportsMidConvoToolAdditions()));
+        var toolSupport = Boolean.TRUE.equals(compat.supportsMidConvoSystemMessages())
+            && Boolean.TRUE.equals(compat.supportsMidConvoToolAdditions())
+            ? TranscriptToolSupport.ADDITIONS : TranscriptToolSupport.NONE;
+        var transcriptTools = Transcripts.resolveTranscriptTools(transcript.messages(), toolSupport);
 
         // B98（pi :1235）：上一条**输入消息**的角色 —— 部分 provider 不允许 tool 结果后
         // 直接跟 user，requiresAssistantAfterToolResult 时中间要插一条桥消息。
         String lastRole = null;
+        int systemIndex = 0;
         for (int i = 0; i < messages.size(); i++) {
             var msg = messages.get(i);
             if (msg instanceof Message.SystemMessage system) {
+                boolean anchorsTools = transcriptTools.anchors(systemIndex++);
                 // 包 A3（pi :1238-1252）：前导系统消息已在上面落成 instruction 消息，
                 // 这里只处理**中途**的 —— 它们可能顺带带来工具增量。
                 if (i == 0) {
@@ -160,9 +164,9 @@ final class OpenAICompletionsMessageConverter {
                 // ⚠️ Kimi 形状：`{role:"system", tools:[…]}` 先于文本落线，**一条系统消息
                 // 可能产出两条线上消息**。pi 的 TS 侧靠 `as unknown as` 塞进 SDK 类型；
                 // java 侧走 SDK 的未知键直通（原始 JSON 反序列化），通路与逐字节往返
-                // 证据见 SdkJsonEscapeHatchTest。只在 `anchorsAdditions` 为真时发 ——
-                // 否则那些工具已经在请求级 tools 字段里了。
-                if (transcriptTools.anchorsAdditions() && !system.toolsAdded().isEmpty()) {
+                // 证据见 SdkJsonEscapeHatchTest。只在折叠边界之后发 —— 否则那些工具
+                // 已经在请求级 tools 字段里了。
+                if (anchorsTools && !system.toolsAdded().isEmpty()) {
                     var gate = Boolean.TRUE.equals(compat.supportsStrictMode());
                     wire.add(CompletionToolWire.kimiSystemMessage(
                         system.toolsAdded(), gate, grammarGate));

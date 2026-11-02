@@ -91,17 +91,14 @@ class TransformMessagesTest {
     // ------------------------------------------------------------------ RED
 
     /**
-     * <b>闸 (e)</b> 跨模型 + 有签名 + 有文本 ⇒ 降级为 **text**（`transform-messages.ts:113-116`
-     * 的 `{type:"text", text: block.thinking}`）。
-     *
-     * <p>这条同时钉**位置**：同一条线格也能由适配器里的 `:318-322` 产出，
-     * 所以只钉线格的话「规则在适配器里」也绿。</p>
+     * <b>闸</b> 跨模型 + 有签名 + 有文本 ⇒ **丢弃**（{@code transform-messages.ts:128-132}）。
+     * 别的模型的 thinking 不能当作可见文本重放，否则新模型会把它当成回复的一部分。
      */
     @Test
-    void crossModelThinkingWithTextBecomesTextBlock() {
+    void crossModelThinkingWithTextIsDropped() {
         assertThat(gated(foreignModel(new ContentBlock.ThinkingContent(
             "reasoning body", "sig-abc"))))
-            .containsExactly("text:reasoning body");
+            .isEmpty();
     }
 
     /**
@@ -172,6 +169,20 @@ class TransformMessagesTest {
     void crossModelTextBlockSurvivesUnchanged() {
         assertThat(gated(foreignModel(new ContentBlock.TextContent("hello"))))
             .containsExactly("text:hello");
+    }
+
+    /**
+     * <b>闸</b> 跨模型的 text 块保留文本、剥离 {@code textSignature}
+     * （{@code transform-messages.ts:140-146} 返回的新对象只有 {@code type} 与 {@code text}）。
+     */
+    @Test
+    void crossModelTextBlockDropsItsTextSignature() {
+        var result = applied(List.of(foreignModel(
+            new ContentBlock.TextContent("hello", "sig-from-old-model"))));
+
+        var assistant = (Message.AssistantMessage) result.get(0);
+        assertThat(assistant.content())
+            .containsExactly(new ContentBlock.TextContent("hello", null));
     }
 
     /** <b>回归门</b> 用户消息**原样放行**（pi `:79-81` 直接 `return msg`）。 */

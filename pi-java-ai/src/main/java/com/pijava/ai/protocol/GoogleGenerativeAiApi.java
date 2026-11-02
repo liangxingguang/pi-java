@@ -145,8 +145,8 @@ public final class GoogleGenerativeAiApi extends AbstractChatApi {
             var transcript = Transcripts.collapseSystemMessages(request.transcript());
             var conversation = Transcripts.withoutInitialSystemMessage(transcript.messages());
             // 共享预通道先于本车道的映射跑（pi google-shared.ts:138 在 contents 转换前调
-            // transformMessages）—— 跨模型重放的 thinking 块在此降级为文本，
-            // 转换器的 ThinkingContent 分支（丢块）才不会把它整段吞掉。
+            // transformMessages）：跨模型的 thinking 与 textSignature 在此已被剥离
+            // （docs/11 #61）。
             var contents = GoogleMessageConverter.toContents(TransformMessages.apply(
                 conversation, request.modelId(), apiName(), request.model(),
                 GoogleToolCallIds.create()),

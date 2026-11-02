@@ -22,6 +22,7 @@ import com.pijava.ai.api.GrammarInputProperties;
 import com.pijava.ai.api.StrictJsonSchema;
 import com.pijava.ai.api.StrictSampling;
 import com.pijava.ai.api.ToolDefinition;
+import com.pijava.ai.api.TranscriptToolSupport;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
 
@@ -172,21 +173,20 @@ final class ResponseToolWire {
      * pi {@code appendSystemToolAdditions}（{@code openai-responses-shared.ts:182-210}）：
      * 把一条系统消息声明的工具**就地锚定**在它自己的位置上。
      *
-     * <p>{@code supportsAdditionalTools} ⇒ 一条
-     * {@code {type:"additional_tools", role:"developer", tools:[…]}}；否则
-     * {@code supportsToolSearch} ⇒ 合成一对 {@code tool_search_call} +
+     * <p>{@link TranscriptToolSupport#CHANGES} ⇒ 一条
+     * {@code {type:"additional_tools", role:"developer", tools:[…]}}；
+     * {@link TranscriptToolSupport#ADDITIONS} ⇒ 合成一对 {@code tool_search_call} +
      * {@code tool_search_output}（都 client/completed），call_id 由「位置＋名字」哈希
-     * 确定性生成。两者皆无 ⇒ 不发（调用方已按同一判据保证实际不可达）。</p>
+     * 确定性生成；{@link TranscriptToolSupport#NONE} ⇒ 不发。</p>
      */
     static void anchorSystemToolAdditions(List<ResponseInputItem> items,
                                             Message.SystemMessage system, int msgIndex,
-                                            boolean supportsAdditionalTools,
-                                            boolean supportsToolSearch,
+                                            TranscriptToolSupport support,
                                             boolean supportsStrictMode,
                                             Map<String, String> grammarProperties) {
         var anchored = system.toolsAdded().stream()
             .map(td -> responseTool(td, supportsStrictMode, grammarProperties, false)).toList();
-        if (supportsAdditionalTools) {
+        if (support == TranscriptToolSupport.CHANGES) {
             items.add(ResponseInputItem.ofAdditionalTools(
                 ResponseInputItem.AdditionalTools.builder()
                     .role(JsonValue.from("developer"))
@@ -194,7 +194,7 @@ final class ResponseToolWire {
                     .build()));
             return;
         }
-        if (!supportsToolSearch) {
+        if (support != TranscriptToolSupport.ADDITIONS) {
             return;
         }
         var names = system.toolsAdded().stream().map(ToolDefinition::name).toList();

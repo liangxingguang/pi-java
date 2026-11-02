@@ -20,7 +20,7 @@ import com.openai.models.responses.ResponseOutputText;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.api.TranscriptContext;
 import com.pijava.ai.api.TranscriptTools;
-import com.pijava.ai.api.Transcripts;
+import com.pijava.ai.api.TranscriptToolSupport;
 import com.pijava.ai.api.TransformMessages;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.ContentBlock;
@@ -42,14 +42,15 @@ final class ResponsesMessageItems {
                                                    TranscriptContext transcript,
                                                    String apiName,
                                                    TranscriptTools transcriptTools,
-                                                   boolean supportsAdditionalTools,
-                                                   boolean supportsToolSearch,
+                                                   TranscriptToolSupport toolSupport,
                                                    boolean supportsStrictMode,
                                                    Map<String, String> grammarProperties,
                                                    boolean instructionDeveloper) {
         // B222：系统指令项的角色（developer 仅推理模型；pi shared:214-215）。
         EasyInputMessage.Role instructionRole = instructionDeveloper
             ? EasyInputMessage.Role.DEVELOPER : EasyInputMessage.Role.SYSTEM;
+        var toolChanges = new ResponsesToolChanges(toolSupport, instructionRole,
+            supportsStrictMode, grammarProperties);
         var items = new ArrayList<ResponseInputItem>();
         // docs/05 B152：**回放侧**的同一次去重 —— 修复之前落盘的转录里已经带着重复的
         // tool call（同 `call_id`），只靠流解析的去重救不回来 ⇒ 那种会话会**永远** 400。
@@ -58,45 +59,42 @@ final class ResponsesMessageItems {
         // ⚠️ 两个 set 必须分开：调用与结果各自去重（共用一个会把**第一条结果**当成重复丢掉）。
         var emittedCalls = new HashSet<String>();
         var emittedOutputs = new HashSet<String>();
-        // 系统文本来自**前导系统消息**（pi openai-responses-shared.ts:218-227 的
-        // `sourceIndex++ === 0` 支 → getSystemMessageText），落成 input 里的指令项
-        // —— 角色按 instructionRole（B222：推理模型 developer，否则 system）；
-        // pi 在循环里就地转，折叠后头必在下标 0，故这里先落它。
-        var initialSystemMessage = Transcripts.getInitialSystemMessage(transcript.messages());
-        var systemText = initialSystemMessage == null
-            ? "" : MessageTexts.getSystemMessageText(initialSystemMessage);
-        if (!systemText.isEmpty()) {
-            items.add(ResponseInputWire.inputMessage(instructionRole,
-                SanitizeUnicode.surrogates(systemText)));
-        }
         // 共享预通道先于本车道的映射跑（pi openai-responses-shared.ts:172 在消息转换前调
-        // transformMessages）—— 跨模型重放的 thinking 块在此降级为文本，否则本车道的
-        // addAssistantItems 会把它连块带文本一起丢（见那里的注释）。
+        // transformMessages）：跨模型的 thinking 与 textSignature 在此已被剥离
+        // （docs/11 #61），本车道只处理剩下能重放的块。
         var messages = TransformMessages.apply(transcript.messages(), request.modelId(), apiName,
                 request.model(), ResponsesToolCallIds.create(apiName));
         // 包 A3（R7）：`requireOnlyLeadingSystemMessage` 已删 —— 中途系统消息现在有落线支。
         var msgIndex = 0;
+        int systemIndex = 0;
         for (int i = 0; i < messages.size(); i++) {
             var msg = messages.get(i);
             // pi :218 —— `sourceIndex++ === 0 && msg.role === "system"`：判据是**下标 0**，
             // 不是「第一条系统消息」，也不能用对象身份（transformMessages 可能换过对象）。
             boolean isLeadingSystemMessage = i == 0 && msg instanceof Message.SystemMessage;
             if (msg instanceof Message.SystemMessage system) {
-                // 前导系统消息已在上面落成 input 项（pi :218-222 的同一支）。
-                if (!isLeadingSystemMessage) {
-                    // 包 A3（pi :185-208 的 `appendSystemToolAdditions`）：就地锚定 ——
-                    // 只有 `anchorsAdditions` 为真时后续声明才作为**增量**发出去，
-                    // 否则它们已经在请求级 tools 字段里了。
-                    if (transcriptTools.anchorsAdditions() && !system.toolsAdded().isEmpty()) {
-                        ResponseToolWire.anchorSystemToolAdditions(items, system, msgIndex,
-                            supportsAdditionalTools, supportsToolSearch, supportsStrictMode,
-                            grammarProperties);
+                boolean anchorsTools = transcriptTools.anchors(systemIndex++);
+                // pi openai-responses-shared.ts:281-299 —— 前导与中途统一处理；
+                // changes 模式下前导也就地声明工具。
+                if (anchorsTools) {
+                    toolChanges.appendToolAdditions(items, system, msgIndex);
+                }
+                var parts = new ArrayList<String>();
+                var text = isLeadingSystemMessage
+                    ? MessageTexts.getSystemMessageText(system)
+                    : MessageTexts.renderSystemMessageUpdate(system);
+                if (!text.isEmpty()) {
+                    parts.add(text);
+                }
+                if (anchorsTools) {
+                    var removal = toolChanges.removalNotice(system);
+                    if (!removal.isEmpty()) {
+                        parts.add(removal);
                     }
-                    var update = MessageTexts.renderSystemMessageUpdate(system);
-                    if (!update.isEmpty()) {
-                        items.add(ResponseInputWire.inputMessage(instructionRole,
-                            SanitizeUnicode.surrogates(update)));
-                    }
+                }
+                if (!parts.isEmpty()) {
+                    items.add(ResponseInputWire.inputMessage(instructionRole,
+                        SanitizeUnicode.surrogates(String.join("\n\n", parts))));
                 }
             } else if (msg instanceof Message.UserMessage user) {
                 items.add(ResponseInputWire.toUserItem(user.content()));

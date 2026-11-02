@@ -71,10 +71,15 @@ public final class FileModelsStore implements ModelsStore {
     }
 
     @Override
-    public synchronized Optional<ModelsStoreEntry> read(String providerId) {
+    public synchronized Optional<ModelsStoreEntry> read(
+            String providerId, ModelsStoreOperationOptions options) {
+        throwIfAborted(options);
         // 批 21（T2 同族）：读也过锁，杜绝撕裂读（pi FileModelsStore 的
         // FileAuthStorageBackend 对位）。
-        return Optional.ofNullable(withLockedFile(channel -> loadFrom(channel).get(providerId)))
+        return Optional.ofNullable(withLockedFile(channel -> {
+            throwIfAborted(options);
+            return loadFrom(channel).get(providerId);
+        }))
             .map(stored -> new ModelsStoreEntry(
                 toModelInfos(providerId, stored.models()),
                 stored.lastModified() != null
@@ -85,8 +90,11 @@ public final class FileModelsStore implements ModelsStore {
     }
 
     @Override
-    public synchronized void write(String providerId, ModelsStoreEntry entry) {
+    public synchronized void write(String providerId, ModelsStoreEntry entry,
+                                   ModelsStoreOperationOptions options) {
+        throwIfAborted(options);
         withLockedFile(channel -> {
+            throwIfAborted(options);
             var map = loadFrom(channel);
             var wires = new ArrayList<RemoteModelWire>();
             for (ModelInfo model : entry.models()) {
@@ -103,14 +111,23 @@ public final class FileModelsStore implements ModelsStore {
     }
 
     @Override
-    public synchronized void delete(String providerId) {
+    public synchronized void delete(String providerId, ModelsStoreOperationOptions options) {
+        throwIfAborted(options);
         withLockedFile(channel -> {
+            throwIfAborted(options);
             var map = loadFrom(channel);
             if (map.remove(providerId) != null) {
+                throwIfAborted(options);
                 writeTo(channel, map);
             }
             return null;
         });
+    }
+
+    private static void throwIfAborted(ModelsStoreOperationOptions options) {
+        if (options != null) {
+            options.throwIfAborted();
+        }
     }
 
     /** 允许 IOException 的通道 I/O body。 */

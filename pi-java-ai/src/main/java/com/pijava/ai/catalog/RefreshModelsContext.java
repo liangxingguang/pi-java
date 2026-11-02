@@ -15,7 +15,8 @@ import java.util.Optional;
  *   <li>pi 的 {@code credential} 不移植 —— pi 自己的 {@code withRemoteCatalog}
  *       从不读它，本仓也没有任何「要凭据才能拉目录」的 provider ⇒ 零读者；
  *   <li>pi 的 {@code signal: AbortSignal} 不移植 —— 原 docs/70 R2 裁决不支持中途取消，
- *       4s attempt timeout 已封顶（HTTP 层）。</li>
+ *       4s attempt timeout 已封顶（HTTP 层）。{@link ModelsStore} 的操作已按 docs/11 #31
+ *       接受 {@link ModelsStoreOperationOptions}；接线到刷新协调器属于 L5 行为，另行设计。</li>
  * </ul></p>
  */
 public record RefreshModelsContext(

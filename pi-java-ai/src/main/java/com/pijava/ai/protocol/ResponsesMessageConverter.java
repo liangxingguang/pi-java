@@ -11,6 +11,7 @@ import com.openai.models.responses.ResponseIncludable;
 import com.openai.models.responses.Tool;
 
 import com.pijava.ai.api.StreamRequest;
+import com.pijava.ai.api.TranscriptToolSupport;
 import com.pijava.ai.api.Transcripts;
 import com.pijava.ai.catalog.CompatResolver;
 import com.pijava.ai.catalog.ModelCompat;
@@ -98,8 +99,10 @@ final class ResponsesMessageConverter {
         boolean supportsAdditionalTools = Boolean.TRUE.equals(compat.supportsAdditionalTools());
         boolean supportsToolSearch = Boolean.TRUE.equals(compat.supportsToolSearch());
         boolean supportsStrictMode = Boolean.TRUE.equals(compat.supportsStrictMode());
-        var transcriptTools = Transcripts.resolveTranscriptTools(transcript.messages(),
-                supportsAdditionalTools || supportsToolSearch);
+        var toolSupport = ResponsesToolChanges.support(
+            Boolean.TRUE.equals(compat.supportsMidConvoSystemMessages()),
+            supportsAdditionalTools, supportsToolSearch);
+        var transcriptTools = Transcripts.resolveTranscriptTools(transcript.messages(), toolSupport);
 
         // B222（pi openai-responses-shared.ts:214-215）：前导/中途系统指令的角色——
         // 推理模型且 compat 未显式关掉 developer ⇒ "developer"，否则 "system"。
@@ -112,7 +115,7 @@ final class ResponsesMessageConverter {
             .store(false)
             .input(ResponseCreateParams.Input.ofResponse(
                 ResponsesMessageItems.convertMessages(request, transcript, apiName, transcriptTools,
-                    supportsAdditionalTools, supportsToolSearch, supportsStrictMode,
+                    toolSupport, supportsStrictMode,
                     grammarProperties, instructionDeveloper)));
 
         var tools = new ArrayList<Tool>();

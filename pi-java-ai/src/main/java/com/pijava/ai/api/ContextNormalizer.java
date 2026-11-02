@@ -27,12 +27,9 @@ public final class ContextNormalizer {
         var suppliedTools = tools == null ? List.<ToolDefinition>of() : tools;
         var normalized = new ArrayList<Message>(suppliedMessages.size() + 1);
 
-        if (!suppliedMessages.isEmpty()
-                && suppliedMessages.getFirst() instanceof Message.SystemMessage) {
-            normalized.addAll(suppliedMessages);
-            return new TranscriptContext(normalized);
-        }
-
+        // pi transcript.ts:30-34 —— legacy 字段无条件折成首条系统消息，即使
+        // suppliedMessages 已经以系统消息开头。生产路径的重复保护在调用点
+        // （DefaultProviders），不在归一器里。
         if ((systemPrompt != null && !systemPrompt.isEmpty()) || !suppliedTools.isEmpty()) {
             normalized.add(new Message.SystemMessage(
                 systemPrompt == null ? "" : systemPrompt,

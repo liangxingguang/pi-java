@@ -179,69 +179,74 @@ class ToolStateChangesTest {
         assertThat(Transcripts.hasToolRedefinitions(messages)).isFalse();
     }
 
-    // ── resolveTranscriptTools（pi :220-234）──────────────────────────
+    // ── resolveTranscriptTools（pi transcript.ts:252-263）─────────────
 
     /**
-     * 车道不支持就地锚定（= 今天**所有**车道，{@code 原 docs/51 §3 F5}）⇒ 出参是完整的当前工具表，
-     * {@code anchorsAdditions} 为假。
+     * 逐字镜像 pi {@code transcript-tool-changes.test.ts:514-544}：
+     * 删除/重声明把顶层边界移动一次，之后的纯新增仍然就地锚定。
      */
     @Test
-    void withoutAnchorSupportTheRequestCarriesTheCompleteCurrentTools() {
-        var result = Transcripts.resolveTranscriptTools(additive().messages(), false);
-
-        assertThat(result.anchorsAdditions()).isFalse();
-        assertThat(result.requestTools()).extracting(ToolDefinition::name)
-            .containsExactly("first", "second");
-    }
-
-    /**
-     * ⚠️ 本用例是 {@code resolveTranscriptTools} 的**靶心**：锚定支下请求级字段
-     * **只有前导消息声明的那一份**，后续增量**不在**里面（它们靠车道的就地锚定发出去，
-     * {@code 原 docs/51 §2 P3} 的警告）。把它写成 {@code requestTools == getCurrentTools(messages)}
-     * 的夹具会漏掉这个差异。
-     */
-    @Test
-    void withAnchorSupportTheRequestCarriesOnlyTheLeadingDeclarations() {
-        var result = Transcripts.resolveTranscriptTools(additive().messages(), true);
-
-        assertThat(result.anchorsAdditions()).isTrue();
-        assertThat(result.requestTools()).extracting(ToolDefinition::name).containsExactly("first");
-    }
-
-    /** 有删除 / 重定义 ⇒ 锚定不成立，退回完整当前表（哪怕车道声明支持）。 */
-    @Test
-    void nonAdditiveHistoryFallsBackToTheCompleteCurrentTools() {
+    void resolvesTheTopLevelToolBoundaryPerTransport() {
+        var baseTool = tool("base_tool");
+        var dropTool = tool("drop_tool");
+        var lateX = tool("late_tool", "x");
+        var lateY = tool("late_tool", "y");
         var messages = List.of(
-            system(List.of(tool("first")), List.of()),
-            system(List.of(tool("second")), List.of(new ToolReference("first"))));
+            system(List.of(baseTool, dropTool), List.of()),
+            system(List.of(), List.of(new ToolReference("drop_tool"))),
+            system(List.of(dropTool), List.of()),
+            system(List.of(lateX), List.of()),
+            system(List.of(lateY), List.of()));
 
-        var result = Transcripts.resolveTranscriptTools(messages, true);
+        var firstTwo = Transcripts.resolveTranscriptTools(
+            messages.subList(0, 2), TranscriptToolSupport.ADDITIONS);
+        assertThat(firstTwo.requestTools()).extracting(ToolDefinition::name)
+            .containsExactly("base_tool");
+        assertThat(firstTwo.foldedSystemMessages()).isEqualTo(2);
 
-        assertThat(result.anchorsAdditions()).isFalse();
-        assertThat(result.requestTools()).extracting(ToolDefinition::name).containsExactly("second");
+        var firstFour = Transcripts.resolveTranscriptTools(
+            messages.subList(0, 4), TranscriptToolSupport.ADDITIONS);
+        assertThat(firstFour.requestTools()).containsExactly(baseTool, dropTool);
+        assertThat(firstFour.foldedSystemMessages()).isEqualTo(3);
+
+        var all = Transcripts.resolveTranscriptTools(messages, TranscriptToolSupport.ADDITIONS);
+        assertThat(all.requestTools()).containsExactly(baseTool, dropTool, lateY);
+        assertThat(all.foldedSystemMessages()).isEqualTo(5);
+
+        var changes = Transcripts.resolveTranscriptTools(messages, TranscriptToolSupport.CHANGES);
+        assertThat(changes.requestTools()).isEmpty();
+        assertThat(changes.foldedSystemMessages()).isZero();
+
+        var none = Transcripts.resolveTranscriptTools(messages, TranscriptToolSupport.NONE);
+        assertThat(none.requestTools()).containsExactly(baseTool, dropTool, lateY);
+        assertThat(none.foldedSystemMessages()).isEqualTo(5);
     }
 
-    /** 没有前导系统消息 ⇒ pi 的 {@code ?? []}：请求级工具表是空的，仍然算锚定。 */
+    /** 没有前导系统消息 ⇒ 折叠数为 0，后续系统消息的工具全部就地锚定。 */
     @Test
-    void anchoringWithoutALeadingSystemMessageYieldsNoRequestTools() {
+    void additionsWithoutALeadingSystemMessageFoldsNothing() {
         var messages = List.<Message>of(
             new Message.UserMessage(List.of()),
             system(List.of(tool("a")), List.of()));
 
-        var result = Transcripts.resolveTranscriptTools(messages, true);
+        var result = Transcripts.resolveTranscriptTools(messages, TranscriptToolSupport.ADDITIONS);
 
-        assertThat(result.anchorsAdditions()).isTrue();
         assertThat(result.requestTools()).isEmpty();
+        assertThat(result.foldedSystemMessages()).isZero();
     }
 
-    // ── 夹具 ─────────────────────────────────────────────────────────
-
     /** 纯增量的转录：前导声明 {@code first}，中途追加 {@code second}。 */
-    private static TranscriptContext additive() {
-        return new TranscriptContext(List.of(
+    @Test
+    void pureAdditionsFoldOnlyTheInitialMessage() {
+        var messages = List.of(
             system(List.of(tool("first")), List.of()),
             new Message.UserMessage(List.of()),
-            system(List.of(tool("second")), List.of())));
+            system(List.of(tool("second")), List.of()));
+
+        var result = Transcripts.resolveTranscriptTools(messages, TranscriptToolSupport.ADDITIONS);
+
+        assertThat(result.requestTools()).extracting(ToolDefinition::name).containsExactly("first");
+        assertThat(result.foldedSystemMessages()).isEqualTo(1);
     }
 
     private static Message system(List<ToolDefinition> added, List<ToolReference> removed) {

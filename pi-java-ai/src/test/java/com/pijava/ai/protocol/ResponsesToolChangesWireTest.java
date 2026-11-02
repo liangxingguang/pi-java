@@ -61,7 +61,7 @@ class ResponsesToolChangesWireTest {
 
     /**
      * pi 的 {@code additionContext}（{@code :56-62}）：前导声明 {@code base_tool}，
-     * 中途一条系统消息追加 {@code late_tool}。**纯增量** ⇒ {@code anchorsAdditions} 为真。
+     * 中途一条系统消息追加 {@code late_tool}。**纯增量** ⇒ 中途声明就地锚定。
      */
     private static List<Message> additionTranscript() {
         return List.of(
@@ -74,7 +74,7 @@ class ResponsesToolChangesWireTest {
 
     /**
      * pi 的 {@code context}（{@code :40-54}）：中途那条**同时**删 {@code base_tool}、加
-     * {@code late_tool} ⇒ 非增量 ⇒ {@code anchorsAdditions} 为假。
+     * {@code late_tool} ⇒ 非增量 ⇒ 顶层边界移到最后一次非增量变更之后。
      */
     private static List<Message> removalTranscript() {
         return List.of(
@@ -85,18 +85,25 @@ class ResponsesToolChangesWireTest {
                 List.of(LATE_TOOL), List.of(new com.pijava.ai.api.ToolReference("base_tool"))));
     }
 
-    /** pi oracle 用例 5 —— {@code additional_tools} 项装载增量工具，请求级只留初始那份。 */
+    /**
+     * pi {@code transcript-tool-changes.test.ts:151-195} —— {@code changes} 模式：
+     * 请求级没有 {@code tools}，前导与中途各自就地声明；中途声明前先发增量通知。
+     */
     @Test
-    void anchorsAdditionalToolsAtTheirDeveloperMessage() throws Exception {
+    void changesModeDeclaresEveryToolInPlace() throws Exception {
         var body = capture(model(true, false), additionTranscript());
 
-        assertThat(names(body.path("tools"))).containsExactly("base_tool");
-        var anchor = firstItemOfType(body, "additional_tools");
-        assertThat(anchor).as("必须落一条 additional_tools 项").isNotNull();
-        assertThat(anchor.path("role").asText()).isEqualTo("developer");
-        assertThat(names(anchor.path("tools"))).containsExactly("late_tool");
+        assertThat(body.has("tools")).as("changes 模式不设请求级 tools").isFalse();
+        var anchors = itemsOfType(body, "additional_tools");
+        assertThat(anchors).hasSize(2);
+        assertThat(anchors.get(0).path("role").asText()).isEqualTo("developer");
+        assertThat(names(anchors.get(0).path("tools"))).containsExactly("base_tool");
+        assertThat(names(anchors.get(1).path("tools"))).containsExactly("late_tool");
+        // 中途声明前的增量通知（第一条 additional_tools 不配通知）。
+        assertThat(incrementalNotices(body)).containsExactly(INCREMENTAL_NOTICE);
         // 文本项：前导走完整提示、中途走分段差分更新，**顺序**与转录一致。
-        assertThat(systemTexts(body)).containsExactly("base prompt", RENDERED_UPDATE);
+        assertThat(systemTexts(body))
+            .containsExactly("base prompt", INCREMENTAL_NOTICE, RENDERED_UPDATE);
     }
 
     /** pi oracle 用例 6 —— 只给 {@code supportsToolSearch} 时合成一对 tool_search。 */
@@ -132,15 +139,91 @@ class ResponsesToolChangesWireTest {
             .isEqualTo(firstItemOfType(first, "tool_search_call").path("call_id").asText());
     }
 
-    /** pi oracle 用例 8 —— 有删除 ⇒ 非增量 ⇒ **无**锚定项，但文本项照发。 */
+    /**
+     * pi {@code transcript-tool-changes.test.ts:436-451} —— {@code changes} 模式的删除：
+     * 工具仍就地声明；删除用文本通知，且与差分文本在同一条指令消息里。
+     */
     @Test
-    void fallsBackToTheCompleteToolStateWhenRemovalsAreUnsupported() throws Exception {
+    void changesModeAnnouncesRemovalsAsText() throws Exception {
         var body = capture(model(true, false), removalTranscript());
 
-        assertThat(names(body.path("tools"))).containsExactly("late_tool");
-        assertThat(firstItemOfType(body, "additional_tools"))
-            .as("锚定不成立 ⇒ 没有 additional_tools 项").isNull();
-        assertThat(systemTexts(body)).containsExactly("base prompt", RENDERED_UPDATE);
+        assertThat(body.has("tools")).as("changes 模式不设请求级 tools").isFalse();
+        var anchors = itemsOfType(body, "additional_tools");
+        assertThat(anchors).hasSize(2);
+        assertThat(names(anchors.get(0).path("tools"))).containsExactly("base_tool");
+        assertThat(names(anchors.get(1).path("tools"))).containsExactly("late_tool");
+        assertThat(systemTexts(body)).containsExactly("base prompt",
+            INCREMENTAL_NOTICE,
+            RENDERED_UPDATE + "\n\n" + removalNotice("base_tool"));
+    }
+
+    /** 只删不增的系统消息：不发增量通知，也不发 {@code additional_tools}。 */
+    @Test
+    void removalOnlySystemMessagesDoNotDeclareToolsOrNotify() throws Exception {
+        var messages = List.of(
+            head(List.of(BASE_TOOL, tool("drop_tool"))),
+            user("before"),
+            removed(List.of("drop_tool")));
+
+        var body = capture(model(true, false), messages);
+
+        assertThat(itemsOfType(body, "additional_tools")).hasSize(1);
+        assertThat(incrementalNotices(body)).isEmpty();
+        assertThat(systemTexts(body))
+            .containsExactly("base prompt", removalNotice("drop_tool"));
+    }
+
+    /** 「仍不可用」在工具被重新声明前一直复述；重声明后从名单消失。 */
+    @Test
+    void incrementalNoticeRestatesStillUnavailableToolsUntilTheyAreDeclaredAgain() throws Exception {
+        var messages = List.of(
+            head(List.of(BASE_TOOL, tool("drop_tool"))),
+            user("before"),
+            removed(List.of("drop_tool")),
+            user("after removal"),
+            added(List.of(LATE_TOOL)),
+            user("after load"),
+            added(List.of(tool("drop_tool"))));
+
+        var body = capture(model(true, false), messages);
+
+        var notices = incrementalNotices(body);
+        assertThat(notices).hasSize(2);
+        assertThat(notices.get(0)).isEqualTo(INCREMENTAL_NOTICE + "\nStill unavailable: drop_tool.");
+        assertThat(notices.get(1)).isEqualTo(INCREMENTAL_NOTICE);
+    }
+
+    /** 没有中途系统消息支持 ⇒ 即使 compat 声明 {@code additional_tools}，也不就地锚定。 */
+    @Test
+    void noMidConversationSupportDisablesAnchoringEvenWithAdditionalTools() throws Exception {
+        var body = capture(model(true, false, false), additionTranscript());
+
+        assertThat(names(body.path("tools"))).containsExactly("base_tool", "late_tool");
+        assertThat(itemsOfType(body, "additional_tools")).isEmpty();
+    }
+
+    /**
+     * {@code additions} 模式：删除把顶层边界移动一次；之后的纯新增仍用
+     * {@code tool_search} 就地锚定（pi #10940）。
+     */
+    @Test
+    void additionsAfterARemovalStayAnchoredAndMoveTheTopLevelBoundaryOnce() throws Exception {
+        var messages = List.of(
+            head(List.of(BASE_TOOL, tool("drop_tool"))),
+            user("before"),
+            removed(List.of("drop_tool")),
+            user("after removal"),
+            added(List.of(LATE_TOOL)),
+            user("after load"));
+
+        var body = capture(model(false, true), messages);
+
+        assertThat(names(body.path("tools"))).containsExactly("base_tool");
+        var calls = itemsOfType(body, "tool_search_call");
+        var outputs = itemsOfType(body, "tool_search_output");
+        assertThat(calls).hasSize(1);
+        assertThat(outputs).hasSize(1);
+        assertThat(names(outputs.get(0).path("tools"))).containsExactly("late_tool");
     }
 
     /** pi oracle 用例 7 —— 模型不支持中途系统消息 ⇒ 折叠，锚定随之关闭。 */
@@ -180,12 +263,52 @@ class ResponsesToolChangesWireTest {
 
     /** input 里第一条 {@code type} 等于给定值的项（没有则 null）。 */
     private static JsonNode firstItemOfType(JsonNode body, String type) {
+        var items = itemsOfType(body, type);
+        return items.isEmpty() ? null : items.get(0);
+    }
+
+    /** input 里全部 {@code type} 等于给定值的项，按出现顺序。 */
+    private static List<JsonNode> itemsOfType(JsonNode body, String type) {
+        var items = new ArrayList<JsonNode>();
         for (var item : body.path("input")) {
             if (type.equals(item.path("type").asText())) {
-                return item;
+                items.add(item);
             }
         }
-        return null;
+        return items;
+    }
+
+    /** 增量通知文本（pi {@code renderIncrementalToolsNotice}）。 */
+    private static List<String> incrementalNotices(JsonNode body) {
+        var notices = new ArrayList<String>();
+        for (var text : systemTexts(body)) {
+            if (text.startsWith(INCREMENTAL_NOTICE)) {
+                notices.add(text);
+            }
+        }
+        return notices;
+    }
+
+    private static String removalNotice(String... names) {
+        var sb = new StringBuilder("The following tools are no longer available. Do not call them:");
+        for (var name : names) {
+            sb.append("\n- ").append(name);
+        }
+        return sb.toString();
+    }
+
+    private static Message head(List<ToolDefinition> tools) {
+        return new Message.SystemMessage("base prompt", Instant.EPOCH, Map.of(),
+            tools, List.of());
+    }
+
+    private static Message removed(List<String> names) {
+        return new Message.SystemMessage("", Instant.EPOCH, Map.of(), List.of(),
+            names.stream().map(com.pijava.ai.api.ToolReference::new).toList());
+    }
+
+    private static Message added(List<ToolDefinition> tools) {
+        return new Message.SystemMessage("", Instant.EPOCH, Map.of(), tools, List.of());
     }
 
     /**
@@ -246,6 +369,12 @@ class ResponsesToolChangesWireTest {
         sections.put("rules", "<rules>\nnew rules\n</rules>");
         return sections;
     }
+
+    /** pi {@code openai-responses-shared.ts:184-185} 的逐字文案。 */
+    private static final String INCREMENTAL_NOTICE =
+        "This is an incremental tools update. Previously declared tools remain available unless "
+        + "explicitly marked unavailable. A tool declared again here is available again, and its "
+        + "latest definition replaces the earlier one.";
 
     /** 中途系统消息的线上文本 —— pi {@code text.ts:23-40} 的「按名框住」渲染。 */
     private static final String RENDERED_UPDATE =

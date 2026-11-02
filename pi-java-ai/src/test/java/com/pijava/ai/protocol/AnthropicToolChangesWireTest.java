@@ -42,8 +42,9 @@ import com.pijava.ai.thinking.ThinkingLevelMap;
  * <p>⚠️ <b>门的判据与 Responses **不同**</b>（这是最容易抄错的一处）：Anthropic 的三条件门
  * 只要求「有初始工具」—— 删除与**同名重定义**都没问题，前者靠 {@code tool_removal} 块、
  * 后者靠重新内联一条 {@code tool_addition}（{@code b271b0a52} 前重定义曾是回退判据）；
- * Responses 的 {@code anchorsAdditions} 则用 {@code hasNonAdditiveToolChanges}，
- * **任何删除都会关掉锚定**。两者的夹具因此用不同的上下文。</p>
+ * Responses 的 {@code changes} 模式把删除渲染成文本通知，锚定不关闭；
+ * {additions} 模式则把顶层边界移到最后一次非增量变更为止。两者的夹具因此
+ * 用不同的上下文。</p>
  *
  * <p>⚠️ <b>与 pi 夹具的三处有意差异</b>：</p>
  *
