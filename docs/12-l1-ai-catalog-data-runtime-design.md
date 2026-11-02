@@ -1469,4 +1469,6 @@ private void runOne(Provider provider, boolean allowNetwork, boolean force, Abor
 | 账面 | L1 **195.0/240＝81.25%**；未加权 104.5/131＝79.8% |
 | 提交 | `b4ce4db4`（装配抽取）、`474e0f3e`（刷新上下文）、`9ba73363`（个性化与 legacy）、`e0f5cb8d`（coding-agent 包装） |
 
-**验证**：全仓 `mvn clean verify`（2026-11-02 17:24）BUILD SUCCESS，5,900 测试／0 失败／0 错误／29 skipped（存量跳过），Checkstyle 0 违规，SpotBugs 0。
+**验证**：全仓 `mvn clean verify`（2026-11-02 18:24）BUILD SUCCESS，5,901 测试／0 失败／0 错误／29 skipped（存量跳过），Checkstyle 0 违规，SpotBugs 0。
+
+**评审修复（2026-11-02）**：终审发现「个性化列表经 `RemoteModelWire` 持久化后离线重启丢元数据」。`RemoteModelWire` 补 `api`/`baseUrl`/cache 费率/`tiers`；个性化包装器离线恢复时把存储条目叠回内置目录的完整元数据（headers／inputLimits／compat），并保留账号限额与价格。`PersonalizedCatalogProviderTest.offlineRestoreRebuildsMetadataLostByTheStoreWire` RED→GREEN（绕过叠回时 `api` 断言为 `null`）；提交 `be71e3e4`。其余评审 Minor 项（生成器原子替换/排序、ATTRIBUTION 行尾、Radius signal 等）作为已知低风险项记入评审记录，不在本包展开。
