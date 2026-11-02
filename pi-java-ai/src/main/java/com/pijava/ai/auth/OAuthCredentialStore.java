@@ -15,6 +15,7 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Function;
 
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
@@ -54,6 +55,25 @@ public final class OAuthCredentialStore {
                 withLockedFile(channel -> readFrom(channel).get(provider)));
         } catch (UnsupportedOperationException e) {
             // 旧 readAll 语义：IO 失败 ⇒ 空（pi parseStorageData 容忍同）。
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * 读取 provider 的<b>原始</b> JSON 节点（含 {@link OAuthCredential} 之外的旧字段，
+     * 如 Radius 的 legacy {@code gatewayConfig}）；无条目 ⇒ empty。
+     *
+     * <p>加锁读，与 {@link #resolve(String)} 同口径；不写回、不改变
+     * {@link OAuthCredential} 的公开形状（#21 裁决 8）。</p>
+     */
+    public Optional<JsonNode> resolveRawEntry(String provider) {
+        try {
+            return Optional.ofNullable(withLockedFile(channel -> {
+                var root = readRawFrom(channel);
+                var entry = root == null ? null : root.get(provider);
+                return entry == null || entry.isNull() ? null : entry;
+            }));
+        } catch (UnsupportedOperationException e) {
             return Optional.empty();
         }
     }
@@ -169,6 +189,27 @@ public final class OAuthCredentialStore {
         } catch (IOException | RuntimeException e) {
             // 旧 readAll 语义：坏 JSON ⇒ 空表（pi parseStorageData 容忍同）。
             return new HashMap<>();
+        }
+    }
+
+    /** 在已加锁的通道上读取原始 JSON 根（空文件/坏 JSON ⇒ null）。 */
+    private JsonNode readRawFrom(FileChannel channel) throws IOException {
+        if (channel.size() == 0) {
+            return null;
+        }
+        channel.position(0);
+        var bytes = new byte[(int) channel.size()];
+        var buffer = ByteBuffer.wrap(bytes);
+        while (buffer.hasRemaining()) {
+            if (channel.read(buffer) < 0) {
+                break;
+            }
+        }
+        try {
+            var root = MAPPER.readTree(bytes);
+            return root == null || !root.isObject() ? null : root;
+        } catch (IOException | RuntimeException e) {
+            return null;
         }
     }
 

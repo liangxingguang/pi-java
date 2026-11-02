@@ -30,9 +30,28 @@ public record RadiusGatewayConfig(String baseUrl, List<ModelInfo> models) {
     /** Parse and validate a gateway response; invalid models are filtered individually. */
     public static RadiusGatewayConfig parse(String providerId, String json) throws IOException {
         JsonNode root = JSON.readTree(json);
-        if (root == null || !root.isObject() || !root.path("baseUrl").isTextual()
-                || !root.path("models").isArray()) {
-            throw new IOException("Invalid Radius config");
+        try {
+            return fromNode(providerId, root);
+        } catch (IllegalArgumentException e) {
+            throw new IOException("Invalid Radius config", e);
+        }
+    }
+
+    /** 一个节点是否具备 Radius 配置的最小形状（{@code baseUrl} 文本 ＋ {@code models} 数组）。 */
+    public static boolean isValidConfigNode(JsonNode root) {
+        return root != null && root.isObject() && root.path("baseUrl").isTextual()
+            && root.path("models").isArray();
+    }
+
+    /**
+     * 从已解析的节点构建配置（/v1/config 与 legacy {@code gatewayConfig} 共用）；
+     * 非法模型逐条过滤。
+     *
+     * @throws IllegalArgumentException 节点不是合法配置形状
+     */
+    public static RadiusGatewayConfig fromNode(String providerId, JsonNode root) {
+        if (!isValidConfigNode(root)) {
+            throw new IllegalArgumentException("Invalid Radius config");
         }
         var baseUrl = root.path("baseUrl").textValue();
         var models = new ArrayList<ModelInfo>();

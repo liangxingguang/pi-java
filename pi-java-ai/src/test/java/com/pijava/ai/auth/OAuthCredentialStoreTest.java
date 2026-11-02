@@ -75,6 +75,24 @@ class OAuthCredentialStoreTest {
         store.delete("any"); // 不抛异常
     }
 
+    @Test
+    void resolvesTheRawEntryIncludingLegacyGatewayConfig() throws Exception {
+        var path = tmp.resolve("radius-legacy.json");
+        java.nio.file.Files.writeString(path, """
+            {"radius":{"accessToken":"a","refreshToken":"r","expiresAtEpochSec":1800000000,
+              "gatewayConfig":{"baseUrl":"https://radius.pi.dev/v1","models":[]}}}
+            """);
+        var store = new OAuthCredentialStore(path);
+
+        var raw = store.resolveRawEntry("radius").orElseThrow();
+
+        assertThat(raw.path("gatewayConfig").path("baseUrl").asText())
+            .isEqualTo("https://radius.pi.dev/v1");
+        // 普通 resolve 仍只投影 OAuthCredential（不暴露 gatewayConfig）。
+        assertThat(store.resolve("radius").orElseThrow().accessToken()).isEqualTo("a");
+        assertThat(store.resolveRawEntry("other")).isEmpty();
+    }
+
     // ── 包 B1 R2：原子 modify ────────────────────────────────────────────
 
     @Test

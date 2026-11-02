@@ -242,6 +242,19 @@ public record ModelInfo(
     }
 
     /**
+     * 只替换限额与价格，其余 13 个组件原样搬运（#16 OpenRouter 个性化用）。
+     *
+     * <p>⚠️ B156：组件数必须与规范构造器同步；新增组件时把这里也补上，
+     * 否则个性化刷新会静默丢掉新字段。{@code ModelInfoCopyTest} 是全字段守卫。</p>
+     */
+    public ModelInfo withLimitsAndPricing(int maxInputTokens, int maxOutputTokens,
+                                          PricingInfo pricing) {
+        return new ModelInfo(id, displayName, capabilities, maxInputTokens, maxOutputTokens,
+            deprecated, pricing, thinkingLevelMap, headers, samplingParams, compat,
+            api, baseUrl, promptCache, inputLimits, samplingParamsByThinkingLevel);
+    }
+
+    /**
      * The least a {@link ModelInfo} can be: identity only, everything else empty.
      *
      * <p>Used when a request names a model the catalog does not know (原 docs/31 §8.34.4 决策 5) —
