@@ -397,9 +397,14 @@ public final class DefaultProviders {
         // ⚠️ 必须**先**查 modelInfo 再 createApi —— 派发键在 modelInfo 上，此前 createApi
         // 用的是不含 protocol 的 apiOptions，多协议 provider（openrouter）恒走默认车道。
         var api = provider.createApi(ChatApi.class, withModelProtocol(effectiveOptions, modelInfo));
+        // #83（docs/11）：pi 的 agent-loop 只传 messages（agent-loop.ts:406）。
+        boolean hasLeadingSystemMessage = !context.messages().isEmpty()
+            && context.messages().get(0) instanceof Message.SystemMessage;
         var request = new com.pijava.ai.api.StreamRequest(
-            modelInfo, context.systemPrompt(), context.messages(),
-            ToolRegistry.definitionsOf(context.tools()),
+            modelInfo,
+            hasLeadingSystemMessage ? null : context.systemPrompt(),
+            context.messages(),
+            hasLeadingSystemMessage ? List.of() : ToolRegistry.definitionsOf(context.tools()),
             options.maxTokens().orElse(-1),
             options.temperature().orElse(-1),
             options.reasoning(),

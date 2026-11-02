@@ -18,6 +18,7 @@ import com.pijava.ai.catalog.CacheRetention;
 import com.pijava.ai.catalog.ModelCatalog;
 import com.pijava.ai.catalog.ModelCompat;
 import com.pijava.ai.catalog.ModelInfo;
+import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.model.PricingInfo;
@@ -273,6 +274,34 @@ class DefaultProvidersTest {
 
         assertThat(alpha.requests).hasSize(1);
         assertThat(alpha.requests.get(0).model().compat().allowEmptySignature()).isTrue();
+    }
+
+    /**
+     * #83：生产路径的重复保护从 {@code ContextNormalizer} 下移到本调用点。
+     *
+     * <p>harness 的转录首条已经是系统消息时，{@code systemPrompt} 只是派生值；
+     * 若仍把它交给归一器，模型会收到两条系统消息。pi 的 agent-loop 只传 messages
+     * （{@code agent-loop.ts:406}），这里等价地不传 legacy 字段。</p>
+     */
+    @Test
+    void leadingSystemMessageSuppressesTheDerivedLegacyPrompt() {
+        var alpha = new RecordingProvider("alpha", new ArrayList<>());
+        var registry = ProviderRegistry.create();
+        registry.register(alpha);
+
+        var args = ArgsParser.parse(new String[] {"--provider", "alpha"});
+        var streamFn = DefaultProviders.streamFnFor(args, "alpha", registry, new Settings());
+
+        var system = new Message.SystemMessage("prompt", java.time.Instant.EPOCH,
+            Map.of(), List.of(), List.of());
+        var user = new Message.UserMessage(List.of(new ContentBlock.TextContent("hi")));
+        streamFn.stream(ModelId.of("alpha", "alpha-model"),
+            new Context("derived prompt", new ArrayList<>(List.of(system, user)), List.of()),
+            StreamOptions.defaults());
+
+        assertThat(alpha.requests).hasSize(1);
+        assertThat(alpha.requests.get(0).transcript().messages())
+            .containsExactly(system, user);
     }
 
     /**
