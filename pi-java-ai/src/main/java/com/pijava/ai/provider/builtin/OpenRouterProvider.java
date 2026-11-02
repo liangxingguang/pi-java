@@ -51,13 +51,15 @@ public final class OpenRouterProvider extends ConfigurableProvider {
 
     /**
      * baseUrl 缺席时按协议 pin（包可见是为了夹具——与 {@code DefaultProviders.cacheExtra}
-     * 同形）。⚠️ 六参构造：{@code authKind} 必须保真（B138 的同族教训，别改回五参）。
+     * 同形）。⚠️ 七参构造：{@code authKind} 与 {@code telemetry} 必须保真
+     * （B138 的同族教训＋docs/13 §3.7 的 B263 清单）。
      */
     static ApiOptions pinnedOptions(Protocol protocol, ApiOptions options) {
         if (protocol == Protocol.ANTHROPIC_MESSAGES
                 && (options.baseUrl() == null || options.baseUrl().isBlank())) {
             return new ApiOptions(ANTHROPIC_BASE_URL, options.apiKey(), options.timeout(),
-                options.maxRetries(), options.extra(), options.authKind());
+                options.maxRetries(), options.extra(), options.authKind(),
+                options.telemetry());
         }
         return options;
     }

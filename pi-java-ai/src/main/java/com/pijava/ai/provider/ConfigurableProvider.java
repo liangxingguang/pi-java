@@ -97,11 +97,12 @@ public abstract class ConfigurableProvider implements Provider {
         if (options.baseUrl() != null && !options.baseUrl().isBlank()) {
             return options;
         }
-        // ⚠️ 六参构造（包 A-02，B138）：五参形态会把 authKind 归一成 API_KEY ——
-        // 生产上 baseUrl 恒空 ⇒ Credentials 给的 BEARER/OAUTH 在进车道前就丢了。
+        // ⚠️ 七参构造（docs/13 B263）：六参形态会把 telemetry 丢掉 ——
+        // 本方法是 baseUrl 缺席时的生产必经点，漏传会让 pi.ai.* 遥测静默消失。
         return new ApiOptions(
             config().defaultBaseUrl(), options.apiKey(),
-            options.timeout(), options.maxRetries(), options.extra(), options.authKind());
+            options.timeout(), options.maxRetries(), options.extra(), options.authKind(),
+            options.telemetry());
     }
 
     /** Subclasses construct the protocol adapter here; image-only providers leave it

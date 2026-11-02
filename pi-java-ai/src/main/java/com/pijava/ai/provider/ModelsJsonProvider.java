@@ -57,19 +57,27 @@ public final class ModelsJsonProvider extends ConfigurableProvider {
         // explicit user config and must win over it (CLI --base-url still
         // applies because DefaultProviders passes it through options.baseUrl —
         // indistinguishable here, accepted tradeoff).
-        // ⚠️ 两处重建都是六参（包 A-02，B138）：五参形态会把 authKind 归一成 API_KEY。
-        var pinned = new ApiOptions(config.defaultBaseUrl(), options.apiKey(),
-            options.timeout(), options.maxRetries(), options.extra(), options.authKind());
-        return super.createApi(apiType, withInlineKey(pinned));
+        var pinned = pinnedOptions(options, config.defaultBaseUrl());
+        return super.createApi(apiType, withInlineKey(pinned, inlineApiKey));
     }
 
-    private ApiOptions withInlineKey(ApiOptions options) {
+    /** 包可见是为了夹具（docs/13 §3.7）：两处重建都不得丢 telemetry。 */
+    static ApiOptions pinnedOptions(ApiOptions options, String defaultBaseUrl) {
+        // ⚠️ 七参（docs/13 B263）：六参形态会把 telemetry 与 authKind 一起丢。
+        return new ApiOptions(defaultBaseUrl, options.apiKey(),
+            options.timeout(), options.maxRetries(), options.extra(), options.authKind(),
+            options.telemetry());
+    }
+
+    /** 包可见是为了夹具（docs/13 §3.7）。 */
+    static ApiOptions withInlineKey(ApiOptions options, String inlineApiKey) {
         if (inlineApiKey == null || inlineApiKey.isBlank()
                 || (options.apiKey() != null && !options.apiKey().isBlank())) {
             return options;
         }
         return new ApiOptions(options.baseUrl(), inlineApiKey,
-            options.timeout(), options.maxRetries(), options.extra(), options.authKind());
+            options.timeout(), options.maxRetries(), options.extra(), options.authKind(),
+            options.telemetry());
     }
 
     @Override

@@ -32,14 +32,17 @@ public abstract class OpenAiCompatibleProvider extends ConfigurableProvider {
     /**
      * Local unauthenticated endpoints (Ollama) still need a non-blank key
      * because {@link OpenAICompletionsApi} rejects empty credentials.
+     *
+     * <p>包可见是为了夹具：docs/13 §3.7 要求逐点断言 {@code telemetry} 在重建时不丢。</p>
      */
-    private static ApiOptions withPlaceholderKey(ApiOptions options) {
+    static ApiOptions withPlaceholderKey(ApiOptions options) {
         if (options.apiKey() != null && !options.apiKey().isBlank()) {
             return options;
         }
-        // 六参（包 A-02，B138）：占位 key 不改凭证形态。
+        // 七参（docs/13 B263）：占位 key 不改凭证形态，也不改 telemetry。
         return new ApiOptions(
             options.baseUrl(), "ollama",
-            options.timeout(), options.maxRetries(), options.extra(), options.authKind());
+            options.timeout(), options.maxRetries(), options.extra(), options.authKind(),
+            options.telemetry());
     }
 }
