@@ -5,11 +5,16 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.function.Function;
 
+import com.pijava.ai.AbortSignal;
+import com.pijava.ai.auth.Credentials;
+import com.pijava.ai.auth.RecordedCredential;
 import com.pijava.ai.catalog.ModelsStore;
 import com.pijava.ai.catalog.RefreshModelsContext;
 import com.pijava.ai.provider.Provider;
@@ -36,19 +41,40 @@ public final class ModelCatalogRefresh {
 
     private final ModelsStore store;
     private final CatalogRefreshCoordinator coordinator;
+    private final Function<String, Optional<RecordedCredential>> credentials;
 
     public ModelCatalogRefresh(ModelsStore store) {
+        this(store, Credentials::resolveCredential);
+    }
+
+    /**
+     * 注入凭据解析器的形态（#16）：联网相按 provider 名解析一次，放进
+     * {@link RefreshModelsContext}。离线相不解析，避免 OAuth 刷新副作用。
+     */
+    public ModelCatalogRefresh(ModelsStore store,
+                               Function<String, Optional<RecordedCredential>> credentials) {
         this.store = store;
         this.coordinator = new CatalogRefreshCoordinator(store);
+        this.credentials = credentials == null
+            ? provider -> Optional.empty() : credentials;
     }
 
     /** 两阶段刷新；{@code allowNetwork=false} 时只有离线相。 */
     public Result refresh(List<Provider> providers, boolean allowNetwork, boolean force) {
+        return refresh(providers, allowNetwork, force, AbortSignal.create());
+    }
+
+    /**
+     * 带批次信号的刷新。当前没有生产取消路径（信号在整批期间不会被触发），
+     * 个性化/远程请求在发出前、返回后各检查一次；HTTP 超时仍是兜底。
+     */
+    public Result refresh(List<Provider> providers, boolean allowNetwork, boolean force,
+                          AbortSignal signal) {
         var errors = new LinkedHashMap<String, RuntimeException>();
         try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
-            runPhase(executor, providers, false, false, errors);
+            runPhase(executor, providers, false, false, signal, errors);
             if (allowNetwork) {
-                runPhase(executor, providers, true, force, errors);
+                runPhase(executor, providers, true, force, signal, errors);
             }
         }
         return new Result(Collections.unmodifiableMap(errors));
@@ -89,13 +115,13 @@ public final class ModelCatalogRefresh {
     }
 
     private void runPhase(ExecutorService executor, List<Provider> providers,
-                          boolean allowNetwork, boolean force,
+                          boolean allowNetwork, boolean force, AbortSignal signal,
                           Map<String, RuntimeException> errors) {
         var futures = new ArrayList<Future<?>>();
         for (var provider : providers) {
             futures.add(executor.submit(() -> {
                 try {
-                    runOne(provider, allowNetwork, force);
+                    runOne(provider, allowNetwork, force, signal);
                 } catch (RuntimeException e) {
                     errors.put(provider.name(), e);
                 }
@@ -114,13 +140,15 @@ public final class ModelCatalogRefresh {
         }
     }
 
-    private void runOne(Provider provider, boolean allowNetwork, boolean force) {
+    private void runOne(Provider provider, boolean allowNetwork, boolean force,
+                        AbortSignal signal) {
         int generation = coordinator.begin(provider.name());
         var stored = store.read(provider.name());
         com.pijava.ai.catalog.CatalogPublisherPort publish =
             publication -> coordinator.publish(provider.name(), generation, publication);
         var context = allowNetwork
-            ? RefreshModelsContext.online(stored, publish, force)
+            ? RefreshModelsContext.online(stored, publish, force,
+                credentials.apply(provider.name()), provider.baseUrl(), signal)
             : RefreshModelsContext.offline(stored, publish);
         provider.refreshModels(context);
     }

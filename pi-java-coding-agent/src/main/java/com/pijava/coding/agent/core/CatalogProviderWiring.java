@@ -42,8 +42,14 @@ final class CatalogProviderWiring {
                     || REMOTE_CATALOG_EXCLUDED.contains(provider.name())) {
                 continue;
             }
-            registry.register(RemoteCatalogProvider.wrap(
-                provider, catalogBaseUrl, generatedAt, http));
+            if ("openrouter".equals(provider.name())) {
+                // OpenRouter 把目录收窄到 Key 可用的模型，并覆盖账号实际限额/价格。
+                registry.register(PersonalizedCatalogProvider.wrap(
+                    provider, catalogBaseUrl, generatedAt, http));
+            } else {
+                registry.register(RemoteCatalogProvider.wrap(
+                    provider, catalogBaseUrl, generatedAt, http));
+            }
         }
     }
 }

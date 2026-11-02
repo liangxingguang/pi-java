@@ -3,11 +3,14 @@ package com.pijava.coding.agent.core;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import com.pijava.ai.api.ApiOptions;
+import com.pijava.ai.api.AuthKind;
 import com.pijava.ai.api.ProviderApi;
+import com.pijava.ai.auth.RecordedCredential;
 import com.pijava.ai.catalog.InMemoryModelsStore;
 import com.pijava.ai.catalog.ModelCatalog;
 import com.pijava.ai.catalog.RefreshModelsContext;
@@ -91,6 +94,63 @@ class ModelCatalogRefreshTest {
         assertThat(result.errors()).containsOnlyKeys("boom");
         assertThat(result.errors().get("boom")).hasMessage("boom exploded");
         assertThat(order).contains("fine:online");
+    }
+
+    @Test
+    void onlinePhaseCarriesCredentialAndProviderBaseUrl() {
+        var seen = new CopyOnWriteArrayList<RefreshModelsContext>();
+        var credential = new RecordedCredential(AuthKind.OAUTH, "access", "stored:openrouter");
+        var provider = new ContextRecordingProvider(seen);
+        var signal = com.pijava.ai.AbortSignal.create();
+
+        new ModelCatalogRefresh(new InMemoryModelsStore(), name -> Optional.of(credential))
+            .refresh(List.of(provider), true, false, signal);
+
+        assertThat(seen).hasSize(2);
+        assertThat(seen.get(0).allowNetwork()).isFalse();
+        assertThat(seen.get(0).credential()).isEmpty();
+        assertThat(seen.get(0).signal()).isNotNull();
+        assertThat(seen.get(1).credential()).contains(credential);
+        assertThat(seen.get(1).baseUrl()).isEqualTo("https://provider.test/v1");
+        assertThat(seen.get(1).signal()).isSameAs(signal);
+    }
+
+    @Test
+    void aCredentialResolverFailureIsRecordedAndSkipsTheOnlinePhase() {
+        var order = new CopyOnWriteArrayList<String>();
+        var provider = new RecordingProvider("p", order, false);
+
+        var result = new ModelCatalogRefresh(new InMemoryModelsStore(), name -> {
+            throw new IllegalStateException("no credentials");
+        }).refresh(List.of(provider), true, false);
+
+        assertThat(result.errors()).containsOnlyKeys("p");
+        assertThat(result.errors().get("p")).hasMessage("no credentials");
+        assertThat(order).containsExactly("p:offline");
+    }
+
+    /** 记录上下文；baseUrl 非空以断言传播。 */
+    private static final class ContextRecordingProvider implements Provider {
+        private final List<RefreshModelsContext> seen;
+
+        private ContextRecordingProvider(List<RefreshModelsContext> seen) {
+            this.seen = seen;
+        }
+
+        @Override public String name() { return "openrouter"; }
+        @Override public String displayName() { return "OpenRouter"; }
+        @Override public Set<Class<? extends ProviderApi>> supportedApis() { return Set.of(); }
+        @Override public <T extends ProviderApi> T createApi(
+                Class<T> apiType, ApiOptions options) {
+            throw new UnsupportedOperationException();
+        }
+        @Override public ModelCatalog builtinModels() { return ModelCatalog.empty(); }
+        @Override public String baseUrl() { return "https://provider.test/v1"; }
+
+        @Override
+        public void refreshModels(RefreshModelsContext context) {
+            seen.add(context);
+        }
     }
 
     @Test

@@ -20,6 +20,15 @@ class DefaultProvidersRemoteCatalogTest {
     }
 
     @Test
+    void openrouterUsesThePersonalizedWrapper() {
+        var registry = DefaultProviders.defaultProviders("http://127.0.0.1:1");
+
+        assertThat(registry.get("openrouter").orElseThrow())
+            .isInstanceOf(PersonalizedCatalogProvider.class)
+            .isNotInstanceOf(RemoteCatalogProvider.class);
+    }
+
+    @Test
     void wrappedProviderDelegatesIdentityAndStaticCatalog() {
         var registry = DefaultProviders.defaultProviders("http://127.0.0.1:1");
         var openai = registry.get("openai").orElseThrow();
@@ -37,6 +46,7 @@ class DefaultProvidersRemoteCatalogTest {
         var registry = DefaultProviders.defaultProviders("http://127.0.0.1:1");
 
         assertThat(registry.get("openrouter-images").orElseThrow())
-            .isNotInstanceOf(RemoteCatalogProvider.class);
+            .isNotInstanceOf(RemoteCatalogProvider.class)
+            .isNotInstanceOf(PersonalizedCatalogProvider.class);
     }
 }

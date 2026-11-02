@@ -3,24 +3,15 @@ package com.pijava.coding.agent.core;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.URI;
-import java.net.URLEncoder;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.ZonedDateTime;
-import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeParseException;
-import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.ProviderApi;
 import com.pijava.ai.catalog.ModelCatalog;
@@ -28,7 +19,6 @@ import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.catalog.ModelsPublication;
 import com.pijava.ai.catalog.ModelsStoreEntry;
 import com.pijava.ai.catalog.RefreshModelsContext;
-import com.pijava.ai.catalog.RemoteModelWire;
 import com.pijava.ai.provider.Provider;
 
 /**
@@ -55,14 +45,10 @@ public final class RemoteCatalogProvider implements Provider {
     public static final String DEFAULT_CATALOG_BASE_URL = "https://pi.dev";
 
     /** pi {@code REMOTE_CATALOG_ATTEMPT_TIMEOUT_MS}。 */
-    static final Duration ATTEMPT_TIMEOUT = Duration.ofSeconds(4);
+    static final Duration ATTEMPT_TIMEOUT = RemoteCatalogWire.ATTEMPT_TIMEOUT;
 
     /** pi {@code REMOTE_CATALOG_REFRESH_INTERVAL_MS}。 */
     public static final Duration REFRESH_INTERVAL = Duration.ofHours(4);
-
-    static final String USER_AGENT = "pi-java/dev";
-
-    private static final ObjectMapper JSON = new ObjectMapper();
 
     private final Provider delegate;
     private final URI catalogBaseUrl;
@@ -129,12 +115,14 @@ public final class RemoteCatalogProvider implements Provider {
         return delegate.supportedProtocols();
     }
 
+    @Override public String baseUrl() { return delegate.baseUrl(); }
+
     // ── 动态协议 ──────────────────────────────────────────────
 
     /** 静态 ∪ overlay：同 id 覆盖、新 id 追加（pi {@code mergeModels}）。 */
     @Override
     public List<ModelInfo> getModels() {
-        return mergeModels(delegate.getModels(), dynamic);
+        return RemoteCatalogWire.mergeModels(delegate.getModels(), dynamic);
     }
 
     @Override
@@ -159,11 +147,11 @@ public final class RemoteCatalogProvider implements Provider {
         // validator 只在有缓存 body 支撑时带 —— 否则 304 会把 overlay 清空。
         var validator = cached != null && !cached.models().isEmpty() ? cached.etag() : null;
         var uri = catalogBaseUrl.resolve(
-            "/api/models/providers/" + encode(delegate.name()));
+            "/api/models/providers/" + RemoteCatalogWire.encode(delegate.name()));
         var builder = HttpRequest.newBuilder(uri)
             .timeout(ATTEMPT_TIMEOUT)
             .header("accept", "application/json")
-            .header("User-Agent", USER_AGENT);
+            .header("User-Agent", RemoteCatalogWire.USER_AGENT);
         if (validator != null) {
             builder.header("If-None-Match", validator);
         }
@@ -194,8 +182,8 @@ public final class RemoteCatalogProvider implements Provider {
         }
 
         var entry = new ModelsStoreEntry(
-            parseCatalog(delegate.name(), response.body()),
-            lastModifiedOf(response), checkedAt, etagOf(response));
+            RemoteCatalogWire.parseCatalog(delegate.name(), response.body()),
+            RemoteCatalogWire.lastModifiedOf(response), checkedAt, RemoteCatalogWire.etagOf(response));
         var published = providerModels(remoteModels(entry));
         context.publish().publish(
             ModelsPublication.persistAndUpdate(entry, () -> dynamic = published));
@@ -224,29 +212,6 @@ public final class RemoteCatalogProvider implements Provider {
 
     // ── 纯函数（逐条对照 pi） ─────────────────────────────────
 
-    /** pi {@code mergeModels}：baseline 保序；动态同 id 覆盖、新 id 追加。 */
-    static List<ModelInfo> mergeModels(List<ModelInfo> baseline, List<ModelInfo> dynamic) {
-        var merged = new ArrayList<ModelInfo>(baseline);
-        for (var model : dynamic) {
-            var index = indexOfId(merged, model.id());
-            if (index >= 0) {
-                merged.set(index, model);
-            } else {
-                merged.add(model);
-            }
-        }
-        return List.copyOf(merged);
-    }
-
-    private static int indexOfId(List<ModelInfo> models, com.pijava.ai.model.ModelId<?> id) {
-        for (int i = 0; i < models.size(); i++) {
-            if (models.get(i).id().equals(id)) {
-                return i;
-            }
-        }
-        return -1;
-    }
-
     /**
      * pi {@code remoteModels}：无条目 ⇒ 空；有 localGeneratedAt 且远端 Last-Modified
      * 不晚于它（或缺席）⇒ 空（overlay 不生效）。
@@ -255,9 +220,8 @@ public final class RemoteCatalogProvider implements Provider {
         if (entry == null) {
             return List.of();
         }
-        if (localGeneratedAt != null
-                && (entry.lastModified() == null
-                    || !entry.lastModified().isAfter(localGeneratedAt))) {
+        if (!RemoteCatalogWire.isNewer(
+                entry.lastModified(), localGeneratedAt)) {
             return List.of();
         }
         return entry.models();
@@ -267,63 +231,5 @@ public final class RemoteCatalogProvider implements Provider {
         return models.stream()
             .filter(model -> model.id().provider().equals(delegate.name()))
             .toList();
-    }
-
-    /** pi {@code parseCatalog}：数组／{@code {models:[]}}／任意对象取 values。 */
-    static List<ModelInfo> parseCatalog(String providerId, String body) {
-        JsonNode root;
-        try {
-            root = JSON.readTree(body);
-        } catch (IOException e) {
-            throw new IllegalStateException(
-                "Invalid model catalog for provider \"" + providerId + "\"", e);
-        }
-        List<JsonNode> entries;
-        if (root != null && root.isArray()) {
-            entries = drain(root.elements());
-        } else if (root != null && root.isObject()
-                && root.has("models") && root.get("models").isArray()) {
-            entries = drain(root.get("models").elements());
-        } else if (root != null && root.isObject()) {
-            entries = drain(root.elements());
-        } else {
-            throw new IllegalStateException(
-                "Invalid model catalog for provider \"" + providerId + "\"");
-        }
-        var models = new ArrayList<ModelInfo>();
-        for (var node : entries) {
-            if (node.isObject() && node.has("id")) {
-                models.add(JSON.convertValue(node, RemoteModelWire.class)
-                    .toModelInfo(providerId));
-            }
-        }
-        return List.copyOf(models);
-    }
-
-    private static List<JsonNode> drain(Iterator<JsonNode> nodes) {
-        var out = new ArrayList<JsonNode>();
-        nodes.forEachRemaining(out::add);
-        return out;
-    }
-
-    /** Last-Modified（RFC 1123）⇒ Instant；缺席／不可解析 ⇒ {@code Instant.EPOCH}（pi 的 0）。 */
-    private static Instant lastModifiedOf(HttpResponse<String> response) {
-        var raw = response.headers().firstValue("last-modified").orElse(null);
-        if (raw == null) {
-            return Instant.EPOCH;
-        }
-        try {
-            return ZonedDateTime.parse(raw, DateTimeFormatter.RFC_1123_DATE_TIME).toInstant();
-        } catch (DateTimeParseException e) {
-            return Instant.EPOCH;
-        }
-    }
-
-    private static String etagOf(HttpResponse<String> response) {
-        return response.headers().firstValue("etag").orElse(null);
-    }
-
-    private static String encode(String value) {
-        return URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20");
     }
 }
