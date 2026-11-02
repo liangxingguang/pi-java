@@ -6,15 +6,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **pi-java** — Pure Java (JDK 25) 复刻 [pi](https://github.com/earendil-works/pi) AI 编码代理。代码在 `D:\workplaceForai\pi-java`，参考原项目在 `D:\workplaceForai\pi`。
 
-11 个 Maven 模块，依赖方向自下而上：
+15 个 Maven 子模块，依赖方向自下而上（`A ← B` 表示 B 依赖 A）：
 
 ```
-telemetry ← ai ← agent ← coding-agent
-                         ← tui
-              agent ← session-backend-sqlite
-              coding-agent ← evals
-              protocol ← client
-              protocol ← server
+telemetry ← ai ← mcp ← coding-agent ← tui
+                 ← agent-core ↑
+                     ↑
+                     └ session-backend-sqlite
+coding-agent ← evals
+coding-agent + tui ← examples
+protocol ← client
+protocol ← server
 ```
 
 命名空间：`com.pijava`（包名） / `com.pi-java`（Maven groupId）。
@@ -25,7 +27,7 @@ JDK 25 · Maven 4.x · Jackson (JSON/CBOR) · [TamboUI](https://tamboui.dev/) (�
 
 ## 构建设计阶段
 
-commands: `mvn clean verify`, `mvn test -pl <module>`, `mvn checkstyle:check`, `mvn -Pnative package`（GraalVM Native Image）
+commands: `mvn clean verify`, `mvn test -pl <module> -am`, `mvn checkstyle:check`。分发使用 fat jar；Native Image 已放弃。
 
 ## 开发流程
 
@@ -38,11 +40,13 @@ commands: `mvn clean verify`, `mvn test -pl <module>`, `mvn checkstyle:check`, `
 | 文档 | 内容 |
 |------|------|
 | `docs/01-requirements-analysis.md` | 35 功能需求 + 10 非功能需求 |
-| `docs/02-architecture-design.md` | 11 模块结构、分层依赖、核心接口 |
+| `docs/02-architecture-design.md` | 15 个子模块、分层依赖、核心接口 |
 | `docs/03-detailed-design.md` | 类级设计：Entry/LaneRecord、AgentHarness、SessionStorage/Repository、SQLite schema、JSONL 格式、TamboUI 业务组件、slash 命令、CLI 参数 |
-| `docs/04-open-items-register.md` | 未结项台账（「还剩什么没对齐」的唯一权威） |
-| `docs/05-module-alignment-map.md` | 模块对齐地图（量化）；明细在 `docs/map/` |
-| `docs/06-coding-agent-batch-plan.md` | coding-agent 对齐批次总账（活文档：多少批/到哪批/账面；**每批闭环必更**；2026-10-26 第六次清理自 docs/20 重编） |
+| `docs/04-open-items-register.md` | 当前未结项与有效裁决 |
+| `docs/05-module-alignment-map.md` | 旧基线最终读数与新基线计分口径；明细在 `docs/map/` |
+| `docs/06-current-alignment-plan.md` | 当前逐层执行顺序、状态与审核门 |
+| `docs/07-examples-alignment.md` | examples 的有效裁决、现有能力与新基线验收口径 |
+| `docs/08-pi-rebaseline-master-plan.md` | pi `56cae7823` 新基线换锚总设计 |
 
 遵循 .claude/rules.md 文档写作规则。当前任务：将技术裁决记录改写为开发工单可读版本，采用【场景/决定/风险】三段式，术语首次附带释义，分点列出裁决条目，区分模型可见/内部实现。
 

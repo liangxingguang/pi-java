@@ -20,9 +20,9 @@
 
 - 【场景】pi-java 有 SQLite 会话后端，schema 与 pi 曾经的 session-backends 分叉。旧文记「SQLite schema 完全分叉＝全项目单点最大拖累（Σ权重 25，+16.2 pp）」。
 - 【决定】不作缺口、移出分母。pi 主流会话持久化**只有 JSONL ＋ in-memory**（`SessionManager`），没有 SQLite 后端；`packages/session-backends` 整包已删，且删除前就**从未被 `bin pi` 主流消费**（R1 ＋ R5）。旧判定**自始即错**。
-- 【风险/代价】无影响。[内部，模型不可见] ⚠️ 这**不主张删除 `pi-java-session-backend-sqlite` 模块**——删模块是独立裁决。本文件只如实标注：该模块**无对齐参照物**，其内部改造（见「本轮翻转与改动摘要」）只影响 JSONL 互读等主流单元的判定。
+- 【风险/代价】无影响。[内部，模型不可见] 不主张删除 SQLite 模块；其独立 schema 不进入 pi 对齐分母。
 
-JSONL 主流互读的残余差异（信封扩展键、pi v1/v2 迁移）与 [`03-agent-core.md`](03-agent-core.md) **#73**（JSONL 存储，判「存疑（形状）」）同一口径，以 #73 为上层挂账条目。
+JSONL 主流互读与 [`03-agent-core.md`](03-agent-core.md) **#73** 使用同一 v3 口径；旧基线 #73 为对齐。
 
 ---
 ## 0. 会话持久化各在哪个模块
@@ -100,7 +100,6 @@ Memory 后端，它是 coding-agent 的**进程内会话注册表**（`-c/-r/--f
 **行数**：20 行 —— 对齐 **19** / 缺失 **0** / 存疑 **1**。
 **权重**：**Σ = 44**（20 行全部进分母）。
 **Σ(w×c) = 42.0（对齐 19 行）＋ 1.0（存疑 #6，w2×0.5）＝ 43.0** ⇒ **加权完成度 = 43.0/44 = 97.7%**。
-（批 33（docs/45）：#3/#8/#9/#14/#16/#17/#19/#20 八行翻对齐，缺失清零；仅 #6 lane vs pi 单 leaf 树维持存疑。翻转明细见文末「本轮翻转清单」。）
 
 ---
 
@@ -218,22 +217,6 @@ pi `scripts/` 是仓库自身构建/发布/校验工具，按 R5 **不进产品�
 
 ---
 
-## 台账纠错
-
-| 条目 | 旧说 | 本锚点实测 | 证据 |
-|---|---|---|---|
-| **B59 SQLite schema 分叉** | 「全项目单点最大拖累 Σ权重 25、+16.2pp」 | **自始即错，销号**：pi 无 SQLite 后端、参照包已删且从未上 `bin pi` ⇒ R1＋R5 移出分母；模块保留 | 见 §口径/B59 |
-| **JSONL v3/v4 互读**（map/03 #73） | 旧文：双向不可读，用户可见硬故障 | **v3 双向互读已通**（包 12/14）；批 33 后 #16 信封（`lane`／`retainedTail` 扩展键）翻对齐、#17 v1/v2 迁移落地 | pi `session-manager.ts:1086/353-368`；java `PiV3Wire.java:75-245` |
-| **`context_edit` 条目** | 上一轮「新发现，java 零对应」 | **已落地，销号**：条目/编解码/投影/写线 null 键齐，生产者为压缩与遗漏恢复 | `Entry.java:283-294`；`ContextEntries.java:185-250` |
-| **会话文件惰性创建** | 上一轮「新发现」 | **批 33 已落地**：create 不落盘，首个 user/assistant 消息时一次性写 header＋缓冲 | pi `:1166-1191`；java `JsonlSessionStorage` |
-| **A17 写者租约** | 「java 反超/越界」 | **维持**：pi 主流从未有租约 ⇒ `WriterLease`/`WriterLeaseRows`/心跳是自研；`DEFAULT_TTL_MS=30_000`（`SqliteSessionRepository.java:37`），权 0 | 同左 |
-| **E6 拆分超限文件** | 记为未结 | **`SqliteSessionStorage` 已解决**（现 **486** 行 <500，`storage/` 子包）；`AgentHarness` 现 **595** 行（E4，仍超） | 工作树 `wc -l` |
-| **E7 `appendEntry`/`appendRecord` 重复** | 保留（判断项） | **三处**（JSONL/Memory/SQLite 各一） | 三后端 storage 类 |
-| **H §9.3 `/export`/`/import` 占位符** | 台账曾判 OPEN | **CLOSED**：`/export`（HTML/JSONL）与 `/import` 已接线；另有 `/share` | `core/slash/builtin/MiscCommands.java:38/61/76`；`core/SessionShare.java` |
-| **`/share` 不是 chord 能力** | 曾列 chord 名下 | **维持更正**：`session-share.ts` 零 chord import（本锚点复核） | pi `session-share.ts`；java `core/SessionShare.java` |
-
----
-
 ## 汇总（未加权）
 
 参与对齐判定的只有存储后端（20 行）＋ 评测（20 行）＝ **40 行**：
@@ -273,11 +256,6 @@ pi `scripts/` 是仓库自身构建/发布/校验工具，按 R5 **不进产品�
 | 评测 | **43（20 行）** | **42.0** | **97.7%** | 95.0%（19/20） |
 | **本范围（R5 可达）** | **87（40 行）** | **85.0** | **97.7%** | **95.0%（38/40）** |
 
-（上一锚点：87 / 34.0 / **39.1%** ／ 未加权 40.0%。本轮 **+12.0 pp 来自判定翻转**：
-JSONL v3 写线改造与 `context_edit` 落地；评测面零变化。**批 32（docs/44）**：评测 15 行缺失/存疑→对齐、
-`#20` 缺失→存疑，评测 12.5→**42.0** ⇒ 本范围 44.5→**74.0/87 ≈ 85.1%**。
-**批 33（docs/45）**：存储后端 #3/#8/#9/#14/#16/#17/#19/#20 八行翻对齐、缺失清零 ⇒
-32.0→**43.0**，本范围 74.0→**85.0/87 ≈ 97.7%**。）
 
 ### 权重 0（排除出分母）的行
 
@@ -290,100 +268,9 @@ JSONL v3 写线改造与 `context_edit` 落地；评测面零变化。**批 32�
 | harness-only / `durable` / pico3 / micro | 全部 59 行 | R1（删除）/ R5（不可达） |
 | 防漂移脚本 | 全部 | 非 `bin pi` 产品面 |
 
-### 关键差距的加权影响（批 33 后）
-
-> 上一锚点的三条存储缺口在批 33 全部清零：JSONL 残余（#16 信封扩展键、#17 迁移）与
-> 会话文件惰性创建（#19）均已落地；本范围 85.0/87 ＝ 97.7%。
-
-| 差距 | 涉及行（权重） | 现状 Σ(w×c) | 若修复后 | 对本范围（分母 87） |
-|---|---|---:|---:|---|
-| ~~JSONL 残余~~ | ~~#16（3）＋ #17（2）~~ | — | — | **批 33 清零** |
-| ~~会话文件惰性创建~~ | ~~#19（2）~~ | — | — | **批 33 清零** |
-| 仅余 S1：`#6` lane vs pi 单 leaf 树 | #6（2） | 1.0 | 2.0 | 85.0→86.0 ⇒ 97.7%→98.9%（+1.1 pp） |
-
-**读法**：
-- 评测面（97.7%）批 32 已收口：20 行对齐 19、存疑 1（`#20` TUI 文档审计，D183）。
-- 存储面 **缺失清零**：B55 批 4 销号、pi v1/v2 迁移批 33 落地、惰性落盘批 33 落地。
-- 存储面唯一存疑是 `#6`（lane 模型 vs pi 单 leaf 树的粒度差）。
-
----
-
 ## 存疑清单（2 个判定单元，2 行）
 
 | # | 能力 | 存疑点 |
 |---|---|---|
 | S1 | 分支创建/移动（#6） | pi 单 leaf 树（`branch`/`resetLeaf`），java lane（`createLane`/`moveLane`）⇒ 语义粒度不同（落线借 `custom` 行） |
 | S7 | TUI 文档审计（评测 #20） | pi 用 context-footer oracle（`42.2%/272k` 状态行）；java TUI 无该行，以 Java 文档问答＋Levenshtein 0.75 替代（D183） |
-
-（S2–S6 在批 33 全部收口：#8 `systemMessage`、#9 `fromHook`、#14 用户可见汇总、#16 信封扩展键、#20 内存后端均为「账面滞后」或 pi 容忍的扩展键。）
-
----
-
-## 缺失清单（0 条）
-
-### A. 存储后端（批 33 清零）
-
-| 原 # | 能力 | 处置 |
-|---|---|---|
-| M1 | list 进度回调 + 增量发布 + `AbortSignal` + 并发扫描 | B55 批 4 已闭环，批 33 纠账面 |
-| M2 | pi v1/v2 旧会话迁移 | 批 33 `LegacyPiVersionMigrator` 落地 |
-| M3 | 会话文件惰性创建 | 批 33 `flushIfConversationStarted` 落地 |
-
-（评测面 12 条缺失已在批 32（docs/44）全部翻对齐/存疑，清单销号。）
-
----
-
-## 本轮翻转清单与 java 改动摘要（`351d199..edc8749d`）
-
-本窗口 pi-java 本图两模块共 **12 个主源码文件**改动（sqlite 10 ＋ evals 2）＋ 1 个测试文件。
-另外，存储面多条翻转的承重代码落在 `pi-java-agent-core`（jsonl 包新增 `PiV3Wire`/`SessionWireShape`、
-`Entry` 增 9 变体、`ContextEntries` 投影），java 侧取证读工作树，一并计入。
-
-**判定翻转（5 缺失/存疑 → 对齐，1 缺失 → 存疑）**：
-
-| 行 | 旧判定 | 新判定 | 承重改动 |
-|---|---|---|---|
-| #10 上下文投影 | 存疑 | **对齐** | `ContextEntries.projectEntries/applyEdit:185-250` |
-| #11 `context_edit` | 缺失 | **对齐** | `Entry.ContextEdit:283-294` ＋ 投影/编解码/生产者 |
-| #12 会话名 | 存疑 | **对齐** | FactName 落 pi 原生 `session_info` 线（`PiV3Wire:209-214`） |
-| #13 entry 标签 | 存疑 | **对齐** | FactLabel 落 pi 原生 `label` 线（`PiV3Wire:217-223`） |
-| #15 JSONL 头 | 缺失 | **对齐** | `PiV3Wire.encodeHeader:75-94`（pi 六键） |
-| #16 JSONL 条目信封 | 缺失 | **存疑（形状）** | 去 seq/kind、ISO 时间戳、合成行借 `custom`；双向可读 |
-
-**12 个主源码文件改了什么**：
-
-| 文件 | 改动 | 判定影响 |
-|---|---|---|
-| `resources/sql/002_pi_identity.sql`（新，10 行）＋ `Migrations.java:16-17` | 002 迁移：`records`/`lane_moves`/`facts` 补可空 `parent_id`/`timestamp`（pi `SessionEntryBase:57-63` 形状；旧行 NULL 按 epoch 读） | #16 合成行能链进 pi 的树 |
-| `storage/EntryRows.java:34` | 载荷序列化改走 `SessionWireShape.toPiTree`（tool→toolResult、tool_use→toolCall、toolUseId→toolCallId 深走重写） | SQLite 载荷与 pi 同词表 |
-| `storage/{Fact,Lane,Record}Rows.java` | 三族行全部贯通 `parentId`/`timestamp`（INSERT/SELECT/record 分量） | #16 |
-| `SqliteMutationReplay.java` | 合成行写库带父级/时间戳；**D6：usage 账改读一等 `Entry.Usage`**，删 `LaneRecord.UsageRecord` 账路径 | #14（载体对齐的一部分） |
-| `SqliteSessionStorage.java`（463→486 行） | `getLog` 重建父级/时间戳；新增 `laneHead()`（合成行挂最近条目）＋ `textToInstant()`（旧行 epoch）；createLane/moveLane/setName/setLabel/appendRecord 挂 `main` 叶；D6 usage 同上 | #12/#13/#16 |
-| `SqliteSessionRepository.java:234-256` | fork 拷贝时合成行父级＝拷贝进来的最后一条（tipId/tipTs） | #16（fork 互读） |
-| `SqliteCodecs.java` | 删 `LaneRecord.UsageRecord` 的 runId 分支（该型随 D6 退役） | 无 |
-| `test/.../SqliteLeaseAndSearchTest.java` | ＋1 测试：SQL 层 type 扫描能捞 usage 行且 runId 审计键读回（B168） | 测试基建 |
-| `evals/.../ChatApiConformanceSuite.java:156` | 跟 B107 删 `StreamRequest` 多余参数 | 无 |
-| `evals/.../ProviderCatalogConformance.java:18/31-35` | 内置 provider 计数 18 → 19 | 无 |
-
----
-
-## 批 33 翻转清单与 java 改动摘要（`docs/45`）
-
-**判定翻转（7 缺失/存疑 → 对齐，1 存疑维持）**：
-
-| 行 | 旧判定 | 新判定 | 承重改动 |
-|---|---|---|---|
-| #3 list 进度/增量/中止/并发 | 缺失（账面滞后） | **对齐** | `RichSessionLister`（B55 批 4 已闭环） |
-| #8 compaction 条目 | 存疑 | **对齐** | `Entry.Compaction` 增 `systemMessage`（`retainedTail` 为扩展键） |
-| #9 分支摘要条目 | 存疑（账面滞后） | **对齐** | `Entry.BranchSummary` 已含 `fromHook` |
-| #14 usage 汇总 | 存疑（账面滞后） | **对齐** | `coding-agent` `SessionStats.UsageTokens`＋`UsageCostBreakdown` |
-| #16 JSONL 条目信封 | 存疑（形状） | **对齐** | `lane`／`retainedTail` 均为 pi 忽略的扩展键（D190） |
-| #17 pi v1/v2 迁移 | 缺失 | **对齐** | 新 `LegacyPiVersionMigrator`＋`PiV3Wire.parseHeader` 接受 1/2/3 |
-| #19 会话文件惰性创建 | 缺失 | **对齐** | `JsonlSessionStorage.create` 不落盘＋首次对话 flush |
-| #20 内存后端 | 存疑（账面滞后） | **对齐** | 分层不是缺失（Storage＋coding-agent 注册表） |
-| #6 分支创建/移动 | 存疑 | **存疑（维持）** | pi 单 leaf 树 vs java lane（S1） |
-
-**承重文件**：`Entry.java`（Compaction 第 12 组件）／`EntryJsonCodec`（`systemMessage`、`retainedTail` 可选、
-`role:"custom"`）／`LegacyPiVersionMigrator`（新）／`JsonlSessionStorage`（惰性创建＋load 前迁移）／
-`ContextEntries`（compaction 投影 `[systemMessage, summary]`、列表级 edit、保留段过滤 system）／
-`CompactionTranscriptBuilder`（`systemMessage` 快照）。窄差 D190–D194 登记在 `docs/04`。

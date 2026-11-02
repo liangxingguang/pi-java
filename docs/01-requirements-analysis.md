@@ -6,13 +6,9 @@
 
 ## 1. 项目背景
 
-pi（原名 pi-mono）是由 earendil-works 开发的开源 AI 编码代理，采用 TypeScript + npm workspaces 单体仓库架构，共 10 个工作区包，~1,110 个源文件，经过一年多的密集开发（5,582 次提交）。其核心能力分为三层：
+pi 是持续演进的 TypeScript AI 编码代理，核心能力分为 LLM API、Agent 运行时和 coding-agent 三层。包数量、Provider 数量与具体行为以固定对齐锚点为准；本文不使用立项时的目录规模作为当前事实。
 
-- **LLM API 层**（`packages/ai`）：统一 40 个内置 LLM 供应商（含图片供应商）的 API 差异，提供一致的流式调用接口
-- **代理运行时层**（`packages/agent`）：Agent 循环、工具调用、会话管理、持久化存储
-- **编码代理层**（`packages/coding-agent`）：交互式 CLI、终端 TUI、slash 命令、技能系统
-
-pi-java 的目标是使用 **JDK 25** 以 **Pure Java**（尽可能减少外部依赖）方式重新实现以上三层，保留 pi 的架构理念同时充分利用 Java 平台的特性优势。
+pi-java 的目标是使用 **JDK 25** 以 **Pure Java** 方式实现相同的主流可观察行为，同时利用 Java 平台的类型、并发与存储能力。当前目标锚点为 `56cae7823`，范围裁决见 docs/04 与 docs/08。
 
 ---
 
@@ -23,7 +19,7 @@ pi-java 的目标是使用 **JDK 25** 以 **Pure Java**（尽可能减少外部�
 | 编号 | 需求 | 优先级 | 说明 |
 |------|------|--------|------|
 | F1 | 统一 LLM API 接口 | P0 | 定义 `StreamApi`、`SimpleApi` 等统一抽象，屏蔽供应商差异 |
-| F2 | 多供应商支持 | P0 | 全量 40 个内置 LLM 供应商（含图片供应商）；Phase 1 完成 5 个核心 provider，Provider SPI 从 Day 1 支持全量扩展 |
+| F2 | 多供应商支持 | P0 | 覆盖 R2 批准的主流 Provider；Provider SPI 支持扩展，长尾 Provider 不自动进入对齐范围 |
 | F3 | 供应商注册机制 | P0 | 可扩展的 Provider SPI，支持运行时注册新供应商 |
 | F4 | 模型目录管理 | P1 | 内置模型列表 + 远程目录刷新（ETag/Last-Modified 增量更新） |
 | F5 | 流式响应处理 | P0 | SSE/JSON Stream 解析，`Flow.Publisher` 或 `Iterator` 风格消费 |
@@ -37,12 +33,12 @@ pi-java 的目标是使用 **JDK 25** 以 **Pure Java**（尽可能减少外部�
 | 编号 | 需求 | 优先级 | 说明 |
 |------|------|--------|------|
 | F10 | Agent 循环引擎 | P0 | 用户提示 → LLM 调用 → 工具结果 → 继续循环，直到 LLM 产生最终消息 |
-| F11 | Durable AgentHarness | P0 | 车道（lane）模型、操作记录、快照、确定性手动驱动模式 |
+| F11 | AgentHarness 运行时 | P0 | 车道（lane）模型、操作记录、快照、确定性手动驱动模式；不是 pi 的 R5 Durable 子系统 |
 | F12 | 工具系统 | P0 | 可扩展的工具注册、参数校验（JSON Schema）、执行回调 |
 | F13 | 内置工具 | P0 | Bash 执行、文件读写（Read/Write/Edit/EditDiff）、Grep、Find、LS、图片处理 |
 | F14 | 会话管理 | P0 | 会话树（session tree）、分支、命名、列表、删除 |
 | F15 | 会话持久化 | P0 | JSON Lines（JSONL）格式，支持增量写入和崩溃恢复 |
-| F34 | SQLite 会话存储后端 | P0 | 实现 `SessionRepository`/`SessionStorage` 接口，含 FTS5 全文搜索、写租约（writer lease）、分支缓存（对应 `packages/session-backends/sqlite-node`） |
+| F34 | SQLite 会话存储后端 | P0 | 实现 `SessionRepository`/`SessionStorage`，含 FTS5 与分支查询；schema 为本仓独立设计，不对齐 pi 已删除后端 |
 | F16 | 压缩（Compaction） | P1 | 上下文过长时自动压缩历史，保留关键信息 |
 | F17 | 分支摘要（Branch Summarization） | P1 | 子分支完成后生成摘要注入父分支 |
 | F18 | 遥测（Telemetry） | P2 | 供应商无关的遥测接口，OpenTelemetry 适配器 |
@@ -83,7 +79,7 @@ pi-java 的目标是使用 **JDK 25** 以 **Pure Java**（尽可能减少外部�
 | NF2 | JDK 25 基线 | P0 | 利用虚拟线程、结构化并发、模式匹配、Foreign Function API、sealed classes 等新特性 |
 | NF3 | 编译期类型安全 | P0 | 利用 Java 泛型、密封类、记录类实现比 TypeScript 更强的类型约束 |
 | NF4 | 跨平台 | P0 | Windows / macOS / Linux 三个主要平台 |
-| NF5 | 原生二进制分发 | P1 | 通过 GraalVM Native Image 编译为独立可执行文件 |
+| NF5 | 分发形态 | P1 | 使用 fat jar；GraalVM Native Image 已放弃，不作为发布目标 |
 | NF6 | 响应式 / 非阻塞 I/O | P1 | LLM 流式响应使用 Flow API 或虚拟线程模拟同步风格 |
 | NF7 | 可测试性 | P0 | 每个模块可独立测试；提供 faux/mock provider 用于离线测试 |
 | NF8 | 模块化 | P0 | 基于 Maven 多模块结构，包隔离 + maven-enforcer-plugin 保证依赖收敛 |
@@ -96,11 +92,11 @@ pi-java 的目标是使用 **JDK 25** 以 **Pure Java**（尽可能减少外部�
 
 | 约束 | 说明 |
 |------|------|
-| 语言版本 | Java 22+（语言特性），JDK 25 作为构建和运行基线 |
+| 语言版本 | JDK 25 作为语言、构建和运行基线 |
 | 构建系统 | Maven 4.x（声明式配置，依赖管理成熟） |
-| 外部依赖上限 | 核心模块 ≤ 5 个外部依赖；CLI 模块可放宽至 ~15 个 |
+| 外部依赖上限 | 核心模块 ≤ 5 个外部依赖；CLI 模块可放宽至 ~15 个；新增依赖须在设计稿单独审核 |
 | 命名空间 | Maven groupId: `com.pi-java`；包名: `com.pijava` |
-| API 兼容性 | 不承诺与 pi（TypeScript）的 API 兼容；仅复刻架构理念和功能 |
+| API 兼容性 | 不承诺 TypeScript 源码级 API 兼容；主流可观察行为按固定锚点对齐 |
 | 功能点 兼容性 | 1：1复刻pi功能点，不能简化或者遗漏，只能对齐或者超越 |
 | 许可证 | MIT（与原项目一致） |
 
@@ -108,22 +104,19 @@ pi-java 的目标是使用 **JDK 25** 以 **Pure Java**（尽可能减少外部�
 
 ## 5. 不做的事（Non-Goals）
 
-> 下列为立项时的 Non-Goals；其中 3、4 已被后续决策推翻，按现状更正。
+> 下列为当前范围边界。
 
-1. **不追求与 pi 的线路级兼容** — RPC 消息词汇不强求字节级对齐；**会话 JSONL 格式
-   与 pi 主流 v3 双向互读**（早期自造格式惰性迁移）；SQLite 后端是**本仓独立
-   设计**（pi 的参照后端已删除，不与其 schema 对齐）
-2. **Provider SPI 从 Day 1 支持全量扩展** — 核心 provider 先行、其余按需注册
-3. **不复制 Bun 二进制编译** — 分发方式后定为 **fat jar**；GraalVM Native Image
-   已放弃（不作为发布目标）
-4. （**已废止**）「不做浏览器端」—— 实际已交付 `pi-java-web`（web UI）
-5. **不做 Slack/Chat 集成** — 独立项目范围，不在本项目
+1. **不追求所有内部形状相同** — 以可观察行为对齐为准；会话 JSONL 与 pi 主流 v3 双向互读，SQLite schema 保持本仓独立设计。
+2. **不内置全部长尾 Provider** — Provider SPI 支持扩展，内置范围按 R2。
+3. **不做 TypeScript 扩展运行时、codemode、durable 或 chord** — 按当前 R5 裁决执行。
+4. **不复制 Bun 或 Native Image 分发** — 使用 fat jar。
+5. **不做 Slack/Chat 集成** — 独立项目范围；`pi-java-web` 是本项目既有交互面。
 
 ---
 
 ## 6. 关键设计决策
 
-> 立项时的决策记录；存储与原生两项已被换锚/分发裁决更新。
+> 当前技术决策。
 
 | 决策项 | 选项 | 推荐 |
 |--------|------|------|

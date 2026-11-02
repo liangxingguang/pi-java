@@ -68,15 +68,17 @@ graph TB
 
 ### 1.2 模块依赖方向
 
-依赖流严格自下而上：
+依赖流严格自下而上。箭头 `A ← B` 表示 B 依赖 A：
 
 ```
-telemetry ← ai ← agent ← coding-agent
-                         ← tui
-              agent ← session-backend-sqlite
-              coding-agent ← evals
-              protocol ← client
-              protocol ← server
+telemetry ← ai ← mcp ← coding-agent ← tui
+                 ← agent-core ↑
+                     ↑
+                     └ session-backend-sqlite
+coding-agent ← evals
+coding-agent + tui ← examples
+protocol ← client
+protocol ← server
 ```
 
 禁止反向依赖，禁止循环依赖，禁止跨层穿透调用。
@@ -85,38 +87,43 @@ telemetry ← ai ← agent ← coding-agent
 
 ## 2. Maven 模块结构
 
+根 `pom.xml` 当前声明 **15 个子模块**；连同根 POM，reactor 共 16 个。
+
 ```
-pi-java/  （13 个 Maven 子模块 + 根 POM；reactor 共 14 个）
-├── pom.xml                          ← 根 POM（dependencyManagement + pluginManagement）
-├── pi-java-bom/                     ← Bill of Materials（统一版本管理）
-├── pi-java-telemetry/               ← 遥测接口 + noop/otel 适配器（≈ pi packages/telemetry）
-├── pi-java-ai/                      ← LLM API + Provider 注册（≈ pi packages/ai）
-├── pi-java-agent-core/              ← Agent 运行时核心（≈ pi packages/agent）
-├── pi-java-session-backend-sqlite/  ← 可选 SQLite 后端（本仓独立 schema；pi 参照后端已删）
-├── pi-java-tui/                     ← 终端 UI（≈ pi packages/tui）
-├── pi-java-protocol/                ← 协议模块
-├── pi-java-client/                  ← 远程会话客户端（≈ pi packages/client）
-├── pi-java-server/                  ← 远程会话服务端（≈ pi packages/server）
-├── pi-java-coding-agent/            ← CLI 入口 + AgentSession（≈ pi packages/coding-agent）
-├── pi-java-web/                     ← Web UI + HTTP/WS 服务（本仓独有；pi 无 web）
-├── pi-java-evals/                   ← 评估框架（≈ pi packages/evals）
-└── pi-java-dist/                    ← 分发包（fat jar）
+pi-java/
+├── pom.xml
+├── pi-java-bom/                     ← 统一依赖版本
+├── pi-java-telemetry/               ← 遥测契约与适配器
+├── pi-java-ai/                      ← LLM API、Provider、目录与鉴权
+├── pi-java-mcp/                     ← MCP 客户端、传输、OAuth 与配置
+├── pi-java-agent-core/              ← Agent 运行时、工具与 JSONL 会话
+├── pi-java-session-backend-sqlite/  ← 独立 SQLite 后端
+├── pi-java-coding-agent/            ← CLI、AgentSession、扩展与 MCP 工具适配
+├── pi-java-tui/                     ← 终端 UI
+├── pi-java-protocol/                ← CBOR 协议（R1 历史面）
+├── pi-java-client/                  ← 远程会话客户端（R1 历史面）
+├── pi-java-server/                  ← 远程会话服务端（R1 历史面）
+├── pi-java-web/                     ← 本仓独有的 Web UI
+├── pi-java-evals/                   ← 评估框架
+├── pi-java-examples/                ← Java 示例与验收规格，不进 dist
+└── pi-java-dist/                    ← fat jar 分发
 ```
 
-| 模块 | groupId:artifactId | pi 对应 | 说明 |
-|------|-------------------|-------------|---------|------|
-| telemetry | `com.pijava:pi-java-telemetry` | `packages/telemetry` | 遥测合约 |
-| ai | `com.pijava:pi-java-ai` | `packages/ai` | LLM API |
-| agent-core | `com.pijava:pi-java-agent-core` | `packages/agent` | Agent 运行时 |
-| sqlite-backend | `com.pijava:pi-java-session-backend-sqlite` | —（pi 后端已删） | 可选 SQLite 后端 |
-| tui | `com.pijava:pi-java-tui` | `packages/tui` | 终端 UI |
-| protocol | `com.pijava:pi-java-protocol` | — | 协议模块 |
-| client | `com.pijava:pi-java-client` | `packages/client` | 远程会话客户端 |
-| server | `com.pijava:pi-java-server` | `packages/server` | 远程会话服务端 |
-| coding-agent | `com.pijava:pi-java-coding-agent` | `packages/coding-agent` | CLI 入口 |
-| web | `com.pijava:pi-java-web` | —（pi 无） | Web UI |
-| evals | `com.pijava:pi-java-evals` | `packages/evals` | 评估框架 |
-| dist | `com.pijava:pi-java-dist` | — | fat jar 打包 |
+| 模块 | pi 对应 | 当前定位 |
+|------|-------------|---------|
+| bom | — | 依赖版本管理 |
+| telemetry | `packages/telemetry` | 遥测契约 |
+| ai | `packages/ai` | LLM API |
+| mcp | `packages/mcp` | MCP 协议与运行时 |
+| agent-core | `packages/agent` | Agent 运行时 |
+| sqlite-backend | —（pi 参照后端已删） | 独立 SQLite 后端 |
+| coding-agent | `packages/coding-agent` | CLI 与 AgentSession |
+| tui | `packages/tui`＋coding-agent 交互面 | 终端 UI |
+| protocol/client/server | pi 旧实验发布面 | 保留现有代码，按 R1 不对齐 |
+| web | — | 本仓独有 Web UI |
+| evals | `packages/evals` | 评估框架 |
+| examples | `packages/coding-agent/examples` | Java 验收规格 |
+| dist | — | fat jar 打包 |
 
 ---
 
@@ -132,7 +139,7 @@ pi-java/  （13 个 Maven 子模块 + 根 POM；reactor 共 14 个）
 | YAML | SnakeYAML (仅 CLI 设置文件) | 最小化使用 |
 | JSON Schema | `com.networknt:json-schema-validator` | 工具参数校验 |
 | 会话存储 | JSONL（默认）＋ SQLite（可选） | JSONL 用 pi 主流 v3 格式；SQLite 是本仓独立 schema（11 表＋惰性 FTS5） |
-| 终端 UI | [TamboUI](https://tamboui.dev/) 0.3.x | 源自 Ratatui（Claude CLI 同源），内置差量渲染、Widget 库、CSS 主题、GraalVM 支持 |
+| 终端 UI | [TamboUI](https://tamboui.dev/) 0.4.0 | 源自 Ratatui，提供差量渲染、Widget、CSS 主题和多终端后端 |
 | 终端后端 | TamboUI Panama Backend | 基于 JDK FFM，与 JDK 25 Foreign Function API 目标一致 |
 | 键盘/输入 | TamboUI JLine3 Backend | 复用 JLine3 的终端输入处理 |
 | 日志 | `java.lang.System.Logger` + `java.util.logging` | 零外部依赖，桥接到 SLF4J 可选 |

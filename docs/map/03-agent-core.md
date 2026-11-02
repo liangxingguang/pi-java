@@ -1,6 +1,6 @@
 # 03 Agent 运行时核心（pi-java-agent-core）
 
-> 【背景摘要】本图是 pi-java-agent-core 层的全量加权盘点：104 个能力单元逐条判定、权重、两侧 `file:line` 证据。「还有什么要对齐」的可读索引见 [`../07-agent-core-alignment-gaps.md`](../07-agent-core-alignment-gaps.md)；台账是 [`../04-open-items-register.md`](../04-open-items-register.md)，锚点事实见 [`ANCHOR.md`](ANCHOR.md)。
+> 【背景摘要】本图保留 agent-core 旧基线的最终能力判定、权重与两侧证据。旧基线 90 个计分单元全部对齐；新目标锚点仍需全量重测。开放项见 docs/04，执行顺序见 docs/06。
 
 ## 基准
 
@@ -250,10 +250,7 @@ pi 侧证据锚定 `agent/src/*` 或 `coding-agent/src/core/*`。
 | 整块缺失（无独立计权项） | 0 | 0 | 0 | 0 | —— |
 | **合计** | **90** | **0** | **0** | **90** | **100%** |
 
-**未加权完成度 = 90 / 90 = 100%**（2026-10-18 批 5：**存疑清零**——21 存疑翻对齐、#60 按 R1 出分母（参照物随 pi `7fd478a2e` 删除，91→90）；设计稿 docs/10）。
-
-> 2026-10-17 批 2 复核更正：批 1 的未加权计数有误（45/92；实测表内逐条点算为 46/92 ——
-> 能力单元 41→42），本表按**点算值**记（53/92；加权账不受影响，权重与系数全对得上）。
+**旧基线未加权完成度 = 90 / 90 = 100%**。
 
 ---
 
@@ -265,7 +262,7 @@ pi 侧证据锚定 `agent/src/*` 或 `coding-agent/src/core/*`。
 | 能力单元（除工具，81） | 159 | 159.0 | **100%** | 100% |
 | **模块合计（90）** | **180** | **180.0** | **100%** | **100%** |
 
-**模块合计**：Σ权重 180 ／ Σ(w×c) 180.0 ／ **加权完成度 = 180/180 = 100%**（未加权 100%；2026-10-18 批 5：+14.5，#60 出分母 Σw −2——166.5−1.0+14.5 = 180.0；设计稿 docs/10）。
+**旧基线模块合计**：Σ权重 180 ／ Σ(w×c) 180.0 ／ **加权完成度 = 180/180 = 100%**（未加权 100%）。
 
 按权重分层（能力单元表，81 条）：
 
@@ -276,7 +273,7 @@ pi 侧证据锚定 `agent/src/*` 或 `coding-agent/src/core/*`。
 | 1 | 25 | 25 | 25 | 0 | 0 | 25.0 | **100%** |
 | 合计 | 81 | 159 | 81 | 0 | 0 | 159.0 | 100% |
 
-### 权重 3 的单元清单（22 条能力单元 + 5 条工具 = 27 条，批 3 起 **27/27 = 100%**）
+### 权重 3 的单元清单（旧基线 27/27 对齐）
 
 | 单元 | 判定 |
 |---|---|
@@ -307,98 +304,6 @@ pi 侧证据锚定 `agent/src/*` 或 `coding-agent/src/core/*`。
 | #100 系统提示作为 system 消息 | 对齐（批 2 裁决） |
 
 **权重 3 层 = 22 对齐 / 0 存疑 / 0 缺失 = 100%**（2026-10-17 批 agent-core-2 清零）。
-
-### 未加权 vs 加权的差（~~75.8% → 91.5%~~ ⇒ 批 5 后 **100% = 100%，差 0**）
-
-✅ **2026-10-18 批 5：存疑清零** —— 未得分池（Σw−Σ(w×c)）= **0**。批 4 后的 15.5 分布
-（w2 9.0／w1 6.5）全部来自存疑半分，批 5 逐条收编：13 条做（#57 族 3 commit、#77、#75、#87、
-#89/#96、#94、#95、#81/#83/#85/#92/#93）、8 条裁决对齐（#14/#53/#56/#80/#82/#84/#90/#91）、
-1 条 R1 出分母（#60，Σw 182→180）。**权重 2 层与权重 1 层同批清到 100%。**
-
-### 七条点名项（✅ 2026-10-17 批 agent-core-2 全数闭环；基线 138.5 → 148.5/183 ≈ **81.1%**，+10.0）
-
-| 条目 | 权重 | 闭环内容 |
-|---|---:|---|
-| **#34 `prepareRequest` 写钩子**（存疑→对齐，+1.0） | 2 | `PiLoop` 三类型＋Config 槽（每次请求前调、context 整体替换、config 写回本 run 生效）；`HookSystem.firePrepareRequest` 链式合并；老 void `before_request` 与 `PiLaneSink.systemPrompt` 字段删除 |
-| **#46 `AgentSessionEvent` 面**（存疑→对齐，+1.5） | 3 | 补五帧（agent_start/turn_start/turn_end/message_start/message_end）＋`AgentSettled{aborted}` 真形状＋`UserMessageReceived` 删；`SessionRunner` 单一漏斗全量转发（pi `:1139-1142` 同形）；RPC 五新帧；web 直译化＋`transcriptSource` 吸收整表替换 |
-| **#52 `agent_end` 本 pass 载荷**（存疑→对齐，+1.5） | 3 | 会话层透传引擎 `newMessages`（不再发 `accumulatedMessages()` 全历史）；A8 销号 |
-| **#54 Entry union**（存疑→对齐·裁决，+1.5） | 3 | 消解：零 Entry 身份消费者＋线格式原生读写＋fact 链进树 ⇒ 行为等价；裁决进 docs/04 §4 |
-| **#58 `convertToLlm`**（存疑→对齐，+1.5） | 3 | case 合并部消解（裁决）；**stopReason 剔除删除**（参照物 `isContextMessage` 已删 ⇒ R1，error/aborted 恒投影） |
-| **#78 `latest()`/`find()` 范围**（存疑→对齐·裁决，+1.5） | 3 | latest/resume 等价；find 跨项目裁决保留；排序键差（lastActivity vs mtime）留痕进 docs/04 §4 |
-| **#100 系统提示载体**（存疑→对齐·裁决，+1.5） | 3 | pi 无会话中变更路径（`setSystemPrompt` 零命中）；provider 边界 `ContextNormalizer` 同点折叠 ⇒ 请求线等价；`Context.java` 类注重写；裁决进 docs/04 §4 |
-
-### 十一条点名项（✅ 2026-10-18 批 agent-core-4 全数闭环；基线 153.5 → 166.5/182 ≈ **91.5%**，+13.0；设计稿 docs/09）
-
-| 条目 | 权重 | 闭环内容 |
-|---|---:|---|
-| **#62 `/skill:` 展开**（缺失→对齐，+2.0） | 2 | `SkillCommandExpansion`（裁决④按 `_expandSkillCommand` 内联形状落地）＋processPrompt/steer/followUp 三接线＋`MarkdownSkill.filePath`；slash 命令注册挂 B244 |
-| **#63 `loadSkills` 面**（存疑→对齐，+1.0） | 2 | 同名先到赢（pi 序，语义反转留痕 docs/09 §14）＋realPath 去重＋来源推断＋collision/警告诊断；归属维持 coding-agent（裁决②） |
-| **#64 `loadPromptTemplates` 面**（存疑→对齐，+1.0） | 2 | `argumentHint`/`filePath`、`loadDefaults` 两默认目录、单正则五支 `substituteArgs`（JS 空串 falsy）、缺失模板静默；归属同裁决② |
-| **#24/#25/#27 branch summary 族**（缺失→对齐，+3.0） | 1×3 | `BranchSummarization`（收集/两遍扫/三态，PROMPT 逐字）＋`navigateTree`（`replaceTranscript` 整体换上下文）＋`Settings.BranchSummary`；B1 销号；扩展事件＋TUI 摘要流挂 B245 |
-| **#48 `session_info_changed`**（缺失→对齐，+1.0） | 1 | setSessionName 归一化＋改名才发；B30 销号 |
-| **#55 `fromHook` 字段**（缺失→对齐，+1.0） | 1 | Entry 两 record +`Boolean fromHook`（NON_NULL ≙ undefined）＋codec＋`CompactionFiles` 守卫；`FileOperationLists` 抽出（两侧共用） |
-| **#69 `setDefaultStreamFn`**（缺失→对齐，+1.0） | 1 | `DefaultStreamFn` 持有器＋`HarnessConfig.build()` 回落＋assemble 安装点 |
-| **#79 列表 `onProgress`**（缺失→对齐，+1.0） | 1 | `RichSessionLister`：progress/AbortSignal/虚拟线程并发；B55 销号 |
-| **#98 `abortCompaction`**（缺失→对齐，+1.0） | 1 | `CompactionAbortToken` per-op 双槽＋`abortBranchSummary`；B36 销号 |
-| **工具 #8 powershell**（缺失→对齐，+1.0） | 1 | `PowerShellTool` 六面逐字＋`createAllTools` 注册＋默认不激活（裁决③，激活面随 B236）；B243 销号 ⇒ 工具表 **21/21 = 100%** |
-| **#68 `streamProxy`**（缺失→权重 0，±0） | 1→0 | 裁决① R5：pi 侧存活但 bin pi 主流不可达 ⇒ 出分母（Σw 183→182、92→91）；触发条件 docs/09 §13.1 |
-| **B242 PI_\* 环境注入**（工具族随批，不在单元表） | —— | `SessionEnvironment` 晚绑定通道＋先删后设注入＋`exposeSessionEnvironment` 闸＋guideline 段 |
-| **B53 find 阶梯**（工具族随批，挂在 #78 行） | —— | 路径快车道＋header-only findById＋项目前缀＋跨项目精确胜前缀 |
-
-### 二十二条点名项（✅ 2026-10-18 批 agent-core-5 全数闭环；基线 166.5 → **180/180 = 100%**，+14.5、#60 出分母 Σw 182→180；设计稿 docs/10）—— **存疑清零，模块 100%**
-
-| 条目 | 权重 | 闭环内容 |
-|---|---:|---|
-| **#57 bashExecution 面**（存疑→对齐，+1.0） | 2 | 最大件：`Entry.BashExecution` 变体（线形 `type:"message"`＋role 判别）＋jsonl 编解码（pi 文件互读断修复）＋投影 `bashExecutionText` 逐字（!! 跳过）＋`recordBashResult`＋pending settled flush＋`appendLaneEntry`；窄差 D-注（exclude 不占工作副本位、会话级 bash 无截断落盘） |
-| **#77 navigateTree 工具恢复**（存疑→对齐，+1.0） | 2 | `RunLifecycle.restoreToolsFromTranscript`（新叶系统消息 `toolsAdded` → 注册表过滤恢复激活装配）＋navigateTree 接线（pi `:4138` 同序）；CLI resume 臂 pi 也不可达（sdk 恒给 `initialActiveToolNames`） |
-| **#75 fork 调用面**（存疑→对齐，+1.0） | 2 | fork 支配并消费 `--session-id`（pi `main.ts:380-386`）；删 java 私加 `" (fork)"` 名后缀；F-d 错误形窄差登记 |
-| **#87 L5 thinking 帧对称**（存疑→对齐，+0.5） | 1 | 修双 twin（pi 侧补 thinking 分支、java 补 delta）＋S16 剧本对拍零 diff（vitest 16/16、ConformanceTest 16/16） |
-| **#89 join 源序夹具**（存疑→对齐，+0.5） | 1 | 三调用闩锁完成序 3→1→2：end 完成序／结果源序／terminate 随源序（every） |
-| **#96 错误路 AgentSettled 夹具**（存疑→对齐，+0.5） | 1 | 错误路 `TurnEnd.toolResults` 恒空（pi `:253`）＋`AgentSettled{aborted}` 不改写 |
-| **#94 拆超限文件**（存疑→对齐，+0.5） | 1 | `PiLaneSink` 562→470（`PiLaneRequestTelemetry`）；`AgentHarness` 643→438（`HarnessBootstrap` 基类）；行为零变化 |
-| **#95 字节精确假 shell**（存疑→对齐，+0.5） | 1 | 3 字节字符第 2 字节钉 8192 泵边界（stdout/stderr）；泵审计无 bug |
-| **#81 工具并发审计**（存疑→对齐，+0.5） | 1 | 审计表＋`AgentTool` 契约注释；**挖出修真**：edit/write 队列统一为 `FileMutationQueue.shared()`（pi 模块级单例） |
-| **#83 transcript 消费者清点**（存疑→对齐，+0.5） | 1 | 全走存储级新解码或快照 COW，无未核裸读 ⇒ 销号 |
-| **#85 recordEvent 兜底**（存疑→对齐，+0.5） | 1 | javadoc＋夹具（name/payload 在、spanId/traceId 键缺席） |
-| **#92/#93 javadoc 两枚**（存疑→对齐，+1.0） | 1×2 | `TelemetryContext` 三处按现状重写；`truncating()` 是有消费者的兜底默认（保留＋javadoc 重写） |
-| **#14 QueueMode 宿主语义**（存疑→对齐·裁决，+1.0） | 2 | drain/默认/setter/设置同步四面 ≡（docs/04 §4） |
-| **#53 turn_end 颗粒度**（存疑→对齐，+1.0） | 2 | **B49 销号**：pi 会话事件 union 本就含逐回合 turn_end，批 2 已对齐；窄差 `parentToolCallId` 包装（无嵌套代理面） |
-| **#80/#84 两道门**（存疑→对齐·裁决，+2.0） | 2×2 | 抛文逐字＋展开先于门＋queue_update；pi 无窗概念、入口抛与关窗抛同效（docs/04 §4） |
-| **#82 retry.provider 三键**（存疑→对齐·裁决，+1.0） | 2 | `maxRetries ?? 0` 两侧同；`maxRetryDelayMs ?? 60000`；`timeoutMs` 明给替换（`httpIdleTimeoutMs` 属 E2-48 另案） |
-| **#56 EntryProjector**（存疑→对齐，+0.5） | 1 | `ProjectedEntry` ≡（含同款 compaction 守卫）；便捷返回无消费者免登 |
-| **#90 transcript 可见性**（存疑→对齐·裁决，+0.5） | 1 | 写者唯一＋快照 COW；裸读面不存在 |
-| **#91 reset/runSpan**（存疑→对齐·裁决，+0.5） | 1 | `finishRun` finally 必关；reset 置 null 是防御（注释补强） |
-| **#60 PendingEntry/InboxItem**（存疑→权重 0，±0） | 2→0 | **R1 作废**：参照物随 pi `7fd478a2e` 删除 ⇒ 出分母（Σw 182→180、91→90） |
-
-### 三条点名项（✅ 2026-10-17 批 agent-core-1 全数闭环；基线 132.0 → 138.5/183 ≈ **75.7%**）
-
-| 条目 | 权重 | 闭环内容 |
-|---|---:|---|
-| **A4 `/compact` 缺 abort-first**（#17，缺失→对齐，+2.0） | 2 | coding-agent `AgentSession.compact` 三手动入口 abort-first＋`harness.waitForIdle`；harness 零改动（abortCompaction 仍 B36） |
-| **#23 截断字节预算 →50KB**（B158，存疑→对齐，+1.5） | 3 | `TruncationUtils.DEFAULT_MAX_BYTES` 100_000→51_200，描述/注记全链现算；快照与终局两口径合一 |
-| **#6 `finishTurn` 形状对齐**（B159，存疑→对齐；含 #41 共 +3.0） | 3×2 | `TurnDecision`＋`FinishTurnHook`（turn_end 前调用、错误路照调）、`explicitContinuation` 三段清零、`NextTurnContext.newMessages`、`HookSystem.fireFinishTurn` 合并（END 先赢否则 CONTINUE，FALSE 方言删） |
-
----
-
-## 本锚判定翻转（相对旧图）
-
-| # | 旧判定 | 新判定 | 依据 |
-|---|---|---|---|
-| **#73** JSONL 存储 | 存疑（形状，v4 vs v3） | **对齐** | pi-java 落 pi v3 原生线：`PiV3Wire` 头、label/session_info/usage/context_edit 原生条目、消息原生拼写、方言行挂 custom 并链接入树、legacy 头惰性迁移；`PiV3WireFormatTest`/`PiNativeSpelling*Test` 双向夹具（2026-10-04/05，包 12–14）。**批 33（docs/45）注记**：条目信封的 `lane`／`retainedTail` 扩展键与会话文件惰性创建不改变 v3 落线判定（pi `JSON.parse` 忽略未知键）；`PiV3Wire.parseHeader` 头解析放宽到 v1/v2，读前经 `LegacyPiVersionMigrator` 迁移 |
-| **#102** reset 基线 system | 存疑 | **对齐** | **B70 已取证消解**：载体不同（pi 首条消息 vs java `Context.systemPrompt` 字段）、行为一致（清空工作副本不丢基线，下次请求重注入） |
-| **#86** `_emitSessionCompactFailed` | 存疑（F3） | **作废（R1）** | pi 该方法**只**发扩展事件 `session_compact_failed`（归 04）；公开失败事件是 java 已齐的 `compaction_end{errorMessage}`；java 源码注释同裁决 |
-| **#88** `ActiveToolsChange` | 存疑（C1） | **作废（R1）** | `active_tools_change` 在 pi 两锚全树零命中；java 早已据 R2 删变体（`Entry.java:23-24`） |
-| #54 计数 | 11 vs **7** | 11 vs **9**（批 2 裁决：行为等价） | java 内存 union 9 record；label/session_info 以 fact 存活、线格式原生读写 ⇒ 磁盘全互通（docs/04 §4） |
-| #46 计数 | 24 vs 20 | **24 vs 24**（批 2 对齐） | 补五帧＋`agent_settled{aborted}` 真形状；java 另有 `FlashStatus` 方言（TUI 专用，不上 RPC 线） |
-
-### 新缺口（只报告，本图不登记编号）
-
-1. ~~**工具耗时 `durationMs`**~~ —— ✅ **销号（2026-10-17 批 agent-core-2 复核）**：事件（`PiLoop.java:74-88`／`AgentSessionEvent.java:148-161`）、消息（`Message.java:386-395`）、单调钟（`ToolRegistry.java:150-164`，`System.nanoTime` 只围本体）、生产链（`PiToolRunner`→`PiLoopTools`→事件）与两条消费链（`JsonEventMapper`、`AgentEventTranslator`＋`WebWireJson`）全部在案；null⇒键省略一致。（B234 本体已于 ai 批 5 落地。）
-2. ~~**`agent_settled.aborted`**~~ —— ✅ **销号（批 agent-core-2，随 #46 收编）**：`AgentSettled{aborted}` 真形状（pi `agent-session.ts:203`），旗源 `agentRunAbortRequested`（abort() 置位、驱动起手清零、收尾读值）；B235 同步销号。
-3. **`--tools` 模式匹配与 MCP 保留**：pi allow/deny 名单改 glob 模式匹配（`createToolNameMatcher`）、新增 `defaultToolModifiers`（`+name/-name`）、空名单/`mcp__*` 名单下 MCP 工具仍注册（`core/agent-session.ts:271-289,501-510,1533-1557,3662-3690`）；java 侧为精确名集合，未核 —— **在册 B236**（docs/04 §3.3），归 coding-agent 批。
-4. ~~`streamProxy` 返型改为 pi-ai 工厂 `createAssistantMessageEventStream()`~~ —— ✅ **销号（2026-10-18 批 4 裁决①）**：#68 按 R5 出分母（bin pi 主流不可达）；若触发条件成立重裁，对齐时照新返型。
-
----
 
 ## 口径备注（可被推翻）
 

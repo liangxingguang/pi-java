@@ -1,6 +1,6 @@
 # 07 MCP（pi-java-mcp ＋ coding-agent MCP 集成面）
 
-> 【背景摘要】本图是 MCP 模块的全量加权盘点，2026-10-12 新建。MCP 在旧基准之后才成为 pi 主流模块，六张旧图从未覆盖；pi-java 侧为 2026-10 对齐批次（12 个对齐包）新建。核心结论（批 24 后）：会话内接线全通（G 组满分），计分母缺口仅剩 #50（structuredContent 消费者，codemode 族）。
+> 【背景摘要】本图保留 MCP 旧基线的最终能力判定与源码证据。批次过程已移除；新目标锚点下重点复核 structuredContent、连接期资源枚举、OAuth 注册策略和取消传播。
 
 ## 基准与口径
 
@@ -9,7 +9,7 @@
 - 所有证据为 `file:line`，两侧均已打开源码确认。**pi 侧一律 `git -C D:/workplaceForai/pi show ea448f454:<path>` 取证，未读工作树。**
 - **范围**：pi `packages/mcp`（SDK 本体）＋ `packages/coding-agent/src/extensions/mcp/**` 与 `core/mcp-servers.ts`（集成面）↔ pi-java `pi-java-mcp` ＋ `pi-java-coding-agent` 的 `extension/mcp/**` 与 `subcommand/Mcp*`。
 - **权重** = 用户可观察影响 × 频率（不含排期优先级）：**3** = 每轮对话都走/默认路径；**2** = 每次会话走/常用命令/常用配置；**1** = 低频/边缘/纯内部；**0** = 非目标，**排除出分母**。完成系数：对齐 1.0 ／ 存疑 0.5 ／ 缺失 0。
-- **R5 口径（关键）**：只计 `bin pi` 主流可达面。MCP 在 pi 的**默认 exposure 是 `codemode`**（`index.ts:123`），默认配置下模型根本看不到 MCP 工具——整条 codemode/tool-search 激活链依赖 quickjs-wasi 沙箱（**B161**）与 deferred 工具发现（**B162**），二者本仓零对应。codemode-only 能力（90–93）记**权重 0 出分母**，**B161/B162 闭环时重裁**。**已落的 wire/配置/CLI/适配形状全部保留计分**（B177 裁决：语义不废，只是运行时激活门未通）。
+- **R5 口径**：codemode 及其专用激活路径不做、不进分母；tool_search 和 deferred MCP 工具发现已有实现，属于主流复核面。wire、配置、CLI 和适配形状继续按行为计分。新锚点的 `structuredContent` 还需区分 codemode 消费与 `after_tool` 等主流消费。
 
 ---
 ## 规模
@@ -168,37 +168,18 @@ pi SDK 逐文件（`packages/mcp/src`）：`client.ts` 615 · `transports/stream
 | 88 | `SettingsManager.load(agentDir,projectDir,override)` 三参信任解析缝 | 接线 | `index.ts:1112`（默认 loadConfig） | coding-agent `core/SettingsManager.java:49` | 对齐 | 1 | B216（缝已开） |
 | 89 | `--no-mcp` 开关（不连任何服务器、无 MCP 工具） | 接线 | `cli/args.ts:191,328` | `ArgsParser`/`Args`/`HelpText`＋装配按名过滤（批 24；pi main.ts:787 disabledBuiltinExtensions 对位）＋`-e builtin:mcp` 显式臂 | 对齐 | 1 | — |
 
-## H. 权重 0（R5 不可达，**排除出分母**；B161/B162 闭环时重裁）
+## H. 权重 0 与共享主流面
 
-| # | 能力单元 | pi 证据 | java | 判定 | 权重 | 台账 |
-|---|---|---|---|---|---|---|
-| 90 | codemode 沙箱（quickjs-wasi）本身 | `extensions/codemode/**` | 零对应 | 缺失 | **0** | B161 |
-| 91 | `tool_search` deferred 工具发现 | `extensions/tool-search/**` | 零对应 | 缺失 | **0** | B162 |
-| 92 | MCP 默认 `codemode` exposure 的运行时激活（默认配置下模型不可见 MCP 工具） | `index.ts:123` | wire/配置语义全保留，激活路径不通 | 缺失 | **0** | B177 |
-| 93 | `ensureDiscoveryActive`（自动激活 codemode/tool_search＋不可达警告） | `index.ts:500-534` | 无 | 缺失 | **0** | B177 |
-
-> 触发条件：仅当用户配置 `exposure:"direct"` （或 `toolExposure` 个别提升）时 MCP 工具才属于主流
-> 模型可见面；该路径仍被 73–89 的接线缺失整体挡住。90–93 随 **B161/B162**（codemode/tool-search 落地）重裁。
+| # | 能力单元 | 当前结论 | 旧权重 |
+|---|---|---:|
+| 90 | codemode 沙箱 | R5，不实现、不进分母 | 0 |
+| 91 | `tool_search` deferred 工具发现 | 已有 Java 实现；新基线在 L2 重新确定计分归属 | 0（旧口径） |
+| 92 | MCP 默认 `codemode` exposure 激活 | R5；direct/deferred 主流路径不受影响 | 0 |
+| 93 | `ensureDiscoveryActive` | deferred/tool_search 臂已有实现；codemode 臂按 R5 排除 | 0（旧口径） |
 
 ---
 
-## 汇总（未加权）
-
-按 **93 个能力单元**（A13 ＋ B7 ＋ C11 ＋ D15 ＋ E18 ＋ F8 ＋ G17 ＋ H4）：
-
-| 档 | 数 | 占比 |
-|---|---:|---:|
-| 对齐 | **73** | 78.5% |
-| 缺失 | **5**（计分母 1〔#50〕＋ 权重 0 的 4） | 5.4% |
-| 存疑 | **15** | 16.1% |
-| **合计** | **93** | 100% |
-
-**非目标口径未加权完成度 = 73/89 = 82.0%**（分母 93 − 4 个权重 0）；
-对齐＋存疑视为「有件」：88/89 = **98.9%**。（批 24：13 缺失翻对齐＋#44 存疑翻对齐）
-
----
-
-## 加权汇总
+## 旧基线加权汇总
 
 | 域 | Σ权重 | Σ(w×系数) | 加权完成度 | 未加权完成度 |
 |---|---:|---:|---:|---:|
@@ -211,55 +192,26 @@ pi SDK 逐文件（`packages/mcp/src`）：`client.ts` 615 · `transports/stream
 | G 接线（17） | 23 | **23.0** | **100%（满分域）** | 100%（17/17） |
 | **模块合计（89 单位）** | **129** | **121.0** | **93.8%** | **83.1%（74/89）** |
 
-**模块合计**：Σ权重 **129** ／ Σ(w×c) **121.0** ／ **加权完成度 = 121.0/129 ≈ 93.8%**（未加权 83.1%，批 30 #53 存疑→对齐 +0.5）。
+**旧基线模块合计**：Σ权重 **129** ／ Σ(w×c) **121.0** ／ **加权完成度 = 121.0/129 ≈ 93.8%**（未加权 83.1%）。
 数字可复算：`grep -E '^\| [0-9]+ \|' docs/map/07-mcp.md` 取判定列（7）与权重列（8）。
 
-**权重 3 只有 1 条（#15 initialize 协商），对齐**。批 24 后计分母缺失仅剩 #50
-（structuredContent 消费者，挂 B202/codemode 族）；存疑 15 条均 w1 方言/字节形态/测试缺口。
+**权重 3 只有 1 条（#15 initialize 协商），旧基线为对齐**。计分母缺失为 #50；B202 在新基线必须拆分 codemode 消费与 `after_tool` 等主流消费，不能整体按 R5 排除。
 
-> 批 23（2026-10-25，coding-agent docs/34）：**3 行翻动 +4.0**——#87 缺失→对齐（+1.0，扩展 MCP 注册三件，B218 销号）＋#81（+2.0）/#84（+1.0）批 16 已落、本批回填收平账面滞后（G 组 2.0→6.0/23 ≈ 26.1%）。
-> 批 24（2026-10-27，coding-agent docs/35）：**14 行翻动 +18.5**——G 组 12 缺失全翻对齐
-> （+17.0，B221① 销号〔内置 MCP 扩展本体：六事件订阅＋提示段生产＋运行时注册三表＋
-> /mcp 命令＋管理器视图载荷＋--no-mcp〕＋B214 销号＋B195 销号）＋#24（+1.0，B188 销号）
-> ＋#44（+0.5，B189 会话臂销号）；docs/11 窄差 D3/D4 收编销号；新窄差 D138–D142。
 
 ### 缺失的权重分布（计分母 1 条）
 
-- w1：1 条 —— 50（structuredContent 消费者，挂 B202/codemode 族）。（批 24 清掉其余 13 条。）
+- w1：#50 `structuredContent` 主流消费链待复核，见 B202。
 
 ### 存疑 14 条（均 w1，方言/字节形态/测试缺口）
 
 A：4/5/6/7（B181–B184）· B：20（in-memory 发布面）· C：27/29/30（B190/B196/B191/B197）·
-D：38/40/41/43/46（B193/B198/B212/B192/B217）· F：71（B213）。（批 30 清 E：53。）
+D：38/40/41/43/46（B193/B198/B212/B192/B217）· F：71（B213）。
 
 ---
 
-## B221 接线面判定摘要（六个 on() 事件 ＋ 挂载点）
-
-| pi 挂载点 | 行 | pi-java 现状 | 判定 |
-|---|---|---|---|
-| `on("session_start")` | `index.ts:1111` | **批 24 已落**（`McpExtension.onSessionStart`） | 对齐 |
-| `on("before_agent_start")` | `index.ts:1175` | **批 24 已落**（提示段生产＋首提示有界等待） | 对齐 |
-| `on("tool_call")` | `index.ts:1187` | **批 24 已落**（资源三工具全等/属主等待）；**批 27** tool_search 等待臂落地（codemode 臂维持 R5） | 对齐 |
-| `on("turn_start")` | `index.ts:1209` | **批 24 已落**（SessionEventBridge 转发＋凭证拾取） | 对齐 |
-| `on("mcp_servers_change")` | `index.ts:1214` | **批 24 已落**（批 23 广播面＋批 24 热插拔本体） | 对齐 |
-| `on("session_shutdown")` | `index.ts:1249` | **批 24 已落**（closeWith 链发射＋收敛） | 对齐 |
-| 激活门 `get/setActiveTools` | `index.ts:490,522` | 机制在 `AgentHarness:528/533`＋**批 16 已暴露 `ExtensionContext` 面** | 对齐（批 16） |
-| `ctx.ui.custom` | `ui.ts:248` | **批 17 挂载面已落**（`TuiExtensionUI.custom`＋`ExtensionComponentOverlay`）；载荷 `/mcp` 管理器视图随 B221① | 面落/载荷缺（B214） |
-| `registerToolRenderer` | `index.ts:383` | **批 16 已落**（`ToolRendererRegistry`＋`McpToolCallRenderer`＋tui 消费缝） | 对齐（批 16，B204 销号） |
-| 提示分节 `.sections(...)` | `index.ts:1178` | 管道齐（`SystemPromptOptions.sections`/`SystemPrompts.buildSections`）＋批 16 `before_agent_start` 可变 sections 写回链，`ContextAssembler:104-148` 不产 mcp 段 | 缺失（无 MCP 生产者） |
-| `registerMcpServer` | `index.ts:349` | **批 23 已落**（`ExtensionContext` MCP 三件，三守卫逐字；注册表安家 `DefaultExtensionContext`） | 对齐（批 23，B218 销号） |
-
-**结论**（批 24 后）：MCP 全面对齐——SDK/配置/OAuth/工具适配/进程外 CLI（A–F）＋会话内接线（G 组满分）；
-计分母缺失仅剩 #50（structuredContent 消费者，随 B202/codemode 族）；台账 B221 六臂全收（②③④⑤⑥ 批 16/17/23、① 批 24），B214/B188/B189/B195 同批销号。
-codemode 默认 exposure 的运行时激活（#92/#93）曾 R5 出分母——**批 27（docs/38）重裁**：#93（deferred ⇒ `tool_search` 自动激活与可达链）已落地对齐（ensureDiscoveryActive 真化＋tool_call 等待臂；权重 0 不动账面）；#92（codemode 激活）维持 R5 出分母，随 B161 重裁。
-
-## 不确定项
+## 当前复核项
 
 1. **#20 in-memory transport**：pi 在 `src/` 公开发布，java 只存在于测试源集——若有第三方扩展要用即缺公开面。
 2. **#30 URL 归一**：`WebUrls` 自建 WHATWG 等价，非 ASCII 主机/IPv6 细节未经真 pi 互读夹具验证。
-3. **#44 auth.provider**：ReadThroughProvider 件齐，但 provider token 的生产源（modelRegistry）只在会话接线后存在。
 4. **#46 真 AS 夹具**：成功登录路径与 `--timeout` 秒数文案只在真授权服务器下可验（B217）。
-5. **测试计数口径**：历史稿「coding 507 测」含跨模块共享件；本图只数 MCP 命名文件（419 个 `@Test`），
-   共享 OAuthPage/settings/truncation 的测试计入各自模块图。
-6. **#43 cimd**：java 代码实际拉取 pi.dev 托管文档，机械上可跑，但向 AS 表明的身份是 pi 而非 pi-java。
+3. **#43 cimd**：java 代码实际拉取 pi.dev 托管文档，机械上可跑，但向 AS 表明的身份是 pi 而非 pi-java。

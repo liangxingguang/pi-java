@@ -17,7 +17,7 @@
     <description>
         Ports of pi's packages/coding-agent/examples extensions (Java + acceptance tests).
         Example library semantics: putting this module on the classpath enables all of them
-        via ServiceLoader. Not carried by pi-java-dist (docs/39 裁决③).
+        via ServiceLoader. Not carried by pi-java-dist (docs/07).
     </description>
 
     <dependencies>
