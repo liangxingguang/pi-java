@@ -2,3 +2,6 @@
 # in .manifest.json must match the classpath bytes verbatim on every checkout,
 # so treat the shards as binary — never let core.autocrlf rewrite their bytes.
 pi-java-ai/src/main/resources/catalog/*.json -text
+# Catalog generator: vendored files are hashed by VENDOR.json and snapshots by
+# SOURCES.json, so their bytes must survive checkout unchanged too.
+pi-java-ai/catalog-generator/** -text
