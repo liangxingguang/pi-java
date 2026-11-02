@@ -485,10 +485,22 @@ mvn clean verify
 
 ### 10.2 验证证据
 
-- `mvn test -pl pi-java-ai -am`：telemetry 80＋AI 1,808，零失败／错误／跳过。
-- `mvn test -pl pi-java-agent-core,pi-java-coding-agent -am`：AI 1,808＋MCP 260＋agent-core 924（1 跳过）＋session 37＋coding-agent 1,768；零失败／错误，BUILD SUCCESS。
-- `mvn clean verify`（2026-11-02 00:30，20:09 min）：BUILD SUCCESS，5,843 测试、0 失败、0 错误、29 跳过。分模块：telemetry 80、AI 1,808、MCP 260、agent-core 924（1 跳过）、session 37、coding-agent 1,768、TUI 624（1 跳过）、protocol 14、server 2、web 61、evals 196（27 跳过）、examples 69。
+- `mvn test -pl pi-java-ai -am`：telemetry 80＋AI 1,811，零失败／错误／跳过。
+- `mvn test -pl pi-java-agent-core,pi-java-coding-agent -am`：AI 1,811＋MCP 260＋agent-core 924（1 跳过）＋session 37＋coding-agent 1,769；零失败／错误，BUILD SUCCESS。
+- `mvn clean verify`（2026-11-02 00:30，评审修正前，20:09 min）：BUILD SUCCESS，5,843 测试、0 失败、0 错误、29 跳过。分模块：telemetry 80、AI 1,808、MCP 260、agent-core 924（1 跳过）、session 37、coding-agent 1,768、TUI 624（1 跳过）、protocol 14、server 2、web 61、evals 196（27 跳过）、examples 69。
+- 评审修正后重跑最终 `mvn clean verify`（2026-11-02，18:25 min）：BUILD SUCCESS，5,847 测试、0 失败、0 错误、29 跳过。分模块：telemetry 80、AI 1,811、MCP 260、agent-core 924（1 跳过）、session 37、coding-agent 1,769、TUI 624（1 跳过）、protocol 14、server 2、web 61、evals 196（27 跳过）、examples 69。
 
 ### 10.3 账面与后续
 
 map/02 只翻 B264 责任行 #6/#9/#12/#18/#37/#64/#79/#103/#104/#109：L1 由 159.5/240＝66.5% 变为 **179.5/240＝74.8%**。B263/B265/B266/B267 未翻行。D202（V8 与 Jackson syntax error 前缀窄差）继续挂账，不影响 malformed 的 `{}`＋原文契约。
+
+### 10.4 独立评审与处置
+
+fresh-context 全分支评审覆盖 `28e3f0d9..dcf23290`（评审修正提交为 `3f0a4e4b`）：
+
+- **Important，已修正**：Anthropic 车道仍用全局 pending id/name，第二个并行 `tool_use` 的 start 会覆盖第一个；index 0 的 delta 落到第二个工具，参数串写成 `{"a":1}{"b":2}`，随后第二个 stop 报槽位错误。改为按 `content_block.index` 记录 open block，并用同一 index 作 `ToolCallSlotKey`（pi `openBlocks`，anthropic-messages.ts:730-815）。RED：`interleavedToolBlocksKeepTheirOwnArgumentSlots`。
+- **Important（评审记 Minor，按影响重判），已修正**：B264 的深不可变 `arguments()` 让 before_tool 扩展无法原地改写嵌套容器；扩展抛 `UnsupportedOperationException` 后被转成工具错误、调用不执行，违背 pi `event.input` 可变契约（types.ts:1474-1483）。桥接层改为深可变复制。RED：`handlersCanMutateNestedArgumentsInPlace`。
+- **Minor（按影响重判为 Important），已修正**：Mistral 并行调用缺 `index` 时全部塌进槽 `"0"`，两个调用的参数被拼成非法 JSON、其中一个丢失；缺 id 或字面 `"null"` 时也不按 pi 派生。改为 `key = index ?? callId` 与 `derive("toolcall:<index>")`（mistral-conversations.ts:712-718）。RED：`parallelToolCallsWithoutIndexUseTheirIdsAsSlots`、`missingOrNullToolCallIdsAreDerivedFromTheIndex`。
+- **Minor，挂账不修**：Anthropic 多文本错误结果附加图片后，线上 `content` 是 block 数组，pi 是 `"\n"` 连接的字符串；Anthropic 两种形状都接受，文本内容等价（`AnthropicMessageConverter`）。
+- **Minor，挂账不修**：Responses `custom_tool_call` 的 `input` 在 added 帧走 SDK 严格访问器，非规范端点缺字段会抛 `OpenAIInvalidDataException`；pi 用 `item.input || ""`（`ResponsesCustomCalls`）。
+- **Minor，挂账不修**：L0 的通用 `TelemetryAdapterConformance` 只接到 InMemory 与 JSONL，OTel/Noop 仍只有专项测试；无运行时缺陷。
