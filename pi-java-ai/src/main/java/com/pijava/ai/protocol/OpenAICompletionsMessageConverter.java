@@ -421,6 +421,9 @@ final class OpenAICompletionsMessageConverter {
         var parts = new ArrayList<ChatCompletionContentPart>();
         for (var block : user.content()) {
             if (block instanceof ContentBlock.TextContent tc) {
+                if (tc.text().isEmpty()) {
+                    continue;
+                }
                 // pi :1261 —— 有图分支：**逐项**净化。
                 parts.add(ChatCompletionContentPart.ofText(ChatCompletionContentPartText.builder()
                         .text(SanitizeUnicode.surrogates(tc.text())).build()));
@@ -450,7 +453,7 @@ final class OpenAICompletionsMessageConverter {
                 .filter(ContentBlock.TextContent.class::isInstance)
                 .map(b -> ((ContentBlock.TextContent) b).text())
                 .collect(java.util.stream.Collectors.joining("\n"));
-        if (!text.isEmpty()) return text;
+        if (!com.pijava.ai.utils.EcmaWhitespace.isEmpty(text)) return text;
         return content.stream().anyMatch(CompletionImageWire::isImageBlock)
                 ? "(see attached image)" : "(no tool output)";
     }

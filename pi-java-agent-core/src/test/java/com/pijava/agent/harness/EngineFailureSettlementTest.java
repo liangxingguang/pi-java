@@ -86,9 +86,13 @@ class EngineFailureSettlementTest {
 
     /** 一轮只发工具调用（源序），不带文本。 */
     private static StreamFn toolCallStreamFn(List<ContentBlock.ToolUseContent> calls) {
-        var partial = AssistantMessage.empty()
+        var base = AssistantMessage.empty()
             .withContent(new ArrayList<ContentBlock>(calls))
             .withStopReason(StopReason.TOOL_USE);
+        var partial = new AssistantMessage(base.id(), base.content(), base.usage(), base.stopReason(),
+            base.api(), base.provider(), base.model(), base.responseModel(), base.providerThinkingLevel(),
+            base.diagnostics(), base.timestamp(), base.errorMessage(), base.rawStopReason(),
+            base.durationMs(), "response-engine");
         var events = new ArrayList<StreamEvent>();
         events.add(new StreamEvent.Start(AssistantMessage.empty()));
         for (int i = 0; i < calls.size(); i++) {
@@ -207,6 +211,7 @@ class EngineFailureSettlementTest {
         assertThat(failure.model()).isEqualTo(MODEL.modelName());
         assertThat(failure.deferred()).isNull();
         assertThat(failure.rawStopReason()).isNull();
+        assertThat(failure.responseId()).isEqualTo("response-engine");
 
         // C2：错误文本 = 抛出者自己的 message（pi `error.message`）
         assertThat(failure.stopReason()).isEqualTo(StopReason.ERROR);

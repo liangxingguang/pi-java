@@ -123,7 +123,7 @@ public sealed interface StreamEvent {
             case ToolCallDelta s -> new ToolCallDelta(
                 s.contentIndex(), s.id(), s.jsonDelta(), newPartial);
             case ToolCallEnd s -> new ToolCallEnd(
-                s.contentIndex(), s.id(), s.name(), s.arguments(), s.namespace(), newPartial);
+                s.contentIndex(), s.id(), s.name(), s.arguments(), s.namespace(), s.argumentsError(), newPartial);
             case UsageInfo s -> s.partial() == null ? s
                 : new UsageInfo(s.inputTokens(), s.outputTokens(), newPartial, s.usage());
             case StreamDone s -> new StreamDone(s.reason(), s.usage(), newPartial);
@@ -220,16 +220,23 @@ public sealed interface StreamEvent {
      */
     record ToolCallEnd(int contentIndex, String id, String name,
                        Map<String, Object> arguments, String namespace,
+                       @org.jspecify.annotations.Nullable String argumentsError,
                        AssistantMessage partial) implements StreamEvent {
         /** Compact constructor that defensively copies the arguments map. */
         public ToolCallEnd {
-            arguments = Map.copyOf(arguments);
+            arguments = JsonSnapshots.copyObject(arguments);
+        }
+
+        /** Backwards-compatible constructor for pre-error call sites. */
+        public ToolCallEnd(int contentIndex, String id, String name,
+                           Map<String, Object> arguments, String namespace, AssistantMessage partial) {
+            this(contentIndex, id, name, arguments, namespace, null, partial);
         }
 
         /** Backwards-compatible constructor for pre-namespace call sites. */
         public ToolCallEnd(int contentIndex, String id, String name,
                            Map<String, Object> arguments, AssistantMessage partial) {
-            this(contentIndex, id, name, arguments, null, partial);
+            this(contentIndex, id, name, arguments, null, null, partial);
         }
     }
 

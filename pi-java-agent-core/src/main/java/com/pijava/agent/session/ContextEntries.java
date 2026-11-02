@@ -266,7 +266,7 @@ public final class ContextEntries {
                 assistant.thinkingLevel(), assistant.diagnostics(),
                 assistant.usage(),
                 assistant.timestamp(), assistant.errorMessage(), assistant.rawStopReason(),
-                assistant.durationMs());
+                assistant.durationMs(), assistant.responseId());
         }
         if (message instanceof Message.ToolResultMessage tool) {
             return new Message.ToolResultMessage(tool.toolUseId(), tool.toolName(), blocks,

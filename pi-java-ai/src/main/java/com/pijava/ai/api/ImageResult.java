@@ -20,10 +20,17 @@ public record ImageResult(
     List<ContentBlock> output,
     ImageStopReason stopReason,
     String errorMessage,
-    long timestamp
+    long timestamp,
+    @org.jspecify.annotations.Nullable String responseId
 ) {
     /** Defensively copies {@code output}. */
     public ImageResult {
         output = List.copyOf(output);
+    }
+
+    /** Backwards-compatible constructor without provider response metadata. */
+    public ImageResult(String provider, String model, List<ContentBlock> output,
+                       ImageStopReason stopReason, String errorMessage, long timestamp) {
+        this(provider, model, output, stopReason, errorMessage, timestamp, null);
     }
 }

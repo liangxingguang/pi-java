@@ -281,12 +281,21 @@ final class AnthropicRequestBuilder {
 
             if (msg instanceof Message.ToolResultMessage) {
                 var resultBlocks = new ArrayList<ContentBlockParam>();
+                var errorImages = new ArrayList<ContentBlockParam>();
                 int j = i;
                 while (j < conversation.size()
                         && conversation.get(j) instanceof Message.ToolResultMessage tool) {
-                    resultBlocks.add(AnthropicMessageConverter.toToolResultBlock(tool));
+                    var converted = AnthropicMessageConverter.convertToolResult(tool);
+                    resultBlocks.add(converted.block());
+                    if (converted.caption() != null) {
+                        errorImages.add(ContentBlockParam.ofText(TextBlockParam.builder()
+                            .text(converted.caption()).build()));
+                        converted.images().forEach(image ->
+                            errorImages.add(ContentBlockParam.ofImage(image)));
+                    }
                     j++;
                 }
+                resultBlocks.addAll(errorImages);
                 i = j - 1;
                 rows.add(new Row(MessageParam.Role.USER, resultBlocks));
                 continue;

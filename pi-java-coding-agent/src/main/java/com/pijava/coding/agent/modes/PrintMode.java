@@ -97,7 +97,7 @@ public final class PrintMode {
             case StreamEvent.ToolCallStart ignored -> { }
             case StreamEvent.ToolCallDelta ignored -> { }
             case StreamEvent.ToolCallEnd(
-                    var contentIndex, var id, var name, var arguments, var namespace,
+                    var contentIndex, var id, var name, var arguments, var namespace, _,
                     var partial) -> {
                 if (verbose) {
                     System.out.println("🔧 " + name + " " + arguments);

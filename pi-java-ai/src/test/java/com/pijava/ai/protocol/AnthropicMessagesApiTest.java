@@ -140,6 +140,50 @@ class AnthropicMessagesApiTest {
     }
 
     /**
+     * B264 评审回归：并行 tool_use 块按 {@code content_block.index} 隔离参数槽。
+     *
+     * <p>pi 用 {@code openBlocks.set(event.index, …)}（anthropic-messages.ts:730-815）逐块记录
+     * 状态；此处曾用全局 pending id/name，第二个 start 会覆盖第一个，index 0 的 delta 落到
+     * 第二个工具上，最终两个工具的参数互相串写或报错。</p>
+     */
+    @Test
+    void interleavedToolBlocksKeepTheirOwnArgumentSlots() throws Exception {
+        var body = sse("message_start", "{\"type\":\"message_start\",\"message\":{"
+                + "\"id\":\"msg_1\",\"type\":\"message\",\"role\":\"assistant\","
+                + "\"model\":\"claude-sonnet-4\",\"content\":[],"
+                + "\"stop_reason\":null,\"stop_sequence\":null,"
+                + "\"usage\":{\"input_tokens\":10,\"output_tokens\":1}}}")
+            + sse("content_block_start", "{\"type\":\"content_block_start\",\"index\":0,"
+                + "\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_a\","
+                + "\"name\":\"echo\",\"input\":{}}}")
+            + sse("content_block_start", "{\"type\":\"content_block_start\",\"index\":1,"
+                + "\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_b\","
+                + "\"name\":\"echo\",\"input\":{}}}")
+            + sse("content_block_delta", "{\"type\":\"content_block_delta\",\"index\":0,"
+                + "\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"a\\\":1}\"}}")
+            + sse("content_block_delta", "{\"type\":\"content_block_delta\",\"index\":1,"
+                + "\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"b\\\":2}\"}}")
+            + sse("content_block_stop", "{\"type\":\"content_block_stop\",\"index\":0}")
+            + sse("content_block_stop", "{\"type\":\"content_block_stop\",\"index\":1}")
+            + sse("message_delta", "{\"type\":\"message_delta\","
+                + "\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null},"
+                + "\"usage\":{\"output_tokens\":15}}")
+            + sse("message_stop", "{\"type\":\"message_stop\"}");
+        var events = collect(body);
+
+        var ends = events.stream()
+            .filter(StreamEvent.ToolCallEnd.class::isInstance)
+            .map(StreamEvent.ToolCallEnd.class::cast)
+            .toList();
+        assertThat(errors(events)).isEmpty();
+        assertThat(ends).hasSize(2);
+        assertThat(ends.get(0).id()).isEqualTo("toolu_a");
+        assertThat(ends.get(0).arguments()).containsEntry("a", 1);
+        assertThat(ends.get(1).id()).isEqualTo("toolu_b");
+        assertThat(ends.get(1).arguments()).containsEntry("b", 2);
+    }
+
+    /**
      * {@code refusal} ⇒ {@code error} + 文案取 {@code stop_details.explanation}
      * （pi {@code :1472-1476} 的 {@code stopDetails?.explanation || "The model refused…"}）。
      */

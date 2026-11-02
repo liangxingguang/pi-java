@@ -60,6 +60,7 @@ class AnthropicResponseModelWireTest {
         var done = last(events, StreamEvent.StreamDone.class);
         assertThat(done.partial().model()).isEqualTo("claude-sonnet-4");
         assertThat(done.partial().responseModel()).isEqualTo("kimi-for-coding");
+        assertThat(done.partial().responseId()).isEqualTo("msg_1");
     }
 
     /** 命中许可回退条目：cost 用条目定价（pi :671-677 的 usageModel 切换）。 */

@@ -160,6 +160,9 @@ public final class SessionJson {
             if (assistant.durationMs() != null) {
                 node.put("durationMs", assistant.durationMs());
             }
+            if (assistant.responseId() != null) {
+                node.put("responseId", assistant.responseId());
+            }
         }
         if (message instanceof Message.SystemMessage system) {
             // A1（docs/08 §A1）：系统消息的 pi 形状（ai/src/types.ts:491-509）。role/content
@@ -252,6 +255,9 @@ public final class SessionJson {
                 // 批 30（ai#8）：pi namespace?: string（types.ts:442-443）——同形缺席省略。
                 if (t.namespace() != null) {
                     node.put("namespace", t.namespace());
+                }
+                if (t.argumentsError() != null) {
+                    node.put("argumentsError", t.argumentsError());
                 }
             }
             case ContentBlock.ToolResultContent t -> {

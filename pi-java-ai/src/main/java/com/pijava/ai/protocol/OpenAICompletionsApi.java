@@ -10,7 +10,6 @@ import java.util.function.Supplier;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.openai.core.JsonField;
-import com.openai.core.JsonValue;
 import com.openai.core.ObjectMappers;
 import com.openai.client.OpenAIClient;
 import com.openai.client.okhttp.OpenAIOkHttpClient;
@@ -237,6 +236,8 @@ public class OpenAICompletionsApi extends AbstractChatApi {
                     if (streamEventHook != null) {
                         streamEventHook.onEvent(chunk, request.model());
                     }
+                    // B264: response id is provider metadata and follows pi's first-nonempty ||= timing.
+                    builder.noteResponseIdFirstNonBlank(chunk._id().asKnown().orElse(null));
                     // B148（pi openai-completions.ts:565-567）：首个非空且与请求 id
                     // 不同的 chunk.model 落 responseModel（builder 内首值胜，||=）。
                     // 放在 choices 判定之前：usage-only chunk 也可能先带 model。
@@ -345,11 +346,11 @@ public class OpenAICompletionsApi extends AbstractChatApi {
                         for (var tc : delta.toolCalls().get()) {
                             var custom = CompletionsCustomChunks.from(tc);
                             if (custom != null) {
-                                toolCall.updateCustom(tc.id().orElse(null), custom,
+                                toolCall.updateCustom(tc.index(), tc.id().orElse(null), custom,
                                     grammarProperties, publisher::submit, builder);
                             } else {
                                 var fn = tc.function();
-                                toolCall.update(
+                                toolCall.update(tc.index(),
                                     tc.id().orElse(null),
                                     fn.flatMap(f -> f.name()).orElse(null),
                                     fn.flatMap(f -> f.arguments()).orElse(null),

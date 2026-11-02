@@ -34,33 +34,67 @@ final class GrammarInputBuffer {
      * @return 追加到重组 JSON 的片段；无内容追加时 {@code null}
      */
     String append(String nextInput, boolean close) {
+        if (close) {
+            return close(nextInput);
+        }
         if (closed) {
-            if (close && nextInput.equals(input)) {
-                return null;
-            }
-            throw new IllegalStateException("grammar tool input for property \"" + property
-                + "\" changed after it was closed");
+            throw changedAfterClose();
         }
         if (!nextInput.startsWith(input)) {
-            throw new IllegalStateException("grammar tool input for property \"" + property
-                + "\" changed non-monotonically");
+            throw nonMonotonic();
         }
-        String inputDelta = nextInput.substring(input.length());
-        if (!close && inputDelta.isEmpty()) {
+        return appendDelta(nextInput.substring(input.length()));
+    }
+
+    /** Append only the new raw input fragment, without closing the reconstructed object. */
+    String appendDelta(String delta) {
+        if (closed) {
+            throw changedAfterClose();
+        }
+        if (delta.isEmpty()) {
             return null;
         }
-        var delta = new StringBuilder();
+        var json = new StringBuilder();
         if (!started) {
-            delta.append('{').append(quote(property)).append(":\"");
+            json.append('{').append(quote(property)).append(":\"");
             started = true;
         }
-        delta.append(escape(inputDelta));
-        input = nextInput;
-        if (close) {
-            delta.append("\"}");
-            closed = true;
+        json.append(escape(delta));
+        input += delta;
+        return json.toString();
+    }
+
+    /** Close against the provider's authoritative complete input, or the current input when absent. */
+    String close(String finalInput) {
+        if (closed) {
+            if (finalInput == null || finalInput.equals(input)) {
+                return null;
+            }
+            throw changedAfterClose();
         }
-        return delta.toString();
+        String complete = finalInput == null ? input : finalInput;
+        if (!complete.startsWith(input)) {
+            throw nonMonotonic();
+        }
+        var json = new StringBuilder();
+        if (!started) {
+            json.append('{').append(quote(property)).append(":\"");
+            started = true;
+        }
+        json.append(escape(complete.substring(input.length()))).append("\"}");
+        input = complete;
+        closed = true;
+        return json.toString();
+    }
+
+    private IllegalStateException changedAfterClose() {
+        return new IllegalStateException("grammar tool input for property \"" + property
+            + "\" changed after it was closed");
+    }
+
+    private IllegalStateException nonMonotonic() {
+        return new IllegalStateException("grammar tool input for property \"" + property
+            + "\" changed non-monotonically");
     }
 
     /** Current accumulated raw input. */

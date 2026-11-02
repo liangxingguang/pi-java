@@ -1,23 +1,36 @@
 package com.pijava.telemetry.testing;
 
+import com.pijava.telemetry.HistogramOptions;
+import com.pijava.telemetry.InstrumentOptions;
+import com.pijava.telemetry.RecordedTelemetryMeasurement;
 import com.pijava.telemetry.RecordedTelemetrySpan;
 import com.pijava.telemetry.SpanOptions;
 import com.pijava.telemetry.SpanStatus;
+import com.pijava.telemetry.TelemetryContext;
+import com.pijava.telemetry.TelemetryMetrics;
 import com.pijava.telemetry.TelemetrySpan;
 
-import java.util.*;
+import java.util.AbstractMap;
+import java.util.AbstractSet;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 
 /**
  * pi {@code testing/conformance.ts:60-315} 的移植：回调式遥测适配器契约的
- * runner 无关一致性用例。7 用例 / 5 组。
+ * runner 无关一致性用例。10 用例 / 6 组；R5 的 links/propagation 案不在本层。
  *
- * <p>与 pi 9 用例的差异（docs/23 §4.2，均登记于此）：</p>
+ * <p>同步结构性差异（沿用 docs/23 §4.2 裁决）：</p>
  * <ul>
  * <li>「async rejection」子场景与同步路径合并——java 回调是同步的
  * （docs/23 §7.3 结构性裁决）；</li>
  * <li>{@code Promise.reject(undefined)} 子场景不移植——java 无空异常；</li>
  * <li>「unreadable {@code SpanOptions}」子场景不移植——{@link SpanOptions} 的
- * 紧凑构造器在调用点就完成读取（{@code Map.copyOf}），炸弹载荷到不了
+ * 紧凑构造器在调用点就完成读取，炸弹载荷到不了
  * adapter，这是 TS Proxy 特有场景；</li>
  * <li>「unreadable {@code SpanStatus}」子场景不移植——sealed record 的组件
  * 访问器不会抛；其核心断言（显式 status 调用失败后自动派生仍生效）已由
@@ -35,6 +48,15 @@ public final class TelemetryAdapterConformance {
         TelemetryAdapterFixtureFactory factory
     ) {
         return List.of(
+            createCase(factory, "capabilities",
+                "carries adapter capabilities through contexts and spans",
+                TelemetryAdapterConformance::carriesCapabilities),
+            createCase(factory, "metrics",
+                "records ordered measurements and optional histogram exemplars",
+                TelemetryAdapterConformance::recordsOrderedMeasurements),
+            createCase(factory, "metrics",
+                "copies instrument metadata and measurement attributes",
+                TelemetryAdapterConformance::copiesMetricMetadataAndAttributes),
             createCase(factory, "callback lifecycle",
                 "admits once synchronously and preserves the result",
                 TelemetryAdapterConformance::admitsOnceSynchronously),
@@ -73,6 +95,90 @@ public final class TelemetryAdapterConformance {
     @FunctionalInterface
     private interface CaseBody {
         void run(TelemetryAdapterFixture fixture) throws Exception;
+    }
+
+    /** Root, child, and settled-child contexts retain the same metrics capability. */
+    private static void carriesCapabilities(TelemetryAdapterFixture fixture) {
+        var metrics = fixture.metrics() == null ? fixture.context().metrics() : fixture.metrics();
+        assertCapabilities(fixture.context(), metrics);
+        TelemetrySpan[] settled = new TelemetrySpan[1];
+        fixture.context().startSpan(new SpanOptions("capabilities"), span -> {
+            settled[0] = span;
+            assertCapabilities(span, metrics);
+            span.startSpan(new SpanOptions("capabilities.child"), child -> {
+                assertCapabilities(child, metrics);
+                return null;
+            });
+            return null;
+        });
+        Objects.requireNonNull(settled[0], "callback span").startSpan(
+            new SpanOptions("capabilities.inert"), child -> {
+                assertCapabilities(child, metrics);
+                return null;
+            });
+    }
+
+    private static void assertCapabilities(TelemetryContext context, TelemetryMetrics metrics) {
+        check(context.metrics() == metrics, "context metrics capability identity");
+    }
+
+    /** Raw measurements preserve order, metadata, attributes, and own-span exemplars. */
+    private static void recordsOrderedMeasurements(TelemetryAdapterFixture fixture) throws Exception {
+        var metrics = fixture.metrics();
+        if (metrics == null) {
+            return;
+        }
+        metrics.counter("bytes", new InstrumentOptions("Encoded bytes", "By"))
+            .add(12, Map.of("direction", "out"));
+        var active = metrics.upDownCounter("active");
+        active.add(1);
+        active.add(-1);
+        var histogram = metrics.histogram("duration", new HistogramOptions(null, "ms", List.of(1.0, 10.0)));
+        fixture.context().startSpan(new SpanOptions("measured"), span -> {
+            histogram.record(5, Map.of("method", "read"), span);
+            return null;
+        });
+
+        var measurements = fixture.getMetrics();
+        checkEquals(4, measurements.size(), "measurement count");
+        var actual = measurements.stream()
+            .map(measurement -> List.of(measurement.kind().wireName(), measurement.name(), measurement.value()))
+            .toList();
+        checkEquals(List.of(
+            List.of("counter", "bytes", 12.0),
+            List.of("upDownCounter", "active", 1.0),
+            List.of("upDownCounter", "active", -1.0),
+            List.of("histogram", "duration", 5.0)), actual, "ordered measurements");
+        checkEquals(Map.of("direction", "out"), measurements.get(0).attributes(), "metric attributes");
+        checkEquals("Encoded bytes", measurements.get(0).description(), "metric description");
+        checkEquals("By", measurements.get(0).unit(), "metric unit");
+        checkEquals(List.of(1.0, 10.0), measurements.get(3).boundaries(), "histogram boundaries");
+        checkEquals(findSpan(fixture.getSpans(), "measured").context(), measurements.get(3).context(),
+            "histogram exemplar");
+    }
+
+    /** Factories and recording detach caller-owned metadata and attribute collections. */
+    private static void copiesMetricMetadataAndAttributes(TelemetryAdapterFixture fixture) throws Exception {
+        var metrics = fixture.metrics();
+        if (metrics == null) {
+            return;
+        }
+        var boundaries = new ArrayList<>(List.of(1.0, 10.0));
+        var histogram = metrics.histogram("snapshot", new HistogramOptions("Original", null, boundaries));
+        boundaries.add(100.0);
+        var tags = new ArrayList<>(List.of("original"));
+        var attributes = new LinkedHashMap<String, Object>();
+        attributes.put("tags", tags);
+        histogram.record(-1, attributes);
+        tags.add("changed");
+
+        var measurements = fixture.getMetrics();
+        checkEquals(1, measurements.size(), "snapshot measurement count");
+        RecordedTelemetryMeasurement measurement = measurements.getFirst();
+        checkEquals(Map.of("tags", List.of("original")), measurement.attributes(), "snapshot attributes");
+        checkEquals(List.of(1.0, 10.0), measurement.boundaries(), "snapshot boundaries");
+        checkEquals("Original", measurement.description(), "snapshot description");
+        check(measurement.context() == null, "measurement without exemplar has null context");
     }
 
     /** pi {@code conformance.ts:65-85}。 */
@@ -166,12 +272,22 @@ public final class TelemetryAdapterConformance {
     private static void mergesAttributesAndRecordsEvents(TelemetryAdapterFixture fixture)
         throws Exception
     {
+        var initial = new LinkedHashMap<String, Object>();
+        initial.put("start", "value");
+        initial.put("overwrite", "start");
+        initial.put("ignored", null);
         fixture.context().startSpan(
-            new SpanOptions("recording", Map.of("start", "value", "overwrite", "start")),
+            new SpanOptions("recording", initial),
             span -> {
                 span.setAttributes(Map.of("count", 1L, "overwrite", "middle"));
-                span.setAttributes(Map.of("overwrite", "end"));
-                span.addEvent("first", Map.of("index", 1L));
+                var end = new LinkedHashMap<String, Object>();
+                end.put("count", null);
+                end.put("overwrite", "end");
+                span.setAttributes(end);
+                var first = new LinkedHashMap<String, Object>();
+                first.put("index", 1L);
+                first.put("ignored", null);
+                span.addEvent("first", first);
                 span.addEvent("second", Map.of("index", 2L));
                 return null;
             });

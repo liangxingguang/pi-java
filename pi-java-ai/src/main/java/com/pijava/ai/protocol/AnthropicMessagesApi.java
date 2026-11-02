@@ -201,10 +201,9 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
     protected void streamInternal(StreamRequest request,
                                    SubmissionPublisher<StreamEvent> publisher) {
         var builder = new StreamPartialBuilder();
-        var isToolBlock = new boolean[]{false};
-        var isThinkingBlock = new boolean[]{false};
-        var pendingToolName = new String[]{""};
-        var pendingToolId = new String[]{""};
+        // B264：pi `openBlocks` 按 content_block.index 记录开放块，并行工具块互不覆盖。
+        var openBlocks =
+            new java.util.HashMap<Long, AnthropicEventMapper.OpenBlock>();
         var stop = new AnthropicStreamSupport.StopState();
         var usageState = new AnthropicUsageState(request.model());
         // B148：服务端回退元数据（fallback 成本归属）＋ input_transformations 收集。
@@ -252,8 +251,7 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
                     if (streamEventHook != null) {
                         streamEventHook.onEvent(raw, request.model());
                     }
-                    StreamEvent se = mapEvent(raw, request, builder, isToolBlock,
-                            isThinkingBlock, pendingToolName, pendingToolId, stop,
+                    StreamEvent se = mapEvent(raw, request, builder, openBlocks, stop,
                             usageState, fallbacks, responseExtras, currentTools);
                     if (se != null) {
                         if (se instanceof StreamEvent.StreamError) {
@@ -279,18 +277,14 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
     private StreamEvent mapEvent(RawMessageStreamEvent event,
                                   StreamRequest request,
                                   StreamPartialBuilder builder,
-                                  boolean[] isToolBlock,
-                                  boolean[] isThinkingBlock,
-                                  String[] pendingToolName,
-                                  String[] pendingToolId,
+                                  java.util.Map<Long, AnthropicEventMapper.OpenBlock> openBlocks,
                                   AnthropicStreamSupport.StopState stop,
                                   AnthropicUsageState usageState,
                                   java.util.List<AllowedFallbackModel> fallbacks,
                                   AnthropicResponseExtras responseExtras,
                                   java.util.List<com.pijava.ai.api.ToolDefinition> currentTools) {
-        return eventMapper.mapEvent(event, request, builder, isToolBlock, isThinkingBlock,
-            pendingToolName, pendingToolId, stop, usageState, fallbacks, responseExtras,
-            currentTools);
+        return eventMapper.mapEvent(event, request, builder, openBlocks, stop, usageState,
+            fallbacks, responseExtras, currentTools);
     }
 
     /** 直调夹具形态（反射调用）：无亲和头、无显式 beta 覆写、非 OAuth 身份。 */

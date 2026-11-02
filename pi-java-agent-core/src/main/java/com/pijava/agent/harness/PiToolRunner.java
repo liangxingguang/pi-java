@@ -13,6 +13,7 @@ import com.pijava.agent.tool.ToolArgumentsValidator;
 import com.pijava.agent.tool.ToolContext;
 import com.pijava.agent.tool.ToolRegistry;
 import com.pijava.agent.tool.ToolResult;
+import com.pijava.agent.tool.builtin.BashTool;
 import com.pijava.agent.tool.image.ToolResultImages;
 import com.pijava.ai.AbortSignal;
 import com.pijava.ai.message.ContentBlock;
@@ -144,11 +145,23 @@ public final class PiToolRunner implements PiLoop.ToolRunner {
         if (tool == null) {
             return immediate(call, true, "Tool " + call.toolName() + " not found", false);
         }
+        Map<String, Object> effectiveArgs = call.args();
+        String argumentsError = call.argumentsError();
+        if ("bash".equals(call.toolName())) {
+            var recovered = BashTool.recoverLegacyArguments(call.args());
+            if (recovered != null) {
+                effectiveArgs = recovered.arguments();
+                if (argumentsError == null) {
+                    argumentsError = recovered.argumentsError();
+                }
+            }
+        }
         BeforeToolResult decision;
         try {
-            ToolArgumentsValidator.validate(tool.inputSchema(), call.args());
+            ToolArgumentsValidator.validate(tool.inputSchema(), effectiveArgs,
+                call.toolName(), argumentsError);
             decision = hooks == null ? null : hooks.fireBeforeTool(laneName,
-                new ToolCallContext(laneName, call.toolCallId(), call.toolName(), call.args(),
+                new ToolCallContext(laneName, call.toolCallId(), call.toolName(), effectiveArgs,
                     parentToolCallId));
         } catch (Exception e) {
             return immediate(call, true, messageOf(e), false);
@@ -163,7 +176,7 @@ public final class PiToolRunner implements PiLoop.ToolRunner {
         }
         notify(call.toolCallId(), true);
         var args = decision != null && decision.arguments() != null
-            ? decision.arguments() : call.args();
+            ? decision.arguments() : effectiveArgs;
         return new PreparedCall(call, args);
     }
 

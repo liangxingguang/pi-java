@@ -2,6 +2,10 @@ package com.pijava.ai.protocol;
 
 import java.util.Map;
 
+import com.pijava.ai.stream.JsonSnapshots;
+
+import org.jspecify.annotations.Nullable;
+
 /**
  * pi-messages wire 上的工具调用（对齐 pi {@code ToolCall}）。
  *
@@ -12,15 +16,22 @@ public record PiToolCall(
     String id,
     String name,
     Map<String, Object> arguments,
-    String thoughtSignature
+    String thoughtSignature,
+    @Nullable String namespace,
+    @Nullable String argumentsError
 ) {
     /** Compact constructor that defensively copies the arguments map. */
     public PiToolCall {
-        arguments = arguments == null ? Map.of() : Map.copyOf(arguments);
+        arguments = arguments == null ? Map.of() : JsonSnapshots.copyObject(arguments);
+    }
+
+    /** Backwards-compatible constructor for pre-metadata call sites. */
+    public PiToolCall(String id, String name, Map<String, Object> arguments, String thoughtSignature) {
+        this(id, name, arguments, thoughtSignature, null, null);
     }
 
     /** Backwards-compatible constructor for pre-signature call sites. */
     public PiToolCall(String id, String name, Map<String, Object> arguments) {
-        this(id, name, arguments, null);
+        this(id, name, arguments, null, null, null);
     }
 }

@@ -23,6 +23,7 @@ import com.pijava.ai.message.Message;
 import com.pijava.ai.message.StopReason;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.stream.StreamPartialBuilder;
+import com.pijava.ai.stream.ToolCallSlotKey;
 import com.pijava.ai.utils.ProviderErrors;
 
 /**
@@ -97,7 +98,6 @@ public final class PiMessagesApi extends AbstractChatApi {
                                   SubmissionPublisher<StreamEvent> publisher) {
         var builder = new StreamPartialBuilder();
         var toolIds = new HashMap<Integer, String>();
-        var toolJson = new HashMap<Integer, String>();
         boolean sawTerminal = false;
         try {
             publisher.submit(builder.emitStart());
@@ -175,28 +175,26 @@ public final class PiMessagesApi extends AbstractChatApi {
                     }
                     case PiMessagesEvent.ToolCallStart s -> {
                         toolIds.put(s.contentIndex(), s.id());
-                        // 包⑥（§4-C）：PiMessagesEvent.ToolCallStart:46 的 toolName
-                        // 字段此前**从未被这个调用点取用** ⇒ 该车道的起点身份为空。
-                        publisher.submit(builder.emitToolCallStart(s.id(), s.toolName()));
+                        publisher.submit(builder.emitToolCallStart(
+                            ToolCallSlotKey.indexed(s.contentIndex()), s.id(), s.toolName(), null));
                     }
-                    case PiMessagesEvent.ToolCallDelta d -> {
-                        toolJson.put(d.contentIndex(),
-                            toolJson.getOrDefault(d.contentIndex(), "") + d.delta());
+                    case PiMessagesEvent.ToolCallDelta d ->
                         publisher.submit(builder.emitToolCallDelta(
+                            ToolCallSlotKey.indexed(d.contentIndex()),
                             toolIds.get(d.contentIndex()), d.delta()));
-                    }
                     case PiMessagesEvent.ToolCallEnd e -> {
                         var tc = e.toolCall();
-                        feedToolCallTail(builder, publisher, toolJson,
-                            e.contentIndex(), tc);
-                        // Batch F（原 docs/67）：toolCall.thoughtSignature 随块透传。
-                        publisher.submit(
-                            builder.emitToolCallEnd(tc.id(), tc.name(), tc.thoughtSignature()));
-                        toolJson.remove(e.contentIndex());
+                        var key = ToolCallSlotKey.indexed(e.contentIndex());
+                        feedToolCallTail(builder, publisher, key, tc);
+                        publisher.submit(builder.emitAuthoritativeToolCallEnd(key,
+                            tc.id(), tc.name(), tc.arguments(), tc.argumentsError(),
+                            tc.thoughtSignature(), tc.namespace()));
                         toolIds.remove(e.contentIndex());
                     }
                     case PiMessagesEvent.Done done -> {
                         sawTerminal = true;
+                        builder.assignResponseId(done.responseId());
+                        builder.emitOpenToolCallEnds().forEach(publisher::submit);
                         if (done.usage() != null) {
                             publisher.submit(builder.emitUsage(
                                 (long) done.usage().input(), (long) done.usage().output()));
@@ -216,6 +214,7 @@ public final class PiMessagesApi extends AbstractChatApi {
                     }
                     case PiMessagesEvent.Error err -> {
                         sawTerminal = true;
+                        builder.assignResponseId(err.responseId());
                         if (err.providerThinkingLevel() != null) {
                             builder.noteProviderThinkingLevel(err.providerThinkingLevel());
                         }
@@ -471,20 +470,16 @@ public final class PiMessagesApi extends AbstractChatApi {
 
     // ── 事件映射辅助 ─────────────────────────────────────────────────────
 
-    /** toolcall_end 的 toolCall.arguments 是权威终值；补喂剩余 delta。 */
+    /** Publish a missing prefix tail once; non-prefix replacement deliberately emits no delta. */
     private static void feedToolCallTail(StreamPartialBuilder builder,
                                          SubmissionPublisher<StreamEvent> publisher,
-                                         Map<Integer, String> toolJson, int index,
-                                         PiToolCall tc) {
+                                         ToolCallSlotKey key, PiToolCall tc) {
         String full;
         try {
             full = JSON.writeValueAsString(tc.arguments());
         } catch (Exception e) {
             full = "{}";
         }
-        String acc = toolJson.getOrDefault(index, "");
-        if (full.startsWith(acc) && full.length() > acc.length()) {
-            publisher.submit(builder.emitToolCallDelta(tc.id(), full.substring(acc.length())));
-        }
+        builder.replaceToolArguments(key, full).ifPresent(publisher::submit);
     }
 }

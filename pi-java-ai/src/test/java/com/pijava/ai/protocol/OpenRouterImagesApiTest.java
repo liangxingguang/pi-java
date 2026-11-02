@@ -1,10 +1,14 @@
 package com.pijava.ai.protocol;
 
+import java.io.OutputStream;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sun.net.httpserver.HttpServer;
 import com.openai.core.JsonValue;
 import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.ImageRequest;
@@ -55,6 +59,34 @@ class OpenRouterImagesApiTest {
         assertThat(blocks).containsExactly(
             new ContentBlock.ImageContent("image/png", "AAAA"),
             new ContentBlock.ImageContent("image/jpeg", "BBBB"));
+    }
+
+    @Test
+    void generateCarriesTheProviderResponseId() throws Exception {
+        var server = HttpServer.create(new InetSocketAddress(0), 0);
+        try {
+            server.createContext("/v1/chat/completions", exchange -> {
+                var body = ("{\"id\":\"resp-image\",\"created\":1,\"model\":\"image-model\","
+                    + "\"choices\":[{\"index\":0,\"finish_reason\":\"stop\",\"message\":{"
+                    + "\"role\":\"assistant\",\"content\":\"\"}}]}")
+                    .getBytes(StandardCharsets.UTF_8);
+                exchange.getResponseHeaders().set("Content-Type", "application/json");
+                exchange.sendResponseHeaders(200, body.length);
+                try (OutputStream output = exchange.getResponseBody()) {
+                    output.write(body);
+                }
+            });
+            server.start();
+            var api = new OpenRouterImagesApi(new ApiOptions(
+                "http://localhost:" + server.getAddress().getPort() + "/v1", "test-key",
+                Duration.ofSeconds(5), 0, Map.of()), "OPENROUTER_API_KEY");
+            var result = api.generate(new ImageRequest(
+                ModelId.of("openrouter-images", "image-model"),
+                List.of(new ContentBlock.TextContent("draw"))), ApiOptions.defaults());
+            assertThat(result.responseId()).isEqualTo("resp-image");
+        } finally {
+            server.stop(0);
+        }
     }
 
     @Test

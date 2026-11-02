@@ -1,12 +1,17 @@
 package com.pijava.telemetry;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.Function;
 
 import io.opentelemetry.api.OpenTelemetry;
+import io.opentelemetry.api.common.AttributeKey;
 import io.opentelemetry.api.common.Attributes;
+import io.opentelemetry.api.common.AttributesBuilder;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.StatusCode;
 import io.opentelemetry.context.Context;
@@ -20,7 +25,7 @@ import io.opentelemetry.context.Context;
  * {@code OpenTelemetrySdk} wired with an OTLP or console exporter); without
  * one the tracer/meter are no-ops, so nothing is recorded.</p>
  */
-public final class OtelTelemetryContext implements TelemetryContext {
+public final class OtelTelemetryContext implements TelemetryContext, TelemetryMetrics {
 
     /** Instrumentation scope name for all spans and metrics. */
     private static final String INSTRUMENTATION = "com.pijava";
@@ -88,6 +93,70 @@ public final class OtelTelemetryContext implements TelemetryContext {
             .record(durationMs, dimensionAttributes());
     }
 
+    @Override
+    public TelemetryMetrics metrics() {
+        return this;
+    }
+
+    @Override
+    public TelemetryCounter counter(String name, InstrumentOptions options) {
+        var builder = openTelemetry.getMeter(INSTRUMENTATION).counterBuilder(name).ofDoubles();
+        if (options != null) {
+            if (options.description() != null) {
+                builder.setDescription(options.description());
+            }
+            if (options.unit() != null) {
+                builder.setUnit(options.unit());
+            }
+        }
+        var counter = builder.build();
+        return (value, attributes) -> counter.add(value, metricAttributes(attributes));
+    }
+
+    @Override
+    public TelemetryUpDownCounter upDownCounter(String name, InstrumentOptions options) {
+        var builder = openTelemetry.getMeter(INSTRUMENTATION).upDownCounterBuilder(name).ofDoubles();
+        if (options != null) {
+            if (options.description() != null) {
+                builder.setDescription(options.description());
+            }
+            if (options.unit() != null) {
+                builder.setUnit(options.unit());
+            }
+        }
+        var counter = builder.build();
+        return (value, attributes) -> counter.add(value, metricAttributes(attributes));
+    }
+
+    @Override
+    public TelemetryHistogram histogram(String name, HistogramOptions options) {
+        var builder = openTelemetry.getMeter(INSTRUMENTATION).histogramBuilder(name);
+        if (options != null) {
+            if (options.description() != null) {
+                builder.setDescription(options.description());
+            }
+            if (options.unit() != null) {
+                builder.setUnit(options.unit());
+            }
+            if (options.boundaries() != null) {
+                builder.setExplicitBucketBoundariesAdvice(options.boundaries());
+            }
+        }
+        var histogram = builder.build();
+        return (value, attributes, context) -> {
+            var attrs = metricAttributes(attributes);
+            if (context instanceof OtelSpan span) {
+                histogram.record(value, attrs, Context.root().with(span.span));
+            } else {
+                histogram.record(value, attrs);
+            }
+        };
+    }
+
+    private Attributes metricAttributes(Map<String, Object> attributes) {
+        return toAttributes(attributes).toBuilder().putAll(dimensionAttributes()).build();
+    }
+
     private TelemetrySpan openSpanUnder(Span parent, SpanOptions options) {
         var builder = openTelemetry.getTracer(INSTRUMENTATION).spanBuilder(options.name());
         builder.setParent(Context.root().with(parent));
@@ -103,25 +172,59 @@ public final class OtelTelemetryContext implements TelemetryContext {
         return builder.build();
     }
 
-    /** Converts a String/Long/Integer/Double/Boolean map to OTel attributes. */
+    /** Converts supported scalar and array values to OTel attributes. */
     private static Attributes toAttributes(Map<String, Object> attrs) {
         var builder = Attributes.builder();
         for (var entry : attrs.entrySet()) {
-            Object value = entry.getValue();
-            if (value instanceof String s) {
-                builder.put(entry.getKey(), s);
-            } else if (value instanceof Boolean b) {
-                builder.put(entry.getKey(), b);
-            } else if (value instanceof Long l) {
-                builder.put(entry.getKey(), l);
-            } else if (value instanceof Integer i) {
-                builder.put(entry.getKey(), i.longValue());
-            } else if (value instanceof Double d) {
-                builder.put(entry.getKey(), d);
-            }
-            // Unsupported attribute types are skipped (telemetry is best-effort).
+            putAttribute(builder, entry.getKey(), entry.getValue());
         }
         return builder.build();
+    }
+
+    private static void putAttribute(AttributesBuilder builder, String key, Object value) {
+        if (value instanceof String s) {
+            builder.put(key, s);
+        } else if (value instanceof Boolean b) {
+            builder.put(key, b);
+        } else if (value instanceof Long l) {
+            builder.put(key, l);
+        } else if (value instanceof Integer i) {
+            builder.put(key, i.longValue());
+        } else if (value instanceof Double d) {
+            builder.put(key, d);
+        } else if (value instanceof String[] array) {
+            builder.put(AttributeKey.stringArrayKey(key), Arrays.asList(array));
+        } else if (value instanceof long[] array) {
+            builder.put(AttributeKey.longArrayKey(key), Arrays.stream(array).boxed().toList());
+        } else if (value instanceof double[] array) {
+            builder.put(AttributeKey.doubleArrayKey(key), Arrays.stream(array).boxed().toList());
+        } else if (value instanceof boolean[] array) {
+            var values = new ArrayList<Boolean>(array.length);
+            for (boolean element : array) {
+                values.add(element);
+            }
+            builder.put(AttributeKey.booleanArrayKey(key), values);
+        } else if (value instanceof List<?> list && !list.isEmpty()) {
+            putListAttribute(builder, key, list);
+        }
+        // Unsupported attribute types are skipped (telemetry is best-effort).
+    }
+
+    private static void putListAttribute(AttributesBuilder builder, String key, List<?> list) {
+        var first = list.getFirst();
+        if (first instanceof String) {
+            builder.put(AttributeKey.stringArrayKey(key), list.stream().map(String.class::cast).toList());
+        } else if (first instanceof Boolean) {
+            builder.put(AttributeKey.booleanArrayKey(key), list.stream().map(Boolean.class::cast).toList());
+        } else if (first instanceof Byte || first instanceof Short
+            || first instanceof Integer || first instanceof Long
+        ) {
+            builder.put(AttributeKey.longArrayKey(key),
+                list.stream().map(value -> ((Number) value).longValue()).toList());
+        } else if (first instanceof Float || first instanceof Double) {
+            builder.put(AttributeKey.doubleArrayKey(key),
+                list.stream().map(value -> ((Number) value).doubleValue()).toList());
+        }
     }
 
     /** A span that doubles as a context for nested child spans and metrics. */
@@ -216,6 +319,11 @@ public final class OtelTelemetryContext implements TelemetryContext {
                     throw e;
                 }
             }
+        }
+
+        @Override
+        public TelemetryMetrics metrics() {
+            return OtelTelemetryContext.this;
         }
 
         @Override

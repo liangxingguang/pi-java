@@ -64,7 +64,21 @@ class JsonlConformanceTest {
         }
 
         @Override
+        public TelemetryMetrics metrics() {
+            return context.metrics();
+        }
+
+        @Override
         public List<RecordedTelemetrySpan> getSpans() throws IOException {
+            return reconstruct(traceLines());
+        }
+
+        @Override
+        public List<RecordedTelemetryMeasurement> getMetrics() throws IOException {
+            return reconstructMetrics(traceLines());
+        }
+
+        private List<String> traceLines() throws IOException {
             Path file;
             try (var files = Files.list(dir)) {
                 file = files
@@ -72,10 +86,7 @@ class JsonlConformanceTest {
                     .findFirst()
                     .orElse(null);
             }
-            if (file == null) {
-                return List.of();
-            }
-            return reconstruct(Files.readAllLines(file, StandardCharsets.UTF_8));
+            return file == null ? List.of() : Files.readAllLines(file, StandardCharsets.UTF_8);
         }
 
         private static List<RecordedTelemetrySpan> reconstruct(List<String> lines)
@@ -91,6 +102,7 @@ class JsonlConformanceTest {
                         var builder = new SpanBuilder();
                         builder.seqId = order.size() + 1L;
                         builder.spanId = (String) json.get("spanId");
+                        builder.traceId = (String) json.get("traceId");
                         builder.parentSpanId = (String) json.get("parentSpanId");
                         builder.name = (String) json.get("name");
                         builder.startAttributes = normalizeMap(json.get("attrs"));
@@ -126,6 +138,8 @@ class JsonlConformanceTest {
                 spans.add(new RecordedTelemetrySpan(
                     builder.seqId,
                     builder.parentSpanId != null ? byId.get(builder.parentSpanId).seqId : null,
+                    carrier(builder),
+                    builder.parentSpanId == null ? null : carrier(byId.get(builder.parentSpanId)),
                     builder.name,
                     builder.settled ? builder.endAttributes : builder.startAttributes,
                     builder.events,
@@ -135,6 +149,54 @@ class JsonlConformanceTest {
                         ? OptionalLong.of(builder.endSequence) : OptionalLong.empty()));
             }
             return spans;
+        }
+
+        private static Map<String, String> carrier(SpanBuilder builder) {
+            return Map.of("traceId", builder.traceId, "spanId", builder.spanId);
+        }
+
+        private static List<RecordedTelemetryMeasurement> reconstructMetrics(List<String> lines)
+            throws IOException
+        {
+            var measurements = new ArrayList<RecordedTelemetryMeasurement>();
+            for (var line : lines) {
+                var json = MAPPER.readValue(line, LINE_TYPE);
+                if (!"metric".equals(json.get("kind"))) {
+                    continue;
+                }
+                var kind = switch ((String) json.get("metricKind")) {
+                    case "counter" -> MetricKind.COUNTER;
+                    case "upDownCounter" -> MetricKind.UP_DOWN_COUNTER;
+                    case "histogram" -> MetricKind.HISTOGRAM;
+                    default -> throw new AssertionError("Unknown metric kind");
+                };
+                measurements.add(new RecordedTelemetryMeasurement(
+                    kind,
+                    (String) json.get("name"),
+                    (String) json.get("description"),
+                    (String) json.get("unit"),
+                    normalizeBoundaries(json.get("boundaries")),
+                    ((Number) json.get("value")).doubleValue(),
+                    normalizeMap(json.get("attrs")),
+                    normalizeCarrier(json.get("exemplar"))));
+            }
+            return List.copyOf(measurements);
+        }
+
+        private static List<Double> normalizeBoundaries(Object value) {
+            if (!(value instanceof List<?> list)) {
+                return null;
+            }
+            return list.stream().map(number -> ((Number) number).doubleValue()).toList();
+        }
+
+        private static Map<String, String> normalizeCarrier(Object value) {
+            if (!(value instanceof Map<?, ?> map)) {
+                return null;
+            }
+            return Map.of(
+                "traceId", (String) map.get("traceId"),
+                "spanId", (String) map.get("spanId"));
         }
 
         private static Map<String, Object> normalizeMap(Object value) {
@@ -168,6 +230,7 @@ class JsonlConformanceTest {
         private static final class SpanBuilder {
             private long seqId;
             private String spanId;
+            private String traceId;
             private String parentSpanId;
             private String name;
             private Map<String, Object> startAttributes = Map.of();

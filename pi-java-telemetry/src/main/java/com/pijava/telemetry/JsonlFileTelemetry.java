@@ -62,6 +62,8 @@ public final class JsonlFileTelemetry implements TelemetryContext {
     private BufferedWriter writer;
     private boolean degraded;
     private final Map<String, String> dimensions;
+    private final TelemetryMetrics metrics = new JsonlTelemetryMetrics(
+        kind -> baseLine(kind, null), this::writeLine, this::metricExemplar);
 
     /**
      * Per-thread stack of spans bound via {@link #pushCurrent}, whose top is the
@@ -143,6 +145,11 @@ public final class JsonlFileTelemetry implements TelemetryContext {
     @Override
     public TelemetrySpan openSpan(SpanOptions options) {
         return new JsonlSpan(nextSpanId(), options, null);
+    }
+
+    @Override
+    public TelemetryMetrics metrics() {
+        return metrics;
     }
 
     @Override
@@ -243,6 +250,13 @@ public final class JsonlFileTelemetry implements TelemetryContext {
         writeLine(line);
     }
 
+    private Map<String, String> metricExemplar(TelemetryContext context) {
+        if (context instanceof JsonlSpan span) {
+            return Map.of("traceId", span.traceId, "spanId", span.spanId);
+        }
+        return null;
+    }
+
     private LinkedHashMap<String, Object> baseLine(String kind, String traceId) {
         var line = new LinkedHashMap<String, Object>();
         line.put("kind", kind);
@@ -334,6 +348,11 @@ public final class JsonlFileTelemetry implements TelemetryContext {
         }
 
         @Override
+        public TelemetryMetrics metrics() {
+            return metrics;
+        }
+
+        @Override
         public void setAttributes(Map<String, Object> attributes) {
             if (ended) {
                 return; // pi memory.ts:150 —— settled 后 inert。
@@ -420,7 +439,7 @@ public final class JsonlFileTelemetry implements TelemetryContext {
                 // preserves its result or rejection, but records nothing —
                 // packages/telemetry/src/memory.ts:126 downgrades to the no-op
                 // context.  原 docs/31 §8.28.4.
-                return NoopTelemetryContext.INSTANCE.startSpan(options, body);
+                return NoopTelemetryContext.startInertSpan(metrics, options, body);
             }
             var child = new JsonlSpan(nextSpanId(), options, this);
             try {
@@ -441,7 +460,7 @@ public final class JsonlFileTelemetry implements TelemetryContext {
             if (ended) {
                 // Same rule as startSpan above; the inert span ignores close()
                 // and addAttribute(), so callers need no special case.
-                return NoopTelemetryContext.INSTANCE.openSpan(options);
+                return NoopTelemetryContext.openInertSpan(metrics);
             }
             return new JsonlSpan(nextSpanId(), options, this);
         }

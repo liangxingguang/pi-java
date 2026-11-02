@@ -54,7 +54,24 @@ class InMemoryTelemetryContextTest {
             new RecordedTelemetryEvent("event", Map.of("value", 1))));
     }
 
-    /** pi {@code memory.ts:195-196}：跨度 id 与 endSequence 各自自 1 自增。 */
+    /** pi {@code memory.ts:441-461}：每次读取都重新复制事件数组。 */
+    @Test
+    void eventArraySnapshotsDoNotExposeRecordedState() {
+        var context = new InMemoryTelemetryContext();
+        context.startSpan(new SpanOptions("snapshot"), span -> {
+            span.addEvent("event", Map.of("tags", new String[]{"original"}));
+            return null;
+        });
+
+        var first = context.getSpans().get(0);
+        ((String[]) first.events().get(0).attributes().get("tags"))[0] = "mutated";
+
+        var second = context.getSpans().get(0);
+        assertThat((String[]) second.events().get(0).attributes().get("tags"))
+            .containsExactly("original");
+    }
+
+    /** pi {@code memory.ts:96}：跨度 id 与 endSequence 各自自 1 自增。 */
     @Test
     void assignsSequentialIdsAndEndSequences() {
         var context = new InMemoryTelemetryContext();
@@ -107,9 +124,9 @@ class InMemoryTelemetryContextTest {
 
         var childResult = captured[0].startSpan(new SpanOptions("late-child"), child -> 7);
         assertThat(childResult).isEqualTo(7);
-        // 降级目标即 NOOP 单例跨度（pi memory.ts:126 → noop.ts:20）。
-        assertThat(captured[0].openSpan(new SpanOptions("late-open")))
-            .isSameAs(NoopTelemetryContext.INSTANCE.openSpan(new SpanOptions("probe")));
+        // 降级后仍保留原 adapter 的 metrics capability（pi memory.ts:164-179）。
+        assertThat(captured[0].openSpan(new SpanOptions("late-open")).metrics())
+            .isSameAs(context.metrics());
 
         assertThat(context.getSpans()).hasSize(1);
     }

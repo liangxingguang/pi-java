@@ -5,6 +5,7 @@ import java.util.Map;
 
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
+import com.pijava.ai.stream.JsonSnapshots;
 
 /**
  * A block of content within a {@link Message}.
@@ -114,16 +115,24 @@ public sealed interface ContentBlock {
      */
     record ToolUseContent(String id, String name, Map<String, Object> arguments,
                           String thoughtSignature,
-                          @org.jspecify.annotations.Nullable String namespace) implements ContentBlock {
+                          @org.jspecify.annotations.Nullable String namespace,
+                          @org.jspecify.annotations.Nullable String argumentsError) implements ContentBlock {
         /** Compact constructor that defensively copies the arguments map. */
         public ToolUseContent {
-            arguments = Map.copyOf(arguments);
+            arguments = JsonSnapshots.copyObject(arguments);
+        }
+
+        /** Backwards-compatible constructor for pre-error call sites. */
+        public ToolUseContent(String id, String name, Map<String, Object> arguments,
+                              String thoughtSignature,
+                              @org.jspecify.annotations.Nullable String namespace) {
+            this(id, name, arguments, thoughtSignature, namespace, null);
         }
 
         /** Backwards-compatible constructor for pre-namespace call sites. */
         public ToolUseContent(String id, String name, Map<String, Object> arguments,
                               String thoughtSignature) {
-            this(id, name, arguments, thoughtSignature, null);
+            this(id, name, arguments, thoughtSignature, null, null);
         }
 
         /** Backwards-compatible constructor for pre-signature call sites. */

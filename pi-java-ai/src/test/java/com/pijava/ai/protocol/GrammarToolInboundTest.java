@@ -144,6 +144,33 @@ class GrammarToolInboundTest {
             .hasMessage("grammar tool input for property \"query\" changed after it was closed");
     }
 
+    @Test
+    void indexedFunctionCallsDoNotShareTheirBuilderSlot() throws Exception {
+        var events = collect(List.of(
+            functionChunk(0, "call-a", "tool-a", null),
+            functionChunk(1, "call-b", "tool-b", null),
+            functionChunk(0, null, null, "{\"a\":1}"),
+            functionChunk(1, null, null, "{\"b\":2}"),
+            finishChunk("tool_calls")));
+
+        var end = last(events, StreamEvent.ToolCallEnd.class);
+        assertThat(end.partial().content()).containsExactly(
+            new ContentBlock.ToolUseContent("call-a", "tool-a", Map.of("a", 1)),
+            new ContentBlock.ToolUseContent("call-b", "tool-b", Map.of("b", 2)));
+        assertThat(end.partial().responseId()).isEqualTo("c1");
+    }
+
+    @Test
+    void responseIdUsesTheFirstNonEmptyChunkId() throws Exception {
+        var events = collect(List.of(
+            chunkFrame(JSON.createObjectNode(), null, ""),
+            chunkFrame(JSON.createObjectNode(), null, "response-first"),
+            chunkFrame(JSON.createObjectNode(), "stop", "response-later")));
+
+        var done = last(events, StreamEvent.StreamDone.class);
+        assertThat(done.partial().responseId()).isEqualTo("response-first");
+    }
+
     // ── 夹具脚手架 ───────────────────────────────────────────────────
 
     private static final ToolDefinition GRAMMAR_TOOL = new ToolDefinition(
@@ -189,6 +216,27 @@ class GrammarToolInboundTest {
         return chunkFrame(delta, null);
     }
 
+    private static String functionChunk(int index, String id, String name, String arguments)
+            throws Exception {
+        var function = JSON.createObjectNode();
+        if (name != null) {
+            function.put("name", name);
+        }
+        if (arguments != null) {
+            function.put("arguments", arguments);
+        }
+        var toolCall = JSON.createObjectNode();
+        toolCall.put("index", index);
+        if (id != null) {
+            toolCall.put("id", id);
+        }
+        toolCall.put("type", "function");
+        toolCall.set("function", function);
+        var delta = JSON.createObjectNode();
+        delta.set("tool_calls", JSON.createArrayNode().add(toolCall));
+        return chunkFrame(delta, null);
+    }
+
     private static String finishChunk(String finishReason) throws Exception {
         return chunkFrame(JSON.createObjectNode(), finishReason);
     }
@@ -196,6 +244,12 @@ class GrammarToolInboundTest {
     private static String chunkFrame(
             com.fasterxml.jackson.databind.node.ObjectNode delta,
             String finishReason) throws Exception {
+        return chunkFrame(delta, finishReason, "c1");
+    }
+
+    private static String chunkFrame(
+            com.fasterxml.jackson.databind.node.ObjectNode delta,
+            String finishReason, String responseId) throws Exception {
         var choice = JSON.createObjectNode();
         choice.put("index", 0);
         choice.set("delta", delta);
@@ -205,7 +259,7 @@ class GrammarToolInboundTest {
             choice.putNull("finish_reason");
         }
         var root = JSON.createObjectNode();
-        root.put("id", "c1");
+        root.put("id", responseId);
         root.put("object", "chat.completion.chunk");
         root.put("created", 1);
         root.put("model", "gpt-5");

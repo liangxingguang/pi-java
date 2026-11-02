@@ -197,6 +197,26 @@ class GoogleGenerativeAiApiTest {
         assertThat(last(events, StreamEvent.StreamDone.class).reason()).isEqualTo(StopReason.TOOL_USE);
     }
 
+    @Test
+    void completeFunctionArgsEmitRealJsonAndFirstResponseId() throws Exception {
+        var events = collect(
+            "data: {\"responseId\":\"\",\"candidates\":[]}\n\n",
+            dataWithResponseId("resp-first", "\"content\":{\"parts\":[{\"functionCall\":"
+                + "{\"id\":\"call-google\",\"name\":\"write\",\"args\":{\"a\":1}}}],"
+                + "\"role\":\"model\"}"),
+            dataWithResponseId("resp-later", "\"finishReason\":\"STOP\""));
+
+        assertThat(events).filteredOn(StreamEvent.ToolCallDelta.class::isInstance)
+            .map(StreamEvent.ToolCallDelta.class::cast)
+            .extracting(StreamEvent.ToolCallDelta::jsonDelta)
+            .containsExactly("{\"a\":1}");
+        var end = last(events, StreamEvent.ToolCallEnd.class);
+        assertThat(end.arguments()).isEqualTo(Map.of("a", 1));
+        assertThat(end.partial().responseId()).isEqualTo("resp-first");
+        assertThat(last(events, StreamEvent.StreamDone.class).partial().responseId())
+            .isEqualTo("resp-first");
+    }
+
     // ── 夹具脚手架 ──────────────────────────────────────────────────────
 
     /**
@@ -253,6 +273,11 @@ class GoogleGenerativeAiApiTest {
     private static String data(String fields) {
         return "data: {\"candidates\":[{" + fields + "}],"
             + "\"usageMetadata\":{\"promptTokenCount\":1,\"candidatesTokenCount\":1}}\n\n";
+    }
+
+    private static String dataWithResponseId(String responseId, String fields) {
+        return "data: {\"responseId\":\"" + responseId + "\",\"candidates\":[{" + fields
+            + "}],\"usageMetadata\":{\"promptTokenCount\":1,\"candidatesTokenCount\":1}}\n\n";
     }
 
     /** 只有文本、**不带** {@code finishReason} 的帧。 */

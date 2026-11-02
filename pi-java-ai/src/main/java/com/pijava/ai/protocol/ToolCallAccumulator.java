@@ -1,102 +1,121 @@
 package com.pijava.ai.protocol;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Consumer;
 
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.stream.StreamPartialBuilder;
+import com.pijava.ai.stream.ToolCallSlotKey;
 
-/**
- * Accumulates one streaming tool call across arbitrarily split chunks.
- *
- * <p>OpenAI-compatible endpoints (DeepSeek in particular) do not guarantee
- * that {@code id}, {@code function.name} and {@code function.arguments}
- * arrive in the same chunk — the first chunk may carry only the id, the next
- * only name + arguments. Accumulating by slot and emitting
- * {@code ToolCallStart} on the FIRST tool-call chunk (whatever it contains)
- * ensures the call is never dropped. Before this, a split arrival left the
- * tool call unstarted: the run then "completed" with only the preamble text
- * and the tool was never executed.</p>
- *
- * <p>原 docs/69：custom（grammar）chunks 走 {@link GrammarInputBuffer}：首帧
- * custom-only（无 function）时建缓冲，属性取 grammar 表、未知名回落 {@code "input"}，
- * 收尾先关闭再 end。</p>
- *
- * <p>Matches {@link StreamPartialBuilder}'s single-tool-call model; parallel
- * tool calls would need multi-slot support in the builder.</p>
- */
+/** Completions-style tool calls accumulated independently by provider index. */
 final class ToolCallAccumulator {
 
-    private boolean started;
-    private String id = "";
-    private String name = "";
-    private GrammarInputBuffer customBuffer;
+    private final Map<ToolCallSlotKey, Slot> slots = new LinkedHashMap<>();
+    private boolean seen;
 
-    /** Apply one chunk's optional function fields and forward any emitted events. */
+    /** Backwards-compatible single-slot entry point. */
     void update(String chunkId, String chunkName, String chunkArguments,
                 Consumer<StreamEvent> emit, StreamPartialBuilder builder) {
-        if (chunkId != null) {
-            id = chunkId;
+        update(0, chunkId, chunkName, chunkArguments, emit, builder);
+    }
+
+    /** Apply one indexed chunk's optional function fields. */
+    void update(long index, String chunkId, String chunkName, String chunkArguments,
+                Consumer<StreamEvent> emit, StreamPartialBuilder builder) {
+        update(ToolCallSlotKey.indexed(index), chunkId, chunkName, chunkArguments, emit, builder);
+    }
+
+    /**
+     * Apply one chunk keyed by an explicit slot — Mistral falls back to the call id when the
+     * wire omits {@code index} (pi {@code key = toolCall.index ?? callId}).
+     */
+    void update(ToolCallSlotKey key, String chunkId, String chunkName, String chunkArguments,
+                Consumer<StreamEvent> emit, StreamPartialBuilder builder) {
+        seen = true;
+        Slot slot = slots.get(key);
+        if (slot == null) {
+            slot = new Slot();
+            slots.put(key, slot);
+            slot.start(key, chunkId, chunkName, emit, builder);
         }
-        if (chunkName != null) {
-            name = chunkName;
-        }
-        if (!started) {
-            started = true;
-            // 包⑥：起点即带身份 —— 此刻**可能只知其一**（首块只给 id），
-            // 另一处为空串，与 pi 的 completions 车道同形（P6）。
-            emit.accept(builder.emitToolCallStart(id, name));
-        }
+        slot.identify(chunkId, chunkName);
         if (chunkArguments != null) {
-            emit.accept(builder.emitToolCallDelta(id, chunkArguments));
+            emit.accept(builder.emitToolCallDelta(key, slot.id, chunkArguments));
         }
     }
 
-    /** Apply one custom-tool chunk (pi ensureToolCallBlock + custom input logic). */
+    /** Backwards-compatible single-slot custom-tool entry point. */
     void updateCustom(String chunkId, CompletionsCustomChunks.CustomChunk custom,
                        Map<String, String> grammarProperties,
                        Consumer<StreamEvent> emit, StreamPartialBuilder builder) {
-        var chunkName = custom.name();
-        if (!started) {
-            // pi :504-505：custom-only 首帧，属性取 grammar 表，未知名/无名回落 "input"。
-            var property = grammarProperties.get(chunkName == null ? "" : chunkName);
-            customBuffer = new GrammarInputBuffer(property != null ? property : "input");
-            started = true;
-            emit.accept(builder.emitToolCallStart(
-                chunkId == null ? "" : chunkId,
-                chunkName == null ? "" : chunkName));
+        updateCustom(0, chunkId, custom, grammarProperties, emit, builder);
+    }
+
+    /** Apply one indexed custom-tool chunk with an independent grammar buffer. */
+    void updateCustom(long index, String chunkId, CompletionsCustomChunks.CustomChunk custom,
+                       Map<String, String> grammarProperties,
+                       Consumer<StreamEvent> emit, StreamPartialBuilder builder) {
+        var key = ToolCallSlotKey.indexed(index);
+        seen = true;
+        Slot slot = slots.get(key);
+        if (slot == null) {
+            slot = new Slot();
+            var property = grammarProperties.get(custom.name() == null ? "" : custom.name());
+            slot.customBuffer = new GrammarInputBuffer(property != null ? property : "input");
+            slots.put(key, slot);
+            slot.start(key, chunkId, custom.name(), emit, builder);
         }
-        if (chunkId != null) {
-            id = chunkId;
-        }
-        if (chunkName != null) {
-            name = chunkName;
-        }
+        slot.identify(chunkId, custom.name());
         if (custom.input() != null) {
-            var nextInput = customBuffer.input() + custom.input();
-            var fragment = customBuffer.append(nextInput, false);
-            // pi :653：片段为 undefined 时照发空串 delta（同一帧形状）。
-            emit.accept(builder.emitToolCallDelta(id, fragment == null ? "" : fragment));
+            var fragment = slot.customBuffer.appendDelta(custom.input());
+            // Completions preserves an empty delta frame for an empty custom input delta.
+            emit.accept(builder.emitToolCallDelta(key, slot.id,
+                fragment == null ? "" : fragment));
         }
     }
 
-    /** Emit closing delta (custom) and {@code ToolCallEnd} if any tool-call chunk was seen. */
+    /** Close custom grammar and finish every open call in provider start order. */
     void finish(Consumer<StreamEvent> emit, StreamPartialBuilder builder) {
-        if (!started) {
-            return;
+        for (var entry : new ArrayList<>(slots.entrySet())) {
+            var key = entry.getKey();
+            Slot slot = entry.getValue();
+            if (slot.customBuffer != null && !slot.customBuffer.closed()) {
+                var fragment = slot.customBuffer.close(slot.customBuffer.input());
+                if (fragment != null) {
+                    emit.accept(builder.emitToolCallDelta(key, slot.id, fragment));
+                }
+            }
+            emit.accept(builder.emitToolCallEnd(key, slot.id, slot.name));
+            slots.remove(key);
         }
-        if (customBuffer != null && !customBuffer.closed()) {
-            // pi finishBlock:448-457 —— 关闭 custom 输入，有片段则补发 delta。
-            var fragment = customBuffer.append(customBuffer.input(), true);
-            if (fragment != null) {
-                emit.accept(builder.emitToolCallDelta(id, fragment));
+    }
+
+    /** Whether any tool-call chunk was seen, including calls already finished. */
+    boolean started() {
+        return seen;
+    }
+
+    private static final class Slot {
+        private String id = "";
+        private String name = "";
+        private GrammarInputBuffer customBuffer;
+
+        private void start(ToolCallSlotKey key, String chunkId, String chunkName,
+                           Consumer<StreamEvent> emit, StreamPartialBuilder builder) {
+            identify(chunkId, chunkName);
+            emit.accept(builder.emitToolCallStart(key, id, name, null));
+        }
+
+        private void identify(String chunkId, String chunkName) {
+            // pi 只在槽创建时读 id：后续分片（含 Mistral 派生的占位 id）不得覆盖首个身份。
+            if (chunkId != null && id.isEmpty()) {
+                id = chunkId;
+            }
+            if (chunkName != null) {
+                name = chunkName;
             }
         }
-        emit.accept(builder.emitToolCallEnd(id, name));
-    }
-
-    /** Whether any tool-call chunk was seen (drives the stop reason). */
-    boolean started() {
-        return started;
     }
 }

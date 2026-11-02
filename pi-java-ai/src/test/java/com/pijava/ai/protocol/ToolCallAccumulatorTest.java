@@ -55,6 +55,24 @@ class ToolCallAccumulatorTest {
     }
 
     @Test
+    void interleavedProviderIndexesKeepTheirOwnIdentityAndArguments() {
+        accumulator.update(0, "call-a", "tool-a", null, emitted::add, builder);
+        accumulator.update(1, "call-b", "tool-b", null, emitted::add, builder);
+        accumulator.update(0, null, null, "{\"a\":1}", emitted::add, builder);
+        accumulator.update(1, null, null, "{\"b\":2}", emitted::add, builder);
+
+        accumulator.finish(emitted::add, builder);
+
+        assertThat(builder.snapshot().content()).containsExactly(
+            new ContentBlock.ToolUseContent("call-a", "tool-a", java.util.Map.of("a", 1)),
+            new ContentBlock.ToolUseContent("call-b", "tool-b", java.util.Map.of("b", 2)));
+        assertThat(emitted).filteredOn(StreamEvent.ToolCallEnd.class::isInstance)
+            .map(StreamEvent.ToolCallEnd.class::cast)
+            .extracting(StreamEvent.ToolCallEnd::contentIndex)
+            .containsExactly(0, 1);
+    }
+
+    @Test
     void noToolChunksEmitNothing() {
         accumulator.finish(emitted::add, builder);
 

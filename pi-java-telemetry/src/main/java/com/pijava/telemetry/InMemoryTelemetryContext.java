@@ -6,6 +6,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.OptionalLong;
+import java.util.UUID;
+import java.util.WeakHashMap;
 import java.util.function.Function;
 
 /**
@@ -23,10 +25,15 @@ import java.util.function.Function;
  * <p>java 偏差：pi 单线程无锁；此处 state 以 {@link #lock} 收口（回调在锁外执行，
  * 锁只护录制状态），语义不变。</p>
  */
-public final class InMemoryTelemetryContext implements TelemetryContext {
+public final class InMemoryTelemetryContext implements TelemetryContext, TelemetryMetrics {
+
+    private static final Object CARRIER_LOCK = new Object();
+    private static final Map<TelemetryContext, Map<String, String>> CONTEXT_CARRIERS = new WeakHashMap<>();
 
     private final Object lock = new Object();
     private final List<MutableSpan> spans = new ArrayList<>();
+    private final List<RecordedTelemetryMeasurement> measurements = new ArrayList<>();
+    private final String scope = UUID.randomUUID().toString();
     private long nextSpanId = 1;
     private long nextEndSequence = 1;
 
@@ -42,6 +49,68 @@ public final class InMemoryTelemetryContext implements TelemetryContext {
     @Override
     public TelemetrySpan openSpan(SpanOptions options) {
         return createSpan(null, options);
+    }
+
+    @Override
+    public TelemetryMetrics metrics() {
+        return this;
+    }
+
+    @Override
+    public TelemetryCounter counter(String name, InstrumentOptions options) {
+        String description = options == null ? null : options.description();
+        String unit = options == null ? null : options.unit();
+        return (value, attributes) -> recordMeasurement(
+            MetricKind.COUNTER, name, description, unit, null, value, attributes, null);
+    }
+
+    @Override
+    public TelemetryUpDownCounter upDownCounter(String name, InstrumentOptions options) {
+        String description = options == null ? null : options.description();
+        String unit = options == null ? null : options.unit();
+        return (value, attributes) -> recordMeasurement(
+            MetricKind.UP_DOWN_COUNTER, name, description, unit, null, value, attributes, null);
+    }
+
+    @Override
+    public TelemetryHistogram histogram(String name, HistogramOptions options) {
+        String description = options == null ? null : options.description();
+        String unit = options == null ? null : options.unit();
+        List<Double> boundaries = options == null || options.boundaries() == null
+            ? null : List.copyOf(options.boundaries());
+        return (value, attributes, context) -> recordMeasurement(
+            MetricKind.HISTOGRAM, name, description, unit, boundaries, value, attributes, context);
+    }
+
+    private void recordMeasurement(
+        MetricKind kind,
+        String name,
+        String description,
+        String unit,
+        List<Double> boundaries,
+        double value,
+        Map<String, Object> attributes,
+        TelemetryContext context
+    ) {
+        synchronized (lock) {
+            Map<String, String> carrier;
+            synchronized (CARRIER_LOCK) {
+                carrier = context == null ? null : CONTEXT_CARRIERS.get(context);
+            }
+            measurements.add(new RecordedTelemetryMeasurement(
+                kind, name, description, unit, boundaries, value, attributes, carrier));
+        }
+    }
+
+    /** Return raw measurements in recording order as detached snapshots. */
+    public List<RecordedTelemetryMeasurement> getMetrics() {
+        synchronized (lock) {
+            return measurements.stream()
+                .map(measurement -> new RecordedTelemetryMeasurement(
+                    measurement.kind(), measurement.name(), measurement.description(), measurement.unit(),
+                    measurement.boundaries(), measurement.value(), measurement.attributes(), measurement.context()))
+                .toList();
+        }
     }
 
     /** pi {@code getSpans()}（{@code memory.ts:203-218}）：detached 快照，按开启序。 */
@@ -60,14 +129,14 @@ public final class InMemoryTelemetryContext implements TelemetryContext {
     ) {
         // pi memory.ts:126 —— settled 父跨度的子跨度降级 NOOP。
         if (parent != null && parent.isSettled()) {
-            return NoopTelemetryContext.INSTANCE.startSpan(options, body);
+            return NoopTelemetryContext.startInertSpan(this, options, body);
         }
         MutableSpan span;
         try {
             span = createSpan(parent, options);
         } catch (RuntimeException | Error e) {
             // pi memory.ts:128-134 —— 录制失败降级 NOOP，回调仍执行。
-            return NoopTelemetryContext.INSTANCE.startSpan(options, body);
+            return NoopTelemetryContext.startInertSpan(this, options, body);
         }
         try {
             T result = body.apply(span);
@@ -102,45 +171,13 @@ public final class InMemoryTelemetryContext implements TelemetryContext {
         return new SpanStatus.Error(null, null);
     }
 
-    /** pi {@code copyAttributes}（{@code memory.ts:54-61}）：null ≙ undefined 缺席。 */
-    private static Map<String, Object> copyAttributes(Map<String, Object> attributes) {
-        if (attributes == null || attributes.isEmpty()) {
-            return Map.of();
-        }
-        var copy = new LinkedHashMap<String, Object>();
-        for (var entry : attributes.entrySet()) {
-            if (entry.getValue() != null) {
-                copy.put(entry.getKey(), copyAttributeValue(entry.getValue()));
-            }
-        }
-        return copy;
-    }
-
-    /** pi {@code copyAttributeValue}（{@code memory.ts:50-52}）：数组/列表浅拷。 */
-    private static Object copyAttributeValue(Object value) {
-        if (value instanceof List<?> list) {
-            return List.copyOf(list);
-        }
-        if (value instanceof String[] array) {
-            return array.clone();
-        }
-        if (value instanceof long[] array) {
-            return array.clone();
-        }
-        if (value instanceof double[] array) {
-            return array.clone();
-        }
-        if (value instanceof boolean[] array) {
-            return array.clone();
-        }
-        return value;
-    }
-
     /** 内部可变跨度（pi {@code MutableRecordedTelemetrySpan}，{@code memory.ts:32-42}）。 */
     private final class MutableSpan implements TelemetrySpan {
 
         private final long id;
         private final MutableSpan parent;
+        private final Map<String, String> context;
+        private final Map<String, String> parentContext;
         private final String name;
         private final Map<String, Object> attributes;
         private final List<RecordedTelemetryEvent> events = new ArrayList<>();
@@ -152,8 +189,17 @@ public final class InMemoryTelemetryContext implements TelemetryContext {
         MutableSpan(long id, MutableSpan parent, SpanOptions options) {
             this.id = id;
             this.parent = parent;
+            this.context = Map.of(
+                "pi-memory-scope", scope,
+                "pi-memory-span", Long.toString(id),
+                "pi-memory-trace", parent == null
+                    ? scope + ":" + id : parent.context.get("pi-memory-trace"));
+            this.parentContext = parent == null ? null : parent.context;
             this.name = options.name();
-            this.attributes = new LinkedHashMap<>(copyAttributes(options.attributes()));
+            this.attributes = new LinkedHashMap<>(TelemetryAttributes.copy(options.attributes()));
+            synchronized (CARRIER_LOCK) {
+                CONTEXT_CARRIERS.put(this, context);
+            }
         }
 
         boolean isSettled() {
@@ -170,10 +216,15 @@ public final class InMemoryTelemetryContext implements TelemetryContext {
         }
 
         @Override
+        public TelemetryMetrics metrics() {
+            return InMemoryTelemetryContext.this;
+        }
+
+        @Override
         public TelemetrySpan openSpan(SpanOptions options) {
             if (isSettled()) {
                 // pi memory.ts:126 —— settled 父跨度的子跨度降级 NOOP。
-                return NoopTelemetryContext.INSTANCE.openSpan(options);
+                return NoopTelemetryContext.openInertSpan(InMemoryTelemetryContext.this);
             }
             return createSpan(this, options);
         }
@@ -185,7 +236,7 @@ public final class InMemoryTelemetryContext implements TelemetryContext {
                     return;
                 }
                 try {
-                    events.add(new RecordedTelemetryEvent(name, copyAttributes(eventAttributes)));
+                    events.add(new RecordedTelemetryEvent(name, TelemetryAttributes.copy(eventAttributes)));
                 } catch (RuntimeException | Error e) {
                     // Recording is passive (pi memory.ts:145-147).
                 }
@@ -202,7 +253,7 @@ public final class InMemoryTelemetryContext implements TelemetryContext {
                     // 两段式：先建合并副本再替换，失败整包原子忽略
                     // （pi memory.ts:63-69,149-156）。
                     var merged = new LinkedHashMap<>(attributes);
-					merged.putAll(copyAttributes(newAttributes));
+					merged.putAll(TelemetryAttributes.copy(newAttributes));
                     attributes.clear();
                     attributes.putAll(merged);
                 } catch (RuntimeException | Error e) {
@@ -250,9 +301,13 @@ public final class InMemoryTelemetryContext implements TelemetryContext {
                 return new RecordedTelemetrySpan(
                     id,
                     parent != null ? parent.id : null,
+                    context,
+                    parentContext,
                     name,
-                    copyAttributes(attributes),
-                    List.copyOf(events),
+                    TelemetryAttributes.copy(attributes),
+                    events.stream()
+                        .map(event -> new RecordedTelemetryEvent(event.name(), event.attributes()))
+                        .toList(),
                     status,
                     settled,
                     settled ? OptionalLong.of(endSequence) : OptionalLong.empty());

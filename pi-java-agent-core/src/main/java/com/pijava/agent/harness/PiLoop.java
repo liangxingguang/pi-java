@@ -7,7 +7,6 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 import com.pijava.ai.AbortSignal;
-import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.stream.StreamEvent;
@@ -99,9 +98,16 @@ public final class PiLoop {
     // 端口：工具执行
     // ═══════════════════════════════════════════════════════════════
 
-    /** 一次工具调用的执行请求。{@code truncatedByLength} 对应 pi 的 length 截断分支。 */
+    /** 一次工具调用的执行请求，携带可选的流式终局参数错误。 */
     public record ToolCall(String toolCallId, String toolName,
-                           Map<String, Object> args, boolean truncatedByLength) {}
+                           Map<String, Object> args, boolean truncatedByLength,
+                           String argumentsError) {
+        /** Backwards-compatible constructor for calls without stream parse metadata. */
+        public ToolCall(String toolCallId, String toolName,
+                        Map<String, Object> args, boolean truncatedByLength) {
+            this(toolCallId, toolName, args, truncatedByLength, null);
+        }
+    }
 
     /**
      * 一次工具调用的最终结果 —— pi 的 {@code FinalizedToolCallOutcome}：

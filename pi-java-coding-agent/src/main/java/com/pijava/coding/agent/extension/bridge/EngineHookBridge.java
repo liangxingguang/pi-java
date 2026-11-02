@@ -240,7 +240,7 @@ public final class EngineHookBridge {
         if (!bus.hasHandlers(TOOL_CALL)) {
             return null;
         }
-        var input = new LinkedHashMap<String, Object>(call.arguments()); // pi event.input
+        var input = mutableArguments(call.arguments()); // pi event.input
         for (var h : bus.snapshot(TOOL_CALL)) {
             ToolCallEventResult r;
             try {
@@ -265,6 +265,32 @@ public final class EngineHookBridge {
         }
         // 原地改写链的回流（pi 靠同一对象引用；java ToolCallContext 防御拷贝 ⇒ 显式返回）。
         return input.equals(call.arguments()) ? null : new BeforeToolResult(true, input);
+    }
+
+    /**
+     * B264 评审回归：{@code ToolUseContent.arguments()} 是深不可变快照，而 pi 的
+     * {@code event.input} 必须允许扩展原地改写任意嵌套容器（types.ts:1474-1483）。
+     * 桥接层因此做一次深可变复制；只重包顶层会让嵌套数组/对象改写抛
+     * {@code UnsupportedOperationException}，再被转成工具错误、调用不执行。
+     */
+    private static Map<String, Object> mutableArguments(Map<String, Object> arguments) {
+        var copy = new LinkedHashMap<String, Object>();
+        arguments.forEach((key, value) -> copy.put(key, mutableValue(value)));
+        return copy;
+    }
+
+    private static Object mutableValue(Object value) {
+        if (value instanceof Map<?, ?> map) {
+            var copy = new LinkedHashMap<String, Object>();
+            map.forEach((key, entry) -> copy.put((String) key, mutableValue(entry)));
+            return copy;
+        }
+        if (value instanceof List<?> list) {
+            var copy = new ArrayList<Object>(list.size());
+            list.forEach(item -> copy.add(mutableValue(item)));
+            return copy;
+        }
+        return value;
     }
 
     // ═══════════════════════════════════════════════════════════

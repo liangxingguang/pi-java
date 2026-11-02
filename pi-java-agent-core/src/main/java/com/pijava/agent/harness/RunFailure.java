@@ -85,10 +85,11 @@ final class RunFailure {
             api,
             provider,
             modelName,
+            null, null, null, null,
             // pi 的 EMPTY_USAGE（agent.ts:39-46）没有 reasoning 分量 ⇒ Usage.of 正好对上。
             Usage.of(0, 0),
             Instant.now(),
             thrown.getMessage() != null ? thrown.getMessage() : thrown.toString(),
-            null);
+            null, null, partial == null ? null : partial.responseId());
     }
 }

@@ -1,6 +1,5 @@
 package com.pijava.ai.protocol;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.SubmissionPublisher;
@@ -9,7 +8,6 @@ import java.util.function.Supplier;
 
 import com.openai.core.http.StreamResponse;
 import com.openai.models.responses.Response;
-import com.openai.models.responses.ResponseOutputItem;
 import com.openai.models.responses.ResponseStatus;
 import com.openai.models.responses.ResponseStreamEvent;
 import com.openai.models.responses.ResponseUsage;
@@ -21,6 +19,7 @@ import com.pijava.ai.message.StopReason;
 import com.pijava.ai.model.CostCalculator;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.stream.StreamPartialBuilder;
+import com.pijava.ai.stream.ToolCallSlotKey;
 
 /**
  * OpenAI Responses 流事件 → pi-java {@link StreamEvent} 映射。
@@ -100,7 +99,9 @@ final class ResponsesStreamProcessor {
                     if (streamEventHook != null) {
                         streamEventHook.onEvent(event, model);
                     }
-                    if (event.outputItemAdded().isPresent()) {
+                    if (event.created().isPresent()) {
+                        builder.assignResponseId(event.created().get().response().id());
+                    } else if (event.outputItemAdded().isPresent()) {
                         var added = event.outputItemAdded().get();
                         ResponseItemHandlers.added(added.item(), added.outputIndex(), ctx);
                     } else if (event.reasoningSummaryTextDelta().isPresent()) {
@@ -132,19 +133,15 @@ final class ResponsesStreamProcessor {
                         var d = event.functionCallArgumentsDelta().get();
                         var state = ctx.toolCalls.get(d.outputIndex());
                         if (state != null) {
-                            state.args += d.delta();
-                            publisher.submit(builder.emitToolCallDelta(state.callId, d.delta()));
+                            publisher.submit(builder.emitToolCallDelta(
+                                ToolCallSlotKey.indexed(d.outputIndex()), state.callId, d.delta()));
                         }
                     } else if (event.functionCallArgumentsDone().isPresent()) {
                         var d = event.functionCallArgumentsDone().get();
                         var state = ctx.toolCalls.get(d.outputIndex());
-                        if (state != null && d.arguments().startsWith(state.args)) {
-                            // 补齐尾部 delta，使 builder 缓冲与权威 arguments 一致。
-                            String tail = d.arguments().substring(state.args.length());
-                            if (!tail.isEmpty()) {
-                                state.args = d.arguments();
-                                publisher.submit(builder.emitToolCallDelta(state.callId, tail));
-                            }
+                        if (state != null) {
+                            builder.replaceToolArguments(ToolCallSlotKey.indexed(d.outputIndex()),
+                                d.arguments()).ifPresent(publisher::submit);
                         }
                     } else if (event.customToolCallInputDelta().isPresent()) {
                         ResponsesCustomCalls.inputDelta(
@@ -170,6 +167,7 @@ final class ResponsesStreamProcessor {
                         sawTerminal = true;
                         // pi `:747`：本支也写原值（写的是 **status**）⇒ 错误消息上可观测，照写。
                         var failed = event.failed().get().response();
+                        builder.assignResponseId(failed.id());
                         builder.noteRawStopReason(failed.status()
                             .map(Object::toString).orElse(null));
                         throw new IllegalStateException(failedMessage(failed));
@@ -236,6 +234,7 @@ final class ResponsesStreamProcessor {
                                          Response response, StopState stop,
                                          ModelInfo model,
                                          ResponsesReasoningCapture reasoningCapture) {
+        builder.assignResponseId(response.id());
         // pi :533-549: backfill encrypted_content from the terminal output
         // (Azure gives it only here), before usage/stop handling.
         var terminalOutput = response._output().asKnown().orElse(List.of());
@@ -398,12 +397,10 @@ final class ResponsesStreamProcessor {
     static final class FunctionCallState {
         final String callId;
         final String name;
-        String args;
 
-        FunctionCallState(String callId, String name, String args) {
+        FunctionCallState(String callId, String name) {
             this.callId = callId;
             this.name = name;
-            this.args = args == null ? "" : args;
         }
     }
 }

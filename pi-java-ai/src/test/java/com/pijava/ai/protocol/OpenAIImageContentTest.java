@@ -112,6 +112,25 @@ class OpenAIImageContentTest {
                 .containsExactly("user_text:   ", "user_image:" + DATA_URL);
     }
 
+    @Test
+    void userExactEmptyTextPartsAreDiscardedButWhitespaceIsKept() {
+        assertThat(render(build(VISION, user(
+                new ContentBlock.TextContent(""), image(),
+                new ContentBlock.TextContent("   "), new ContentBlock.TextContent("x")))))
+            .containsExactly("user_image:" + DATA_URL, "user_text:   ", "user_text:x");
+    }
+
+    @Test
+    void whitespaceOnlyToolTextUsesEcmaWhitespaceFallbacks() {
+        var blank = new ContentBlock.TextContent(" ﻿　");
+        assertThat(render(build(VISION, List.of(tool("toolu_1", blank)))))
+            .containsExactly("tool:(no tool output)");
+        assertThat(render(build(VISION, List.of(tool("toolu_2", blank, image())))))
+            .containsExactly("tool:(see attached image)",
+                "user_text:Attached image(s) from tool result:",
+                "user_image:" + DATA_URL);
+    }
+
     /**
      * <b>红</b> pi {@code :1440-1456}：toolResult 的图片**移出** tool 消息，补一条合成的
      * user 消息（文案逐字 {@code "Attached image(s) from tool result:"}）。

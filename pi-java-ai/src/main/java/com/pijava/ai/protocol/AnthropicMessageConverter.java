@@ -30,7 +30,19 @@ import com.pijava.ai.utils.SanitizeUnicode;
  */
 final class AnthropicMessageConverter {
 
+    private static final String ERROR_TOOL_IMAGE_PLACEHOLDER =
+        "(image attached after the tool results)";
+
     private AnthropicMessageConverter() {}
+
+    /** One tool result plus any error images that belong after its whole consecutive group. */
+    record ConvertedToolResult(ContentBlockParam block,
+                               @org.jspecify.annotations.Nullable String caption,
+                               List<ImageBlockParam> images) {
+        ConvertedToolResult {
+            images = List.copyOf(images);
+        }
+    }
 
     /**
      * 一条消息的块 → 线格。{@code allowImages} 只在 **user** 消息上为真
@@ -162,6 +174,49 @@ final class AnthropicMessageConverter {
                 .isError(tool.isError())
                 .build();
         return ContentBlockParam.ofToolResult(toolResult);
+    }
+
+    /** Convert a result while extracting error images to the end of its contiguous tool-result group. */
+    static ConvertedToolResult convertToolResult(Message.ToolResultMessage tool) {
+        boolean hasImages = tool.content().stream()
+            .anyMatch(ContentBlock.ImageContent.class::isInstance);
+        if (!tool.isError() || !hasImages) {
+            return new ConvertedToolResult(toToolResultBlock(tool), null, List.of());
+        }
+        var images = new ArrayList<ImageBlockParam>();
+        var blocks = convertErrorContent(tool.content(), images);
+        var content = ToolResultBlockParam.Content.ofBlocks(blocks);
+        var block = ContentBlockParam.ofToolResult(ToolResultBlockParam.builder()
+            .toolUseId(tool.toolUseId())
+            .content(content)
+            .isError(true)
+            .build());
+        String caption = images.isEmpty() ? null
+            : "Images from the error result of tool call " + tool.toolUseId()
+                + " (" + tool.toolName() + "):";
+        return new ConvertedToolResult(block, caption, images);
+    }
+
+    /** Replace each error-image run with one placeholder and retain the images for the group tail. */
+    private static List<ToolResultBlockParam.Content.Block> convertErrorContent(
+            List<ContentBlock> blocks, List<ImageBlockParam> images) {
+        var out = new ArrayList<ToolResultBlockParam.Content.Block>(blocks.size() + 1);
+        boolean previousWasPlaceholder = false;
+        for (var block : blocks) {
+            if (block instanceof ContentBlock.ImageContent img) {
+                if (!previousWasPlaceholder) {
+                    out.add(ToolResultBlockParam.Content.Block.ofText(
+                        TextBlockParam.builder().text(ERROR_TOOL_IMAGE_PLACEHOLDER).build()));
+                }
+                images.add(toImageBlock(img));
+                previousWasPlaceholder = true;
+            } else if (block instanceof ContentBlock.TextContent tc) {
+                out.add(ToolResultBlockParam.Content.Block.ofText(
+                    TextBlockParam.builder().text(SanitizeUnicode.surrogates(tc.text())).build()));
+                previousWasPlaceholder = ERROR_TOOL_IMAGE_PLACEHOLDER.equals(tc.text());
+            }
+        }
+        return List.copyOf(out);
     }
 
     /**

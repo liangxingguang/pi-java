@@ -76,8 +76,11 @@ class PiJavaPathsTest {
     void inRepoRunResolvesTheRealRootWithExamples() {
         var documentation = PiJavaPaths.documentation();
         assertThat(documentation).isNotNull();
-        assertThat(documentation.readme()).endsWith("/pi-java/README.md");
-        assertThat(documentation.docs()).endsWith("/pi-java/docs");
-        assertThat(documentation.examples()).endsWith("/pi-java/pi-java-examples");
+        var root = PiJavaPaths.packageDir();
+        assertThat(root).isNotNull();
+        var expectedRoot = root.toString().replace('\\', '/');
+        assertThat(documentation.readme()).isEqualTo(expectedRoot + "/README.md");
+        assertThat(documentation.docs()).isEqualTo(expectedRoot + "/docs");
+        assertThat(documentation.examples()).isEqualTo(expectedRoot + "/pi-java-examples");
     }
 }

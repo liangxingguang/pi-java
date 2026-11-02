@@ -65,8 +65,8 @@ class ToolCallBuilderTest {
         builder.append("not valid json");
 
         var end = builder.toEnd(0, PARTIAL);
-        assertThat(end.arguments()).containsKey("_raw");
-        assertThat(end.arguments().get("_raw")).isEqualTo("not valid json");
+        assertThat(end.arguments()).isEmpty();
+        assertThat(end.argumentsError()).contains("Received arguments:\nnot valid json");
     }
 
     @Test

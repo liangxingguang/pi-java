@@ -117,7 +117,8 @@ final class PiLoopTools {
 
     /** 内容块 → 端口请求。截断分支在 {@link #run} 顶部整体拦下，这里恒为 {@code false}。 */
     private static PiLoop.ToolCall toolCall(ContentBlock.ToolUseContent call) {
-        return new PiLoop.ToolCall(call.id(), call.name(), call.arguments(), false);
+        return new PiLoop.ToolCall(call.id(), call.name(), call.arguments(), false,
+            call.argumentsError());
     }
 
     /**

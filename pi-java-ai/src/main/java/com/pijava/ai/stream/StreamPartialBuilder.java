@@ -3,6 +3,7 @@ package com.pijava.ai.stream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import com.pijava.ai.Usage;
 import com.pijava.ai.message.AssistantMessage;
@@ -21,6 +22,8 @@ import com.pijava.ai.message.StopReason;
  * <p>Thread-safe for single-threaded streaming use.</p>
  */
 public final class StreamPartialBuilder {
+
+    private static final ToolCallSlotKey LEGACY_TOOL_SLOT = ToolCallSlotKey.fallback("legacy");
 
     private final String messageId;
     // 包级可见：text/thinking 两簇的实现在 TextThinkingBlockAccumulator，
@@ -64,6 +67,9 @@ public final class StreamPartialBuilder {
      */
     private String responseModel;
 
+    /** Provider response metadata, distinct from the local message id. */
+    private String responseId;
+
     /**
      * B148：provider/运行时诊断（pi {@code output.diagnostics}）。
      * 默认 null（≙ undefined，键省略）；{@link #appendDiagnostic} 按需建表追加。
@@ -104,7 +110,7 @@ public final class StreamPartialBuilder {
         return new AssistantMessage(messageId, List.copyOf(blocks), usage, stopReason,
             null, null, null, responseModel, providerThinkingLevel,
             diagnostics == null ? null : List.copyOf(diagnostics),
-            null, null, rawStopReason, null);
+            null, null, rawStopReason, null, responseId);
     }
 
     /**
@@ -127,6 +133,18 @@ public final class StreamPartialBuilder {
     public void noteResponseModel(String model) {
         if (this.responseModel == null && model != null && !model.isEmpty()) {
             this.responseModel = model;
+        }
+    }
+
+    /** Assign a provider response id, allowing a terminal authoritative value to replace the created value. */
+    public void assignResponseId(String responseId) {
+        this.responseId = responseId;
+    }
+
+    /** Retain the first non-empty provider response id, matching the lanes' fixed {@code ||=} timing. */
+    public void noteResponseIdFirstNonBlank(String responseId) {
+        if (this.responseId == null && responseId != null && !responseId.isEmpty()) {
+            this.responseId = responseId;
         }
     }
 
@@ -302,51 +320,99 @@ public final class StreamPartialBuilder {
     // Tool call block（实现见 ToolCallBlockAccumulator）
     // ═══════════════════════════════════════════════════════════
 
-    /** Emit tool-call-start carrying the call's identity（javadoc 逐字随迁，见卫星类）。 */
+    /** Emit a legacy single-slot tool-call start. */
     public StreamEvent.ToolCallStart emitToolCallStart(String id, String name) {
-        return toolCalls.emitToolCallStart(id, name);
+        return emitToolCallStart(LEGACY_TOOL_SLOT, id, name, null);
     }
 
-    /** 批 30（ai#8）：namespace 形起点（javadoc 见卫星类）。 */
+    /** Emit a legacy single-slot tool-call start with a Responses namespace. */
     public StreamEvent.ToolCallStart emitToolCallStart(String id, String name, String namespace) {
-        return toolCalls.emitToolCallStart(id, name, namespace);
+        return emitToolCallStart(LEGACY_TOOL_SLOT, id, name, namespace);
     }
 
-    /**
-     * 用**收尾项里的权威参数**替换流式累积的草稿
-     * （javadoc 逐字随迁，见 {@link ToolCallBlockAccumulator#replaceToolArguments}）。
-     */
+    /** Start an isolated provider tool-call slot. */
+    public StreamEvent.ToolCallStart emitToolCallStart(
+            ToolCallSlotKey key, String id, String name, String namespace) {
+        return toolCalls.emitToolCallStart(key, id, name, namespace);
+    }
+
+    /** Start a custom call whose initial input is visible before its first outbound delta. */
+    public StreamEvent.ToolCallStart emitToolCallStart(ToolCallSlotKey key, String id, String name,
+            String namespace, Map<String, Object> initialArguments) {
+        return toolCalls.emitToolCallStart(key, id, name, namespace, initialArguments);
+    }
+
+    /** Start a function call and seed its initial raw arguments before taking the start snapshot. */
+    public StreamEvent.ToolCallStart emitSeededToolCallStart(ToolCallSlotKey key, String id,
+            String name, String namespace, String initial) {
+        return toolCalls.emitSeededToolCallStart(key, id, name, namespace, initial);
+    }
+
+    /** Replace legacy single-slot text without emitting a delta. */
     public void replaceToolArguments(String argumentsJson) {
-        toolCalls.replaceToolArguments(argumentsJson);
+        toolCalls.replaceToolArguments(LEGACY_TOOL_SLOT, argumentsJson);
     }
 
-    /** Emit a tool-call argument delta. */
+    /** Seed initial Responses arguments without publishing a delta. */
+    public void seedToolArguments(ToolCallSlotKey key, String initial) {
+        toolCalls.seedToolArguments(key, initial);
+    }
+
+    /** Apply authoritative complete arguments and return only a missing prefix tail. */
+    public Optional<StreamEvent.ToolCallDelta> replaceToolArguments(
+            ToolCallSlotKey key, String completeText) {
+        return toolCalls.replaceToolArguments(key, completeText);
+    }
+
+    /** Emit a legacy single-slot argument delta. */
     public StreamEvent.ToolCallDelta emitToolCallDelta(String id, String jsonDelta) {
-        return toolCalls.emitToolCallDelta(id, jsonDelta);
+        return emitToolCallDelta(LEGACY_TOOL_SLOT, id, jsonDelta);
     }
 
-    /** Emit tool-call-end with the full tool name, ID, and parsed arguments. */
+    /** Append one delta to exactly one provider slot. */
+    public StreamEvent.ToolCallDelta emitToolCallDelta(
+            ToolCallSlotKey key, String id, String jsonDelta) {
+        return toolCalls.emitToolCallDelta(key, id, jsonDelta);
+    }
+
+    /** Finish a legacy single-slot call. */
     public StreamEvent.ToolCallEnd emitToolCallEnd(String id, String name) {
-        return toolCalls.emitToolCallEnd(id, name);
+        return emitToolCallEnd(LEGACY_TOOL_SLOT, id, name);
     }
 
-    /**
-     * Emit tool-call-end carrying the part's thought signature
-     * (pi {@code ...(part.thoughtSignature && { thoughtSignature })}，
-     * {@code google-generative-ai.ts:201-207}).
-     *
-     * @param thoughtSignature base64 signature attached to the functionCall
-     *        part, or null when absent
-     */
-    public StreamEvent.ToolCallEnd emitToolCallEnd(
-            String id, String name, String thoughtSignature) {
-        return toolCalls.emitToolCallEnd(id, name, thoughtSignature);
+    /** Finish a provider slot with no terminal signature or namespace override. */
+    public StreamEvent.ToolCallEnd emitToolCallEnd(ToolCallSlotKey key, String id, String name) {
+        return emitToolCallEnd(key, id, name, null, null);
     }
 
-    /** 批 30（ai#8）：namespace 形收尾（javadoc 见卫星类）。 */
+    /** Finish a legacy call with a thought signature. */
+    public StreamEvent.ToolCallEnd emitToolCallEnd(String id, String name, String thoughtSignature) {
+        return emitToolCallEnd(LEGACY_TOOL_SLOT, id, name, thoughtSignature, null);
+    }
+
+    /** Finish a legacy call with signature and namespace override. */
     public StreamEvent.ToolCallEnd emitToolCallEnd(
             String id, String name, String thoughtSignature, String namespace) {
-        return toolCalls.emitToolCallEnd(id, name, thoughtSignature, namespace);
+        return emitToolCallEnd(LEGACY_TOOL_SLOT, id, name, thoughtSignature, namespace);
+    }
+
+    /** Finish exactly one provider slot. */
+    public StreamEvent.ToolCallEnd emitToolCallEnd(ToolCallSlotKey key, String id, String name,
+            String thoughtSignature, String namespace) {
+        return toolCalls.emitToolCallEnd(key, id, name, thoughtSignature, namespace);
+    }
+
+    /** Finish from a terminal pi-messages toolCall without reparsing raw arguments. */
+    public StreamEvent.ToolCallEnd emitAuthoritativeToolCallEnd(ToolCallSlotKey key, String id,
+            String name, Map<String, Object> arguments, String argumentsError,
+            String thoughtSignature, String namespace) {
+        return toolCalls.emitAuthoritativeToolCallEnd(key, id, name, arguments,
+            argumentsError, thoughtSignature, namespace);
+    }
+
+    /** Finish all calls still open at end-of-stream in start order. */
+    public List<StreamEvent.ToolCallEnd> emitOpenToolCallEnds() {
+        return toolCalls.emitOpenToolCallEnds();
     }
 
     // ═══════════════════════════════════════════════════════════

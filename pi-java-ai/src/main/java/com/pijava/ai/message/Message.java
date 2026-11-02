@@ -162,10 +162,8 @@ public sealed interface Message
      * 消息级 {@code thinkingLevel}（agent-loop :409 的请求侧 pi 级别，含 "off"）
      * 同批落地，唯一盖章点是 agent loop 的终局定案（{@code PiLoopRunner}）。</p>
      *
-     * <p>仍<b>不移植</b>的两个 pi 字段（逐字证据）：{@code responseId}
-     * （{@code types.ts:572}）、{@code endTurn}（{@code :589-593}）——全仓只有
-     * codex-responses 车道内的读点（随该车道 R5 出分母，docs/08 §2.1）与一个
-     * write-only 生产者，主流七家零消费者。</p>
+     * <p>{@code responseId} 是主流 provider 的响应元数据，由 B264 生产并随本记录持久化；
+     * 不得用本地 message id 或 tool-call id 代替。{@code endTurn} 仍属面外 Codex 车道。</p>
      * <p>{@code providerThinkingLevel}（{@code :573-574}）随批 4（B110/B99）落地；
      * {@code rawStopReason} 的两个读点都在 Google 车道的<b>生产者层</b>，
      * pi-java 也要实现那一层。</p>
@@ -206,12 +204,25 @@ public sealed interface Message
         String errorMessage,
         String rawStopReason,
         /** B234（pi {@code types.ts:595}）：响应单调钟毫秒数；只在终局消息上有值。 */
-        Long durationMs
+        Long durationMs,
+        /** Provider response metadata, never the local message or tool-call id. */
+        @org.jspecify.annotations.Nullable String responseId
     ) implements Message {
         /** Compact constructor that defensively copies the content blocks. */
         public AssistantMessage {
             content = List.copyOf(content);
             diagnostics = diagnostics == null ? null : List.copyOf(diagnostics);
+        }
+
+        /** Backwards-compatible full pre-responseId shape. */
+        public AssistantMessage(List<ContentBlock> content, StopReason stopReason,
+                DeferredHandle deferred, String api, String provider, String model,
+                String responseModel, String providerThinkingLevel, String thinkingLevel,
+                List<AssistantMessageDiagnostic> diagnostics, com.pijava.ai.Usage usage,
+                java.time.Instant timestamp, String errorMessage, String rawStopReason, Long durationMs) {
+            this(content, stopReason, deferred, api, provider, model, responseModel,
+                providerThinkingLevel, thinkingLevel, diagnostics, usage, timestamp,
+                errorMessage, rawStopReason, durationMs, null);
         }
 
         /**
@@ -220,7 +231,7 @@ public sealed interface Message
          */
         public AssistantMessage(List<ContentBlock> content) {
             this(content, null, null, null, null, null, null, null, null, null,
-                null, null, null, null, null);
+                null, null, null, null, null, null);
         }
 
         /** Compatibility constructor for the (content, stopReason, deferred) shape. */
@@ -228,7 +239,7 @@ public sealed interface Message
                                 DeferredHandle deferred) {
             this(content, stopReason, deferred,
                 null, null, null, null, null, null, null,
-                null, null, null, null, null);
+                null, null, null, null, null, null);
         }
 
         /**
@@ -244,7 +255,7 @@ public sealed interface Message
                                 String errorMessage, String rawStopReason) {
             this(content, stopReason, deferred,
                 api, provider, model, null, null, null, null,
-                usage, timestamp, errorMessage, rawStopReason, null);
+                usage, timestamp, errorMessage, rawStopReason, null, null);
         }
 
         /**
@@ -259,7 +270,7 @@ public sealed interface Message
                                 String errorMessage, String rawStopReason) {
             this(content, stopReason, deferred,
                 api, provider, model, null, providerThinkingLevel, null, null,
-                usage, timestamp, errorMessage, rawStopReason, null);
+                usage, timestamp, errorMessage, rawStopReason, null, null);
         }
 
         /**
@@ -289,7 +300,8 @@ public sealed interface Message
                 partial.timestamp(),
                 partial.errorMessage(),
                 partial.rawStopReason(),
-                partial.durationMs());
+                partial.durationMs(),
+                partial.responseId());
         }
 
         /**
@@ -338,7 +350,7 @@ public sealed interface Message
             return new AssistantMessage(content, newStopReason, deferred,
                 api, provider, model,
                 responseModel, providerThinkingLevel, thinkingLevel, diagnostics,
-                usage, timestamp, errorMessage, rawStopReason, durationMs);
+                usage, timestamp, errorMessage, rawStopReason, durationMs, responseId);
         }
 
         /**
@@ -349,7 +361,7 @@ public sealed interface Message
             return new AssistantMessage(content, stopReason, deferred,
                 api, provider, model,
                 responseModel, providerThinkingLevel, newThinkingLevel, diagnostics,
-                usage, timestamp, errorMessage, rawStopReason, durationMs);
+                usage, timestamp, errorMessage, rawStopReason, durationMs, responseId);
         }
 
         @Override

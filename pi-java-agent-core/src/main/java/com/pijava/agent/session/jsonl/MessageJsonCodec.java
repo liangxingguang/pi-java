@@ -61,7 +61,8 @@ final class MessageJsonCodec {
                 decodeTimestamp(node.get("timestamp")),
                 JsonlCodec.optionalString(node, "errorMessage"),
                 JsonlCodec.optionalString(node, "rawStopReason"),
-                JsonlCodec.optionalLong(node, "durationMs"));
+                JsonlCodec.optionalLong(node, "durationMs"),
+                JsonlCodec.optionalString(node, "responseId"));
             // pi 主流 role "toolResult"；2026-10-05 之前本仓写 "tool"（legacy，保留可读）。
             case "toolResult", "tool" -> new Message.ToolResultMessage(
                 JsonlCodec.firstText(node, "toolCallId", "toolUseId"),
@@ -397,7 +398,8 @@ final class MessageJsonCodec {
                 JsonlCodec.requireString(node, "name"),
                 JsonlCodec.optionalObject(node, "arguments"),
                 JsonlCodec.optionalString(node, "thoughtSignature"),
-                JsonlCodec.optionalString(node, "namespace"));
+                JsonlCodec.optionalString(node, "namespace"),
+                JsonlCodec.optionalString(node, "argumentsError"));
             case "tool_result" -> new ContentBlock.ToolResultContent(
                 JsonlCodec.requireString(node, "toolUseId"),
                 JsonlCodec.requireString(node, "toolName"),
