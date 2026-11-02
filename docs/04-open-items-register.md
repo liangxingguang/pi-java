@@ -26,7 +26,6 @@ Chord plugin 已按 R5 决定不做，不再是待拍板项。
 
 | 编号 | 当前结论 | 所属层 |
 |---|---|---|
-| B263 | AI 缺少 `AI_TELEMETRY_SCHEMA`、`pi.ai.request`/`pi.ai.poll`、content-free block events、request/first-chunk histogram、四类 token counter、cost counter、`provider_error` 500 个 UTF-16 单元上限及 abort 保持 ok 的行为；L1 单独设计。 | L1 AI |
 | B266 | 缺少 ClientIdentity 的 tri-state merge、User-Agent/归因头、Models wrapper 与上层 identity 输入。 | L1 AI |
 | B267 | Provider wire、usage、retry/overflow、OAuth/device/env、pi-ai CLI 权限与 Faux 余量未对齐；须按依赖继续拆设计。 | L1 AI |
 | B116 | 对外 JSON 的 usage 已改为 pi 扁平形状；Java 内部 `StreamDone` 仍保留嵌套方言，AI 重测时决定是否继续保留。 | L1 AI |
@@ -39,7 +38,9 @@ B264 已于 2026-11-02 按 docs/10 实施并闭环：流式工具参数、malfor
 
 B265 行为面（#31/#61/#83/#84）已于 2026-11-02 按 docs/11 实施并闭环：跨模型 thinking 丢弃与 textSignature 剥离、`normalizeContext` 无条件前置、transcript tools 三态＋`foldedSystemMessages`、`ModelsStore` operation signal。
 
-B265b 目录数据与运行时（#16/#21/#33/#34）已于 2026-11-02 按 docs/12 分阶段闭环：阶段 A 落仓内 vendor 锚点生成器＋提交快照，重生成 18 分片（600 chat／64 image／Radius 28 基线）；阶段 B 落 OpenRouter `/models/user` 个性化、`RefreshModelsContext` 的 credential/baseUrl/signal、Radius legacy `gatewayConfig` 导入与 coding-agent 包装器。L1 账面 **195.0/240＝81.25%**。B263/B266/B267 仍开放。
+B265b 目录数据与运行时（#16/#21/#33/#34）已于 2026-11-02 按 docs/12 分阶段闭环：阶段 A 落仓内 vendor 锚点生成器＋提交快照，重生成 18 分片（600 chat／64 image／Radius 28 基线）；阶段 B 落 OpenRouter `/models/user` 个性化、`RefreshModelsContext` 的 credential/baseUrl/signal、Radius legacy `gatewayConfig` 导入与 coding-agent 包装器。
+
+B263（#106）已于 2026-11-03 按 docs/13 实施并闭环：`AI_TELEMETRY_SCHEMA`、`pi.ai.request`/`pi.ai.poll` 观察者、content-free block events、request/first-chunk histogram、四类 token／cost counter、`provider_error` 500 UTF-16 上限与 abort 保持 ok 均已落地；`ApiOptions` 增加 `telemetry` 组件并逐点保真 11 个重建点。L1 账面 **196.0/240＝81.67%**。B266/B267 仍开放。
 
 ## 3. MCP 开放项与复核项
 
@@ -116,6 +117,7 @@ SQLite 后端是 pi-java 独立实现，保留模块，不对齐已删除 schema
 | B18 | PiMessages 是 pi-java 自有 wire，不按 pi 不存在的对应面改造。 |
 | D201 | telemetry typed schema 保留运行时 identity、parent binding 与 metadata 合并；Java 无法复刻 TS 条件类型对 exact attributes、required keys、schema 名与 instrument kind 的编译期约束，不新增 pi 没有的运行时校验。 |
 | D202 | malformed 工具参数沿用 Jackson syntax-error 前缀；非对象文案、`{}`＋raw suffix 与 raw 原文逐字保持，不引入 V8 文案兼容层。 |
+| D203 | `pi.ai.poll` 观察者、schema 与单测已落地，但 Java 的 `StreamApi` 没有 `streamDeferred`／`fetchDeferred` 生产入口；真实 poll 入口由 B267 #75 接管。 |
 | B83 | pi 自身三处 sanitize 缺口保持同样行为；pi 修补时同步。 |
 | B100 | compat 探测的 baseUrl 在内置模型上行为等价；出现可观察差异再重裁。 |
 | B126 | Codex 车道及其 transport 等随 R2/R5 出分母。 |
@@ -135,4 +137,4 @@ SQLite 后端是 pi-java 独立实现，保留模块，不对齐已删除 schema
 3. 条目关闭后从开放表移除，历史由 git 保存，编号不复用。
 4. 每层重测后同步更新对应地图；全部层完成前不发布新全仓百分比。
 5. 每个实施工作包仍需独立设计稿和用户审核。
-6. 下一新文档号为 **docs/12**；`docs/11` 为 B265 行为面设计，待审核。
+6. 下一新文档号为 **docs/14**；`docs/13` 为 B263 请求遥测设计，已闭环（2026-11-03）。
