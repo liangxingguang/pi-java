@@ -29,27 +29,27 @@ public sealed interface PiMessagesEvent {
 
     record Start() implements PiMessagesEvent {}
 
-    record TextStart(int contentIndex) implements PiMessagesEvent {}
+    record TextStart(Integer contentIndex) implements PiMessagesEvent {}
 
-    record TextDelta(int contentIndex, String delta) implements PiMessagesEvent {}
+    record TextDelta(Integer contentIndex, String delta) implements PiMessagesEvent {}
 
-    record TextEnd(int contentIndex, String content, String contentSignature)
+    record TextEnd(Integer contentIndex, String content, String contentSignature)
         implements PiMessagesEvent {}
 
-    record ThinkingStart(int contentIndex) implements PiMessagesEvent {}
+    record ThinkingStart(Integer contentIndex) implements PiMessagesEvent {}
 
-    record ThinkingDelta(int contentIndex, String delta) implements PiMessagesEvent {}
+    record ThinkingDelta(Integer contentIndex, String delta) implements PiMessagesEvent {}
 
-    record ThinkingEnd(int contentIndex, String content, String contentSignature,
+    record ThinkingEnd(Integer contentIndex, String content, String contentSignature,
                        boolean redacted) implements PiMessagesEvent {}
 
-    record ToolCallStart(int contentIndex, String id, String toolName)
+    record ToolCallStart(Integer contentIndex, String id, String toolName)
         implements PiMessagesEvent {}
 
-    record ToolCallDelta(int contentIndex, String delta) implements PiMessagesEvent {}
+    record ToolCallDelta(Integer contentIndex, String delta) implements PiMessagesEvent {}
 
     /** pi: toolCall —— 独立 record，避免继承 ContentBlock 的多态 type 字段。 */
-    record ToolCallEnd(int contentIndex, PiToolCall toolCall)
+    record ToolCallEnd(Integer contentIndex, PiToolCall toolCall)
         implements PiMessagesEvent {}
 
     record Done(String reason, Usage usage, String responseId, RewriteImpact rewrite,

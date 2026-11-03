@@ -32,9 +32,9 @@ class PiMessagesProviderHooksWireTest {
 
     private static final byte[] SUCCESS_SSE = (
             "data: {\"type\":\"start\"}\n\n"
-            + "data: {\"type\":\"text_start\"}\n\n"
-            + "data: {\"type\":\"text_delta\",\"delta\":\"hi\"}\n\n"
-            + "data: {\"type\":\"text_end\"}\n\n"
+            + "data: {\"type\":\"text_start\",\"contentIndex\":0}\n\n"
+            + "data: {\"type\":\"text_delta\",\"contentIndex\":0,\"delta\":\"hi\"}\n\n"
+            + "data: {\"type\":\"text_end\",\"contentIndex\":0}\n\n"
             + "data: {\"type\":\"done\",\"reason\":\"stop\"}\n\n").getBytes(
                 java.nio.charset.StandardCharsets.UTF_8);
 
