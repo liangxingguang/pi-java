@@ -39,10 +39,10 @@ public abstract class OpenAiCompatibleProvider extends ConfigurableProvider {
         if (options.apiKey() != null && !options.apiKey().isBlank()) {
             return options;
         }
-        // 七参（docs/13 B263）：占位 key 不改凭证形态，也不改 telemetry。
+        // 八参（docs/14 B266）：占位 key 不改凭证形态、telemetry 与 identity。
         return new ApiOptions(
             options.baseUrl(), "ollama",
             options.timeout(), options.maxRetries(), options.extra(), options.authKind(),
-            options.telemetry());
+            options.telemetry(), options.identity());
     }
 }

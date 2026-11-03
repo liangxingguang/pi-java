@@ -22,18 +22,23 @@ final class MistralHeaders {
     private MistralHeaders() {}
 
     /**
+     * @param identityHeaders provider 预计算的 identity 头（pi :348 的最前层）
      * @param apiKey        凭证（pi :359 的 Bearer 头）
      * @param modelHeaders  {@code Model.headers}（models.json/目录层），非 null 字符串值
      * @param optionHeaders per-request {@code options.headers} 原始 map（值可能为 {@code null}）
      * @param sessionId     过了 cacheRetention=none 门的会话 id（门由调用方算）
      * @param useCaching    pi {@code shouldUsePromptCaching} 的结果
      */
-    static LinkedHashMap<String, String> build(String apiKey,
+    static LinkedHashMap<String, String> build(Map<String, String> identityHeaders, String apiKey,
                                                 Map<String, String> modelHeaders,
                                                 Map<?, ?> optionHeaders,
                                                 String sessionId,
                                                 boolean useCaching) {
         var headers = new LinkedHashMap<String, String>();
+        // docs/14 B266：pi :348 identity → :358/:359 accept/auth → model → options。
+        if (identityHeaders != null) {
+            headers.putAll(identityHeaders);
+        }
         headers.put("Accept", "text/event-stream"); // pi :358
         headers.put("Authorization", "Bearer " + apiKey); // pi :359
         if (modelHeaders != null) {

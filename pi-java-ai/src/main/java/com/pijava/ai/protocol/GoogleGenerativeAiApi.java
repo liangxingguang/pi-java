@@ -94,7 +94,9 @@ public final class GoogleGenerativeAiApi extends AbstractChatApi {
         var httpRetryOptions = HttpRetryOptions.builder().attempts(1).build();
         // D-P1：models.json 合并来的 default headers（原 docs/65）。
         var extraHeaders = new LinkedHashMap<String, String>();
-        putExtraHeaders(options, extraHeaders::put);
+        // docs/14 B266：pi google-generative-ai.ts:353 的
+        // providerHeadersToRecord(identity, model.headers, optionsHeaders) 同序。
+        putRequestHeaders(options, extraHeaders::put);
         var httpOptionsBuilder = HttpOptions.builder()
                         .baseUrl(baseUrl)
                         .retryOptions(httpRetryOptions);

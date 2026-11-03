@@ -1,5 +1,6 @@
 package com.pijava.ai.provider;
 
+import java.util.LinkedHashMap;
 import java.util.Set;
 
 import com.pijava.ai.api.ApiOptions;
@@ -8,6 +9,8 @@ import com.pijava.ai.api.EmbeddingApi;
 import com.pijava.ai.api.ImageApi;
 import com.pijava.ai.api.ProviderApi;
 import com.pijava.ai.catalog.ModelCatalog;
+import com.pijava.ai.identity.ClientIdentityTarget;
+import com.pijava.ai.identity.IdentityHeaders;
 
 /**
  * Config-driven Provider base class — all new Providers reuse this.
@@ -65,7 +68,7 @@ public abstract class ConfigurableProvider implements Provider {
     @Override
     public <T extends ProviderApi> T createApi(Class<T> apiType, ApiOptions options) {
         var protocol = resolveProtocol(options);
-        var opts = effectiveOptions(options);
+        var opts = enrichWithIdentity(effectiveOptions(options));
         if (apiType.equals(ChatApi.class)) {
             return apiType.cast(createChatApi(protocol, opts));
         }
@@ -97,12 +100,32 @@ public abstract class ConfigurableProvider implements Provider {
         if (options.baseUrl() != null && !options.baseUrl().isBlank()) {
             return options;
         }
-        // ⚠️ 七参构造（docs/13 B263）：六参形态会把 telemetry 丢掉 ——
-        // 本方法是 baseUrl 缺席时的生产必经点，漏传会让 pi.ai.* 遥测静默消失。
+        // ⚠️ 八参构造（docs/14 B266）：七参形态会把 identity 丢掉 ——
+        // 本方法是 baseUrl 缺席时的生产必经点，漏传会让归因头静默消失。
         return new ApiOptions(
             config().defaultBaseUrl(), options.apiKey(),
             options.timeout(), options.maxRetries(), options.extra(), options.authKind(),
-            options.telemetry());
+            options.telemetry(), options.identity());
+    }
+
+    /**
+     * docs/14 B266：在 provider 侧预计算 identity 头。
+     *
+     * <p>车道构造器只有 {@link ApiOptions}、没有 {@code ModelInfo}，因此拿不到
+     * provider 名与 effective baseUrl；本方法在 {@code createApi} 时把两者补齐，
+     * 把结果放进 {@code extra["identityHeaders"]}，车道按最低层应用。</p>
+     *
+     * @param options effective options（baseUrl 已补默认／已 pin）
+     * @return 带 {@code identityHeaders} 的新选项；其余组件逐字保真
+     */
+    ApiOptions enrichWithIdentity(ApiOptions options) {
+        var headers = IdentityHeaders.identityHeaders(
+            new ClientIdentityTarget(name(), options.baseUrl()), options.identity());
+        var extra = new LinkedHashMap<String, Object>(options.extra());
+        extra.put(IdentityHeaders.EXTRA_KEY, headers);
+        return new ApiOptions(options.baseUrl(), options.apiKey(), options.timeout(),
+            options.maxRetries(), extra, options.authKind(), options.telemetry(),
+            options.identity());
     }
 
     /** Subclasses construct the protocol adapter here; image-only providers leave it

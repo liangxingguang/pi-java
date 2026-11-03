@@ -118,8 +118,14 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
             }
             // A-14（G1）：SDK 内置重试关到 0，初始请求由 ProviderRetry 独占。
             builder.maxRetries(0);
-            // D-P1：models.json 合并来的 default headers（原 docs/65）。
-            putExtraHeaders(options, builder::putHeader);
+            // docs/14 B266：OAuth 车道保持 Claude Code 身份（pi :951-970），其余车道
+            // 先在本模块完成 identity＋model/request 合并，再一次性交给 builder。
+            if (oauth) {
+                // D-P1：OAuth 分支只挂 models.json/model/request 头（无 identity 层）。
+                putExtraHeaders(options, builder::putHeader);
+            } else {
+                putRequestHeaders(options, builder::putHeader);
+            }
             this.client = builder.build();
         }
         this.baseUrl = options.baseUrl() != null && !options.baseUrl().isBlank()

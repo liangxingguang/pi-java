@@ -8,6 +8,7 @@ import java.util.concurrent.SubmissionPublisher;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.pijava.ai.api.ApiOptions;
+import com.pijava.ai.identity.IdentityHeaders;
 import com.pijava.ai.api.AuthKind;
 import com.pijava.ai.api.ChatApi;
 import com.pijava.ai.api.SimpleOptions;
@@ -345,6 +346,56 @@ public abstract class AbstractChatApi implements ChatApi {
      */
     protected abstract void streamInternal(StreamRequest request,
                                            SubmissionPublisher<StreamEvent> publisher);
+
+    /**
+     * docs/14 B266：读取 provider 预计算的 identity 头（{@code extra["identityHeaders"]}）。
+     *
+     * <p>这些头是**最低层**：调用方必须在本方法之后调用 {@link #putExtraHeaders}，
+     * 后者的同名头才覆盖得上。值恒为 {@code String}，不会出现 {@code null}。</p>
+     */
+    public static Map<String, String> identityHeaders(ApiOptions options) {
+        Map<String, Object> extra = options.extra();
+        Object raw = extra == null ? null : extra.get(IdentityHeaders.EXTRA_KEY);
+        if (!(raw instanceof Map<?, ?> map)) {
+            return Map.of();
+        }
+        var headers = new java.util.LinkedHashMap<String, String>();
+        map.forEach((key, value) -> {
+            if (key != null && value != null) {
+                headers.put(key.toString(), value.toString());
+            }
+        });
+        return headers;
+    }
+
+    /**
+     * docs/14 B266：把 identity 头逐条交给 sink；必须在 {@link #putExtraHeaders} 之前调用。
+     */
+    protected static void putIdentityHeaders(ApiOptions options,
+                                              java.util.function.BiConsumer<String, String> sink) {
+        identityHeaders(options).forEach(sink);
+    }
+
+    /**
+     * docs/14 B266：identity 头（最低层）与 {@code extra["headers"]}（覆盖层，{@code null}
+     * 删除）合并后的最终头表。
+     *
+     * <p>SDK builder 的 {@code putHeader} 在同名键上的先后语义各 SDK 不一，因此本方法
+     * 先在 Java map 里完成覆盖，再一次性交给 builder——同时把 {@code null} 删除带到
+     * SDK 车道。</p>
+     */
+    public static Map<String, String> requestHeaders(ApiOptions options) {
+        Map<String, Object> extra = options.extra();
+        Object raw = extra == null ? null : extra.get("headers");
+        return IdentityHeaders.mergeHeaders(identityHeaders(options),
+            raw instanceof Map<?, ?> map ? map : null);
+    }
+
+    /** 把 {@link #requestHeaders(ApiOptions)} 逐条交给 sink。 */
+    protected static void putRequestHeaders(ApiOptions options,
+                                             java.util.function.BiConsumer<String, String> sink) {
+        requestHeaders(options).forEach(sink);
+    }
 
     /**
      * D-P1：读取 {@code ApiOptions.extra["headers"]}（{@code Map<String,String>}），

@@ -85,6 +85,9 @@ public final class MistralConversationsApi extends AbstractChatApi {
     /** B233：extra["headers"] 原始 map（值可能为 null ⇒ 删除，pi :374-380）；缺席为 null。 */
     private final Map<?, ?> optionHeaders;
 
+    /** docs/14 B266：provider 预计算的 identity 头（最低层）。 */
+    private final Map<String, String> identityHeaders;
+
     /**
      * Create an adapter for the given options.
      *
@@ -108,6 +111,7 @@ public final class MistralConversationsApi extends AbstractChatApi {
         this.cacheRetention = retentionOf(options);
         Object rawHeaders = options.extra() == null ? null : options.extra().get("headers");
         this.optionHeaders = rawHeaders instanceof Map<?, ?> map ? map : null;
+        this.identityHeaders = AbstractChatApi.identityHeaders(options);
         // A-14（G3）：重试次数取选项（默认 0 ⇒ 不重试），cap 经 extra 过桥。
         var policyBuilder = new com.pijava.ai.http.RetryPolicy.Builder()
                 .maxRetries(options.maxRetries());
@@ -160,7 +164,8 @@ public final class MistralConversationsApi extends AbstractChatApi {
             String jsonBody = MAPPER.writeValueAsString(bodyMap);
             // B233（pi mc.ts:355-372）：基底头 → model.headers → options.headers
             // （null 删除）→ 缓存门自动补 x-affinity。
-            var headers = MistralHeaders.build(apiKey,
+            var headers = MistralHeaders.build(identityHeaders,
+                    apiKey,
                     request.model() == null ? Map.of() : request.model().headers(),
                     optionHeaders, sessionId, useCaching());
 

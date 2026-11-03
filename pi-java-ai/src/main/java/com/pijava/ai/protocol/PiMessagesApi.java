@@ -65,6 +65,9 @@ public final class PiMessagesApi extends AbstractChatApi {
     /** docs/17（裁决⑦）：extra["headers"] 原始 map（null 值＝删除）；缺席为 null。 */
     private final Map<?, ?> optionHeaders;
 
+    /** docs/14 B266：provider 预计算的 identity 头（最低层）。 */
+    private final Map<String, String> identityHeaders;
+
     /** docs/17（B248）：pi {@code onPayload}（pi-messages.ts:387）——null ≙ undefined。 */
     private final ProviderHooks.PayloadHook payloadHook;
 
@@ -86,6 +89,7 @@ public final class PiMessagesApi extends AbstractChatApi {
         this.client = PiHttpClient.builder().userAgent("pi-java/dev").build();
         Object rawHeaders = options.extra() == null ? null : options.extra().get("headers");
         this.optionHeaders = rawHeaders instanceof Map<?, ?> map ? map : null;
+        this.identityHeaders = AbstractChatApi.identityHeaders(options);
         // docs/17（B248）：pi 请求面三钩——pi-messages 车道在 pi **不豁免**
         // （pi-messages.ts:387/:404/:415 全有，与 R2 的 resolvesRequestOptions 豁免是两层事）。
         this.payloadHook = ProviderHooks.payloadHookOf(options);
@@ -114,6 +118,10 @@ public final class PiMessagesApi extends AbstractChatApi {
             // （pi providerHeadersToRecord 逐字：名小写规范化、null＝删、调用方值压默认）——
             // 本车道此前不读 extra["headers"]（存量缺口）。
             var headers = new java.util.LinkedHashMap<String, String>();
+            // docs/14 B266：pi :410-418 的 providerHeadersToRecord 同序——
+            // identity → authorization/accept → extra["headers"]（null 删除）。
+            identityHeaders.forEach((name, value) ->
+                headers.put(name.toLowerCase(java.util.Locale.ROOT), value));
             headers.put("authorization", "Bearer " + apiKey);
             headers.put("accept", "text/event-stream");
             if (optionHeaders != null) {

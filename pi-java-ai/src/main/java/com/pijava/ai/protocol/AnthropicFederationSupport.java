@@ -129,7 +129,9 @@ final class AnthropicFederationSupport {
     static AnthropicClient client(ApiOptions options, Map<String, String> env) {
         var base = BASE_CLIENTS.computeIfAbsent(cacheKey(options.baseUrl(), env),
             key -> buildBase(options.baseUrl(), env));
-        return base.withOptions(b -> AbstractChatApi.putExtraHeaders(options, b::putHeader));
+        return base.withOptions(b ->
+            // docs/14 B266：联邦车道与 key 车道同序——identity 最低，extra 覆盖。
+            AbstractChatApi.putRequestHeaders(options, b::putHeader));
     }
 
     /** 缓存键：baseUrl ＋ 五值定序拼接（pi :1054 的 {@code JSON.stringify([baseUrl, config])}）。 */

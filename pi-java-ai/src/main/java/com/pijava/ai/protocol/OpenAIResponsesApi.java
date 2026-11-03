@@ -63,8 +63,9 @@ public final class OpenAIResponsesApi extends AbstractChatApi {
         // A-14（G1）：SDK 内置重试关到 0，初始请求由 ProviderRetry 独占。
         var clientBuilder = OpenAIOkHttpClient.builder()
             .apiKey(apiKey).baseUrl(baseUrl).maxRetries(0);
-        // D-P1：models.json 合并来的 default headers（原 docs/65）。
-        putExtraHeaders(options, clientBuilder::putHeader);
+        // docs/14 B266＋D-P1：identity 最低层，models.json/model/request 头覆盖；
+        // 两表在本模块合并后一次性交给 builder。
+        putRequestHeaders(options, clientBuilder::putHeader);
         this.client = clientBuilder.build();
         this.providerRetry = ProviderRetry.optionsOf(options);
         this.responsesOptions = ResponsesOptions.from(options);

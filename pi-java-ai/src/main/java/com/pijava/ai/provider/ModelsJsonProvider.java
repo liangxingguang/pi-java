@@ -61,15 +61,15 @@ public final class ModelsJsonProvider extends ConfigurableProvider {
         return super.createApi(apiType, withInlineKey(pinned, inlineApiKey));
     }
 
-    /** 包可见是为了夹具（docs/13 §3.7）：两处重建都不得丢 telemetry。 */
+    /** 包可见是为了夹具（docs/14 §3.7）：两处重建都不得丢 telemetry 与 identity。 */
     static ApiOptions pinnedOptions(ApiOptions options, String defaultBaseUrl) {
-        // ⚠️ 七参（docs/13 B263）：六参形态会把 telemetry 与 authKind 一起丢。
+        // ⚠️ 八参（docs/14 B266）：七参形态会把 identity 丢掉。
         return new ApiOptions(defaultBaseUrl, options.apiKey(),
             options.timeout(), options.maxRetries(), options.extra(), options.authKind(),
-            options.telemetry());
+            options.telemetry(), options.identity());
     }
 
-    /** 包可见是为了夹具（docs/13 §3.7）。 */
+    /** 包可见是为了夹具（docs/14 §3.7）。 */
     static ApiOptions withInlineKey(ApiOptions options, String inlineApiKey) {
         if (inlineApiKey == null || inlineApiKey.isBlank()
                 || (options.apiKey() != null && !options.apiKey().isBlank())) {
@@ -77,7 +77,7 @@ public final class ModelsJsonProvider extends ConfigurableProvider {
         }
         return new ApiOptions(options.baseUrl(), inlineApiKey,
             options.timeout(), options.maxRetries(), options.extra(), options.authKind(),
-            options.telemetry());
+            options.telemetry(), options.identity());
     }
 
     @Override

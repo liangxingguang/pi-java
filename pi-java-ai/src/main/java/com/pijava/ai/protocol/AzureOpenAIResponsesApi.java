@@ -64,7 +64,9 @@ public final class AzureOpenAIResponsesApi extends AbstractChatApi {
         // docs/17（裁决⑦）：extra["headers"] 应用补挂——pi azure-openai-responses.ts:156-169
         // 是 {User-Agent, ...model.headers, ...options.headers} 全量进 defaultHeaders；
         // 本车道此前从不读（存量缺口，头事件/models.json 头对本车道曾为空操作）。
-        putExtraHeaders(options, clientBuilder::putHeader);
+        // docs/14 B266：identity 占据 pi 头表最前面的 User-Agent＋归因头层；
+        // 与 extra 合并后一次性交给 builder。
+        putRequestHeaders(options, clientBuilder::putHeader);
         this.client = clientBuilder.build();
         this.providerRetry = ProviderRetry.optionsOf(options);
         this.responsesOptions = ResponsesOptions.from(options);
