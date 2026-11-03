@@ -170,6 +170,24 @@ public final class OpenAIResponsesApi extends AbstractChatApi {
     }
 
     /**
+     * #108（pi {@code openai-responses.ts:165-172}）：启用 mid-conversation effort 时，
+     * 产出消息盖 {@code configuration_update} 的 effort，供下一轮历史回放。门与请求构建
+     * 完全共用 {@link ResponsesMessageConverter#configurationUpdateEffort}。
+     */
+    @Override
+    protected String providerThinkingLevel(StreamRequest request) {
+        if (request.model() == null || request.modelId() == null) {
+            return null;
+        }
+        var compat = CompatResolver.forResponses(request.model(), false);
+        boolean chatGptSignIn =
+            isChatGptSignIn(request.modelId().provider(), baseUrl, apiKey);
+        var level = ResponsesMessageConverter.effectiveLevel(request, responsesOptions);
+        return ResponsesMessageConverter.configurationUpdateEffort(
+            request.model(), compat, level, chatGptSignIn).orElse(null);
+    }
+
+    /**
      * pi {@code openai-responses.ts:222-230}：{@code `<Provider> API error`} 前缀
      * （provider 为 {@code "openai"} 时首字母大写，其余原样）＋错误体归一；
      * 含订阅共享用量码时另起一行追加 ChatGPT 用量链接（{@code :34}）。

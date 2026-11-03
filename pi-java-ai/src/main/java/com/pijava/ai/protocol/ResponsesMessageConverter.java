@@ -15,6 +15,7 @@ import com.pijava.ai.api.TranscriptToolSupport;
 import com.pijava.ai.api.Transcripts;
 import com.pijava.ai.catalog.CompatResolver;
 import com.pijava.ai.catalog.ModelCompat;
+import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.api.SimpleOptions;
 import com.pijava.ai.model.ModelCapability;
 import com.pijava.ai.thinking.ModelThinkingLevel;
@@ -34,6 +35,9 @@ final class ResponsesMessageConverter {
 
     /** OpenAI Responses rejects max_output_tokens below 16. */
     static final int MIN_OUTPUT_TOKENS = 16;
+
+    /** #108（pi {@code openai-responses.ts:43}）：启用 mid-convo effort 时的顶层 effort。 */
+    static final String CONFIGURATION_UPDATE_REQUEST_EFFORT = "medium";
 
     /**
      * **只有这条车道**理会 {@code compat.supportsMaxOutputTokens} 这道门（包 A-10 第 6 步）。
@@ -110,13 +114,18 @@ final class ResponsesMessageConverter {
         boolean instructionDeveloper = request.model() != null
             && request.model().capabilities().contains(ModelCapability.THINKING)
             && !Boolean.FALSE.equals(compat.supportsDeveloperRole());
+        // #108（docs/17 §4，pi :103-121/:165-172）：mid-conversation effort 的三条件门。
+        // 启用时顶层 reasoning.effort 固定 medium，真实级别由 configuration_update 携带。
+        var level = effectiveLevel(request, ropts);
+        String configurationUpdateEffort = configurationUpdateEffort(
+            request.model(), compat, level, omitUnsupportedFields).orElse(null);
         var builder = ResponseCreateParams.builder()
             .model(modelName)
             .store(false)
             .input(ResponseCreateParams.Input.ofResponse(
                 ResponsesMessageItems.convertMessages(request, transcript, apiName, transcriptTools,
                     toolSupport, supportsStrictMode,
-                    grammarProperties, instructionDeveloper)));
+                    grammarProperties, instructionDeveloper, configurationUpdateEffort)));
 
         var tools = new ArrayList<Tool>();
         for (var td : transcriptTools.requestTools()) {
@@ -146,9 +155,6 @@ final class ResponsesMessageConverter {
         // （生产路径不经它，见 ResponsesOptions 的 javadoc）。
         var reasoningSupported = request.model().capabilities()
             .contains(ModelCapability.THINKING);
-        var level = ropts.reasoningEffort() != null
-            ? Optional.of(ropts.reasoningEffort())
-            : SimpleOptions.clampedReasoningEffort(request.model(), request.reasoning());
         if (reasoningSupported) {
             if (level.isPresent() || ropts.reasoningSummary() != null) {
                 // pi `:346-347`：目录映射值优先，缺席回落级别自身的字面量（**不塌缩**）。
@@ -156,8 +162,12 @@ final class ResponsesMessageConverter {
                     .mapped(ModelThinkingLevel.of(level.orElse(new ThinkingLevel.Medium())));
                 var fallbackLiteral = level.map(ResponsesMessageConverter::wireLiteral)
                     .orElse("medium");                       // pi `:348` 的 `: "medium"`
+                // #108（pi :398-405）：启用 mid-convo effort 时顶层固定 medium
+                // （它属于缓存前缀；真实级别由逐轮 configuration_update 表达）。
+                var effort = configurationUpdateEffort == null
+                    ? mapped.orElse(fallbackLiteral) : CONFIGURATION_UPDATE_REQUEST_EFFORT;
                 var rb = Reasoning.builder()
-                    .effort(ReasoningEffort.of(mapped.orElse(fallbackLiteral)))
+                    .effort(ReasoningEffort.of(effort))
                     .summary(Reasoning.Summary.of(
                         ropts.reasoningSummary() != null ? ropts.reasoningSummary() : "auto"));
                 builder.reasoning(rb.build());
@@ -205,6 +215,33 @@ final class ResponsesMessageConverter {
     }
 
     // ── Options ────────────────────────────────────────────────────────
+
+    /**
+     * #108（docs/17 §4.3）：请求级实际生效的思考级别 —— {@code extra["reasoningEffort"]} 显式
+     * 覆盖优先，否则 {@code SimpleOptions.clampedReasoningEffort}（生产路径的 streamSimple 映射）。
+     */
+    static Optional<ThinkingLevel> effectiveLevel(StreamRequest request, ResponsesOptions ropts) {
+        return ropts.reasoningEffort() != null
+            ? Optional.of(ropts.reasoningEffort())
+            : SimpleOptions.clampedReasoningEffort(request.model(), request.reasoning());
+    }
+
+    /**
+     * #108（pi {@code openai-responses.ts:103-121}）：要放进 {@code configuration_update}
+     * 的 effort；空表示不启用。三条件：compat 有 mid-convo 能力、请求带级别、
+     * 且不是 Sign in with ChatGPT（订阅 token 拒绝该输入项）。
+     */
+    static Optional<String> configurationUpdateEffort(ModelInfo model, ModelCompat compat,
+                                                      Optional<ThinkingLevel> level,
+                                                      boolean chatGptSignIn) {
+        if (!Boolean.TRUE.equals(compat.supportsMidConvoEffort())
+                || level.isEmpty() || chatGptSignIn) {
+            return Optional.empty();
+        }
+        var value = level.get();
+        return Optional.of(model.thinkingLevelMap()
+            .mapped(ModelThinkingLevel.of(value)).orElse(wireLiteral(value)));
+    }
 
     /**
      * 级别 → 线格字面量，**一一对应**。pi 的 {@code reasoningEffort} 类型是

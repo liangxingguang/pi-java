@@ -16,6 +16,8 @@ import com.openai.models.responses.ResponseInputItem;
 import com.openai.models.responses.ResponseInputTextContent;
 import com.openai.models.responses.ResponseOutputMessage;
 import com.openai.models.responses.ResponseOutputText;
+import com.openai.models.ReasoningEffort;
+import com.openai.models.responses.ResponseConfigurationUpdateItemParam;
 
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.api.TranscriptContext;
@@ -45,7 +47,8 @@ final class ResponsesMessageItems {
                                                    TranscriptToolSupport toolSupport,
                                                    boolean supportsStrictMode,
                                                    Map<String, String> grammarProperties,
-                                                   boolean instructionDeveloper) {
+                                                   boolean instructionDeveloper,
+                                                   String configurationUpdateEffort) {
         // B222：系统指令项的角色（developer 仅推理模型；pi shared:214-215）。
         EasyInputMessage.Role instructionRole = instructionDeveloper
             ? EasyInputMessage.Role.DEVELOPER : EasyInputMessage.Role.SYSTEM;
@@ -100,7 +103,7 @@ final class ResponsesMessageItems {
                 items.add(ResponseInputWire.toUserItem(user.content()));
             } else if (msg instanceof Message.AssistantMessage assistant) {
                 addAssistantItems(items, assistant, msgIndex, request.modelId(), apiName,
-                    grammarProperties, emittedCalls);
+                    grammarProperties, emittedCalls, configurationUpdateEffort);
             } else if (msg instanceof Message.ToolResultMessage tool) {
                 // 原 docs/69（pi shared:335-347）：grammar 工具的结果落 custom_tool_call_output。
                 var callId = ResponsesToolCallIds.callIdOf(tool.toolUseId());
@@ -117,6 +120,11 @@ final class ResponsesMessageItems {
             if (!isLeadingSystemMessage) {
                 msgIndex++;
             }
+        }
+        // #108（pi openai-responses-shared.ts:414-416）：转录末尾补当前 effort，供下一轮
+        // 回放时出现在输入前缀里（历史 assistant 的 update 由 addAssistantItems 插）。
+        if (configurationUpdateEffort != null) {
+            items.add(configurationUpdate(configurationUpdateEffort));
         }
         return items;
     }
@@ -217,7 +225,8 @@ final class ResponsesMessageItems {
                                           int msgIndex,
                                           ModelId<?> target, String apiName,
                                           Map<String, String> grammarProperties,
-                                          Set<String> emittedCalls) {
+                                          Set<String> emittedCalls,
+                                          String configurationUpdateEffort) {
         var textMessages = new ArrayList<ResponseInputItem>();
         var toolCalls = new ArrayList<ResponseInputItem>();
         var reasoningItems = new ArrayList<ResponseReasoningItem>();
@@ -258,6 +267,18 @@ final class ResponsesMessageItems {
                     dropItemId, grammarProperties, sameModel));
             }
         }
+        // #108（pi openai-responses-shared.ts:401-410）：同 provider＋同 api＋同模型且盖章的
+        // 历史 assistant，在其输入项**之前**插一条 configuration_update。pi 的判据是
+        // `output.length > 0`（本消息确实产出了项）——这里用三个列表非空同形。
+        boolean produced = !reasoningItems.isEmpty() || !textMessages.isEmpty()
+            || !toolCalls.isEmpty();
+        boolean sameModel = java.util.Objects.equals(assistant.provider(), target.provider())
+            && java.util.Objects.equals(assistant.api(), apiName)
+            && java.util.Objects.equals(assistant.model(), target.modelName());
+        if (produced && configurationUpdateEffort != null && sameModel
+                && assistant.providerThinkingLevel() != null) {
+            items.add(configurationUpdate(assistant.providerThinkingLevel()));
+        }
         // Reasoning items precede the output messages; tool calls follow them.
         // ⚠️ 这与 pi 的**块序**（它在同一个循环里按块 push）有差：本仓按「reasoning ⇒
         // 文本 ⇒ 工具调用」分组。分组形状见 原 docs/71 §12 的裁决与登记。
@@ -266,6 +287,20 @@ final class ResponsesMessageItems {
         }
         items.addAll(textMessages);
         items.addAll(toolCalls);
+    }
+
+    /**
+     * #108：{@code {type:"configuration_update", reasoning:{effort}}} 输入项
+     * （pi {@code openai-responses-shared.ts:267-272}）。SDK builder 自动写
+     * {@code type:"configuration_update"}。
+     */
+    private static ResponseInputItem configurationUpdate(String effort) {
+        return ResponseInputItem.ofConfigurationUpdate(
+            ResponseConfigurationUpdateItemParam.builder()
+                .reasoning(ResponseConfigurationUpdateItemParam.Reasoning.builder()
+                    .effort(ReasoningEffort.of(effort))
+                    .build())
+                .build());
     }
 
     /**

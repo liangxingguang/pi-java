@@ -3,7 +3,10 @@ package com.pijava.ai.protocol;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.openai.core.ObjectMappers;
 import com.openai.models.responses.EasyInputMessage;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.openai.models.responses.ResponseInputContent;
 import com.openai.models.responses.ResponseInputImage;
 import com.openai.models.responses.ResponseInputItem;
@@ -20,12 +23,19 @@ final class ResponseInputWire {
 
     private ResponseInputWire() {}
 
-    /** A single-text easy input item (system updates and text-only users). */
+    /**
+     * A single-text easy input item (system updates and text-only users).
+     *
+     * <p><b>SDK 4.96 漂移</b>（docs/17 步骤 0）：{@code EasyInputMessage.builder()} 现在把
+     * {@code type} 默认成 {@code "message"}，序列化会多出 pi 线格没有的键
+     * （pi {@code openai-responses-shared.ts:297} 只发 {@code role/content}）。这里用
+     * SDK 的公开 JSON 往返把该键去掉，保持请求体逐字对齐。</p>
+     */
     static ResponseInputItem inputMessage(EasyInputMessage.Role role, String text) {
-        return ResponseInputItem.ofEasyInputMessage(EasyInputMessage.builder()
+        return ResponseInputItem.ofEasyInputMessage(withoutMessageType(EasyInputMessage.builder()
             .role(role)
             .content(EasyInputMessage.Content.ofTextInput(text))
-            .build());
+            .build()));
     }
 
     /** One user message → ResponseInputItem（pi :231 串形态／:238 有图块形态）。 */
@@ -56,10 +66,26 @@ final class ResponseInputWire {
                     .build()));
             }
         }
-        return ResponseInputItem.ofEasyInputMessage(EasyInputMessage.builder()
+        return ResponseInputItem.ofEasyInputMessage(withoutMessageType(EasyInputMessage.builder()
             .role(EasyInputMessage.Role.USER)
             .content(EasyInputMessage.Content.ofResponseInputMessageContentList(parts))
-            .build());
+            .build()));
+    }
+
+    /**
+     * 去掉 4.96 的默认 {@code type:"message"} 键（见 {@link #inputMessage}）。
+     */
+    private static EasyInputMessage withoutMessageType(EasyInputMessage message) {
+        var mapper = ObjectMappers.jsonMapper();
+        var node = mapper.valueToTree(message);
+        if (node instanceof ObjectNode object) {
+            object.remove("type");
+        }
+        try {
+            return mapper.treeToValue(node, EasyInputMessage.class);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("cannot normalize an easy input message", e);
+        }
     }
 
     private static String extractText(List<ContentBlock> blocks) {
