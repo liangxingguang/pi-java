@@ -52,6 +52,8 @@ class ContextOverflowTest {
         "input is too long for requested model",
         "This message exceeds the context window for this model",
         "Requested 300000 tokens exceeds the model's maximum context length of 200000 tokens",
+        // LiteLLM 预检（ContextWindowExceededError，overflow.ts:46）—— 独立文案，旧表缺。
+        "litellm.ContextWindowExceededError: ... Context Window exceeded for given call.",
         "input token count for the contents (300000) exceeds the maximum allowed (200000)",
         "maximum prompt length is 8192 characters",
         "Please reduce the length of the messages",
@@ -72,6 +74,11 @@ class ContextOverflowTest {
         "context_length_exceeded",
         "too many tokens to process",
         "token limit exceeded",
+        // HTTP 413 = 请求体字节超限，厂商无关（overflow.ts:66-68；pi overflow.test.ts:32-37）。
+        "github-copilot API error (413): {\"message\":\"failed to parse request\",\"code\":\"\"}",
+        "custom-provider API error (413): Payload Too Large",
+        "413 {\"error\":{\"message\":\"failed to parse request\",\"code\":\"\"}}",
+        "413",
         // B2（原 docs/64）：z.ai 的无 is 形态 —— pi 首正则 /prompt (?:is )?too long/。
         "Prompt too long",
         "400: {\"code\":\"1261\",\"message\":\"Prompt too long\"}",
@@ -86,7 +93,7 @@ class ContextOverflowTest {
 
     @ParameterizedTest
     @ValueSource(strings = {
-        "413 status code (no body)",
+        // 413 无体不走本条：通用 413 模式已对所有 provider 命中（见下）。
         "400 status code (no body)",
         "400 (no body)",
     })
@@ -94,6 +101,31 @@ class ContextOverflowTest {
         // 该模式不在通用 OVERFLOW_PATTERNS 里：非 cerebras 一律不算溢出。
         assertThat(ContextOverflow.isContextOverflow(error(null, message), null)).isFalse();
         assertThat(ContextOverflow.isContextOverflow(error("openai", message), null)).isFalse();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"413 status code (no body)", "413 (no body)"})
+    void bodyless413IsRequestSizeOverflowForAllProviders(String message) {
+        // HTTP 413 与厂商无关（overflow.ts:66-68）；pi overflow.test.ts:133-139 的注释明确
+        // 「HTTP 413 对所有 provider 都是请求体超限」。
+        assertThat(ContextOverflow.isContextOverflow(error(null, message), null)).isTrue();
+        assertThat(ContextOverflow.isContextOverflow(error("openai", message), null)).isTrue();
+        assertThat(ContextOverflow.isContextOverflow(error("cerebras", message), null)).isTrue();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+        // body 里顺带提到 413、或状态码只是更长数字/前缀的一部分 ⇒ 不算（pi
+        // overflow.test.ts:39-46 的负例）。
+        "custom-provider API error (4130): invalid input",
+        "4130 failed to parse request",
+        "github-copilot API error (400): {\"message\":\"failed to parse request: invalid value 413\"}",
+        "custom-provider API error (400): upstream mentioned OpenAI API error (413): invalid input",
+        "custom-provider API error (429): Too many requests"
+    })
+    void requestSizeOverflowDoesNotOverreach(String message) {
+        assertThat(ContextOverflow.isContextOverflow(error(message), null)).isFalse();
+        assertThat(ContextOverflow.isContextOverflow(error("github-copilot", message), null)).isFalse();
     }
 
     @ParameterizedTest

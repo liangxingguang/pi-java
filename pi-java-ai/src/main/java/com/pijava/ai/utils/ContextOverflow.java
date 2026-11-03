@@ -43,6 +43,7 @@ public final class ContextOverflow {
         Pattern.compile("input is too long for requested model", Pattern.CASE_INSENSITIVE), // Amazon Bedrock
         Pattern.compile("exceeds the context window", Pattern.CASE_INSENSITIVE), // OpenAI (Completions & Responses API)
         Pattern.compile("exceeds (?:the )?(?:model'?s )?maximum context length(?: of [\\d,]+ tokens?|\\s*\\([\\d,]+\\))", Pattern.CASE_INSENSITIVE), // OpenAI-compatible proxies (LiteLLM)
+        Pattern.compile("context window exceeded", Pattern.CASE_INSENSITIVE), // LiteLLM pre-call check (ContextWindowExceededError)
         Pattern.compile("input token count.*exceeds the maximum", Pattern.CASE_INSENSITIVE), // Google (Gemini)
         Pattern.compile("maximum prompt length is \\d+", Pattern.CASE_INSENSITIVE), // xAI (Grok)
         Pattern.compile("reduce the length of the messages", Pattern.CASE_INSENSITIVE), // Groq
@@ -61,7 +62,10 @@ public final class ContextOverflow {
         Pattern.compile("range of input length should be", Pattern.CASE_INSENSITIVE), // DashScope / Qwen Token Plan
         Pattern.compile("context[_ ]length[_ ]exceeded", Pattern.CASE_INSENSITIVE), // Generic fallback
         Pattern.compile("too many tokens", Pattern.CASE_INSENSITIVE), // Generic fallback
-        Pattern.compile("token limit exceeded", Pattern.CASE_INSENSITIVE) // Generic fallback
+        Pattern.compile("token limit exceeded", Pattern.CASE_INSENSITIVE), // Generic fallback
+        // HTTP 413 means request-size overflow regardless of provider or body text.
+        // Match raw SDK errors and formatProviderError's prefix, not a status mentioned in the body.
+        Pattern.compile("^(?:[\\w -]+ API error \\(413\\):|413(?:\\s|:|$))", Pattern.CASE_INSENSITIVE)
     );
 
     /**
