@@ -147,11 +147,115 @@ class DeviceCodeFlowTest {
         assertThat(calls.get()).isEqualTo(2);
     }
 
+    // ── docs/19 #43: server-supplied URL whitelisting ──────────
+
+    @Test
+    void verificationUriIsNormalizedBeforeNotification() throws Exception {
+        var deviceServer = startServer("/device", req -> new Resp(200, DEVICE_JSON));
+        var tokenServer = startServer("/token", req -> new Resp(200, TOKEN_JSON));
+        var messages = new java.util.ArrayList<String>();
+        var config = DeviceCodeConfig.standard("test",
+            url(deviceServer, "/device"), url(tokenServer, "/token"), "client-1", "");
+
+        new DeviceCodeFlow(config, false).login(recording(messages));
+
+        assertThat(messages).anySatisfy(message ->
+            assertThat(message).contains("https://verify.example.com/")
+                .doesNotContain("https://verify.example.com\n"));
+    }
+
+    @Test
+    void untrustedVerificationUriIsRejected() throws Exception {
+        var deviceServer = startServer("/device", req -> new Resp(200,
+            "{\"device_code\":\"dc\",\"user_code\":\"1234\","
+                + "\"verification_uri\":\"file:///tmp/x\",\"interval\":1,\"expires_in\":300}"));
+        var tokenServer = startServer("/token", req -> new Resp(200, TOKEN_JSON));
+        var config = DeviceCodeConfig.standard("test",
+            url(deviceServer, "/device"), url(tokenServer, "/token"), "client-1", "");
+
+        var thrown = catchThrowable(() -> new DeviceCodeFlow(config, false).login(notifyOnly()));
+
+        assertThat(thrown).isInstanceOf(java.io.IOException.class)
+            .hasMessageContaining("Untrusted verification_uri")
+            .hasMessageContaining("file:///tmp/x");
+    }
+
+    @Test
+    void preferModeUsesCompleteUriWhenTrusted() throws Exception {
+        var deviceServer = startServer("/device", req -> new Resp(200,
+            "{\"device_code\":\"dc\",\"user_code\":\"1234\","
+                + "\"verification_uri\":\"https://verify.example.com\","
+                + "\"verification_uri_complete\":\"https://verify.example.com/complete\""
+                + ",\"interval\":1,\"expires_in\":300}"));
+        var tokenServer = startServer("/token", req -> new Resp(200, TOKEN_JSON));
+        var messages = new java.util.ArrayList<String>();
+        var config = DeviceCodeConfig.standard("test",
+            url(deviceServer, "/device"), url(tokenServer, "/token"), "client-1", "",
+            DeviceCodeConfig.UriPolicy.HTTP_OR_HTTPS, DeviceCodeConfig.CompleteUriMode.PREFER);
+
+        new DeviceCodeFlow(config, false).login(recording(messages));
+
+        assertThat(messages).anySatisfy(message ->
+            assertThat(message).contains("https://verify.example.com/complete"));
+    }
+
+    @Test
+    void preferModeFallsBackWhenCompleteUriIsAbsent() throws Exception {
+        var deviceServer = startServer("/device", req -> new Resp(200, DEVICE_JSON));
+        var tokenServer = startServer("/token", req -> new Resp(200, TOKEN_JSON));
+        var messages = new java.util.ArrayList<String>();
+        var config = DeviceCodeConfig.standard("test",
+            url(deviceServer, "/device"), url(tokenServer, "/token"), "client-1", "",
+            DeviceCodeConfig.UriPolicy.HTTP_OR_HTTPS, DeviceCodeConfig.CompleteUriMode.PREFER);
+
+        new DeviceCodeFlow(config, false).login(recording(messages));
+
+        assertThat(messages).anySatisfy(message ->
+            assertThat(message).contains("https://verify.example.com/"));
+    }
+
+    @Test
+    void requireModeRejectsResponseWithoutCompleteUri() throws Exception {
+        var deviceServer = startServer("/device", req -> new Resp(200, DEVICE_JSON));
+        var tokenServer = startServer("/token", req -> new Resp(200, TOKEN_JSON));
+        var config = DeviceCodeConfig.standard("test",
+            url(deviceServer, "/device"), url(tokenServer, "/token"), "client-1", "",
+            DeviceCodeConfig.UriPolicy.HTTP_OR_HTTPS, DeviceCodeConfig.CompleteUriMode.REQUIRE);
+
+        var thrown = catchThrowable(() -> new DeviceCodeFlow(config, false).login(notifyOnly()));
+
+        assertThat(thrown).isInstanceOf(java.io.IOException.class)
+            .hasMessageContaining("Untrusted verification_uri");
+    }
+
+    @Test
+    void httpsOnlyPolicyRejectsHttpUri() throws Exception {
+        var deviceServer = startServer("/device", req -> new Resp(200,
+            "{\"device_code\":\"dc\",\"user_code\":\"1234\","
+                + "\"verification_uri\":\"http://verify.example.com\",\"interval\":1,\"expires_in\":300}"));
+        var tokenServer = startServer("/token", req -> new Resp(200, TOKEN_JSON));
+        var config = DeviceCodeConfig.standard("test",
+            url(deviceServer, "/device"), url(tokenServer, "/token"), "client-1", "",
+            DeviceCodeConfig.UriPolicy.HTTPS_ONLY, DeviceCodeConfig.CompleteUriMode.IGNORE);
+
+        var thrown = catchThrowable(() -> new DeviceCodeFlow(config, false).login(notifyOnly()));
+
+        assertThat(thrown).isInstanceOf(java.io.IOException.class)
+            .hasMessageContaining("Untrusted verification_uri");
+    }
+
     // ── Helpers ──────────────────────────────────────────────
 
     private static OAuthInteraction notifyOnly() {
         return new OAuthInteraction() {
             @Override public void notify(String message) { }
+            @Override public String prompt(String message) { return ""; }
+        };
+    }
+
+    private static OAuthInteraction recording(java.util.List<String> messages) {
+        return new OAuthInteraction() {
+            @Override public void notify(String message) { messages.add(message); }
             @Override public String prompt(String message) { return ""; }
         };
     }

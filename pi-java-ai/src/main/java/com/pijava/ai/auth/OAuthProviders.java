@@ -28,13 +28,15 @@ public final class OAuthProviders {
             "https://auth.x.ai/oauth2/device/code",
             "https://auth.x.ai/oauth2/token",
             "b1a00492-073a-47ea-816f-4c329264a828",
-            "openid profile email offline_access grok-cli:access api:access")),
+            "openid profile email offline_access grok-cli:access api:access",
+            DeviceCodeConfig.UriPolicy.HTTPS_ONLY, DeviceCodeConfig.CompleteUriMode.PREFER)),
         "kimi", new OAuthProvider.Device(DeviceCodeConfig.standard(
             "kimi",
             "https://auth.kimi.com/api/oauth/device_authorization",
             "https://auth.kimi.com/api/oauth/token",
             "17e5f671-d194-4dfb-9706-5516cb48c098",
-            "")),
+            "",
+            DeviceCodeConfig.UriPolicy.HTTP_OR_HTTPS, DeviceCodeConfig.CompleteUriMode.REQUIRE)),
         "github-copilot", new OAuthProvider.Device(DeviceCodeConfig.standard(
             "github-copilot",
             "https://github.com/login/device/code",

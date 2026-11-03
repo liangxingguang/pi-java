@@ -142,7 +142,7 @@ public final class DeviceCodeFlow {
         var code = text(node, "device_code");
         var userCode = text(node, "user_code");
         var verification = config.verificationUri().isBlank()
-            ? text(node, "verification_uri") : config.verificationUri();
+            ? selectVerificationUri(node) : config.verificationUri();
         if (code == null || userCode == null || verification == null) {
             throw new IOException("Device authorization response is missing required fields: "
                 + response.body());
@@ -151,6 +151,64 @@ public final class DeviceCodeFlow {
             ? Math.max(1, node.get("interval").asLong()) : DEFAULT_POLL_INTERVAL_SECONDS;
         long expiresIn = node.has("expires_in") ? node.get("expires_in").asLong() : LOGIN_TIMEOUT_SECONDS;
         return new Device(code, userCode, verification, interval, expiresIn);
+    }
+
+    /**
+     * docs/19 #43：按 provider 策略从设备授权响应里取 verification URI。
+     *
+     * <p>IGNORE 只用 {@code verification_uri}；PREFER 在 complete 可信时优先；
+     * REQUIRE 要求两条都可信并展示 complete。被选中的值都过
+     * {@link TrustedHttpUrl#normalize} 与 {@link DeviceCodeConfig.UriPolicy}。</p>
+     */
+    private String selectVerificationUri(JsonNode node) throws IOException {
+        var standardRaw = text(node, "verification_uri");
+        var completeRaw = text(node, "verification_uri_complete");
+        return switch (config.completeUriMode()) {
+            case IGNORE -> normalizeServerUri(standardRaw);
+            case PREFER -> {
+                var complete = normalizeIfTrusted(completeRaw);
+                yield complete != null ? complete : normalizeServerUri(standardRaw);
+            }
+            case REQUIRE -> {
+                var standard = normalizeServerUri(standardRaw);
+                var complete = normalizeServerUri(completeRaw);
+                if (standard == null || complete == null) {
+                    throw untrusted(completeRaw != null ? completeRaw : standardRaw);
+                }
+                yield complete;
+            }
+        };
+    }
+
+    /** {@code null} 原样返回（留给「缺少必填字段」判据）；不可信 ⇒ 抛出。 */
+    private String normalizeServerUri(String raw) throws IOException {
+        if (raw == null) {
+            return null;
+        }
+        var normalized = TrustedHttpUrl.normalize(raw);
+        if (normalized == null || !policyAllows(normalized)) {
+            throw untrusted(raw);
+        }
+        return normalized;
+    }
+
+    /** PREFER 的回落判据：不可信不抛，直接让调用方用标准 URI。 */
+    private String normalizeIfTrusted(String raw) {
+        if (raw == null) {
+            return null;
+        }
+        var normalized = TrustedHttpUrl.normalize(raw);
+        return normalized != null && policyAllows(normalized) ? normalized : null;
+    }
+
+    private boolean policyAllows(String normalized) {
+        return config.uriPolicy() != DeviceCodeConfig.UriPolicy.HTTPS_ONLY
+            || normalized.startsWith("https://");
+    }
+
+    private IOException untrusted(String raw) {
+        return new IOException("Untrusted verification_uri in " + config.name()
+            + " device authorization response: " + (raw == null ? "<missing>" : raw));
     }
 
     // ── Token polling ───────────────────────────────────────────────────

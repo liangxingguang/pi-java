@@ -18,7 +18,9 @@ public record DeviceCodeConfig(
     String verificationUri,
     DeviceAuthStyle deviceStyle,
     String exchangeUrl,
-    String exchangeRedirectUri
+    String exchangeRedirectUri,
+    UriPolicy uriPolicy,
+    CompleteUriMode completeUriMode
 ) {
 
     /** 设备授权的两种轮询形状。 */
@@ -29,11 +31,37 @@ public record DeviceCodeConfig(
         OPENAI_CODEX
     }
 
+    /** docs/19 #43：服务端 verification URI 的协议策略。 */
+    public enum UriPolicy {
+        /** 接受 {@code http:} 与 {@code https:}（GitHub Copilot、Kimi、Radius）。 */
+        HTTP_OR_HTTPS,
+        /** 只接受 {@code https:}（xAI）。 */
+        HTTPS_ONLY
+    }
+
+    /** docs/19 #43：{@code verification_uri_complete} 的取用方式。 */
+    public enum CompleteUriMode {
+        /** 忽略 complete URI，只用 {@code verification_uri}（GitHub Copilot）。 */
+        IGNORE,
+        /** complete URI 可信时优先使用，否则回落 {@code verification_uri}（xAI）。 */
+        PREFER,
+        /** 两条 URI 都必须可信，展示 complete URI（Kimi）。 */
+        REQUIRE
+    }
+
     /** 标准 RFC 8628 device-code 配置（verification URI 取自设备响应）。 */
     public static DeviceCodeConfig standard(String name, String deviceCodeUrl,
                                             String tokenUrl, String clientId, String scope) {
+        return standard(name, deviceCodeUrl, tokenUrl, clientId, scope,
+            UriPolicy.HTTP_OR_HTTPS, CompleteUriMode.IGNORE);
+    }
+
+    /** docs/19 #43：带 URL 策略的标准 device-code 配置。 */
+    public static DeviceCodeConfig standard(String name, String deviceCodeUrl,
+                                            String tokenUrl, String clientId, String scope,
+                                            UriPolicy uriPolicy, CompleteUriMode completeUriMode) {
         return new DeviceCodeConfig(name, deviceCodeUrl, tokenUrl, clientId, scope,
-            "", DeviceAuthStyle.STANDARD, "", "");
+            "", DeviceAuthStyle.STANDARD, "", "", uriPolicy, completeUriMode);
     }
 
     /** OpenAI Codex 两段式配置：device 轮询 + PKCE 授权码交换。 */
@@ -41,6 +69,7 @@ public record DeviceCodeConfig(
                                          String clientId, String scope, String verificationUri,
                                          String exchangeUrl, String exchangeRedirectUri) {
         return new DeviceCodeConfig(name, deviceCodeUrl, tokenUrl, clientId, scope,
-            verificationUri, DeviceAuthStyle.OPENAI_CODEX, exchangeUrl, exchangeRedirectUri);
+            verificationUri, DeviceAuthStyle.OPENAI_CODEX, exchangeUrl, exchangeRedirectUri,
+            UriPolicy.HTTP_OR_HTTPS, CompleteUriMode.IGNORE);
     }
 }
