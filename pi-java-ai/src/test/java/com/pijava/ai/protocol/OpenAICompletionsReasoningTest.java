@@ -122,18 +122,22 @@ class OpenAICompletionsReasoningTest {
 
     @Test
     void endsFollowBlockCreationOrderNotAFixedOrder() throws Exception {
-        // 同一个 delta 里同时有 content 与 reasoning_content 时，pi 先处理 content
-        // （:584 建块→推 delta）再处理 reasoning（:597 建块→推 delta）⇒ 文本块先建；
-        // 收尾按**建块序**发（:674-676），故 text_end 在 thinking_end 之前。
+        // 同一个 delta 里同时有 content 与 reasoning_content 时，pi **先处理 reasoning**
+        // （:576-620 建 thinking 块→推 delta）再处理 content（:621-629 建 text 块→推 delta）
+        // ⇒ 文本块后建；收尾按**建块序**发（:674-676），故 thinking_end 在 text_end 之前。
         var api = api(startServer(sse(
             chunk("{\"content\":\"x\",\"reasoning_content\":\"R\"}"),
             finalChunk("stop"))));
 
         var events = collect(api, "hi");
 
-        assertThat(classes(events)).containsExactly("Start", "TextStart",
-            "TextDelta", "ThinkingStart", "ThinkingDelta", "TextEnd",
-            "ThinkingEnd", "StreamDone");
+        assertThat(classes(events)).containsExactly("Start", "ThinkingStart",
+            "ThinkingDelta", "TextStart", "TextDelta", "ThinkingEnd",
+            "TextEnd", "StreamDone");
+        // 终局块序也是 thinking 在前：LiteLLM 型代理把 reasoning 与 answer 聚合进一个 delta。
+        assertThat(last(events, StreamEvent.StreamDone.class).partial().content())
+            .extracting(block -> block.getClass().getSimpleName())
+            .containsExactly("ThinkingContent", "TextContent");
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────

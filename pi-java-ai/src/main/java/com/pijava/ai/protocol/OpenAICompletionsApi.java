@@ -190,9 +190,8 @@ public class OpenAICompletionsApi extends AbstractChatApi {
         boolean hasFinishReason = false;
         boolean textStarted = false;
         boolean thinkingStarted = false;
-        // pi 收尾时按**建块序**发 text_end / thinking_end（openai-completions.ts:674-676），
-        // 而建块序由线格决定（同一个 delta 里两者都有时 content 先处理、块先建）⇒ 记序，
-        // 不写死「先 thinking 还是先 text」。
+        // pi 收尾按**建块序**发 text_end / thinking_end（:674-676）；#2 起同 delta 内
+        // reasoning 先处理 ⇒ thinking 块先建。
         var blockEnds = new ArrayDeque<Supplier<StreamEvent>>();
         var toolCall = new ToolCallAccumulator();
         // pi streamedReasoningDetails (:328): validated detail entries accumulated
@@ -291,19 +290,8 @@ public class OpenAICompletionsApi extends AbstractChatApi {
                         hasFinishReason = true;
                     }
 
-                    // Text content
-                    if (delta.content().isPresent()) {
-                        var text = delta.content().get();
-                        if (!text.isEmpty()) {
-                            if (!textStarted) {
-                                publisher.submit(builder.emitTextStart());
-                                textStarted = true;
-                                blockEnds.add(builder::emitTextEnd);
-                            }
-                            publisher.submit(builder.emitTextDelta(text));
-                        }
-                    }
-
+                    // #2（pi :576-629）：**reasoning 先于 content**（LiteLLM 型代理把两者聚合
+                    // 进同一个 delta，thinking 块必须先建）。
                     // Reasoning (pi :597-620). The three wire names are not modelled by the
                     // SDK, so they are read off `_additionalProperties()`. The matched name
                     // becomes the block's signature — that is what lets replay send the text
@@ -341,6 +329,18 @@ public class OpenAICompletionsApi extends AbstractChatApi {
                                 streamedDetails = new ArrayList<>();
                             }
                             CompletionReasoningDetails.append(streamedDetails, detailNode);
+                        }
+                    }
+                    // Text content（pi :621-629，reasoning_details 之后）。
+                    if (delta.content().isPresent()) {
+                        var text = delta.content().get();
+                        if (!text.isEmpty()) {
+                            if (!textStarted) {
+                                publisher.submit(builder.emitTextStart());
+                                textStarted = true;
+                                blockEnds.add(builder::emitTextEnd);
+                            }
+                            publisher.submit(builder.emitTextDelta(text));
                         }
                     }
 
