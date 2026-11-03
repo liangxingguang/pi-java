@@ -7,6 +7,7 @@ import com.pijava.ai.api.ApiOptions;
 import com.pijava.ai.api.AuthKind;
 import com.pijava.ai.api.ChatApi;
 import com.pijava.ai.catalog.ModelCatalog;
+import com.pijava.ai.utils.OpenRouterBilling;
 
 import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -53,5 +54,47 @@ class ConfigurableProviderAuthKindTest {
         var out = new TestProvider().effectiveOptions(options);
 
         assertThat(out).isSameAs(options);
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // docs/15（B267）：OpenRouter 判定在 provider 侧预计算
+    // ═══════════════════════════════════════════════════════════
+
+    @Test
+    void openRouterBaseUrlIsPrecomputedIntoExtra() {
+        var out = new TestProvider().enrichWithIdentity(new ApiOptions(
+            "https://openrouter.ai/api/v1", "tok", Duration.ofSeconds(1), 0, Map.of()));
+
+        assertThat(out.extra().get(OpenRouterBilling.EXTRA_KEY)).isEqualTo(Boolean.TRUE);
+    }
+
+    @Test
+    void openRouterProviderNameIsPrecomputedIntoExtra() {
+        var out = new OpenRouterNamedProvider().enrichWithIdentity(new ApiOptions(
+            "https://relay.example.com", "tok", Duration.ofSeconds(1), 0, Map.of()));
+
+        assertThat(out.extra().get(OpenRouterBilling.EXTRA_KEY)).isEqualTo(Boolean.TRUE);
+    }
+
+    @Test
+    void ordinaryProviderLeavesTheKeyAbsent() {
+        var out = new TestProvider().enrichWithIdentity(new ApiOptions(
+            "https://api.openai.com/v1", "tok", Duration.ofSeconds(1), 0, Map.of()));
+
+        assertThat(out.extra()).doesNotContainKey(OpenRouterBilling.EXTRA_KEY);
+    }
+
+    /** 名字命中（baseUrl 普通）—— pi 的 {@code provider === "openrouter"} 分支。 */
+    private static final class OpenRouterNamedProvider extends ConfigurableProvider {
+        @Override
+        protected ProviderConfig config() {
+            return ProviderConfig.single("openrouter", "OpenRouter", "https://relay.example.com",
+                "OPENROUTER_API_KEY", Protocol.OPENAI_COMPLETIONS, ModelCatalog.empty());
+        }
+
+        @Override
+        protected ChatApi createChatApi(Protocol protocol, ApiOptions options) {
+            throw new UnsupportedOperationException();
+        }
     }
 }

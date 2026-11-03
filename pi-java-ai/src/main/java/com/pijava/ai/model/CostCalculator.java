@@ -71,8 +71,9 @@ public final class CostCalculator {
         double costCacheRead = cacheReadRate / PER_MILLION * usage.cacheRead();
         double costCacheWrite = (cacheWriteRate * shortWrite + inputRate * 2 * longWrite) / PER_MILLION;
 
+        // docs/15（B267）：pi models.ts:1255 —— 目录估算显式写 totalFromProvider: false。
         return new Usage.Cost(costInput, costOutput, costCacheRead, costCacheWrite,
-            costInput + costOutput + costCacheRead + costCacheWrite);
+            costInput + costOutput + costCacheRead + costCacheWrite, false);
     }
 
     /** The {@code -1} sentinel means "unknown" and is priced at zero (see {@link PricingInfo}). */

@@ -43,6 +43,9 @@ class CostCalculatorTest {
         assertThat(cost.cacheRead()).isCloseTo(0.3, within(1e-9));
         assertThat(cost.cacheWrite()).isCloseTo(3.75, within(1e-9));
         assertThat(cost.total()).isCloseTo(3.0 + 15.0 + 0.3 + 3.75, within(1e-9));
+        assertThat(cost.totalFromProvider())
+            .as("docs/15 B267：目录估算显式 totalFromProvider=false（pi models.ts:1255）")
+            .isFalse();
     }
 
     @Test

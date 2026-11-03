@@ -11,6 +11,7 @@ import com.pijava.ai.api.ProviderApi;
 import com.pijava.ai.catalog.ModelCatalog;
 import com.pijava.ai.identity.ClientIdentityTarget;
 import com.pijava.ai.identity.IdentityHeaders;
+import com.pijava.ai.utils.OpenRouterBilling;
 
 /**
  * Config-driven Provider base class — all new Providers reuse this.
@@ -123,6 +124,11 @@ public abstract class ConfigurableProvider implements Provider {
             new ClientIdentityTarget(name(), options.baseUrl()), options.identity());
         var extra = new LinkedHashMap<String, Object>(options.extra());
         extra.put(IdentityHeaders.EXTRA_KEY, headers);
+        // docs/15（B267）：与 identity 同点预计算 OpenRouter 判定 —— 车道只有 effective
+        // baseUrl、拿不到 provider 名；只写 true，缺席即 false。
+        if (OpenRouterBilling.isOpenRouterModel(name(), options.baseUrl())) {
+            extra.put(OpenRouterBilling.EXTRA_KEY, Boolean.TRUE);
+        }
         return new ApiOptions(options.baseUrl(), options.apiKey(), options.timeout(),
             options.maxRetries(), extra, options.authKind(), options.telemetry(),
             options.identity());

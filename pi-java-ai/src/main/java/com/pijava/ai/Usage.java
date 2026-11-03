@@ -33,13 +33,25 @@ public record Usage(
 ) {
 
     /** Cost breakdown in USD. */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
     public record Cost(
         double input,
         double output,
         double cacheRead,
         double cacheWrite,
-        double total
+        double total,
+        /**
+         * docs/15（B267）：{@code null} = 键缺席（旧会话兼容）；{@code false} =
+         * 目录估算（{@code CostCalculator}）；{@code true} = provider 实报账单
+         * （OpenRouter）。缺席与 {@code false} 语义等价，但保留缺席才不会改写旧文件。
+         */
+        Boolean totalFromProvider
     ) {
+        /** 五参便捷构造：旧调用点零改签，缺席 ≙ pi 的 {@code undefined}。 */
+        public Cost(double input, double output, double cacheRead, double cacheWrite, double total) {
+            this(input, output, cacheRead, cacheWrite, total, null);
+        }
+
         /** Zero cost. */
         public static Cost zero() {
             return new Cost(0, 0, 0, 0, 0);
