@@ -26,7 +26,7 @@ Chord plugin 已按 R5 决定不做，不再是待拍板项。
 
 | 编号 | 当前结论 | 所属层 |
 |---|---|---|
-| B267 | usage／billing 已按 docs/15 闭环；15 个存疑行已按 docs/16 裁决并闭环；Provider wire 已按 docs/17 闭环；retry/overflow 已按 docs/18 闭环；OAuth/device/env、pi-ai CLI 权限与 Faux 余量仍未对齐；须按依赖继续拆设计。 | L1 AI |
+| B267 | usage／billing 已按 docs/15 闭环；15 个存疑行已按 docs/16 裁决并闭环；Provider wire 已按 docs/17 闭环；retry/overflow 已按 docs/18 闭环；OAuth/device/env 与 pi-ai CLI 权限已按 docs/19 闭环；仅剩 Faux／deferred 余量，待 docs/20。 | L1 AI |
 | B116 | 对外 JSON 的 usage 已改为 pi 扁平形状；Java 内部 `StreamDone` 仍保留嵌套方言，AI 重测时决定是否继续保留。 | L1 AI |
 | B156 | `ModelCompat` 逐组件重建存在漏字段风险；新增组件时必须同时检查构造点和 `withPartial` 类重建点。 | L1 AI |
 | B259 | RPC `cycle_thinking_level` 对不支持 thinking 的模型仍返级别；`get_available_thinking_levels` 也未按模型能力过滤。pi 对应结果为 `null` 或可用子集。 | L5 coding-agent |
@@ -49,7 +49,9 @@ B267 第二批存疑复核（15 行）已于 2026-11-03 按 docs/16 裁决并闭
 
 B267 第三批 provider wire（#1／#2／#108／#101／#110／#111）已于 2026-11-03 按 docs/17 实施并闭环：`openai-java` 升级到 4.96.0（4.96 的 `EasyInputMessage` 默认多写 `type:"message"`，已用公开 JSON 往返还原 pi 线格）；Anthropic managed effort 顶层固定 `low`、off 可表达时发 `{type:"disabled"}` 并抑制 marker；completions 同 chunk reasoning 先于 content；Responses 发 `configuration_update`（顶层固定 `medium`，ChatGPT 登录排除）；pi-messages `contentIndex` 整数/范围/缺键校验；Gemini `const`→单值 `enum`；Anthropic strict prefer 工具 400 一次性降级（start 移至请求成功后）。
 
-B267 第四批 retry／overflow（#70／#71）已于 2026-11-03 按 docs/18 实施并闭环：`ContextOverflow` 补 LiteLLM `context window exceeded` 预检文案与厂商无关的 HTTP 413 模式（`^(?:[\w -]+ API error \(413\):|413(?:\s|:|$))`，body 内提及 413 与 `4130` 不命中）；`RetryableError` 排除表补 ChatGPT Business 工作区限额与 z.ai `1308` 正则，白名单补 7 条网关／node-fetch／Codex 文案，状态码由裸子串收紧为 `(?<![a-z0-9])…(?![a-z0-9])` 独立 token。L1 账面 **223.0/232＝96.12%**（对齐 119／缺失 6）。B267 其余面仍开放。
+B267 第四批 retry／overflow（#70／#71）已于 2026-11-03 按 docs/18 实施并闭环：`ContextOverflow` 补 LiteLLM `context window exceeded` 预检文案与厂商无关的 HTTP 413 模式（`^(?:[\w -]+ API error \(413\):|413(?:\s|:|$))`，body 内提及 413 与 `4130` 不命中）；`RetryableError` 排除表补 ChatGPT Business 工作区限额与 z.ai `1308` 正则，白名单补 7 条网关／node-fetch／Codex 文案，状态码由裸子串收紧为 `(?<![a-z0-9])…(?![a-z0-9])` 独立 token。
+
+B267 第五批 OAuth／device／env 与 pi-ai CLI 权限（#43／#44／#45／#50／#112）已于 2026-11-03 按 docs/19 实施并闭环：新增 `TrustedHttpUrl`（HTTP(S) 归一/白名单，xAI `HTTPS_ONLY`、Kimi complete `REQUIRE`）并接入 `DeviceCodeFlow`／`RadiusOAuthHttp`；`OAuthEvent` 结构化设备码事件（两确认开关默认 true），TUI 登录对话框一次消费；`ApiOptions` 增加请求级 `env`（第九组件）与 `ProviderEnv`，15 个重建点保真，`DefaultProviders` 投影凭证 env；两个凭证存储在建文件/覆写前收紧到 `0600`（非 POSIX no-op）。L1 账面 **231.0/232＝99.57%**（对齐 124／缺失 1，仅剩 #80）。B267 仅剩 Faux 余量待 docs/20。
 
 ## 3. MCP 开放项与复核项
 
@@ -156,4 +158,4 @@ SQLite 后端是 pi-java 独立实现，保留模块，不对齐已删除 schema
 3. 条目关闭后从开放表移除，历史由 git 保存，编号不复用。
 4. 每层重测后同步更新对应地图；全部层完成前不发布新全仓百分比。
 5. 每个实施工作包仍需独立设计稿和用户审核。
-6. 下一新文档号为 **docs/18**；`docs/17` 为 L1 Provider wire 对齐设计，已闭环（2026-11-03）；`docs/16` 已闭环（2026-11-03）。
+6. 下一新文档号为 **docs/20**（L1 Faux／deferred 余量）；`docs/19` 已闭环（2026-11-03）；`docs/18` 已闭环（2026-11-03）；`docs/17` 已闭环（2026-11-03）；`docs/16` 已闭环（2026-11-03）。
