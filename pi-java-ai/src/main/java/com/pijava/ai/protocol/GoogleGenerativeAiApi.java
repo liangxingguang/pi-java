@@ -447,7 +447,7 @@ public final class GoogleGenerativeAiApi extends AbstractChatApi {
         if (options.apiKey() != null && !options.apiKey().isBlank()) {
             return options.apiKey();
         }
-        var env = System.getenv("GEMINI_API_KEY");
+        var env = com.pijava.ai.utils.ProviderEnv.value("GEMINI_API_KEY", options.env());
         if (env != null && !env.isBlank()) {
             return env;
         }

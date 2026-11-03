@@ -71,14 +71,14 @@ final class AnthropicFederationSupport {
         Map<?, ?> bridged = raw instanceof Map<?, ?> map ? map : null;
         var resolved = new LinkedHashMap<String, String>();
         for (var name : REQUIRED) {
-            var value = read(bridged, name);
+            var value = read(options.env(), bridged, name);
             if (value == null) {
                 return null;
             }
             resolved.put(name, value);
         }
         for (var name : OPTIONAL) {
-            var value = read(bridged, name);
+            var value = read(options.env(), bridged, name);
             if (value != null) {
                 resolved.put(name, value);
             }
@@ -86,8 +86,17 @@ final class AnthropicFederationSupport {
         return resolved;
     }
 
-    /** extra 优先、{@code System.getenv} 回落的单变量读取；blank 一律视为缺席。 */
-    private static String read(Map<?, ?> bridged, String name) {
+    /**
+     * 三级读取：请求级 env → {@code extra["federationEnv"]} 过桥 → {@code System.getenv}。
+     * 三者都按 pi 的真值口径：blank 视为缺席（{@code options.env} 用空串回落）。
+     */
+    private static String read(Map<String, String> scoped, Map<?, ?> bridged, String name) {
+        if (scoped != null) {
+            var value = scoped.get(name);
+            if (value != null && !value.isEmpty()) {
+                return value;
+            }
+        }
         Object value = bridged == null ? null : bridged.get(name);
         if (value != null && !value.toString().isBlank()) {
             return value.toString();

@@ -173,7 +173,7 @@ public final class OpenRouterImagesApi implements ImageApi {
             return options.apiKey();
         }
         if (envVar != null && !envVar.isBlank()) {
-            var env = System.getenv(envVar);
+            var env = com.pijava.ai.utils.ProviderEnv.value(envVar, options.env());
             if (env != null && !env.isBlank()) {
                 return env;
             }

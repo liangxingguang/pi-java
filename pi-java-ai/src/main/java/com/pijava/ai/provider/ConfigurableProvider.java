@@ -106,7 +106,7 @@ public abstract class ConfigurableProvider implements Provider {
         return new ApiOptions(
             config().defaultBaseUrl(), options.apiKey(),
             options.timeout(), options.maxRetries(), options.extra(), options.authKind(),
-            options.telemetry(), options.identity());
+            options.telemetry(), options.identity(), options.env());
     }
 
     /**
@@ -131,7 +131,7 @@ public abstract class ConfigurableProvider implements Provider {
         }
         return new ApiOptions(options.baseUrl(), options.apiKey(), options.timeout(),
             options.maxRetries(), extra, options.authKind(), options.telemetry(),
-            options.identity());
+            options.identity(), options.env());
     }
 
     /** Subclasses construct the protocol adapter here; image-only providers leave it

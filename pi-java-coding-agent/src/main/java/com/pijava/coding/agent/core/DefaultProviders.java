@@ -211,7 +211,7 @@ public final class DefaultProviders {
         }
         return new ApiOptions(baseUrl, options.apiKey(), options.timeout(),
             options.maxRetries(), extra, options.authKind(), options.telemetry(),
-            options.identity());
+            options.identity(), options.env());
     }
 
     /**
@@ -273,7 +273,7 @@ public final class DefaultProviders {
         // 八参构造：authKind、telemetry 与 identity 保真（B138 同族教训＋docs/14 §3.7）。
         return new ApiOptions(options.baseUrl(), options.apiKey(), options.timeout(),
             options.maxRetries(), extra, options.authKind(), options.telemetry(),
-            options.identity());
+            options.identity(), options.env());
     }
 
     /**
@@ -283,7 +283,7 @@ public final class DefaultProviders {
     static ApiOptions withMaxRetries(ApiOptions options, int maxRetries) {
         return new ApiOptions(options.baseUrl(), options.apiKey(), options.timeout(),
             maxRetries, options.extra(), options.authKind(), options.telemetry(),
-            options.identity());
+            options.identity(), options.env());
     }
 
     /**
@@ -460,6 +460,9 @@ public final class DefaultProviders {
         if (credential != null && credential.kind() == AuthKind.FEDERATION) {
             mergedExtra.put("federationEnv", credential.env());
         }
+        // docs/19 #50：所有凭证的 provider env 同时进入请求级覆盖（不再只给 federation 过桥）。
+        Map<String, String> providerEnv = credential != null && !credential.env().isEmpty()
+            ? credential.env() : null;
         // 批 11 T4（pi sdk.ts:344-354 链序）：provider retry timeoutMs ??
         // httpIdleTimeoutMs 有效值（0 ⇒ 2147483647；缺席 ⇒ 300_000）。java 原 120s
         // 自造兜底删除。
@@ -468,7 +471,7 @@ public final class DefaultProviders {
             : effectiveHttpIdleTimeout(settings);
         return new ApiOptions(baseUrl == null ? "" : baseUrl,
             apiKey == null ? "" : apiKey,
-            timeout, providerMaxRetries, Map.copyOf(mergedExtra), kind, null, null);
+            timeout, providerMaxRetries, Map.copyOf(mergedExtra), kind, null, null, providerEnv);
     }
 
     /** pi sdk.ts:345-346：0/"disabled" ⇒ 2147483647；缺席 ⇒ 300s（非法值随访问器抛）。 */

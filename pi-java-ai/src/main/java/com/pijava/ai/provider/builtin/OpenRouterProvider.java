@@ -59,7 +59,7 @@ public final class OpenRouterProvider extends ConfigurableProvider {
                 && (options.baseUrl() == null || options.baseUrl().isBlank())) {
             return new ApiOptions(ANTHROPIC_BASE_URL, options.apiKey(), options.timeout(),
                 options.maxRetries(), options.extra(), options.authKind(),
-                options.telemetry(), options.identity());
+                options.telemetry(), options.identity(), options.env());
         }
         return options;
     }

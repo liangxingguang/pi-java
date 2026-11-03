@@ -20,9 +20,11 @@ class OpenRouterProviderTelemetryTest {
     private static final TelemetrySpan SENTINEL =
         new InMemoryTelemetryContext().openSpan(new SpanOptions("sentinel"));
 
+    private static final Map<String, String> ENV = Map.of("REGION", "eu");
+
     private static ApiOptions withTelemetry(String baseUrl) {
         return new ApiOptions(baseUrl, "k", Duration.ofSeconds(1), 0, Map.of(),
-            AuthKind.API_KEY, SENTINEL);
+            AuthKind.API_KEY, SENTINEL, null, ENV);
     }
 
     @Test
@@ -32,6 +34,7 @@ class OpenRouterProviderTelemetryTest {
 
         assertThat(pinned.baseUrl()).isEqualTo(OpenRouterProvider.ANTHROPIC_BASE_URL);
         assertThat(pinned.telemetry()).isSameAs(SENTINEL);
+        assertThat(pinned.env()).isEqualTo(ENV);
     }
 
     @Test

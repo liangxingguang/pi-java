@@ -1,6 +1,8 @@
 package com.pijava.ai.protocol;
 
+import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Flow;
@@ -10,6 +12,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import com.pijava.ai.api.ApiOptions;
+import com.pijava.ai.api.AuthKind;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.model.ModelId;
@@ -71,6 +74,18 @@ class AbstractChatApiTest {
             invocations.incrementAndGet();
             publisher.submit(event);
         }
+    }
+
+    /** docs/19 #50：key 回落先读请求级 env，再读进程环境。 */
+    @Test
+    void resolveAuthPrefersRequestScopedEnv() {
+        var options = new ApiOptions("", "", Duration.ofSeconds(1), 0, Map.of(),
+            AuthKind.API_KEY, null, null, Map.of("DOCS19_RESOLVE_KEY", "scoped"));
+
+        var auth = AbstractChatApi.resolveAuth(options, "DOCS19_RESOLVE_KEY");
+
+        assertThat(auth.value()).isEqualTo("scoped");
+        assertThat(auth.kind()).isEqualTo(AuthKind.API_KEY);
     }
 
     /**

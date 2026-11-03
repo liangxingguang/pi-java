@@ -25,6 +25,10 @@ import com.pijava.telemetry.TelemetrySpan;
  *                      {@code ProviderRequestOptions.identity}，{@code types.ts:196-201}）。
  *                      {@code null} ≙ pi 的 {@code undefined} ⇒ 车道仍发默认 detailed
  *                      {@code User-Agent}，只是没有归因头。
+ * @param env           docs/19 #50：provider 作用域的环境覆盖（pi
+ *                      {@code ProviderRequestOptions.env}，{@code types.ts:171-176}）。
+ *                      {@code null} ≙ pi 的 {@code undefined}；非 null 时覆盖进程环境，
+ *                      用于地域/端点占位符/代理等 provider 配置（不是鉴权层）。
  */
 public record ApiOptions(
     String baseUrl,
@@ -34,17 +38,30 @@ public record ApiOptions(
     Map<String, Object> extra,
     AuthKind authKind,
     @org.jspecify.annotations.Nullable TelemetrySpan telemetry,
-    @org.jspecify.annotations.Nullable ClientIdentity identity
+    @org.jspecify.annotations.Nullable ClientIdentity identity,
+    @org.jspecify.annotations.Nullable Map<String, String> env
 ) {
-    /** Compact constructor that defensively copies the {@code extra} options map. */
+    /** Compact constructor that defensively copies the {@code extra} and {@code env} maps. */
     public ApiOptions {
         extra = Map.copyOf(extra);
+        env = env == null ? null : Map.copyOf(env);
         authKind = authKind == null ? AuthKind.API_KEY : authKind;
     }
 
     /**
-     * 七组件构造器（docs/13 的**规范**构造）：{@code identity} 缺席 ≙
+     * 八组件构造器（docs/14 的**规范**构造）：{@code env} 缺席 ≙
      * pi 的 {@code undefined}。保留该形态使 B266 之前的调用点零改签。
+     */
+    public ApiOptions(String baseUrl, String apiKey, Duration timeout, int maxRetries,
+                      Map<String, Object> extra, AuthKind authKind,
+                      @org.jspecify.annotations.Nullable TelemetrySpan telemetry,
+                      @org.jspecify.annotations.Nullable ClientIdentity identity) {
+        this(baseUrl, apiKey, timeout, maxRetries, extra, authKind, telemetry, identity, null);
+    }
+
+    /**
+     * 七组件构造器（docs/13 的**规范**构造）：{@code identity} 缺席 ≙
+     * pi 的 {@code undefined}。
      */
     public ApiOptions(String baseUrl, String apiKey, Duration timeout, int maxRetries,
                       Map<String, Object> extra, AuthKind authKind,
@@ -85,6 +102,16 @@ public record ApiOptions(
     public static ApiOptions withIdentity(ApiOptions options, ClientIdentity identity) {
         return new ApiOptions(options.baseUrl(), options.apiKey(), options.timeout(),
             options.maxRetries(), options.extra(), options.authKind(), options.telemetry(),
-            identity);
+            identity, options.env());
+    }
+
+    /**
+     * docs/19 #50：把请求级 provider env 写回新选项（编码侧唯一的第九参重建入口）。
+     * 其余组件逐字保真。
+     */
+    public static ApiOptions withEnv(ApiOptions options, Map<String, String> env) {
+        return new ApiOptions(options.baseUrl(), options.apiKey(), options.timeout(),
+            options.maxRetries(), options.extra(), options.authKind(), options.telemetry(),
+            options.identity(), env);
     }
 }

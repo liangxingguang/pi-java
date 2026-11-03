@@ -161,7 +161,7 @@ public final class ProviderEventBridge {
         // 八参（docs/14 §3.7）：三钩写入不得丢 telemetry 与 identity。
         return new ApiOptions(options.baseUrl(), options.apiKey(), options.timeout(),
             options.maxRetries(), extra, options.authKind(), options.telemetry(),
-            options.identity());
+            options.identity(), options.env());
     }
 
     /**
@@ -190,6 +190,6 @@ public final class ProviderEventBridge {
         // 八参（docs/14 §3.7）：头变换写回不得丢 telemetry 与 identity。
         return new ApiOptions(options.baseUrl(), options.apiKey(), options.timeout(),
             options.maxRetries(), newExtra, options.authKind(), options.telemetry(),
-            options.identity());
+            options.identity(), options.env());
     }
 }

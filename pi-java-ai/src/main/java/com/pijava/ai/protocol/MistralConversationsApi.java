@@ -84,6 +84,13 @@ public final class MistralConversationsApi extends AbstractChatApi {
     private final Optional<CacheRetention> cacheRetention;
     /** B233：extra["headers"] 原始 map（值可能为 null ⇒ 删除，pi :374-380）；缺席为 null。 */
     private final Map<?, ?> optionHeaders;
+    /** docs/19 #50：请求级 provider env（{@code null} ≙ pi 的 undefined）。 */
+    private final Map<String, String> providerEnv;
+
+    /** docs/19 #50：{@code PI_CACHE_RETENTION} 的读取点（请求级 env → 进程 env）。 */
+    String cacheRetentionEnv() {
+        return com.pijava.ai.utils.ProviderEnv.value(CACHE_RETENTION_ENV, providerEnv);
+    }
 
     /** docs/14 B266：provider 预计算的 identity 头（最低层）。 */
     private final Map<String, String> identityHeaders;
@@ -105,6 +112,7 @@ public final class MistralConversationsApi extends AbstractChatApi {
         this.baseUrl = options.baseUrl() != null && !options.baseUrl().isBlank()
                 ? options.baseUrl() : DEFAULT_BASE_URL;
         this.headerTimeout = headerTimeout;
+        this.providerEnv = options.env();
         // B233：宿主 DefaultProviders.requestExtra 已对所有 provider 注入 sessionId/
         // cacheRetention（适配器每请求新建，不串味）；per-request headers 走 extra["headers"]。
         this.sessionId = sessionIdOf(options);
@@ -297,7 +305,7 @@ public final class MistralConversationsApi extends AbstractChatApi {
      */
     private boolean useCaching() {
         return CompatResolver.resolveCacheRetention(
-                    cacheRetention, System.getenv(CACHE_RETENTION_ENV)) != CacheRetention.NONE
+                    cacheRetention, cacheRetentionEnv()) != CacheRetention.NONE
                 && sessionId != null && !sessionId.isBlank();
     }
 
@@ -326,7 +334,7 @@ public final class MistralConversationsApi extends AbstractChatApi {
         if (options.apiKey() != null && !options.apiKey().isBlank()) {
             return options.apiKey();
         }
-        var env = System.getenv("MISTRAL_API_KEY");
+        var env = com.pijava.ai.utils.ProviderEnv.value("MISTRAL_API_KEY", options.env());
         if (env != null && !env.isBlank()) {
             return env;
         }

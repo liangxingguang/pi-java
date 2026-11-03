@@ -144,6 +144,23 @@ class DefaultProvidersTest {
         assertThat(opts.apiKey()).isEmpty();
         assertThat(opts.authKind()).isEqualTo(com.pijava.ai.api.AuthKind.FEDERATION);
         assertThat(opts.extra()).containsEntry("federationEnv", federationEnv);
+        // docs/19 #50：所有凭证的 env 同时进入 request-scoped env。
+        assertThat(opts.env()).isEqualTo(federationEnv);
+    }
+
+    /** docs/19 #50：非 federation 凭证的 env 同样进请求级覆盖。 */
+    @Test
+    void credentialEnvBecomesRequestScopedEnv() {
+        var settings = new Settings();
+        var args = ArgsParser.parse(new String[] {});
+        var credential = new com.pijava.ai.auth.RecordedCredential(
+            com.pijava.ai.api.AuthKind.API_KEY, "sk-x", "src",
+            Map.of("OPENAI_REGION", "eu"));
+
+        var opts = DefaultProviders.apiOptions(args, "openai", settings,
+            provider -> java.util.Optional.of(credential));
+
+        assertThat(opts.env()).containsEntry("OPENAI_REGION", "eu");
     }
 
     /** 非 federation 凭证 ⇒ 不塞 {@code federationEnv}（键缺席 ≙ pi 的 undefined）。 */
@@ -498,8 +515,9 @@ class DefaultProvidersTest {
     @Test
     void requestOptionRebuildsPreserveTelemetry() {
         var span = new InMemoryTelemetryContext().openSpan(new SpanOptions("sentinel"));
+        var env = Map.of("REGION", "eu");
         var base = new ApiOptions("", "sk", java.time.Duration.ofSeconds(1), 0,
-            Map.of(), AuthKind.API_KEY, span);
+            Map.of(), AuthKind.API_KEY, span, null, env);
         var model = new ModelInfo(ModelId.of("alpha", "anthropic/claude-x"), "X",
             Set.of(), 128_000, 16_384, false, PricingInfo.UNKNOWN,
             ThinkingLevelMap.empty(), Map.of(), Map.of(), ModelCompat.NONE, "anthropic-messages");
@@ -510,6 +528,10 @@ class DefaultProvidersTest {
             .isSameAs(span);
         assertThat(DefaultProviders.withMaxRetries(base, 0).telemetry())
             .isSameAs(span);
+        // docs/19 #50：三个重建点都不得丢掉请求级 env。
+        assertThat(DefaultProviders.withPerModelOverrides(base, model).env()).isEqualTo(env);
+        assertThat(DefaultProviders.withModelProtocol(base, model).env()).isEqualTo(env);
+        assertThat(DefaultProviders.withMaxRetries(base, 0).env()).isEqualTo(env);
     }
 
     private static StreamOptions options(CacheRetention retention) {

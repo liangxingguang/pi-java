@@ -33,9 +33,29 @@ class ApiOptionsTelemetryPropagationTest {
                 com.pijava.ai.identity.ClientAttribution.PI),
             "1.0.0");
 
+    /** docs/19 #50：请求级 env 与 telemetry/identity 一起保真。 */
+    private static final Map<String, String> ENV = Map.of("REGION", "eu");
+
     private static ApiOptions withTelemetry(String baseUrl, String apiKey) {
         return new ApiOptions(baseUrl, apiKey, Duration.ofSeconds(1), 0, Map.of(),
-            AuthKind.API_KEY, SENTINEL, IDENTITY);
+            AuthKind.API_KEY, SENTINEL, IDENTITY, ENV);
+    }
+
+    @Test
+    void rebuildPointsPreserveProviderEnv() {
+        var provider = new CapturingProvider();
+        provider.createApi(ChatApi.class, withTelemetry("", "k"));
+        assertThat(provider.seen.env()).isEqualTo(ENV);
+
+        assertThat(OpenAiCompatibleProvider.withPlaceholderKey(withTelemetry("", "")).env())
+            .isEqualTo(ENV);
+        assertThat(ModelsJsonProvider.pinnedOptions(withTelemetry("", "k"), "https://models-json")
+            .env()).isEqualTo(ENV);
+        assertThat(ModelsJsonProvider.withInlineKey(withTelemetry("", ""), "inline-key").env())
+            .isEqualTo(ENV);
+        assertThat(ApiOptions.withIdentity(withTelemetry("", "k"), IDENTITY).env())
+            .isEqualTo(ENV);
+        assertThat(ApiOptions.withEnv(withTelemetry("", "k"), ENV).env()).isEqualTo(ENV);
     }
 
     @Test

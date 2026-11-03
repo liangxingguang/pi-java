@@ -77,7 +77,7 @@ public final class OpenAIEmbeddingApi implements EmbeddingApi {
             return options.apiKey();
         }
         if (envVar != null && !envVar.isBlank()) {
-            var env = System.getenv(envVar);
+            var env = com.pijava.ai.utils.ProviderEnv.value(envVar, options.env());
             if (env != null && !env.isBlank()) {
                 return env;
             }

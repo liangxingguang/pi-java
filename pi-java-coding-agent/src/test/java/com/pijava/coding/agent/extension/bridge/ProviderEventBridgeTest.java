@@ -179,10 +179,11 @@ class ProviderEventBridgeTest {
         var bridge = new ProviderEventBridge();
         bridge.install(bus, null);
 
+        var env = Map.of("REGION", "eu");
         var options = new com.pijava.ai.api.ApiOptions("http://x", "k",
             java.time.Duration.ofSeconds(5), 0,
             Map.of("headers", Map.of("x-model", "m")),
-            com.pijava.ai.api.AuthKind.API_KEY, TELEMETRY);
+            com.pijava.ai.api.AuthKind.API_KEY, TELEMETRY, null, env);
 
         var transformed = bridge.applyHeaderTransform(options);
 
@@ -192,6 +193,8 @@ class ProviderEventBridgeTest {
         // pi 测试对位：transformHeaders 钩本体不出现在 options 里。
         assertThat(transformed.extra()).doesNotContainKey("transformHeaders");
         assertThat(transformed.telemetry()).isSameAs(TELEMETRY);
+        // docs/19 #50：头变换写回不得丢请求级 env。
+        assertThat(transformed.env()).isEqualTo(env);
 
         // 无订阅 ⇒ 原样返回（同一个对象）。
         var quiet = new ProviderEventBridge();
@@ -203,14 +206,16 @@ class ProviderEventBridgeTest {
     @Test
     void withRequestHooksInjectsThreeKeys() {
         var bridge = new ProviderEventBridge();
+        var env = Map.of("REGION", "eu");
         var options = new com.pijava.ai.api.ApiOptions("http://x", "k",
             java.time.Duration.ofSeconds(5), 0, Map.of(),
-            com.pijava.ai.api.AuthKind.API_KEY, TELEMETRY);
+            com.pijava.ai.api.AuthKind.API_KEY, TELEMETRY, null, env);
 
         var withHooks = bridge.withRequestHooks(options);
 
         assertThat(withHooks.extra()).containsKeys("onPayload", "onResponse",
             "onProviderStreamEvent");
+        assertThat(withHooks.env()).isEqualTo(env);
         assertThat(com.pijava.ai.api.ProviderHooks.payloadHookOf(withHooks)).isNotNull();
         assertThat(com.pijava.ai.api.ProviderHooks.responseHookOf(withHooks)).isNotNull();
         assertThat(com.pijava.ai.api.ProviderHooks.streamEventHookOf(withHooks)).isNotNull();

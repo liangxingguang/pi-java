@@ -39,6 +39,8 @@ public final class AzureOpenAIResponsesApi extends AbstractChatApi {
     private final OpenAIClient client;
     private final ResponsesOptions responsesOptions;
     private final AzureOptions azureOptions;
+    /** docs/19 #50：请求级 provider env（{@code null} ≙ pi 的 undefined）。 */
+    private final Map<String, String> providerEnv;
 
     /** A-14：初始请求获取的重试选项。 */
     private final ProviderRetry.Options providerRetry;
@@ -51,9 +53,10 @@ public final class AzureOpenAIResponsesApi extends AbstractChatApi {
      */
     public AzureOpenAIResponsesApi(ApiOptions options, String apiKeyEnvVar) {
         this.azureOptions = AzureOptions.from(options);
+        this.providerEnv = options.env();
         String apiKey = resolveApiKey(options, apiKeyEnvVar);
-        String baseUrl = resolveBaseUrl(options);
-        String apiVersion = resolveApiVersion();
+        String baseUrl = resolveBaseUrl(azureOptions, options, providerEnv);
+        String apiVersion = resolveApiVersion(azureOptions, providerEnv);
         var clientBuilder = OpenAIOkHttpClient.builder()
             .baseUrl(baseUrl)
             .credential(AzureApiKeyCredential.create(apiKey))
@@ -88,7 +91,7 @@ public final class AzureOpenAIResponsesApi extends AbstractChatApi {
     @Override
     protected void streamInternal(StreamRequest request,
                                   SubmissionPublisher<StreamEvent> publisher) {
-        String deploymentName = resolveDeploymentName(request);
+        String deploymentName = resolveDeploymentName(azureOptions, request, providerEnv);
         // pi azure-openai-responses.ts:296 / :319：`supportsStrictMode: model.compat?.supportsStrictMode ?? true`
         // —— 与 openai-responses 车道（`?? false`）**缺省相反**，是 pi 的事实，别改成一致。
         var compat = CompatResolver.forResponses(request.model(), true);
@@ -136,13 +139,17 @@ public final class AzureOpenAIResponsesApi extends AbstractChatApi {
 
     // ── 配置解析 ─────────────────────────────────────────────────────────
 
-    /** 部署名：azureDeploymentName → DEPLOYMENT_NAME_MAP.get(model.id) → model.id。 */
-    private String resolveDeploymentName(StreamRequest request) {
+    /**
+     * 部署名：azureDeploymentName → DEPLOYMENT_NAME_MAP.get(model.id) → model.id。
+     * 包可见是为了 docs/19 #50 的 env 夹具。
+     */
+    static String resolveDeploymentName(AzureOptions azureOptions, StreamRequest request,
+                                        Map<String, String> env) {
         if (!isBlank(azureOptions.deploymentName())) {
             return azureOptions.deploymentName();
         }
         Map<String, String> map = AzureOptions.parseDeploymentNameMap(
-            System.getenv("AZURE_OPENAI_DEPLOYMENT_NAME_MAP"));
+            com.pijava.ai.utils.ProviderEnv.value("AZURE_OPENAI_DEPLOYMENT_NAME_MAP", env));
         String modelId = request.modelId().modelName();
         return map.getOrDefault(modelId, modelId);
     }
@@ -152,11 +159,13 @@ public final class AzureOpenAIResponsesApi extends AbstractChatApi {
      * 1. azureBaseUrl option → 2. AZURE_OPENAI_BASE_URL env →
      * 3. resourceName 拼默认 → 4. ApiOptions.baseUrl → 5. 全空抛异常。
      * 归一化只做去尾部斜杠 + URL 合法性校验，路径补全交给 SDK。
+     * 包可见是为了 docs/19 #50 的 env 夹具。
      */
-    private String resolveBaseUrl(ApiOptions options) {
+    static String resolveBaseUrl(AzureOptions azureOptions, ApiOptions options,
+                                 Map<String, String> env) {
         String baseUrl = azureOptions.baseUrl();
         if (isBlank(baseUrl)) {
-            baseUrl = System.getenv("AZURE_OPENAI_BASE_URL");
+            baseUrl = com.pijava.ai.utils.ProviderEnv.value("AZURE_OPENAI_BASE_URL", env);
         }
         if (isBlank(baseUrl) && !isBlank(azureOptions.resourceName())) {
             baseUrl = "https://" + azureOptions.resourceName()
@@ -174,14 +183,17 @@ public final class AzureOpenAIResponsesApi extends AbstractChatApi {
         return normalizeBaseUrl(baseUrl);
     }
 
-    /** apiVersion：azureApiVersion option → AZURE_OPENAI_API_VERSION env → "v1"。 */
-    private String resolveApiVersion() {
+    /**
+     * apiVersion：azureApiVersion option → AZURE_OPENAI_API_VERSION env → "v1"。
+     * 包可见是为了 docs/19 #50 的 env 夹具。
+     */
+    static String resolveApiVersion(AzureOptions azureOptions, Map<String, String> env) {
         if (!isBlank(azureOptions.apiVersion())) {
             return azureOptions.apiVersion();
         }
-        String env = System.getenv("AZURE_OPENAI_API_VERSION");
-        if (!isBlank(env)) {
-            return env;
+        String fromEnv = com.pijava.ai.utils.ProviderEnv.value("AZURE_OPENAI_API_VERSION", env);
+        if (!isBlank(fromEnv)) {
+            return fromEnv;
         }
         return AzureOptions.DEFAULT_API_VERSION;
     }

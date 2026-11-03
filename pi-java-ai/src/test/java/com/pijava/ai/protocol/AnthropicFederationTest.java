@@ -179,6 +179,33 @@ class AnthropicFederationTest {
             AuthKind.FEDERATION);
     }
 
+    @Test
+    void requestScopedEnvFeedsFederationBeforeTheExtraBridge() throws Exception {
+        var env = federationEnv();
+        var bridged = new LinkedHashMap<String, String>(env);
+        bridged.put("ANTHROPIC_FEDERATION_RULE_ID", "rule-extra");
+        var options = new ApiOptions("", "", Duration.ofSeconds(10), 0,
+            Map.of("federationEnv", bridged), AuthKind.FEDERATION, null, null, env);
+
+        var resolved = AnthropicFederationSupport.federationEnvOf(options);
+
+        assertThat(resolved).containsEntry("ANTHROPIC_FEDERATION_RULE_ID", "rule-1");
+    }
+
+    @Test
+    void emptyScopedFederationValueFallsBackToTheExtraBridge() throws Exception {
+        var env = federationEnv();
+        env.put("ANTHROPIC_FEDERATION_RULE_ID", "");
+        var bridged = new LinkedHashMap<String, String>(env);
+        bridged.put("ANTHROPIC_FEDERATION_RULE_ID", "rule-extra");
+        var options = new ApiOptions("", "", Duration.ofSeconds(10), 0,
+            Map.of("federationEnv", bridged), AuthKind.FEDERATION, null, null, env);
+
+        var resolved = AnthropicFederationSupport.federationEnvOf(options);
+
+        assertThat(resolved).containsEntry("ANTHROPIC_FEDERATION_RULE_ID", "rule-extra");
+    }
+
     private static void runOneStream(ApiOptions options) {
         var api = new AnthropicMessagesApi(options, "ANTHROPIC_API_KEY");
         var request = new StreamRequest(TARGET, null,

@@ -43,6 +43,6 @@ public abstract class OpenAiCompatibleProvider extends ConfigurableProvider {
         return new ApiOptions(
             options.baseUrl(), "ollama",
             options.timeout(), options.maxRetries(), options.extra(), options.authKind(),
-            options.telemetry(), options.identity());
+            options.telemetry(), options.identity(), options.env());
     }
 }

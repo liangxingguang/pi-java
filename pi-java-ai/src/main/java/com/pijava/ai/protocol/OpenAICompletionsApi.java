@@ -52,20 +52,16 @@ import com.pijava.ai.utils.ProviderErrors;
  * <p><b>三个刻意的偏差/不可达点</b>（均为 pi-java 结构所致，非遗漏）：</p>
  * <ol>
  *   <li><b>abort 检查不可达</b>（pi {@code :678}/{@code :682}）：{@link StreamRequest}
- *       没有 signal（pi 的 {@code options.signal}）⇒ 中止上提到宿主层
- *       {@code PiLoopRunner.markAborted}（{@code :291-303}）。</li>
+ *       没有 signal ⇒ 中止上提到宿主层 {@code PiLoopRunner.markAborted}（{@code :291-303}）。</li>
  *   <li><b>{@code default} 分支只可能命中 SDK 认得的值</b>：{@code openai-java 4.42}
- *       的 {@code FinishReason.Known} 只有 5 个（stop/length/tool_calls/content_filter/
- *       function_call），但 {@code asString()} 对**任意字符串**都给出线格原值
- *       （实测：{@code "network_error"} → {@code "network_error"}），故 pi 的
- *       {@code network_error} 特例与 {@code default} 都**可达**。
- *       ⚠️ 不要改用 {@code known()} —— 它对未知值**抛**
- *       {@code OpenAIInvalidDataException}（实测），而 pi 在这一格要的是
- *       「落 error 事件」而不是「抛」。同族的 Anthropic SDK 行为相反（未知值进
- *       {@code asKnown()}），两处都别照抄。</li>
- *   <li><b>空字符串≙缺席</b>：pi 写的是 {@code if (choice.finish_reason)} —— 对
- *       {@code ""} 为假 ⇒ 不发 {@code hasFinishReason}。SDK 侧 {@code ""} 是
- *       {@code Optional.of} 存在值，故必须显式过滤（见 {@link #rawFinishReason}）。</li>
+ *       的 {@code FinishReason.Known} 只有 5 个，但 {@code asString()} 对**任意字符串**
+ *       都给出线格原值（实测 {@code "network_error"}），故 pi 的 {@code network_error}
+ *       特例与 {@code default} 都**可达**。⚠️ 不要改用 {@code known()} —— 它对未知值
+ *       **抛** {@code OpenAIInvalidDataException}，而 pi 要的是「落 error 事件」；
+ *       同族 Anthropic SDK 行为相反（未知值进 {@code asKnown()}），两处都别照抄。</li>
+ *   <li><b>空字符串≙缺席</b>：pi 的 {@code if (choice.finish_reason)} 对 {@code ""} 为假
+ *       ⇒ 不发 {@code hasFinishReason}。SDK 侧 {@code ""} 是存在值，故必须显式过滤
+ *       （见 {@link #rawFinishReason}）。</li>
  * </ol>
  */
 public class OpenAICompletionsApi extends AbstractChatApi {
@@ -121,6 +117,7 @@ public class OpenAICompletionsApi extends AbstractChatApi {
         this.providerRetry = ProviderRetry.optionsOf(options);
         // 包 A-02（B105）：cacheRetention 的选项面（pi :342 的 options?.cacheRetention）。
         this.cacheRetention = retentionOf(options);
+        this.cacheRetentionFromEnv = com.pijava.ai.utils.ProviderEnv.value(CACHE_RETENTION_ENV, options.env());
         // B103（docs/52）：原始 sessionId —— prompt_cache_key 与亲和头共用（none 门在转换器）。
         this.sessionId = sessionIdOf(options);
         // B125（批1）：per-request 采样参数（适配器每请求新建，options 即 per-request）。
@@ -146,6 +143,9 @@ public class OpenAICompletionsApi extends AbstractChatApi {
      * 在请求期做（{@link CompatResolver#resolveCacheRetention}，与 anthropic 车道同源）。
      */
     private final Optional<CacheRetention> cacheRetention;
+
+    private final String cacheRetentionFromEnv;
+    String cacheRetentionEnv() { return cacheRetentionFromEnv; }
 
     /** 包 B103：原始 sessionId（prompt_cache_key 用）。 */
     private final String sessionId;
@@ -207,7 +207,7 @@ public class OpenAICompletionsApi extends AbstractChatApi {
             // 包 A-02（pi :342/:349-357）：cacheRetention 三源合并后进请求构建
             // —— 断点族（cacheControlOf）与 prompt_cache_retention 共用这一个值。
             var resolvedRetention = CompatResolver.resolveCacheRetention(cacheRetention,
-                System.getenv(CACHE_RETENTION_ENV));
+                cacheRetentionEnv());
             var params = OpenAICompletionsMessageConverter.buildParams(request, apiName(), baseUrl,
                 resolvedRetention, sessionId, requestSamplingParams);
             // docs/17（pi :366-369 逐字）：载荷构建后、HTTP 前；非 null 返回 ⇒ 替换。

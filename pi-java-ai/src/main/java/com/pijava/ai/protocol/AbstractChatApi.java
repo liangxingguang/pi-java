@@ -439,7 +439,8 @@ public abstract class AbstractChatApi implements ChatApi {
             return new ResolvedAuth(options.authKind(), options.apiKey());
         }
         if (envVar != null && !envVar.isBlank()) {
-            var env = System.getenv(envVar);
+            // docs/19 #50：请求级 env 优先于进程环境。
+            var env = com.pijava.ai.utils.ProviderEnv.value(envVar, options.env());
             if (env != null && !env.isBlank()) {
                 return new ResolvedAuth(AuthKind.API_KEY, env);
             }

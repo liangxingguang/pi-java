@@ -66,7 +66,7 @@ public final class ModelsJsonProvider extends ConfigurableProvider {
         // ⚠️ 八参（docs/14 B266）：七参形态会把 identity 丢掉。
         return new ApiOptions(defaultBaseUrl, options.apiKey(),
             options.timeout(), options.maxRetries(), options.extra(), options.authKind(),
-            options.telemetry(), options.identity());
+            options.telemetry(), options.identity(), options.env());
     }
 
     /** 包可见是为了夹具（docs/14 §3.7）。 */
@@ -77,7 +77,7 @@ public final class ModelsJsonProvider extends ConfigurableProvider {
         }
         return new ApiOptions(options.baseUrl(), inlineApiKey,
             options.timeout(), options.maxRetries(), options.extra(), options.authKind(),
-            options.telemetry(), options.identity());
+            options.telemetry(), options.identity(), options.env());
     }
 
     @Override

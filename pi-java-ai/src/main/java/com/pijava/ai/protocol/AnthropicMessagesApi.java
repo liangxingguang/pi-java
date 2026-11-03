@@ -1,5 +1,6 @@
 package com.pijava.ai.protocol;
 
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.SubmissionPublisher;
 
@@ -140,6 +141,7 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
         this.effectiveHeaderNames = AnthropicStreamSupport.extraHeaderNames(options);
         this.providerRetry = ProviderRetry.optionsOf(options);
         this.cacheRetention = AnthropicStreamSupport.retentionOf(options);
+        this.providerEnv = options.env();
         // B103（docs/52）：pi :625 的 cacheSessionId 原料（none 门在 streamInternal
         // 按解析后的保留期过）；Bearer（OAuth/copilot）分支 pi 不挂亲和头（:992-1031）。
         this.sessionId = AnthropicStreamSupport.sessionIdOf(options);
@@ -171,6 +173,14 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
      * 与 {@code ResponsesOptions}/{@code AzureOptions} 同形。</p>
      */
     private final Optional<CacheRetention> cacheRetention;
+
+    /** docs/19 #50：请求级 provider env（{@code null} ≙ pi 的 undefined）。 */
+    private final Map<String, String> providerEnv;
+
+    /** docs/19 #50：{@code PI_CACHE_RETENTION} 的读取点（请求级 env → 进程 env）。 */
+    String cacheRetentionEnv() {
+        return com.pijava.ai.utils.ProviderEnv.value(CACHE_RETENTION_ENV, providerEnv);
+    }
 
     /** B103：Bearer（OAuth/copilot）分支不挂会话亲和头（pi :992-1031）。 */
     private final boolean bearer;
@@ -339,7 +349,7 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
         // 随后由 AnthropicRequestBuilder 翻成 SDK 形状并挂到三处落点上。
         return AnthropicRequestBuilder.buildParams(request,
             CompatResolver.anthropicCacheControl(request.model(), cacheRetention,
-                System.getenv(CACHE_RETENTION_ENV)),
+                cacheRetentionEnv()),
             affinitySessionId, baseUrl, headerNames, oauth, disablePreferredStrictTools);
     }
 
@@ -388,7 +398,7 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
             return null;
         }
         var resolved = CompatResolver.resolveCacheRetention(cacheRetention,
-            System.getenv(CACHE_RETENTION_ENV));
+            cacheRetentionEnv());
         return resolved == CacheRetention.NONE ? null : sessionId;
     }
 
