@@ -158,9 +158,10 @@ public final class ProviderEventBridge {
         extra.put(ProviderHooks.ON_RESPONSE, (ProviderHooks.ResponseHook) this::onResponse);
         extra.put(ProviderHooks.ON_PROVIDER_STREAM_EVENT,
             (ProviderHooks.StreamEventHook) this::onStreamEvent);
-        // 七参（docs/13 §3.7）：三钩写入不得丢 telemetry。
+        // 八参（docs/14 §3.7）：三钩写入不得丢 telemetry 与 identity。
         return new ApiOptions(options.baseUrl(), options.apiKey(), options.timeout(),
-            options.maxRetries(), extra, options.authKind(), options.telemetry());
+            options.maxRetries(), extra, options.authKind(), options.telemetry(),
+            options.identity());
     }
 
     /**
@@ -186,8 +187,9 @@ public final class ProviderEventBridge {
         var newExtra = new LinkedHashMap<String, Object>(
             extra == null ? Map.of() : extra);
         newExtra.put("headers", transformed);
-        // 七参（docs/13 §3.7）：头变换写回不得丢 telemetry。
+        // 八参（docs/14 §3.7）：头变换写回不得丢 telemetry 与 identity。
         return new ApiOptions(options.baseUrl(), options.apiKey(), options.timeout(),
-            options.maxRetries(), newExtra, options.authKind(), options.telemetry());
+            options.maxRetries(), newExtra, options.authKind(), options.telemetry(),
+            options.identity());
     }
 }

@@ -6,7 +6,7 @@ package com.pijava.coding.agent.core;
  * settings 的 {@code enableInstallTelemetry}（默认 {@code true}，
  * settings-defaults.ts:31）。
  *
- * <p>本批唯一消费点是 attribution 头层（{@link ProviderAttribution}）；pi 的
+ * <p>本批唯一消费点是 attribution 头层（{@link ClientIdentityProvider}）；pi 的
  * 另一消费点 {@code reportInstallTelemetry}（interactive-mode.ts:1360-1376，
  * 向 pi.dev 报装）按裁决⑤不做——端点是 pi 产品的安装统计，pi-java 是独立制品。</p>
  */

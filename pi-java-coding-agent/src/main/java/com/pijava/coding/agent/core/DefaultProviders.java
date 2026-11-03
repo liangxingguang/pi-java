@@ -182,7 +182,7 @@ public final class DefaultProviders {
             });
             return streamBlocking(provider, model, context, options,
                 apiOptions(args, model.provider(), settings, Credentials::resolveCredential,
-                    requestExtra(options, sessionId)), bridge, settings);
+                    requestExtra(options, sessionId)), bridge, settings, sessionId);
         };
     }
 
@@ -210,7 +210,8 @@ public final class DefaultProviders {
             extra.put("headers", modelInfo.headers());
         }
         return new ApiOptions(baseUrl, options.apiKey(), options.timeout(),
-            options.maxRetries(), extra, options.authKind(), options.telemetry());
+            options.maxRetries(), extra, options.authKind(), options.telemetry(),
+            options.identity());
     }
 
     /**
@@ -269,9 +270,10 @@ public final class DefaultProviders {
         }
         var extra = new java.util.LinkedHashMap<>(options.extra());
         extra.put("protocol", api);
-        // 七参构造：authKind 与 telemetry 保真（B138 同族教训＋docs/13 §3.7）。
+        // 八参构造：authKind、telemetry 与 identity 保真（B138 同族教训＋docs/14 §3.7）。
         return new ApiOptions(options.baseUrl(), options.apiKey(), options.timeout(),
-            options.maxRetries(), extra, options.authKind(), options.telemetry());
+            options.maxRetries(), extra, options.authKind(), options.telemetry(),
+            options.identity());
     }
 
     /**
@@ -280,7 +282,8 @@ public final class DefaultProviders {
      */
     static ApiOptions withMaxRetries(ApiOptions options, int maxRetries) {
         return new ApiOptions(options.baseUrl(), options.apiKey(), options.timeout(),
-            maxRetries, options.extra(), options.authKind(), options.telemetry());
+            maxRetries, options.extra(), options.authKind(), options.telemetry(),
+            options.identity());
     }
 
     /**
@@ -311,7 +314,7 @@ public final class DefaultProviders {
             // ①：maxRetries 钉 0（authKind 与 telemetry 保真；docs/13 §3.7）。
             resolved = withMaxRetries(resolved, 0);
             return streamBlocking(provider, model, context, options, resolved, bridge,
-                settings, true);
+                settings, true, sessionId);
         };
     }
 
@@ -322,9 +325,10 @@ public final class DefaultProviders {
             com.pijava.agent.harness.StreamOptions options,
             ApiOptions apiOptions,
             com.pijava.coding.agent.extension.bridge.ProviderEventBridge bridge,
-            Settings settings) {
+            Settings settings,
+            String sessionId) {
         return streamBlocking(provider, model, context, options, apiOptions, bridge,
-            settings, false);
+            settings, false, sessionId);
     }
 
     private static StreamIterator streamBlocking(
@@ -335,7 +339,8 @@ public final class DefaultProviders {
             ApiOptions apiOptions,
             com.pijava.coding.agent.extension.bridge.ProviderEventBridge bridge,
             Settings settings,
-            boolean warm) {
+            boolean warm,
+            String sessionId) {
         // 系统提示与工具定义都来自 Context（pi 的 Context）；它们不再走消息列表或 options。
         //
         // 模型**元数据**（而非只有 id）必须随请求走：pi 的请求构建器拿到整个 Model<TApi>，
@@ -356,13 +361,15 @@ public final class DefaultProviders {
                 .orElseGet(() -> ModelInfo.minimal(model));
         // D-P1（原 docs/65）：per-model baseUrl/headers（三源合并的产物）在请求面生效。
         var effectiveOptions = withPerModelOverrides(apiOptions, modelInfo);
-        // 批 20（B253，pi sdk.ts:355-361 对位）：attribution 头层并入
-        // extra["headers"]——恒执行（遥测门内建），**不挂** before_provider_headers
-        // 订阅门（pi 的 merge 在 transformHeaders 闭包里、钩判定之前）；扩展钩自此
-        // 看到合并全集。暖路径同过（pi 暖请求保留 transformHeaders 闭包）。
-        effectiveOptions = ProviderAttribution.apply(effectiveOptions, modelInfo,
-            providerDefaultBaseUrl(provider),
-            InstallTelemetry.isEnabled(settings.enableInstallTelemetry));
+        // docs/14 B266（pi sdk.ts:340-353 对位）：宿主身份**替换** agent 默认
+        // （pi 注释原话：replaces the agent loop's default identity；逐请求求值，
+        // 遥测开关即时生效）。归因头本身由 ConfigurableProvider.createApi 在
+        // provider 侧预计算；这里只确定 identity 的来源与 OpenCode session 头
+        // （先 session、后既有头）。
+        effectiveOptions = ApiOptions.withIdentity(effectiveOptions,
+            ClientIdentityProvider.get(settings));
+        effectiveOptions = ClientIdentityProvider.withOpenCodeSessionHeaders(
+            effectiveOptions, modelInfo, providerDefaultBaseUrl(provider), sessionId);
         if (bridge != null) {
             // docs/17（B248，pi models.ts:866-871 对位）：合并头集过 transformHeaders
             // 写回 extra["headers"]（钩本体不入 extra——pi :870 剥离键对位）；
@@ -461,7 +468,7 @@ public final class DefaultProviders {
             : effectiveHttpIdleTimeout(settings);
         return new ApiOptions(baseUrl == null ? "" : baseUrl,
             apiKey == null ? "" : apiKey,
-            timeout, providerMaxRetries, Map.copyOf(mergedExtra), kind);
+            timeout, providerMaxRetries, Map.copyOf(mergedExtra), kind, null, null);
     }
 
     /** pi sdk.ts:345-346：0/"disabled" ⇒ 2147483647；缺席 ⇒ 300s（非法值随访问器抛）。 */

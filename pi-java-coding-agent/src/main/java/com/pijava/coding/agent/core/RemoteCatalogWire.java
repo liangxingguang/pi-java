@@ -32,7 +32,8 @@ final class RemoteCatalogWire {
 
     static final Duration ATTEMPT_TIMEOUT = Duration.ofSeconds(4);
 
-    static final String USER_AGENT = "pi-java/dev";
+    /** docs/14 B266：pi {@code getPiUserAgent(VERSION)} 的 detailed 形。 */
+    static final String USER_AGENT = ClientIdentityProvider.userAgent();
 
     private static final ObjectMapper JSON = new ObjectMapper();
 
