@@ -15,14 +15,14 @@
 - `docs/13` 是 L1 请求遥测设计（B263：#106），已实施并闭环（2026-11-03）。
 - `docs/14` 是 L1 Client Identity 设计（B266：#105），已实施并闭环（2026-11-03）。
 - `docs/15` 是 L1 usage 与 OpenRouter 账单设计（B267 第一批：#53／#59／#107），已实施并闭环（2026-11-03）。
-- `docs/17` 是 L1 Provider wire 对齐设计（B267 第三批：#1／#2／#108／#101／#110／#111），设计待审（2026-11-03）；前置 `openai-java 4.42.0 → 4.96.0` 升级（用户已批准）；下一新文档号为 **docs/18**。
+- `docs/17` 是 L1 Provider wire 对齐设计（B267 第三批：#1／#2／#108／#101／#110／#111），已实施并闭环（2026-11-03）；前置 `openai-java 4.42.0 → 4.96.0` 升级（用户已批准）；下一新文档号为 **docs/18**。
 
 ## 2. 层级顺序与状态
 
 | 层 | 范围 | 当前状态 | 下一步产出 |
 |---|---|---|---|
 | L0 | telemetry | 已闭环 | B260–B262 已验收；账面 36/36＝100%；B263 随 L1 设计 |
-| L1 | ai | 实施中 | B264、docs/11 行为面（#31/#61/#83/#84）、docs/12 目录数据与运行时（#16/#21/#33/#34）、docs/13 请求遥测（#106）、docs/14 Client Identity（#105）、docs/15 usage 与 OpenRouter 账单（B267 第一批：#53/#59/#107）、docs/16 存疑复核（B267 第二批：15 个存疑行）均已闭环；**docs/17 provider wire（#1／#2／#108／#101／#110／#111，前置 openai-java 4.96 升级）设计待审**；B267 其余面（retry／overflow、OAuth／device／env、CLI 权限、Faux、deferred fetch）待拆；账面 **208.0/232＝89.66%**（分母因 6 个 Java 扩展作废由 240 缩至 232） |
+| L1 | ai | 实施中 | B264、docs/11 行为面（#31/#61/#83/#84）、docs/12 目录数据与运行时（#16/#21/#33/#34）、docs/13 请求遥测（#106）、docs/14 Client Identity（#105）、docs/15 usage 与 OpenRouter 账单（B267 第一批：#53/#59/#107）、docs/16 存疑复核（B267 第二批：15 个存疑行）均已闭环；docs/17 provider wire（#1／#2／#108／#101／#110／#111，前置 openai-java 4.96 升级）已闭环；B267 其余面（retry／overflow、OAuth／device／env、CLI 权限、Faux、deferred fetch）待拆；账面 **219.0/232＝94.40%**（分母因 6 个 Java 扩展作废由 240 缩至 232） |
 | L2 | mcp | 未开始 | structuredContent、连接、OAuth 与安全复核 |
 | L3 | agent-core | 未开始 | identity、streamProxy 和 AI 新类型适配复核 |
 | L4 | session / SQLite | 未开始 | 恢复、截断、压缩和持久化复核 |

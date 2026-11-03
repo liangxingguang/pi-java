@@ -2,7 +2,7 @@
 
 > 【背景摘要】docs/15 已闭环 usage 与 OpenRouter 账单，docs/16 已清零 15 个存疑行。本包接手 `docs/map/02-ai.md` 剩余 14 个「缺失」中的 **6 个 provider wire 行**，并把 `openai-java` 由 4.42.0 升级到 4.96.0（用户 2026-11-03 已批准依赖升级）。本包改 Java 代码，不改已闭环的判定。
 >
-> 文档状态：**设计待审（2026-11-03）**。用户批准前不得写代码。
+> 文档状态：**已实施并闭环（2026-11-03）**。用户已审核通过并按 §10 实施。
 >
 > 当前 pi 锚点：`56cae782341c339d3bb820081f0f9425d8c5b1ec`；取证只走 `git show 56cae7823:<path>`。
 
@@ -643,9 +643,14 @@ function rewriteConstAsEnum(schema: unknown, isNameMap = false): unknown {
 
 ## 11. 闭环记录（实施后回填）
 
-- 实施 HEAD：待填
-- 依赖：`openai-java 4.42.0 → 4.96.0`
+- 实施 HEAD：`f9580455`（实施提交；闭环文档在其后）
+- 依赖：`openai-java 4.42.0 → 4.96.0`。4.96 的 `EasyInputMessage` 默认多写 `type:"message"`，已在 `ResponseInputWire` 用公开 JSON 往返还原 pi 线格（§0.3 的漂移条款）。
 - 地图翻行：#1／#2／#108／#101／#110／#111 → 对齐
 - 新增 D：D213（pi-messages 缺键校验严于 pi 的 `in` 检查）
-- 复算结果：待填（预计 219.0/232＝94.40%，对齐 117／缺失 8）
-- 与计划的偏差：待填
+- 复算结果：**219.0/232＝94.40%**；对齐 117／存疑 0／缺失 8；未加权 117/125＝93.6%；w1 50/53、w2 64/74、w3 105/105
+- 验证：`mvn clean verify` **6,017 测试／0 失败／0 错误／29 跳过**；Checkstyle 0、SpotBugs 0
+- 与计划的偏差：
+  1. `emitStart` 后移后，`AnthropicManagedEffortWireTest` 的默认 400 桩不再产生 start；夹具改为脚本 200 SSE。
+  2. `PiMessagesProviderHooksWireTest` 的旧 `text_*` 夹具补 `contentIndex`（D213 的严格化）。
+  3. 为守住 ≤500 行，拆出 `AnthropicCacheBreakpoint`（断点挂块逻辑）与 `PiMessagesBody`（pi-messages body 构建）；纯移动零行为变化。
+  4. 中断线程用例只断言可观察面（OkHttp 可能在发站前失败，请求计数不可依赖）。
