@@ -431,13 +431,13 @@ public final class DefaultProviders {
         var baseUrl = firstNonBlank(args.baseUrl(), settings == null ? null : settings.defaultBaseUrl);
         var apiKey = firstNonBlank(args.apiKey(), settings == null ? null : settings.defaultApiKey);
         var kind = AuthKind.API_KEY;
-        RecordedCredential credential = null;
-        if (apiKey == null && credentialResolver != null) {
-            credential = credentialResolver.apply(providerName).orElse(null);
-            if (credential != null) {
-                apiKey = credential.value();
-                kind = credential.kind();
-            }
+        // docs/19 #50：即使显式 key 在场也要读取存储凭证，让 credential.env() 能投影到
+        // 请求级覆盖（pi provider-composer 合并 credential.env 与显式 key 的顺序无关）。
+        RecordedCredential credential = credentialResolver == null ? null
+            : credentialResolver.apply(providerName).orElse(null);
+        if (apiKey == null && credential != null) {
+            apiKey = credential.value();
+            kind = credential.kind();
         }
         // A-14（G4/G5）：provider 重试设置在 Settings POJO 上按 pi 的 ?? 链现读
         // （settings-manager.ts:966-972）：maxRetries 缺席 ⇒ 0；

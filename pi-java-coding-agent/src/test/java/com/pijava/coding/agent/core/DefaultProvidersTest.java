@@ -148,6 +148,22 @@ class DefaultProvidersTest {
         assertThat(opts.env()).isEqualTo(federationEnv);
     }
 
+    /** docs/19 #50：显式 CLI/settings key 在场时，存储凭证的 env 仍要投影。 */
+    @Test
+    void explicitKeyStillProjectsCredentialEnv() {
+        var settings = new Settings();
+        var args = ArgsParser.parse(new String[] {"--api-key", "sk-cli"});
+        var credential = new com.pijava.ai.auth.RecordedCredential(
+            com.pijava.ai.api.AuthKind.API_KEY, "sk-store", "src",
+            Map.of("OPENAI_REGION", "eu"));
+
+        var opts = DefaultProviders.apiOptions(args, "openai", settings,
+            provider -> java.util.Optional.of(credential));
+
+        assertThat(opts.apiKey()).isEqualTo("sk-cli");
+        assertThat(opts.env()).containsEntry("OPENAI_REGION", "eu");
+    }
+
     /** docs/19 #50：非 federation 凭证的 env 同样进请求级覆盖。 */
     @Test
     void credentialEnvBecomesRequestScopedEnv() {
