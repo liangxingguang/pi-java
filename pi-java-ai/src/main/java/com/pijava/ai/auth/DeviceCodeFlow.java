@@ -36,6 +36,19 @@ public final class DeviceCodeFlow {
 
     private static final ObjectMapper JSON = new ObjectMapper();
 
+    /** docs/19 #45：浏览器打开注入点（测试不碰真实桌面）。 */
+    @FunctionalInterface
+    interface BrowserOpener {
+        void open(String url);
+    }
+
+    private static volatile BrowserOpener browserOpener = DeviceCodeFlow::openDesktop;
+
+    /** 测试替换点：{@code null} 恢复 AWT 默认。 */
+    static void overrideBrowserForTest(BrowserOpener opener) {
+        browserOpener = opener == null ? DeviceCodeFlow::openDesktop : opener;
+    }
+
     private final DeviceCodeConfig config;
     private final boolean autoOpenBrowser;
     private final Duration refreshTimeout;
@@ -69,7 +82,8 @@ public final class DeviceCodeFlow {
         // docs/19 #45：结构化事件；只有 notify(String) 的实现经 default 降级成旧文案。
         interaction.notify(new OAuthEvent.DeviceCode(device.userCode(), device.verificationUri(),
             device.intervalSeconds(), device.expiresInSeconds()));
-        if (autoOpenBrowser) {
+        // 结构化消费者（TUI）自己在确认后打开，避免事件到达时先开一次、Enter 再开一次。
+        if (autoOpenBrowser && !interaction.handlesStructuredEvents()) {
             openBrowser(device.verificationUri());
         }
         return pollForTokens(device);
@@ -361,6 +375,10 @@ public final class DeviceCodeFlow {
     }
 
     private static void openBrowser(String url) {
+        browserOpener.open(url);
+    }
+
+    private static void openDesktop(String url) {
         try {
             if (Desktop.isDesktopSupported()
                     && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {

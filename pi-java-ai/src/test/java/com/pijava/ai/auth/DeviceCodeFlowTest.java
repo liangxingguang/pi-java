@@ -275,6 +275,43 @@ class DeviceCodeFlowTest {
                 + "https://verify.example.com/\nUser code: 1234");
     }
 
+    // ── docs/19 #45: flow-level auto-open is suppressed for structured consumers ──
+
+    @org.junit.jupiter.api.AfterEach
+    void resetBrowserOpener() {
+        DeviceCodeFlow.overrideBrowserForTest(null);
+    }
+
+    @Test
+    void structuredConsumerSuppressesFlowLevelBrowserOpen() throws Exception {
+        var opened = new java.util.ArrayList<String>();
+        DeviceCodeFlow.overrideBrowserForTest(opened::add);
+        var deviceServer = startServer("/device", req -> new Resp(200, DEVICE_JSON));
+        var tokenServer = startServer("/token", req -> new Resp(200, TOKEN_JSON));
+        var events = new java.util.ArrayList<OAuthEvent>();
+        var config = DeviceCodeConfig.standard("test",
+            url(deviceServer, "/device"), url(tokenServer, "/token"), "client-1", "");
+
+        new DeviceCodeFlow(config, true).login(structuredRecording(events));
+
+        assertThat(opened).isEmpty();
+        assertThat(events).hasSize(1);
+    }
+
+    @Test
+    void legacyConsumerKeepsFlowLevelBrowserOpen() throws Exception {
+        var opened = new java.util.ArrayList<String>();
+        DeviceCodeFlow.overrideBrowserForTest(opened::add);
+        var deviceServer = startServer("/device", req -> new Resp(200, DEVICE_JSON));
+        var tokenServer = startServer("/token", req -> new Resp(200, TOKEN_JSON));
+        var config = DeviceCodeConfig.standard("test",
+            url(deviceServer, "/device"), url(tokenServer, "/token"), "client-1", "");
+
+        new DeviceCodeFlow(config, true).login(notifyOnly());
+
+        assertThat(opened).containsExactly("https://verify.example.com/");
+    }
+
     // ── Helpers ──────────────────────────────────────────────
 
     private static OAuthInteraction notifyOnly() {
@@ -295,6 +332,15 @@ class DeviceCodeFlowTest {
         return new OAuthInteraction() {
             @Override public void notify(String message) { }
             @Override public void notify(OAuthEvent event) { events.add(event); }
+            @Override public String prompt(String message) { return ""; }
+        };
+    }
+
+    private static OAuthInteraction structuredRecording(java.util.List<OAuthEvent> events) {
+        return new OAuthInteraction() {
+            @Override public void notify(String message) { }
+            @Override public void notify(OAuthEvent event) { events.add(event); }
+            @Override public boolean handlesStructuredEvents() { return true; }
             @Override public String prompt(String message) { return ""; }
         };
     }

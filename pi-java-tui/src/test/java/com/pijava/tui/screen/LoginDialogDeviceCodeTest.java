@@ -69,6 +69,28 @@ class LoginDialogDeviceCodeTest {
     }
 
     @Test
+    void onlyConfirmKeyTriggersActions() throws Exception {
+        var copied = new ArrayList<String>();
+        var opened = new ArrayList<String>();
+        ClipboardSupport.overrideForTest(copied::add);
+        LoginDialogScreen.overrideBrowserForTest(opened::add);
+        var dialog = dialog();
+        dialog.notify(new OAuthEvent.DeviceCode(CODE, URL, 1L, 60L));
+
+        dialog.onKeyEvent(KeyEvent.ofChar('x'));
+        dialog.onKeyEvent(KeyEvent.ofKey(KeyCode.DOWN));
+
+        assertThat(copied).isEmpty();
+        assertThat(opened).isEmpty();
+        assertThat(render(dialog)).contains("to open browser and copy code");
+
+        dialog.onKeyEvent(KeyEvent.ofKey(KeyCode.ENTER));
+
+        assertThat(copied).containsExactly(CODE);
+        assertThat(opened).containsExactly(URL);
+    }
+
+    @Test
     void clipboardFailureShowsManualInstructionWithoutBlockingBrowser() throws Exception {
         var opened = new ArrayList<String>();
         ClipboardSupport.overrideForTest(text -> {

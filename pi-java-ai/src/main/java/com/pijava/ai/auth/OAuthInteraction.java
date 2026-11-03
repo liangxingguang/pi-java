@@ -23,6 +23,14 @@ public interface OAuthInteraction {
         notify(event.legacyText());
     }
 
+    /**
+     * docs/19 #45：结构化消费者自行处理「确认后打开浏览器」，flow 不再自动打开，
+     * 以免同一 URL 被打开两次（TUI 对话框覆写为 {@code true}）。
+     */
+    default boolean handlesStructuredEvents() {
+        return false;
+    }
+
     String prompt(String message);
 
     /** 登录法选项（id 为流内判别值，label 为展示文案）。 */

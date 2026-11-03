@@ -75,6 +75,11 @@ public final class LoginDialogScreen implements ScreenOverlay, LoginInteraction 
     }
 
     @Override
+    public boolean handlesStructuredEvents() {
+        return true;
+    }
+
+    @Override
     public void notify(OAuthEvent event) {
         if (event instanceof OAuthEvent.DeviceCode device) {
             dispatcher.accept(() -> {
@@ -168,8 +173,8 @@ public final class LoginDialogScreen implements ScreenOverlay, LoginInteraction 
             }
             return true;
         }
-        if (deviceCodeAction != null) {
-            // pi login-dialog.ts:331-341：只消费一次，避免重复 Enter 开多个浏览器/写多次剪贴板。
+        if (deviceCodeAction != null && event.isConfirm()) {
+            // pi login-dialog.ts:331-341：只认 confirm 键，且只消费一次。
             activateDeviceCode();
             return true;
         }
