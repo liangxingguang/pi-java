@@ -396,8 +396,11 @@ final class GoogleMessageConverter {
         return tools.stream().<FunctionDeclaration>map(tool -> {
             var strict = Boolean.TRUE.equals(
                 StrictSampling.resolveStrict(tool, supportsStrictMode));
-            var schema = strict
+            Object schema = strict
                 ? StrictJsonSchema.convert(tool.inputSchema()) : tool.inputSchema();
+            // #111（pi google-shared.ts:450-455）：转换后统一把 string/number const 改写成
+            // 单值 enum（Gemini 不接受 const）。strict 与非 strict 两路都走。
+            schema = GoogleJsonSchema.rewriteConstAsEnum(schema);
             var builder = FunctionDeclaration.builder()
                     .name(tool.name());
             if (tool.description() != null && !tool.description().isEmpty()) {
