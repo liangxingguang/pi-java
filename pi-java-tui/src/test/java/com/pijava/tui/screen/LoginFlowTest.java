@@ -197,6 +197,7 @@ class LoginFlowTest {
         }
 
         void confirmCurrentOverlay() {
+            LoginFlowTest.await(() -> host.overlay != null);
             var overlay = host.overlay;
             overlay.onKeyEvent(KeyEvent.ofKey(KeyCode.ENTER));
             assertThat(overlay.isDone()).isTrue();

@@ -165,6 +165,58 @@ class RadiusOAuthFlowTest {
         }
     }
 
+    @Test
+    void deviceEmitsStructuredDeviceCodeEvent() throws Exception {
+        try (var server = new FakeRadiusOAuthServer()) {
+            server.enqueueDevice(60, 1);
+            server.enqueueToken("access", "refresh", 3600);
+            var events = new java.util.ArrayList<OAuthEvent>();
+            var flow = new RadiusOAuthFlow(
+                new RadiusOAuthConfig("Radius", server.gateway()), server.httpClient(), 0);
+
+            flow.login(new EventOnlyInteraction("device-code", events));
+
+            assertThat(events).hasSize(1);
+            var device = (OAuthEvent.DeviceCode) events.getFirst();
+            assertThat(device.userCode()).isEqualTo("user-code");
+            assertThat(device.verificationUri()).isEqualTo("https://verify.example.com/");
+            assertThat(device.openBrowserOnConfirm()).isTrue();
+            assertThat(device.copyCodeOnConfirm()).isTrue();
+            assertThat(device.intervalSeconds()).isEqualTo(1L);
+            assertThat(device.expiresInSeconds()).isEqualTo(60L);
+        }
+    }
+
+    /** Structured-event consumer: no string notifications. */
+    private static final class EventOnlyInteraction implements OAuthInteraction {
+        private final String method;
+        private final java.util.List<OAuthEvent> events;
+
+        private EventOnlyInteraction(String method, java.util.List<OAuthEvent> events) {
+            this.method = method;
+            this.events = events;
+        }
+
+        @Override
+        public void notify(String message) {
+        }
+
+        @Override
+        public void notify(OAuthEvent event) {
+            events.add(event);
+        }
+
+        @Override
+        public String prompt(String message) {
+            return "";
+        }
+
+        @Override
+        public String select(String message, java.util.List<LoginOption> options) {
+            return method;
+        }
+    }
+
     /** Device/browser interaction with notification-driven local callback. */
     private static final class ScriptedOAuthInteraction implements OAuthInteraction {
         private final String method;

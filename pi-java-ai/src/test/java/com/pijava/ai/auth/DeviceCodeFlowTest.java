@@ -244,6 +244,37 @@ class DeviceCodeFlowTest {
             .hasMessageContaining("Untrusted verification_uri");
     }
 
+    // ── docs/19 #45: structured device-code events ─────────────
+
+    @Test
+    void emitsStructuredDeviceCodeEvent() throws Exception {
+        var deviceServer = startServer("/device", req -> new Resp(200, DEVICE_JSON));
+        var tokenServer = startServer("/token", req -> new Resp(200, TOKEN_JSON));
+        var events = new java.util.ArrayList<OAuthEvent>();
+        var config = DeviceCodeConfig.standard("test",
+            url(deviceServer, "/device"), url(tokenServer, "/token"), "client-1", "");
+
+        new DeviceCodeFlow(config, false).login(eventRecording(events));
+
+        assertThat(events).hasSize(1);
+        var device = (OAuthEvent.DeviceCode) events.getFirst();
+        assertThat(device.userCode()).isEqualTo("1234");
+        assertThat(device.verificationUri()).isEqualTo("https://verify.example.com/");
+        assertThat(device.intervalSeconds()).isEqualTo(1L);
+        assertThat(device.expiresInSeconds()).isEqualTo(300L);
+        assertThat(device.openBrowserOnConfirm()).isTrue();
+        assertThat(device.copyCodeOnConfirm()).isTrue();
+    }
+
+    @Test
+    void structuredEventLegacyTextMatchesPreviousPrompt() {
+        var event = new OAuthEvent.DeviceCode("1234", "https://verify.example.com/", 1L, 300L);
+
+        assertThat(event.legacyText()).isEqualTo(
+            "Open this URL in your browser and enter the code:\n  "
+                + "https://verify.example.com/\nUser code: 1234");
+    }
+
     // ── Helpers ──────────────────────────────────────────────
 
     private static OAuthInteraction notifyOnly() {
@@ -256,6 +287,14 @@ class DeviceCodeFlowTest {
     private static OAuthInteraction recording(java.util.List<String> messages) {
         return new OAuthInteraction() {
             @Override public void notify(String message) { messages.add(message); }
+            @Override public String prompt(String message) { return ""; }
+        };
+    }
+
+    private static OAuthInteraction eventRecording(java.util.List<OAuthEvent> events) {
+        return new OAuthInteraction() {
+            @Override public void notify(String message) { }
+            @Override public void notify(OAuthEvent event) { events.add(event); }
             @Override public String prompt(String message) { return ""; }
         };
     }

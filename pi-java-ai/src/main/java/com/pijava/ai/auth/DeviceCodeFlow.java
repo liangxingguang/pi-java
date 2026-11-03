@@ -66,8 +66,9 @@ public final class DeviceCodeFlow {
      */
     public OAuthCredential login(OAuthInteraction interaction) throws IOException {
         var device = requestDeviceAuthorization(interaction);
-        interaction.notify("Open this URL in your browser and enter the code:\n  "
-            + device.verificationUri() + "\nUser code: " + device.userCode());
+        // docs/19 #45：结构化事件；只有 notify(String) 的实现经 default 降级成旧文案。
+        interaction.notify(new OAuthEvent.DeviceCode(device.userCode(), device.verificationUri(),
+            device.intervalSeconds(), device.expiresInSeconds()));
         if (autoOpenBrowser) {
             openBrowser(device.verificationUri());
         }

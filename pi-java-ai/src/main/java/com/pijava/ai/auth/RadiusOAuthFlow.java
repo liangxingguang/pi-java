@@ -59,8 +59,9 @@ public final class RadiusOAuthFlow {
 
     private OAuthCredential loginWithDeviceCode(OAuthInteraction interaction) throws IOException {
         var device = http.requestDevice();
-        interaction.notify("Open this URL in your browser and enter the code:\n  "
-            + device.verificationUri() + "\nUser code: " + device.userCode());
+        // docs/19 #45：结构化设备码事件（默认两个确认动作都开启）。
+        interaction.notify(new OAuthEvent.DeviceCode(device.userCode(), device.verificationUri(),
+            device.intervalSeconds(), device.expiresInSeconds()));
         return DeviceCodePoller.poll(device.intervalSeconds(), device.expiresInSeconds(), () -> {
             try {
                 return new DeviceCodePoller.PollResult.Complete<>(http.token(Map.of(

@@ -15,6 +15,14 @@ public interface OAuthInteraction {
 
     void notify(String message);
 
+    /**
+     * docs/19 #45：结构化事件通道。默认降级成 {@link OAuthEvent#legacyText()}，
+     * 存量实现无需改签名；理解事件的 UI 覆写本方法。
+     */
+    default void notify(OAuthEvent event) {
+        notify(event.legacyText());
+    }
+
     String prompt(String message);
 
     /** 登录法选项（id 为流内判别值，label 为展示文案）。 */
