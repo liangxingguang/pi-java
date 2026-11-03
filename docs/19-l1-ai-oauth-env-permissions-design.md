@@ -572,21 +572,22 @@ function saveAuth(auth: Record<string, OAuthCredential>): void {
 
 ### 10.1 落地内容
 
+- 实施提交：`7bc51ac3`（#43）→ `afa0a3ae`（#44）→ `553c986b`（#45）→ `8e17b825`（#50）→ `816f7f88`（#112）；评审修复 `aeb0660c`（confirm 键／双开）与 `56b75afa`（显式 key 的 credential env）。闭环文档提交在其后。
 - **#43**：新增 `AI/auth/TrustedHttpUrl.java`（绝对 HTTP(S)、host 非空、scheme/host 小写、默认端口省略、空路径补 `/`、空格／控制字符百分号编码、非 ASCII `toASCIIString`、点段折叠、IPv6 方括号保留）。`DeviceCodeConfig` 增加 `UriPolicy`／`CompleteUriMode` 与带策略的 `standard(...)` 重载；`OAuthProviders` 配 `xai`（`HTTPS_ONLY`＋`PREFER`）与 `kimi`（`HTTP_OR_HTTPS`＋`REQUIRE`）；`DeviceCodeFlow` 在设备授权响应处按策略取值并统一抛出 `Untrusted verification_uri in {provider} device authorization response: {raw}`。
 - **#44**：`RadiusOAuthHttp.loadAuthorizationEndpoint` 对 `authorizationEndpoint` 过 `TrustedHttpUrl`，不可信 ⇒ pi 逐字 `Invalid Radius OAuth config from {gateway}`；`requestDevice` 四字段改真值判据（空串与数字 `0` 缺失）、`verification_uri` 白名单，不可信 ⇒ pi 逐字 `Untrusted verification_uri in Radius OAuth device authorization response`。
-- **#45**：新增 `AI/auth/OAuthEvent.java`（`Info`／`AuthUrl`／`DeviceCode`／`Progress`＋`legacyText()`）；`OAuthInteraction.notify(OAuthEvent)` 默认降级到字符串通道；`DeviceCodeFlow` 与 `RadiusOAuthFlow` 发结构化 `DeviceCode`（两确认开关默认 `true`）；TUI `LoginDialogScreen` 渲染 URL／`Enter code:`／提示行，Enter 只消费一次，先复制再打开浏览器，失败不打断登录，两开关都 false 时不绑定 Enter。
-- **#50**：`ApiOptions` 增加第九组件 `@Nullable Map<String,String> env`，新增 `withEnv`，8／7／6／5 参构造与 `defaults()` 置 `null`；新增 `AI/utils/ProviderEnv.java`（scoped → process，空串回落、空白串有值、无 Bun 兜底）；`AbstractChatApi`、Anthropic／Completions／Mistral 缓存保留期、Azure 三处、Google／Mistral／Embedding／Images key、Anthropic federation 全部改走该解析器；15 个重建点逐点保真；`DefaultProviders.apiOptions` 把所有非空 `credential.env()` 投影进 `ApiOptions.env`，federation 仍保留 `extra["federationEnv"]` 过桥且读取顺序为 `options.env → extra → process`。
+- **#45**：新增 `AI/auth/OAuthEvent.java`（`Info`／`AuthUrl`／`DeviceCode`／`Progress`＋`legacyText()`）；`OAuthInteraction.notify(OAuthEvent)` 默认降级到字符串通道，并新增 `handlesStructuredEvents()`（默认 `false`）；`DeviceCodeFlow` 与 `RadiusOAuthFlow` 发结构化 `DeviceCode`（两确认开关默认 `true`）；结构化消费者自行确认，flow 不再自动打开浏览器（避免双开，TUI 覆写为 `true`）；TUI `LoginDialogScreen` 渲染 URL／`Enter code:`／提示行，**只有 confirm 键**且只消费一次，先复制再打开浏览器，失败不打断登录，两开关都 false 时不绑定 Enter。
+- **#50**：`ApiOptions` 增加第九组件 `@Nullable Map<String,String> env`，新增 `withEnv`，8／7／6／5 参构造与 `defaults()` 置 `null`；新增 `AI/utils/ProviderEnv.java`（scoped → process，空串回落、空白串有值、无 Bun 兜底）；`AbstractChatApi`、Anthropic／Completions／Mistral 缓存保留期、Azure 三处、Google／Mistral／Embedding／Images key、Anthropic federation 全部改走该解析器；15 个重建点逐点保真；`DefaultProviders.apiOptions` 把所有非空 `credential.env()` 投影进 `ApiOptions.env`（即使 CLI/settings 显式 key 在场也读取存储凭证），federation 仍保留 `extra["federationEnv"]` 过桥且读取顺序为 `options.env → extra → process`。
 - **#112**：新增 `AI/auth/CredentialFilePermissions.java`（POSIX `rw-------`，非 POSIX no-op，`UnsupportedOperationException` 按不支持处理）；两个凭证存储的 `withLockedFile` 在持有通道／文件锁后、执行 body 前收紧权限。
 
 ### 10.2 验证证据
 
 | 项 | 结果 |
 |---|---|
-| RED-first | #43 `TrustedHttpUrlTest` 12 新＋`DeviceCodeFlowTest` +6（共 15 个用例先红）；#44 `RadiusOAuthFlowTest` +6（6 红）；#45 AI +2（结构化事件 2 红）＋TUI `LoginDialogDeviceCodeTest` 6（6 红）；#50 `ProviderEnvTest`／`ApiOptionsEnvTest`／`ProviderEnvLaneTest` 与重建点夹具（先编译红、优先级 1 红）；#112 编译红后 POSIX 断言按平台跳过。本包净增 **56** 测 |
+| RED-first | #43 `TrustedHttpUrlTest` 12 新＋`DeviceCodeFlowTest` +6（共 15 个用例先红）；#44 `RadiusOAuthFlowTest` +6（6 红）；#45 AI +4（结构化事件 2 红＋flow 级自动打开 2 红）＋TUI `LoginDialogDeviceCodeTest` 7（6 红＋仅 confirm 键 1 红）；#50 `ProviderEnvTest`／`ApiOptionsEnvTest`／`ProviderEnvLaneTest` 与重建点夹具（先编译红、优先级 1 红、显式 key env 1 红）；#112 编译红后 POSIX 断言按平台跳过。本包净增 **60** 测 |
 | 变异探针 | 删 `HTTPS_ONLY` ⇒ xAI http 用例红；删尾斜杠补全 ⇒ 归一样例红；`expires_in` 回退 `isNumber` ⇒ `0` 用例红；`notify(OAuthEvent)` 改空实现 ⇒ 字符串降级夹具红；去掉一次性消费 ⇒ 重复 Enter 用例红；`ProviderEnv` 优先级反转 ⇒ scoped 用例红（均恢复后绿）。#112 的删 `restrict` 探针只能在 POSIX 上观察，Windows 本机跳过（设计 §6.4 注） |
-| AI 模块 | `mvn test -pl pi-java-ai -am`：**2,031 测／0 失败／0 错误／4 跳过**（含 4 个 POSIX 门控） |
+| AI 模块 | `mvn test -pl pi-java-ai -am`：**2,033 测／0 失败／0 错误／4 跳过**（含 4 个 POSIX 门控） |
 | 下游冒烟 | `DefaultProvidersTest`／`DefaultProvidersIdentityTest`／`ProviderEventBridgeTest`／`LoginFlowTest` 全绿 |
-| 全量 | `mvn clean verify`：**6,098 测／0 失败／0 错误／33 跳过**（基线 6,042，本包净增 56）；Checkstyle 0 违规、SpotBugs `BugInstance size is 0`；BUILD SUCCESS（18:41） |
+| 全量 | `mvn clean verify`：**6,102 测／0 失败／0 错误／33 跳过**（基线 6,042，本包净增 60）；Checkstyle 0 违规、SpotBugs `BugInstance size is 0`；BUILD SUCCESS |
 | 真实终端冒烟 | 未执行真实 TUI 会话；由 `LoginDialogDeviceCodeTest` 的渲染／确认／失败路径夹具覆盖（无真实桌面与剪贴板注入） |
 
 ### 10.3 账面
@@ -608,6 +609,17 @@ function saveAuth(auth: Record<string, OAuthCredential>): void {
 - 文案统一：三家 provider 不可信 URL 收敛为同一句（§8 裁决 3），并附原始值。
 - 测试接缝：`cacheRetentionEnv()`（Anthropic／Completions／Mistral）与 Azure 三个 `resolve*` 改为包可见，供夹具直接断言读取点；不是行为逻辑复制。`OpenAICompletionsApi` 已恰在 500 行上限，压缩了既有 Javadoc 以容纳新字段／方法。
 - `LoginFlowTest.confirmCurrentOverlay` 增加 `await(overlay != null)`：原有 `currentScreen` 与 `host.open` 之间存在测试时序竞态，本包跑绿时偶发空指针；仅测试加固，无生产改动。
-- TUI 生产路径仍使用 `DeviceCodeFlow` 的既有 `autoOpenBrowser=true`：因此浏览器可能在事件到达时自动打开一次，用户再按 Enter 会再次打开一次。设计 §2.3.4 仍要求 `login` 打开已归一 URI，本包未改该开关；按设计范围保留，列为后续可优化点（pi 的 flow 不自动打开、由 UI 确认后打开）。
+- 评审修复①：TUI 生产路径原本会在事件到达时自动打开浏览器、Enter 再开一次。新增 `OAuthInteraction.handlesStructuredEvents()`（默认 false，TUI 覆写 true），`DeviceCodeFlow` 对结构化消费者不自动打开；控制台仍保留既有自动打开。
+- 评审修复②：TUI 确认动作原来对任意按键触发；已收紧为 `event.isConfirm()`，与 pi `kb.matches("tui.select.confirm")` 对位。
+- 评审修复③：`DefaultProviders.apiOptions` 原在显式 key 在场时不解析存储凭证，导致 `credential.env()` 丢失；已改为始终解析凭证、仅在 `apiKey` 空时采用其值与 kind。属设计 §5.3.4「所有凭证」的落地修正。
 - #112 的 POSIX 权限断言与删 `restrict` 探针在本机（Windows）按设计跳过；Linux CI 承担真实断言。
 - 与设计的其它偏差：无。
+
+### 10.5 评审遗留（延迟项，Minor）
+
+- `TrustedHttpUrl` 接受 `https://ex.com:99999/x` 这类超范围端口（WHATWG 拒绝）；IDN 与反斜杠按 §8 裁决 1 不模拟。
+- xAI `PREFER` 在 `verification_uri_complete` 不可信时静默回落标准 URI（设计 §2.3 的既定策略；pi 对该字段独立复核并抛错）。
+- Radius `expires_in` 只认 JSON 数字；pi 的真值判据还会接受字符串 `"60"`（真实服务端发数字）。
+- `OpenAIResponsesApi`／`PiMessagesApi` 车道本身不读 `PI_CACHE_RETENTION`（既有缺口；设计 §5.1 列出读面但 §5.3 未把改点列入），请求级 env 在这两条车道暂无效果，留待后续包。
+- `ProviderEnvLaneTest` 通过包可见读取点（`cacheRetentionEnv()`、Azure 三个静态解析器）断言，未做出站 wire 断言；读取点本身是生产逻辑。
+- #112 的 `restrict` 在锁内每次读／写都执行（设计 §6.3 指定位置）；异常挂载上 chmod 失败会让读回落到空表，用户会表现为“未登录”。
