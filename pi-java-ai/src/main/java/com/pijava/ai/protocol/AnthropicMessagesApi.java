@@ -24,6 +24,7 @@ import com.pijava.ai.http.ProviderRetry;
 import com.pijava.ai.message.StopReason;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.stream.StreamPartialBuilder;
+import com.pijava.ai.utils.OpenRouterBilling;
 
 /**
  * Anthropic Messages API adapter using the official {@code anthropic-java} SDK.
@@ -130,6 +131,7 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
         }
         this.baseUrl = options.baseUrl() != null && !options.baseUrl().isBlank()
             ? options.baseUrl() : null;
+        this.openRouterModel = OpenRouterBilling.isOpenRouterModel(options);
         this.bearer = bearer;
         this.oauth = oauth;
         this.eventMapper = new AnthropicEventMapper(oauth);
@@ -185,6 +187,9 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
     /** B103：有效 baseUrl（openrouter 探测用；空白 ⇒ null）。 */
     private final String baseUrl;
 
+    /** docs/15（B267）：provider 预计算的 OpenRouter 判定（{@code extra["openRouterModel"]}）。 */
+    private final boolean openRouterModel;
+
     /** B99 裁决③：models.json 合并后有效 header 的名集合（仅名，不传值）。 */
     private final java.util.Set<String> effectiveHeaderNames;
 
@@ -211,7 +216,7 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
         var openBlocks =
             new java.util.HashMap<Long, AnthropicEventMapper.OpenBlock>();
         var stop = new AnthropicStreamSupport.StopState();
-        var usageState = new AnthropicUsageState(request.model());
+        var usageState = new AnthropicUsageState(request.model(), openRouterModel);
         // B148：服务端回退元数据（fallback 成本归属）＋ input_transformations 收集。
         var requestCompat = request.model() == null ? null
             : CompatResolver.forAnthropic(request.model(), baseUrl);

@@ -28,6 +28,7 @@ import com.pijava.ai.http.ProviderRetry;
 import com.pijava.ai.message.StopReason;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.stream.StreamPartialBuilder;
+import com.pijava.ai.utils.OpenRouterBilling;
 import com.pijava.ai.utils.ProviderErrors;
 
 /**
@@ -88,7 +89,8 @@ public class OpenAICompletionsApi extends AbstractChatApi {
      * visible to the decision.</p>
      */
     protected final String baseUrl;
-
+    /** docs/15（B267）：provider 预计算的 OpenRouter 判定。 */
+    private final boolean openRouterModel;
     /**
      * Create an adapter for the given options.
      *
@@ -108,6 +110,7 @@ public class OpenAICompletionsApi extends AbstractChatApi {
         this.apiKey = resolveApiKey(options, apiKeyEnvVar);
         this.baseUrl = options.baseUrl() != null && !options.baseUrl().isBlank()
                 ? options.baseUrl() : "https://api.openai.com/v1";
+        this.openRouterModel = OpenRouterBilling.isOpenRouterModel(options);
         // A-14（G1）：SDK 内置重试关到 0，重试独占 ProviderRetry（pi requestOptions.maxRetries:0）。
         var clientBuilder = OpenAIOkHttpClient.builder()
                 .apiKey(apiKey).baseUrl(baseUrl).maxRetries(0);
@@ -254,7 +257,7 @@ public class OpenAICompletionsApi extends AbstractChatApi {
                     if (chunk.choices().isEmpty()) {
                         if (chunk.usage().isPresent()) {
                             publisher.submit(builder.emitUsage(
-                                OpenAICompletionsUsage.parse(chunk.usage().get(), request.model())));
+                                OpenAICompletionsUsage.parse(chunk.usage().get(), request.model(), openRouterModel)));
                         }
                         continue;
                     }
@@ -267,7 +270,7 @@ public class OpenAICompletionsApi extends AbstractChatApi {
                         var choiceUsage = OpenAICompletionsUsage.choiceUsage(choice._additionalProperties());
                         if (choiceUsage != null) {
                             publisher.submit(builder.emitUsage(
-                                OpenAICompletionsUsage.parse(choiceUsage, request.model())));
+                                OpenAICompletionsUsage.parse(choiceUsage, request.model(), openRouterModel)));
                         }
                     }
                     var delta = choice.delta();
@@ -363,7 +366,7 @@ public class OpenAICompletionsApi extends AbstractChatApi {
                     // Usage
                     if (chunk.usage().isPresent()) {
                         publisher.submit(builder.emitUsage(
-                            OpenAICompletionsUsage.parse(chunk.usage().get(), request.model())));
+                            OpenAICompletionsUsage.parse(chunk.usage().get(), request.model(), openRouterModel)));
                     }
                 }
             }

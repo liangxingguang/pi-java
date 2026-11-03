@@ -24,6 +24,7 @@ import com.pijava.ai.model.ModelCapability;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.model.PricingInfo;
 import com.pijava.ai.stream.StreamEvent;
+import com.pijava.ai.utils.OpenRouterBilling;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -103,19 +104,92 @@ class AnthropicMessagesApiUsageTest {
     }
 
     // ═══════════════════════════════════════════════════════════
-    // T4：cacheWrite1h 只在 message_start 设
+    // T4（docs/15 B267 翻转）：cacheWrite1h 在 delta 里**有就覆盖**
     // ═══════════════════════════════════════════════════════════
 
     @Test
-    void oneHourCacheSplitIsOnlyCapturedFromMessageStart() throws Exception {
+    void oneHourCacheSplitInTheDeltaOverridesTheFirstFrame() throws Exception {
+        // pi :222-228（Vercel AI Gateway）：delta 也带 TTL 拆分 ⇒ 覆盖 message_start。
         var usage = lastUsage(collect(
             startWithFullUsage() + delta("{\"stop_reason\":\"end_turn\",\"stop_sequence\":null}",
-                "{\"output_tokens\":45,\"cache_creation_input_tokens\":90}") + messageStop()));
+                "{\"output_tokens\":45,\"cache_creation_input_tokens\":90,"
+                    + "\"cache_creation\":{\"ephemeral_1h_input_tokens\":90,"
+                    + "\"ephemeral_5m_input_tokens\":0}}") + messageStop()));
 
         assertThat(usage.cacheWrite()).as("delta 的 cache_creation 覆盖 cacheWrite").isEqualTo(90);
         assertThat(usage.cacheWrite1h())
-            .as("cacheWrite1h 不在 delta 的覆盖列表里（pi :763-787）")
-            .isEqualTo(50.0);
+            .as("delta 的 1h 拆分覆盖首帧的 50")
+            .isEqualTo(90.0);
+    }
+
+    @Test
+    void zeroOneHourCacheSplitInTheDeltaOverridesTheFirstFrame() throws Exception {
+        // `0` 是合法值：delta 显式把 1h 拆分清零 ⇒ 全部按 5m 计价。
+        var usage = lastUsage(collect(
+            startWithFullUsage() + delta("{\"stop_reason\":\"end_turn\",\"stop_sequence\":null}",
+                "{\"output_tokens\":45,\"cache_creation_input_tokens\":90,"
+                    + "\"cache_creation\":{\"ephemeral_1h_input_tokens\":0,"
+                    + "\"ephemeral_5m_input_tokens\":90}}") + messageStop()));
+
+        assertThat(usage.cacheWrite1h()).isZero();
+        assertThat(usage.cost().cacheWrite())
+            .as("清零后全部按 5m 价：3.75 × 90 / 1M")
+            .isCloseTo(3.75 * 90 / 1e6, within(1e-12));
+    }
+
+    @Test
+    void oneHourSplitReportedOnlyInTheDeltaIsPricedAtTwoTimesInput() throws Exception {
+        // pi test anthropic-cache-write-1h-cost.test.ts:84-110（Vercel AI Gateway）。
+        var usage = lastUsage(collect(
+            noOneHourInStart() + delta("{\"stop_reason\":\"end_turn\",\"stop_sequence\":null}",
+                "{\"output_tokens\":45,\"cache_creation_input_tokens\":6535,"
+                    + "\"cache_creation\":{\"ephemeral_1h_input_tokens\":6535}}")
+                + messageStop()));
+
+        assertThat(usage.cacheWrite()).isEqualTo(6535);
+        assertThat(usage.cacheWrite1h()).isEqualTo(6535.0);
+        assertThat(usage.cost().cacheWrite())
+            .as("1h 写入按 2 × input 计价")
+            .isCloseTo(2 * 3.0 * 6535 / 1e6, within(1e-12));
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // OpenRouter 实报账单（pi test anthropic-sse-parsing.test.ts:142-176）
+    // ═══════════════════════════════════════════════════════════
+
+    @Test
+    void openRouterReportedCostReplacesTheCatalogTotal() throws Exception {
+        var usage = lastUsage(collect(
+            startWithFullUsage() + delta("{\"stop_reason\":\"end_turn\",\"stop_sequence\":null}",
+                "{\"output_tokens\":45,\"cache_creation_input_tokens\":80,"
+                    + "\"cache_creation\":{\"ephemeral_1h_input_tokens\":50,"
+                    + "\"ephemeral_5m_input_tokens\":30},"
+                    + "\"cost\":0.004,\"is_byok\":false,\"cost_details\":null}")
+                + messageStop(), Map.of(OpenRouterBilling.EXTRA_KEY, Boolean.TRUE)));
+
+        assertThat(usage.cost().total()).isCloseTo(0.004, within(1e-12));
+        assertThat(usage.cost().totalFromProvider()).isTrue();
+        assertThat(usage.cost().input() + usage.cost().output()
+                + usage.cost().cacheRead() + usage.cost().cacheWrite())
+            .as("分量和是目录价，不等于 provider 实报 total")
+            .isNotCloseTo(0.004, within(1e-12));
+    }
+
+    @Test
+    void reportedCostIsIgnoredOutsideTheOpenRouterLane() throws Exception {
+        var usage = lastUsage(collect(
+            startWithFullUsage() + delta("{\"stop_reason\":\"end_turn\",\"stop_sequence\":null}",
+                "{\"output_tokens\":45,\"cache_creation_input_tokens\":80,"
+                    + "\"cache_creation\":{\"ephemeral_1h_input_tokens\":50,"
+                    + "\"ephemeral_5m_input_tokens\":30},"
+                    + "\"cost\":0.004,\"is_byok\":false,\"cost_details\":null}")
+                + messageStop()));
+
+        assertThat(usage.cost().total())
+            .as("非 OpenRouter 车道保留目录合计")
+            .isCloseTo(0.003 + 15.0 * 45 / 1e6 + 0.3 * 20 / 1e6
+                + (3.75 * 30 + 3.0 * 2 * 50) / 1e6, within(1e-12));
+        assertThat(usage.cost().totalFromProvider()).isFalse();
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -196,6 +270,16 @@ class AnthropicMessagesApiUsageTest {
             + "\"output_tokens_details\":{\"thinking_tokens\":7}}}}");
     }
 
+    /** 首帧不带 1h 拆分（message_start 的 cache_creation 对象缺席）。 */
+    private static String noOneHourInStart() {
+        return sse("message_start", "{\"type\":\"message_start\",\"message\":{"
+            + "\"id\":\"msg_1\",\"type\":\"message\",\"role\":\"assistant\","
+            + "\"model\":\"claude-sonnet-4\",\"content\":[],"
+            + "\"stop_reason\":null,\"stop_sequence\":null,"
+            + "\"usage\":{\"input_tokens\":1000,\"output_tokens\":1,"
+            + "\"cache_read_input_tokens\":20,\"cache_creation_input_tokens\":0}}}");
+    }
+
     private static String delta(String deltaJson, String usageJson) {
         return sse("message_delta", "{\"type\":\"message_delta\",\"delta\":" + deltaJson
             + ",\"usage\":" + usageJson + "}");
@@ -211,6 +295,11 @@ class AnthropicMessagesApiUsageTest {
 
     /** 收一条流的全部事件（照 {@code AnthropicMessagesApiTest} 的脚手架）。 */
     private List<StreamEvent> collect(String sseBody) throws Exception {
+        return collect(sseBody, Map.of());
+    }
+
+    /** 同上的可选 {@code ApiOptions.extra}（OpenRouter 判定预计算键）。 */
+    private List<StreamEvent> collect(String sseBody, Map<String, Object> extra) throws Exception {
         server = HttpServer.create(new InetSocketAddress(0), 0);
         server.createContext("/v1/messages", exchange -> {
             byte[] body = sseBody.getBytes(StandardCharsets.UTF_8);
@@ -223,7 +312,7 @@ class AnthropicMessagesApiUsageTest {
         server.start();
         var api = new AnthropicMessagesApi(new ApiOptions(
             "http://localhost:" + server.getAddress().getPort(), "test-key",
-            Duration.ofSeconds(5), 0, Map.of()));
+            Duration.ofSeconds(5), 0, extra));
 
         var events = new CopyOnWriteArrayList<StreamEvent>();
         var finished = new CountDownLatch(1);

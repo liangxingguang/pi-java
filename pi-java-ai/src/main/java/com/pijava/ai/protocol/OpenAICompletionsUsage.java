@@ -9,6 +9,7 @@ import com.openai.models.completions.CompletionUsage;
 import com.pijava.ai.Usage;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.model.CostCalculator;
+import com.pijava.ai.utils.OpenRouterBilling;
 
 /**
  * OpenAI-completions 车道的 usage 归一 —— pi {@code openai-completions.ts:1509-1550}
@@ -42,19 +43,37 @@ final class OpenAICompletionsUsage {
     private OpenAICompletionsUsage() {
     }
 
-    /** typed 入口（顶层 {@code chunk.usage}）。 */
+    /** typed 入口（顶层 {@code chunk.usage}），非 OpenRouter。 */
     static Usage parse(CompletionUsage raw, ModelInfo model) {
-        return parse(rawOf(raw), model);
+        return parse(rawOf(raw), model, false);
+    }
+
+    /** typed 入口（顶层 {@code chunk.usage}），带 OpenRouter 账单门。 */
+    static Usage parse(CompletionUsage raw, ModelInfo model, boolean openRouterModel) {
+        return parse(rawOf(raw), model, openRouterModel);
     }
 
     /**
-     * 未类型化入口 —— {@code choice.usage} 回退走这条（pi 的 {@code (choice as any).usage}）。
+     * 未类型化入口 —— {@code choice.usage} 回退走这条（pi 的 {@code (choice as any).usage}），
+     * 非 OpenRouter。
      *
      * @param raw   pi 键名的原始视图
      * @param model 计价用模型；{@code null} ⇒ 不计价
      * @return 归一后的 usage
      */
     static Usage parse(Map<String, Object> raw, ModelInfo model) {
+        return parse(raw, model, false);
+    }
+
+    /**
+     * 未类型化入口，带 OpenRouter 账单门。
+     *
+     * @param raw             pi 键名的原始视图
+     * @param model           计价用模型；{@code null} ⇒ 不计价
+     * @param openRouterModel 本车道是否 OpenRouter（provider 预计算）
+     * @return 归一后的 usage；账目有效时 {@code total} 为 provider 实报
+     */
+    static Usage parse(Map<String, Object> raw, ModelInfo model, boolean openRouterModel) {
         double promptTokens = number(raw.get("prompt_tokens"));
         // `??` 链：null 才算缺席，显式的 0 短路后续来源
         double cacheReadTokens = firstPresent(
@@ -70,9 +89,13 @@ final class OpenAICompletionsUsage {
 
         var usage = new Usage(input, outputTokens, cacheReadTokens, cacheWriteTokens,
             null, reasoning, totalTokens, Usage.Cost.zero());
-        return model == null
+        var priced = model == null
             ? usage
             : usage.withCost(CostCalculator.calculateCost(model.pricing(), usage));
+        // pi openai-completions.ts:1548-1553：目录估算之后才应用 provider 实报账单。
+        return openRouterModel
+            ? OpenRouterBilling.applyReportedCost(priced, raw)
+            : priced;
     }
 
     /**
@@ -130,22 +153,12 @@ final class OpenAICompletionsUsage {
      */
     private static Object unwrap(JsonValue value) {
         try {
-            var number = value.asNumber();
-            if (number.isPresent()) {
-                return number.get();
-            }
-            var string = value.asString();
-            if (string.isPresent()) {
-                return string.get();
-            }
-            var bool = value.asBoolean();
-            if (bool.isPresent()) {
-                return bool.get();
-            }
+            // docs/15（B267）：账单的 cost_details 是嵌套对象，标量三连访问器覆盖不到；
+            // convert(Object.class) 把标量还原成 Number/String/Boolean、对象还原成 Map。
+            return value.convert(Object.class);
         } catch (RuntimeException e) {
             return null;
         }
-        return null;
     }
 
     // ── 取值 ────────────────────────────────────────────────────────────

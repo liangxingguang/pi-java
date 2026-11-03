@@ -24,6 +24,7 @@ import com.pijava.ai.model.ModelCapability;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.model.PricingInfo;
 import com.pijava.ai.stream.StreamEvent;
+import com.pijava.ai.utils.OpenRouterBilling;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -164,6 +165,63 @@ class OpenAICompletionsApiUsageTest {
     // 计价
     // ═══════════════════════════════════════════════════════════
 
+    // ═══════════════════════════════════════════════════════════
+    // OpenRouter 实报账单（docs/15 B267；pi openai-completions.ts:1548-1553）
+    // ═══════════════════════════════════════════════════════════
+
+    @Test
+    void openRouterNonByokCostReplacesTheCatalogTotal() throws Exception {
+        var usage = lastUsage(collect(stream(usageChunk(
+            "{\"prompt_tokens\":1000,\"completion_tokens\":50,"
+                + "\"prompt_tokens_details\":{\"cached_tokens\":400,\"cache_write_tokens\":100},"
+                + "\"cost\":0.004,\"is_byok\":false}")),
+            Map.of(OpenRouterBilling.EXTRA_KEY, Boolean.TRUE)));
+
+        assertThat(usage.cost().total()).isCloseTo(0.004, within(1e-12));
+        assertThat(usage.cost().totalFromProvider()).isTrue();
+    }
+
+    @Test
+    void openRouterByokAddsTheNestedUpstreamCost() throws Exception {
+        var usage = lastUsage(collect(stream(usageChunk(
+            "{\"prompt_tokens\":1000,\"completion_tokens\":50,"
+                + "\"cost\":0.0002,\"is_byok\":true,"
+                + "\"cost_details\":{\"upstream_inference_cost\":0.003}}")),
+            Map.of(OpenRouterBilling.EXTRA_KEY, Boolean.TRUE)));
+
+        assertThat(usage.cost().total()).as("0.0002 + 0.003")
+            .isCloseTo(0.0032, within(1e-12));
+        assertThat(usage.cost().totalFromProvider()).isTrue();
+    }
+
+    @Test
+    void openRouterBillingAlsoWorksForTheChoiceUsageFallback() throws Exception {
+        // choice.usage 走未类型化 Map 路径；嵌套 cost_details 必须原样保留。
+        var usage = lastUsage(collect(stream(
+            "data: {\"id\":\"c1\",\"object\":\"chat.completion.chunk\",\"created\":1,"
+                + "\"model\":\"glm-5.3-flash\",\"choices\":[{\"index\":0,"
+                + "\"delta\":{\"content\":\"hi\"},"
+                + "\"usage\":{\"prompt_tokens\":1000,\"completion_tokens\":5,"
+                + "\"cost\":0.0002,\"is_byok\":true,"
+                + "\"cost_details\":{\"upstream_inference_cost\":0.003}}}]}\n\n"),
+            Map.of(OpenRouterBilling.EXTRA_KEY, Boolean.TRUE)));
+
+        assertThat(usage.cost().total()).isCloseTo(0.0032, within(1e-12));
+        assertThat(usage.cost().totalFromProvider()).isTrue();
+    }
+
+    @Test
+    void billedCostIsIgnoredWithoutThePrecomputedFlag() throws Exception {
+        var usage = lastUsage(collect(stream(usageChunk(
+            "{\"prompt_tokens\":1000,\"completion_tokens\":50,"
+                + "\"cost\":0.004,\"is_byok\":false}"))));
+
+        assertThat(usage.cost().total())
+            .as("目录价 = 3×1000/1M + 15×50/1M")
+            .isCloseTo(0.00375, within(1e-12));
+        assertThat(usage.cost().totalFromProvider()).isFalse();
+    }
+
     @Test
     void costIsComputedFromTheModelPricing() throws Exception {
         var usage = lastUsage(collect(stream(usageChunk(
@@ -200,6 +258,11 @@ class OpenAICompletionsApiUsageTest {
     }
 
     private List<StreamEvent> collect(String sseBody) throws Exception {
+        return collect(sseBody, Map.of());
+    }
+
+    /** 同上的可选 {@code ApiOptions.extra}（OpenRouter 判定预计算键）。 */
+    private List<StreamEvent> collect(String sseBody, Map<String, Object> extra) throws Exception {
         server = HttpServer.create(new InetSocketAddress(0), 0);
         server.createContext("/v1/chat/completions", exchange -> {
             byte[] body = sseBody.getBytes(StandardCharsets.UTF_8);
@@ -212,7 +275,7 @@ class OpenAICompletionsApiUsageTest {
         server.start();
         var api = new OpenAICompletionsApi(new ApiOptions(
             "http://localhost:" + server.getAddress().getPort() + "/v1", "test-key",
-            Duration.ofSeconds(5), 0, Map.of()), "OPENAI_API_KEY");
+            Duration.ofSeconds(5), 0, extra), "OPENAI_API_KEY");
 
         var request = new StreamRequest(PRICED_MODEL, null,
             List.of(new Message.UserMessage(List.of(new ContentBlock.TextContent("hi")))),

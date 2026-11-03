@@ -1,5 +1,9 @@
 package com.pijava.ai.protocol;
 
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+import com.anthropic.models.messages.MessageDeltaUsage;
 import com.anthropic.models.messages.RawMessageStreamEvent;
 
 import com.pijava.ai.api.StreamRequest;
@@ -211,20 +215,25 @@ final class AnthropicEventMapper {
                         }
                     }
                 }
-                // pi `:763-787`：四字段**各自 `!= null`** 才覆盖（注释逐字 "Only update
+                // pi `:849-889`：五字段**各自 `!= null`** 才覆盖（注释逐字 "Only update
                 // usage fields if present (not null). Preserves input_tokens from
                 // message_start when proxies omit it in message_delta."）⇒ `0` 是合法值。
                 // `reasoning` 走 `output_tokens_details.thinking_tokens`（与四字段不同层）；
-                // `cacheWrite1h` **不在覆盖列表里**。`totalTokens` 重算与计价在
-                // `if (event.usage)` **块外**，无条件执行（在 AnthropicUsageState 里）。
-                var deltaUsage = event.asMessageDelta().usage();
+                // `cacheWrite1h` 在 delta 里**有就覆盖**（docs/15 B267，Vercel AI Gateway）。
+                // `totalTokens` 重算与计价在 `if (event.usage)` **块外**，无条件执行
+                // （在 AnthropicUsageState 里）。用 `_usage()`：`usage()` 是非 Optional 访问器。
+                var rawUsage = deltaEvent._usage().asKnown().orElse(null);
                 usageState.onMessageDelta(
-                        deltaUsage.inputTokens().orElse(null),
-                        deltaUsage._outputTokens().asKnown().orElse(null),
-                        deltaUsage.cacheReadInputTokens().orElse(null),
-                        deltaUsage.cacheCreationInputTokens().orElse(null),
-                        deltaUsage.outputTokensDetails()
-                                .flatMap(d -> d._thinkingTokens().asKnown()).orElse(null));
+                        rawUsage == null ? null : rawUsage._inputTokens().asKnown().orElse(null),
+                        rawUsage == null ? null : rawUsage._outputTokens().asKnown().orElse(null),
+                        rawUsage == null ? null
+                                : rawUsage._cacheReadInputTokens().asKnown().orElse(null),
+                        rawUsage == null ? null
+                                : rawUsage._cacheCreationInputTokens().asKnown().orElse(null),
+                        deltaCacheWrite1h(rawUsage),
+                        rawUsage == null ? null : rawUsage.outputTokensDetails()
+                                .flatMap(d -> d._thinkingTokens().asKnown()).orElse(null),
+                        rawUsage == null ? null : rawUsageMap(rawUsage));
                 return builder.emitUsage(usageState.usage());
             }
             if (event.isMessageStop()) {
@@ -234,5 +243,30 @@ final class AnthropicEventMapper {
             return builder.emitError(StopReason.ERROR, e);
         }
         return null;
+    }
+
+    /** delta 的 {@code cache_creation.ephemeral_1h_input_tokens}；键缺席或显式 null ⇒ null。 */
+    private static Long deltaCacheWrite1h(MessageDeltaUsage usage) {
+        if (usage == null) {
+            return null;
+        }
+        var raw = usage._additionalProperties().get("cache_creation");
+        if (raw == null) {
+            return null;
+        }
+        Object converted = raw.convert(Object.class);
+        if (!(converted instanceof Map<?, ?> map)) {
+            return null;
+        }
+        Object oneHour = map.get("ephemeral_1h_input_tokens");
+        return oneHour instanceof Number number ? number.longValue() : null;
+    }
+
+    /** SDK 丢弃的扩展键（{@code cost}／{@code is_byok}／{@code cost_details} 等）还原成 pi 键名普通 Map。 */
+    private static Map<String, Object> rawUsageMap(MessageDeltaUsage usage) {
+        var out = new LinkedHashMap<String, Object>();
+        usage._additionalProperties()
+            .forEach((key, value) -> out.put(key, value.convert(Object.class)));
+        return out;
     }
 }
