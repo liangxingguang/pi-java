@@ -32,7 +32,11 @@ final class UsageCombiner {
                 first.cost().output() + second.cost().output(),
                 first.cost().cacheRead() + second.cost().cacheRead(),
                 first.cost().cacheWrite() + second.cost().cacheWrite(),
-                first.cost().total() + second.cost().total()));
+                first.cost().total() + second.cost().total(),
+                // docs/15（B267）：pi usage-totals.ts:51 —— 合计只有在每一段都是
+                // provider 实报时才是实报；结果永远是 bool（false 显式写出）。
+                Boolean.TRUE.equals(first.cost().totalFromProvider())
+                    && Boolean.TRUE.equals(second.cost().totalFromProvider())));
     }
 
     private static double orZero(Double value) {

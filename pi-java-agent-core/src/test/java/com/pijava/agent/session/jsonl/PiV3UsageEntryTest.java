@@ -224,6 +224,65 @@ class PiV3UsageEntryTest {
         assertThat(usage.stopReason()).isEqualTo(StopReason.STOP);
     }
 
+    /**
+     * docs/15（B267）：{@code cost.totalFromProvider} 的三态往返 —— 缺席 ⇒ 键省略；
+     * {@code false}／{@code true} ⇒ 显式布尔。旧文件缺席不得被改写成 {@code false}。
+     */
+    @Test
+    void totalFromProviderRoundTripsInThreeStates() throws Exception {
+        Path dir = Files.createTempDirectory("pi-v3-usage-tfp");
+        var repo = JsonlSessionRepository.over(dir);
+        var session = repo.create(new JsonlSessionCreateOptions(null, "work", null, null));
+        session.appendEntry(new com.pijava.agent.entry.ProvisionedEntry<>(new Entry.Message(
+            "m1", 0, null, null,
+            new Message.UserMessage(List.of(new ContentBlock.TextContent("hi")), null), null)),
+            "main");
+        session.appendEntry(new com.pijava.agent.entry.ProvisionedEntry<>(usageEntry(
+            "u-true", Boolean.TRUE)), "main");
+        session.appendEntry(new com.pijava.agent.entry.ProvisionedEntry<>(usageEntry(
+            "u-false", Boolean.FALSE)), "main");
+        session.appendEntry(new com.pijava.agent.entry.ProvisionedEntry<>(usageEntry(
+            "u-absent", null)), "main");
+        session.storage().drain();
+        Path file = repo.list(JsonlSessionListOptions.all()).getFirst().path();
+
+        var byId = new java.util.HashMap<String, com.fasterxml.jackson.databind.JsonNode>();
+        lines(file).stream()
+            .filter(n -> n.has("id") && n.path("type").asText().equals("usage"))
+            .forEach(n -> byId.put(n.path("id").asText(), n));
+
+        var trueCost = byId.get("u-true").path("usage").path("cost");
+        assertThat(trueCost.path("totalFromProvider").asBoolean()).isTrue();
+        var falseCost = byId.get("u-false").path("usage").path("cost");
+        assertThat(falseCost.has("totalFromProvider")).isTrue();
+        assertThat(falseCost.path("totalFromProvider").asBoolean()).isFalse();
+        var absentCost = byId.get("u-absent").path("usage").path("cost");
+        assertThat(absentCost.has("totalFromProvider"))
+            .as("absent stays absent — old files are not rewritten")
+            .isFalse();
+
+        var reloaded = JsonlSessionStorage.load(FS, file);
+        var flags = new java.util.HashMap<String, Boolean>();
+        reloaded.getLog(LogOptions.none()).stream()
+            .filter(item -> item instanceof LogItem.EntryItem e
+                && e.entry() instanceof Entry.Usage)
+            .map(item -> (Entry.Usage) ((LogItem.EntryItem) item).entry())
+            .forEach(entry -> flags.put(entry.id(),
+                entry.usage().cost().totalFromProvider()));
+        assertThat(flags.get("u-true")).isTrue();
+        assertThat(flags.get("u-false")).isFalse();
+        assertThat(flags).containsKey("u-absent");
+        assertThat(flags.get("u-absent")).isNull();
+    }
+
+    private static Entry.Usage usageEntry(String id, Boolean totalFromProvider) {
+        return new Entry.Usage(
+            id, 0, null, null, "cache_warm", "anthropic", "claude-opus-4-6",
+            new com.pijava.ai.Usage(0, 1, 100, 0, null, null, 101,
+                new com.pijava.ai.Usage.Cost(0, 0, 0.01, 0, 0.01, totalFromProvider)),
+            null, null, null, null, null, null);
+    }
+
     /** 读一个会话文件的所有行（跳过空行）。 */
     private static java.util.List<com.fasterxml.jackson.databind.JsonNode> lines(Path file)
             throws Exception {

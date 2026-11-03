@@ -222,12 +222,17 @@ final class EntryJsonCodec {
         double costOutput = 0;
         double costCacheRead = 0;
         double costCacheWrite = 0;
+        Boolean totalFromProvider = null;
         if (cost != null && cost.isObject()) {
             costTotal = cost.has("total") ? cost.get("total").asDouble() : 0;
             costInput = cost.has("input") ? cost.get("input").asDouble() : 0;
             costOutput = cost.has("output") ? cost.get("output").asDouble() : 0;
             costCacheRead = cost.has("cacheRead") ? cost.get("cacheRead").asDouble() : 0;
             costCacheWrite = cost.has("cacheWrite") ? cost.get("cacheWrite").asDouble() : 0;
+            // docs/15（B267）：缺席保持 null（旧文件往返不改写）；false／true 显式读回。
+            if (cost.has("totalFromProvider") && !cost.get("totalFromProvider").isNull()) {
+                totalFromProvider = cost.get("totalFromProvider").asBoolean();
+            }
         }
         return new com.pijava.ai.Usage(
             node.has("input") ? node.get("input").asDouble() : 0,
@@ -237,6 +242,7 @@ final class EntryJsonCodec {
             node.has("cacheWrite1h") ? node.get("cacheWrite1h").asDouble() : null,
             node.has("reasoning") ? node.get("reasoning").asDouble() : null,
             node.has("totalTokens") ? node.get("totalTokens").asDouble() : 0,
-            new com.pijava.ai.Usage.Cost(costInput, costOutput, costCacheRead, costCacheWrite, costTotal));
+            new com.pijava.ai.Usage.Cost(costInput, costOutput, costCacheRead, costCacheWrite,
+                costTotal, totalFromProvider));
     }
 }
