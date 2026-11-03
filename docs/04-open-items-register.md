@@ -26,7 +26,7 @@ Chord plugin 已按 R5 决定不做，不再是待拍板项。
 
 | 编号 | 当前结论 | 所属层 |
 |---|---|---|
-| B267 | usage／billing 已按 docs/15 闭环；Provider wire、retry/overflow、OAuth/device/env、pi-ai CLI 权限与 Faux 余量仍未对齐；须按依赖继续拆设计。 | L1 AI |
+| B267 | usage／billing 已按 docs/15 闭环；15 个存疑行已按 docs/16 裁决并闭环；Provider wire、retry/overflow、OAuth/device/env、pi-ai CLI 权限与 Faux 余量仍未对齐；须按依赖继续拆设计。 | L1 AI |
 | B116 | 对外 JSON 的 usage 已改为 pi 扁平形状；Java 内部 `StreamDone` 仍保留嵌套方言，AI 重测时决定是否继续保留。 | L1 AI |
 | B156 | `ModelCompat` 逐组件重建存在漏字段风险；新增组件时必须同时检查构造点和 `withPartial` 类重建点。 | L1 AI |
 | B259 | RPC `cycle_thinking_level` 对不支持 thinking 的模型仍返级别；`get_available_thinking_levels` 也未按模型能力过滤。pi 对应结果为 `null` 或可用子集。 | L5 coding-agent |
@@ -43,7 +43,9 @@ B263（#106）已于 2026-11-03 按 docs/13 实施并闭环：`AI_TELEMETRY_SCHE
 
 B266（#105）已于 2026-11-03 按 docs/14 实施并闭环：新增 `AI/identity/` 包（`ClientIdentity` tri-state merge、`AttributionSetting`、三种 UA、OpenRouter／NVIDIA／OpenCode 归因头、OpenCode session 头、大小写不敏感头合并＋`null` 删除）；`ApiOptions` 增加 `identity` 组件并由 `ConfigurableProvider.createApi` 预计算 `extra["identityHeaders"]`；agent-core 的 `StreamOptions`／`HarnessConfig`／`PiLoop.Config`／`ExecutionContext` 逐点携带 identity，`AgentIdentity.DEFAULT` 提供 agent 默认归因；coding-agent 新增 `ClientIdentityProvider`（settings＋`PI_TELEMETRY` 门＋版本），删除旧锚点 `ProviderAttribution`。
 
-B267 第一批 usage 与 OpenRouter 账单（#53／#59／#107）已于 2026-11-03 按 docs/15 实施并闭环：`Usage.Cost` 增加可空 `totalFromProvider`；`CostCalculator` 显式写 `false`；Anthropic delta 覆盖 `cache_creation.ephemeral_1h_input_tokens`（含 `0` 值）；`OpenRouterBilling` 按 pi `openrouter-cost.ts` 处理非 BYOK／BYOK／上游总额缺席与显式 null；`ConfigurableProvider` 预计算 `extra["openRouterModel"]`；`UsageCombiner` 与 JSONL 解码传播三态。L1 账面 **206.0/240＝85.83%**。B267 其余面仍开放；docs/16 的存疑复核设计待审。
+B267 第一批 usage 与 OpenRouter 账单（#53／#59／#107）已于 2026-11-03 按 docs/15 实施并闭环：`Usage.Cost` 增加可空 `totalFromProvider`；`CostCalculator` 显式写 `false`；Anthropic delta 覆盖 `cache_creation.ephemeral_1h_input_tokens`（含 `0` 值）；`OpenRouterBilling` 按 pi `openrouter-cost.ts` 处理非 BYOK／BYOK／上游总额缺席与显式 null；`ConfigurableProvider` 预计算 `extra["openRouterModel"]`；`UsageCombiner` 与 JSONL 解码传播三态。
+
+B267 第二批存疑复核（15 行）已于 2026-11-03 按 docs/16 裁决并闭环：6 个 Java 特有扩展（#4/#5/#18/#21/#46/#88）转作废并退出分母，9 行（#7/#20/#24/#28/#38/#47/#63/#75/#76）转对齐并登记 D206–D212；B18 改写后销号。L1 账面 **208.0/232＝89.66%**（分母因作废由 240 缩至 232，不可与旧百分比直接比较）。B267 其余面仍开放。
 
 ## 3. MCP 开放项与复核项
 
@@ -58,7 +60,7 @@ B267 第一批 usage 与 OpenRouter 账单（#53／#59／#107）已于 2026-11-0
 | B185 | `OAuthMetadataParsers.optionalBoolean` 的 SpotBugs 排除仍需保留或有代码级替代。 |
 | B190 | Java 以 `IOException` 判瞬断，范围宽于 pi 的网络错误分类。 |
 | B191/B197 | 自建 WHATWG URL 归一化尚未完整互读验证；相对引用和剩余 URL 入口需逐点检查。 |
-| B192 | CIMD 文档仍依托 pi.dev；需结合新 `clientRegistration: auto | cimd | dcr` 决策树重新裁决。 |
+| B192 | CIMD 文档仍依托 pi.dev；需结合新 `clientRegistration: auto \| cimd \| dcr` 决策树重新裁决。 |
 | B193 | `mcp-auth.json` 的嵌套键、null 省略和字节形态与 pi 不同。 |
 | B194 | OAuth 请求的超时、abort 和 transport `signal` 需按新实现重测。 |
 | B196 | 工具与资源当前顺序拉取；新锚点已改变连接期资源枚举行为，需整体复核。 |
@@ -117,12 +119,19 @@ SQLite 后端是 pi-java 独立实现，保留模块，不对齐已删除 schema
 
 | 条目 | 最终结论 |
 |---|---|
-| B18 | PiMessages 是 pi-java 自有 wire，不按 pi 不存在的对应面改造。 |
+| B18（已销号） | 2026-11-03 销号：pi 固定锚点 `packages/ai/src/api/pi-messages.ts` 已存在同一 `POST /messages` SSE 协议，旧「pi-java 自有 wire」描述失效；细差归 #110。 |
 | D201 | telemetry typed schema 保留运行时 identity、parent binding 与 metadata 合并；Java 无法复刻 TS 条件类型对 exact attributes、required keys、schema 名与 instrument kind 的编译期约束，不新增 pi 没有的运行时校验。 |
 | D202 | malformed 工具参数沿用 Jackson syntax-error 前缀；非对象文案、`{}`＋raw suffix 与 raw 原文逐字保持，不引入 V8 文案兼容层。 |
-| D203 | `pi.ai.poll` 观察者、schema 与单测已落地，但 Java 的 `StreamApi` 没有 `streamDeferred`／`fetchDeferred` 生产入口；真实 poll 入口由 B267 #75 接管。 |
+| D203 | `pi.ai.poll` 观察者、schema 与单测已落地，但 Java 的 `StreamApi` 没有 `streamDeferred`／`fetchDeferred` 生产入口；真实 poll 入口仍由 B267 的 deferred fetch 与 Faux #80 跟踪。docs/16 已将 #75 的类型面判对齐（D212），生产入口缺席不重复扣分。 |
 | D204 | pi 的 `withClientIdentity(models, identity)` 包装器没有 Java 对应物：Java 无 `Models`／`MutableModels` 门面，identity 合并落在 `DefaultProviders`／`ConfigurableProvider.createApi` 两个请求组装点；行为面（请求头）已对齐。 |
 | D205 | detailed `User-Agent` 的品牌与运行时 token 不同：pi 为 `pi/<ver> (platform; node/<ver>; arch)`，pi-java 为 `pi-java/<ver> (os.name; java/<java.version>; os.arch)`；归因头仍用 pi 品牌值。属 D77 族工具自述差异。 |
+| D206 | `StreamError` 的 `Throwable` 是内部扩展，不得进入任何序列化投影；所有线投影走 `StreamError.textOf`（`JsonEventMapper`／`PrintMode`／web translator／payload recorder）。模型可见错误体与 pi 的 `AssistantMessage` 同形；新增投影若直接序列化 `StreamError` 即回归。 |
+| D207 | 目录 `Model.input`／`reasoning` 投影为 `ModelCapability` 能力位（`BuiltinModelCatalogs`）；`ModelInfo.minimal` 能力集为空，`supportsImageInput()` 对未知按支持（`ModelInfo.java:240`）。pi 无「未知模型」状态，此方向性选择仅作用于 Java 独有状态。 |
+| D208 | `ToolResultMessage` 的 `details`／`usage` 取 `Object`，因为 pi 的 `Usage` 类型在 Java 侧属于 agent 模块，ai 不能反向依赖 agent；字段值须保持 JSON 兼容，provider 投影不读取这三项（与 pi 同）。 |
+| D209 | Java 以静态协议注册表从 models.json 建 provider，按模型 `api` 派发；不能加载任意 JS api 模块。新增 wire 协议须先在 Java 实现适配器并注册，未跟进时按缺失行登记，不藏在本行。 |
+| D210 | Java 无动态模块加载；setup 失败在 `createApi` 同步抛出，错误文本／时序与 pi 的 `error` 事件不完全同形；`fetchDeferred`／`cancelDeferred` 懒包装无对应物（与 D203 同族）。宿主异常处理变更时须复核。 |
+| D211 | `PiMessagesEvent` 是 Java record 方言，字段与 pi TS 联合逐项对应但不共享代码；#110 若扩面到请求／响应外壳，须回头复核 #7／#63。 |
+| D212 | `DeferredHandle.data` 用 `Map<String,Object>` 承载 pi 的 `JsonValue`；若需顶层数组或标量须复核。Faux deferred（#80）落地时补生产→poll→重建的集成测试。 |
 | B83 | pi 自身三处 sanitize 缺口保持同样行为；pi 修补时同步。 |
 | B100 | compat 探测的 baseUrl 在内置模型上行为等价；出现可观察差异再重裁。 |
 | B126 | Codex 车道及其 transport 等随 R2/R5 出分母。 |
@@ -142,4 +151,4 @@ SQLite 后端是 pi-java 独立实现，保留模块，不对齐已删除 schema
 3. 条目关闭后从开放表移除，历史由 git 保存，编号不复用。
 4. 每层重测后同步更新对应地图；全部层完成前不发布新全仓百分比。
 5. 每个实施工作包仍需独立设计稿和用户审核。
-6. 下一新文档号为 **docs/15**；`docs/14` 为 B266 Client Identity 设计，已闭环（2026-11-03）。
+6. 下一新文档号为 **docs/17**；`docs/16` 为 L1 存疑复核与裁决设计，已闭环（2026-11-03）。
