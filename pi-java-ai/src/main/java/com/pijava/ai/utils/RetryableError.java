@@ -56,7 +56,14 @@ public final class RetryableError {
 
             // Sign in with ChatGPT: the subscription's shared usage limit, which resets
             // after hours rather than seconds.（retry.ts:27）
-            "subscription_sharing_usage_limit_exceeded"
+            "subscription_sharing_usage_limit_exceeded",
+            // Sign in with ChatGPT on a ChatGPT Business plan: a usage limit set by the
+            // workspace admin. Only the admin can raise it.（retry.ts:28-30）
+            "subscription_sharing_workplace_individual_usage_limit_exceeded",
+
+            // Zhipu/Z.ai (open.bigmodel.cn) error code 1308: the plan's usage limit is
+            // reached, sent as HTTP 429. It resets after hours, not seconds (#11537).
+            "\"code\"\\s*:\\s*\"?1308(?![0-9])"
         ));
 
     /**
@@ -73,21 +80,26 @@ public final class RetryableError {
             "model is at capacity", // retry.ts:36
             "rate.?limit",
             "too many requests",
-            "429",
-            "500",
-            "502",
-            "503",
-            "504",
-            "520", // retry.ts:37（插在 504 与 524 之间）
-            "524",
-            "service.?unavailable",
+            // Status codes must not be part of a longer word or number, e.g. a request id or byte count (#11057).
+            "(?<![a-z0-9])(?:429|500|502|503|504|520|524)(?![a-z0-9])", // retry.ts:46-47
+            // Also matches "The service is temporarily unavailable" (#10965).
+            "service.?(?:is.?)?(?:temporarily.?)?unavailable",
             "server.?error",
             "internal.?error",
 
             // Wrapper/provider text for transient upstream failures, including OpenRouter
-            // "Provider returned error" responses (#2264).
-            "provider.?returned.?error",
+            // "Provider returned error" responses (#2264) and gateway wording such as
+            // "The upstream provider returned an error" (#10842).
+            "provider.?returned.?(?:an.?)?error",
             "exceeded request buffer limit while retrying upstream",
+            // Gateway failure relaying the upstream response stream, sent as an OpenAI
+            // Responses `response.failed` event without an error code (#10920).
+            "unable to forward upstream",
+            // Other gateway upstream failures relayed as `response.failed` error codes (#10920).
+            "upstream.?request.?failed",
+            "upstream_stream_read_error",
+            "stream was interrupted",
+            "http/?2 stream failed",
 
             // Network, proxy, and fetch transport failures. This includes OpenAI Codex
             // raw-fetch failures such as "upstream connect", "connection refused", and
@@ -98,6 +110,9 @@ public final class RetryableError {
             "connection.?lost",
             "other side closed",
             "fetch failed",
+            // node-fetch system errors, e.g. the Google ADC OAuth token refresh used by
+            // google-vertex. The reason is often empty (#10996).
+            "request to \\S+ failed, reason:",
             "getaddrinfo",
             "ENOTFOUND",
             "EAI_AGAIN",
@@ -120,6 +135,9 @@ public final class RetryableError {
             "stream ended before message_stop",
             "stream ended before a terminal response event",
             "http2 request did not get a response",
+            // Codex CLI mid-stream disconnect, relayed by proxies that wrap the Codex CLI,
+            // e.g. "stream disconnected before completion: stream closed before response.completed" (#11057).
+            "stream disconnected before completion",
             // Node ERR_HTTP2_STREAM_CANCEL：HTTP/2 会话在请求发出前死掉
             // （Bedrock SDK 5 分钟会话超时，#10379）。retry.ts:88（5b6c792b4）
             "pending stream has been canceled",

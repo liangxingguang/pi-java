@@ -25,7 +25,7 @@ class RetryableErrorTest {
     }
 
     // ═══════════════════════════════════════════════════════════
-    // 白名单命中（retry.ts:26-90，按注释分组取样）
+    // 白名单命中（retry.ts:37-125，按注释分组取样）
     // ═══════════════════════════════════════════════════════════
 
     @ParameterizedTest
@@ -46,19 +46,32 @@ class RetryableErrorTest {
         "502 Bad Gateway",
         "503 Service Unavailable",
         "504 Gateway Timeout",
-        // pi 白名单里插在 504 与 524 之间的那条（retry.ts:37）—— 同批漏掉的一条；
-        // ⚠️ 子串匹配（pi 的既有语义，照抄不收紧）：凡含 "520" 的文本都会命中。
+        // pi 白名单里插在 504 与 524 之间的那条（retry.ts:37）。
         "520 status code",
         "524 origin timeout",
+        // 1308 的长码（13080）不命中排除表，429 仍使本条瞬断（retry.ts:32-34 的
+        // `(?![0-9])` 边界）。
+        "429 {\"code\":\"13080\",\"message\":\"Usage limit reached\"}",
         "server error, please wait",
         "Provider returned error: upstream gone",
+        // pi retry.ts:54-56（#10842）：网关转述的上游失败。
+        "Provider returned an error: upstream gone",
+        // pi retry.ts:48-49（#10965）：带 "is temporarily" 的形态。
+        "The service is temporarily unavailable. Please retry later.",
         "exceeded request buffer limit while retrying upstream",
+        // pi retry.ts:58-65（#10920）：网关中继的 upstream 失败族。
+        "unknown: Unable to forward upstream stream",
+        "upstream_error: Upstream request failed",
+        "upstream_stream_read_error: Upstream response stream was interrupted",
+        "Upstream HTTP/2 stream failed",
         "Network error while fetching",
         "connection error: eof",
         "connection refused",
         "connection lost mid-stream",
         "other side closed",
         "fetch failed",
+        // pi retry.ts:78（#10996）：node-fetch 系统错误，reason 常为空。
+        "request to https://oauth2.googleapis.com/token failed, reason:",
         "getaddrinfo ENOTFOUND api.example.com",
         "EAI_AGAIN",
         "upstream connect error or disconnect/reset",
@@ -74,6 +87,8 @@ class RetryableErrorTest {
         "ended without a terminal event",
         "stream ended before a terminal response event",
         "http2 request did not get a response",
+        // pi retry.ts:102-103（#11057）：Codex CLI 中流断开，被转述为 response.failed。
+        "stream disconnected before completion: stream closed before response.completed",
         // pi retry.ts:88（5b6c792b4）：Node ERR_HTTP2_STREAM_CANCEL，HTTP/2 会话先死
         // （Bedrock SDK 5 分钟会话超时，#10379）。
         "pending stream has been canceled",
@@ -93,7 +108,7 @@ class RetryableErrorTest {
     }
 
     // ═══════════════════════════════════════════════════════════
-    // 配额排除表（retry.ts:7-24）：即便撞白名单词也不重试
+    // 配额排除表（retry.ts:7-35）：即便撞白名单词也不重试
     // ═══════════════════════════════════════════════════════════
 
     @ParameterizedTest
@@ -109,11 +124,16 @@ class RetryableErrorTest {
         // ChatGPT 订阅路的配额墙（retry.ts:27）：同 subscription_sharing_ 家族，
         // 但裁决与两条 _unavailable 相反 —— 见 sharingFamilySplitsBetweenTheTwoTables。
         "subscription_sharing_usage_limit_exceeded",
+        // pi retry.ts:28-30：ChatGPT Business 工作区限额，只有管理员能提高。
+        "subscription_sharing_workplace_individual_usage_limit_exceeded",
+        // pi retry.ts:32-34：z.ai 1308（HTTP 429，但是小时级配额墙，#11537）。
+        "429 {\"code\":\"1308\",\"message\":\"Usage limit reached\"}",
         // 组合排除：既撞配额又撞白名单 ⇒ 配额赢
         "quota exceeded (429)",
         // ⚠️ 同族的配额墙单独不放电流（其文本不含任何白名单子串）⇒ 必须与白名单词
         // 组合才能证明「它在排除表里」。缺此行则删掉排除表那条**零红**（M4 实测）。
-        "429 subscription_sharing_usage_limit_exceeded"
+        "429 subscription_sharing_usage_limit_exceeded",
+        "429 subscription_sharing_workplace_individual_usage_limit_exceeded"
     })
     void quotaLimitsAreNeverRetryable(String errorMessage) {
         assertThat(RetryableError.isRetryableAssistantError(error(errorMessage))).isFalse();
@@ -144,6 +164,16 @@ class RetryableErrorTest {
             error("invalid api key provided"))).isFalse();
         assertThat(RetryableError.isRetryableAssistantError(
             error("model not found"))).isFalse();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+        // 状态码必须是独立 token（retry.ts:38，#11057）：请求 id／字节数里的数字不算。
+        "401 {\"type\":\"error\",\"error\":{},\"request_id\":\"req_011CU503xyz\"}",
+        "400 image exceeds 5 MB maximum: 5316784 bytes > 5242880 bytes"
+    })
+    void embeddedStatusCodeDigitsAreNotRetryable(String errorMessage) {
+        assertThat(RetryableError.isRetryableAssistantError(error(errorMessage))).isFalse();
     }
 
     // ═══════════════════════════════════════════════════════════
