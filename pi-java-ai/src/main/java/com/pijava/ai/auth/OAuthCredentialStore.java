@@ -160,6 +160,8 @@ public final class OAuthCredentialStore {
                     StandardOpenOption.READ,
                     StandardOpenOption.WRITE);
                  FileLock lock = channel.lock()) {
+                // docs/19 #112：新文件创建后、任何 token 写入前即收紧；旧文件先收紧再覆写。
+                CredentialFilePermissions.restrict(path);
                 return body.apply(channel);
             }
         } catch (IOException e) {
