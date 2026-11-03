@@ -26,7 +26,7 @@ Chord plugin 已按 R5 决定不做，不再是待拍板项。
 
 | 编号 | 当前结论 | 所属层 |
 |---|---|---|
-| B267 | Provider wire、usage、retry/overflow、OAuth/device/env、pi-ai CLI 权限与 Faux 余量未对齐；须按依赖继续拆设计。 | L1 AI |
+| B267 | usage／billing 已按 docs/15 闭环；Provider wire、retry/overflow、OAuth/device/env、pi-ai CLI 权限与 Faux 余量仍未对齐；须按依赖继续拆设计。 | L1 AI |
 | B116 | 对外 JSON 的 usage 已改为 pi 扁平形状；Java 内部 `StreamDone` 仍保留嵌套方言，AI 重测时决定是否继续保留。 | L1 AI |
 | B156 | `ModelCompat` 逐组件重建存在漏字段风险；新增组件时必须同时检查构造点和 `withPartial` 类重建点。 | L1 AI |
 | B259 | RPC `cycle_thinking_level` 对不支持 thinking 的模型仍返级别；`get_available_thinking_levels` 也未按模型能力过滤。pi 对应结果为 `null` 或可用子集。 | L5 coding-agent |
@@ -41,7 +41,9 @@ B265b 目录数据与运行时（#16/#21/#33/#34）已于 2026-11-02 按 docs/12
 
 B263（#106）已于 2026-11-03 按 docs/13 实施并闭环：`AI_TELEMETRY_SCHEMA`、`pi.ai.request`/`pi.ai.poll` 观察者、content-free block events、request/first-chunk histogram、四类 token／cost counter、`provider_error` 500 UTF-16 上限与 abort 保持 ok 均已落地；`ApiOptions` 增加 `telemetry` 组件并逐点保真 11 个重建点。
 
-B266（#105）已于 2026-11-03 按 docs/14 实施并闭环：新增 `AI/identity/` 包（`ClientIdentity` tri-state merge、`AttributionSetting`、三种 UA、OpenRouter／NVIDIA／OpenCode 归因头、OpenCode session 头、大小写不敏感头合并＋`null` 删除）；`ApiOptions` 增加 `identity` 组件并由 `ConfigurableProvider.createApi` 预计算 `extra["identityHeaders"]`；agent-core 的 `StreamOptions`／`HarnessConfig`／`PiLoop.Config`／`ExecutionContext` 逐点携带 identity，`AgentIdentity.DEFAULT` 提供 agent 默认归因；coding-agent 新增 `ClientIdentityProvider`（settings＋`PI_TELEMETRY` 门＋版本），删除旧锚点 `ProviderAttribution`。L1 账面 **199.0/240＝82.92%**。B267 仍开放。
+B266（#105）已于 2026-11-03 按 docs/14 实施并闭环：新增 `AI/identity/` 包（`ClientIdentity` tri-state merge、`AttributionSetting`、三种 UA、OpenRouter／NVIDIA／OpenCode 归因头、OpenCode session 头、大小写不敏感头合并＋`null` 删除）；`ApiOptions` 增加 `identity` 组件并由 `ConfigurableProvider.createApi` 预计算 `extra["identityHeaders"]`；agent-core 的 `StreamOptions`／`HarnessConfig`／`PiLoop.Config`／`ExecutionContext` 逐点携带 identity，`AgentIdentity.DEFAULT` 提供 agent 默认归因；coding-agent 新增 `ClientIdentityProvider`（settings＋`PI_TELEMETRY` 门＋版本），删除旧锚点 `ProviderAttribution`。
+
+B267 第一批 usage 与 OpenRouter 账单（#53／#59／#107）已于 2026-11-03 按 docs/15 实施并闭环：`Usage.Cost` 增加可空 `totalFromProvider`；`CostCalculator` 显式写 `false`；Anthropic delta 覆盖 `cache_creation.ephemeral_1h_input_tokens`（含 `0` 值）；`OpenRouterBilling` 按 pi `openrouter-cost.ts` 处理非 BYOK／BYOK／上游总额缺席与显式 null；`ConfigurableProvider` 预计算 `extra["openRouterModel"]`；`UsageCombiner` 与 JSONL 解码传播三态。L1 账面 **206.0/240＝85.83%**。B267 其余面仍开放；docs/16 的存疑复核设计待审。
 
 ## 3. MCP 开放项与复核项
 
