@@ -48,11 +48,13 @@ final class RadiusOAuthHttp {
             throw new IOException("Could not load Radius OAuth config from " + config.gateway()
                 + ": " + response.statusCode() + " " + response.body());
         }
-        var endpoint = JSON.readTree(response.body()).path("authorizationEndpoint");
-        if (!endpoint.isTextual()) {
+        var endpointNode = JSON.readTree(response.body()).path("authorizationEndpoint");
+        var endpoint = TrustedHttpUrl.normalize(
+            endpointNode.isTextual() ? endpointNode.textValue() : null);
+        if (endpoint == null) {
             throw new IOException("Invalid Radius OAuth config from " + config.gateway());
         }
-        return endpoint.textValue();
+        return endpoint;
     }
 
     Device requestDevice() throws IOException {
@@ -62,13 +64,25 @@ final class RadiusOAuthHttp {
             throw error(response, "Radius OAuth device authorization failed");
         }
         var node = JSON.readTree(response.body());
-        if (!node.path("device_code").isTextual() || !node.path("user_code").isTextual()
-                || !node.path("verification_uri").isTextual() || !node.path("expires_in").isNumber()) {
+        // pi radius.ts:215 的真值判据：空串与数字 0 都算缺失。
+        if (!nonEmptyText(node.path("device_code")) || !nonEmptyText(node.path("user_code"))
+                || !nonEmptyText(node.path("verification_uri")) || !nonZeroNumber(node.path("expires_in"))) {
             throw new IOException("Radius OAuth device authorization response is missing required fields");
         }
+        var verificationUri = TrustedHttpUrl.normalize(node.path("verification_uri").textValue());
+        if (verificationUri == null) {
+            throw new IOException("Untrusted verification_uri in Radius OAuth device authorization response");
+        }
         return new Device(node.path("device_code").textValue(), node.path("user_code").textValue(),
-            node.path("verification_uri").textValue(),
-            node.path("interval").asLong(5), node.path("expires_in").asLong());
+            verificationUri, node.path("interval").asLong(5), node.path("expires_in").asLong());
+    }
+
+    private static boolean nonEmptyText(com.fasterxml.jackson.databind.JsonNode node) {
+        return node.isTextual() && !node.textValue().isEmpty();
+    }
+
+    private static boolean nonZeroNumber(com.fasterxml.jackson.databind.JsonNode node) {
+        return node.isNumber() && node.asDouble() != 0;
     }
 
     OAuthCredential token(Map<String, String> params) throws IOException {

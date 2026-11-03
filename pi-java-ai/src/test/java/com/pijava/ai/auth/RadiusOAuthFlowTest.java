@@ -14,6 +14,7 @@ import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 class RadiusOAuthFlowTest {
 
@@ -71,10 +72,104 @@ class RadiusOAuthFlowTest {
         }
     }
 
+    // ── docs/19 #44: Radius discovery/device URL validation ─────
+
+    @Test
+    void discoveryRejectsUntrustedAuthorizationEndpoint() throws Exception {
+        try (var server = new FakeRadiusOAuthServer()) {
+            server.enqueueDiscoveryEndpoint("file:///tmp/x");
+            var http = new RadiusOAuthHttp(
+                new RadiusOAuthConfig("Radius", server.gateway()), server.httpClient());
+
+            var thrown = catchThrowable(http::loadAuthorizationEndpoint);
+
+            assertThat(thrown).isInstanceOf(java.io.IOException.class)
+                .hasMessageContaining("Invalid Radius OAuth config from " + server.gateway());
+        }
+    }
+
+    @Test
+    void discoveryRejectsRelativeAuthorizationEndpoint() throws Exception {
+        try (var server = new FakeRadiusOAuthServer()) {
+            server.enqueueDiscoveryEndpoint("/authorize");
+            var http = new RadiusOAuthHttp(
+                new RadiusOAuthConfig("Radius", server.gateway()), server.httpClient());
+
+            var thrown = catchThrowable(http::loadAuthorizationEndpoint);
+
+            assertThat(thrown).isInstanceOf(java.io.IOException.class)
+                .hasMessageContaining("Invalid Radius OAuth config");
+        }
+    }
+
+    @Test
+    void deviceRejectsUntrustedVerificationUri() throws Exception {
+        try (var server = new FakeRadiusOAuthServer()) {
+            server.enqueueDeviceRaw("{\"device_code\":\"dc\",\"user_code\":\"user-code\","
+                + "\"verification_uri\":\"file:///tmp/x\",\"expires_in\":60,\"interval\":1}");
+            var http = new RadiusOAuthHttp(
+                new RadiusOAuthConfig("Radius", server.gateway()), server.httpClient());
+
+            var thrown = catchThrowable(http::requestDevice);
+
+            assertThat(thrown).isInstanceOf(java.io.IOException.class)
+                .hasMessageContaining("Untrusted verification_uri");
+        }
+    }
+
+    @Test
+    void deviceRequiresTruthyFields() throws Exception {
+        try (var server = new FakeRadiusOAuthServer()) {
+            server.enqueueDeviceRaw("{\"device_code\":\"\",\"user_code\":\"user-code\","
+                + "\"verification_uri\":\"https://verify.example.com\",\"expires_in\":60}");
+            var http = new RadiusOAuthHttp(
+                new RadiusOAuthConfig("Radius", server.gateway()), server.httpClient());
+
+            var thrown = catchThrowable(http::requestDevice);
+
+            assertThat(thrown).isInstanceOf(java.io.IOException.class)
+                .hasMessageContaining("missing required fields");
+        }
+    }
+
+    @Test
+    void deviceRejectsZeroExpiresIn() throws Exception {
+        try (var server = new FakeRadiusOAuthServer()) {
+            server.enqueueDeviceRaw("{\"device_code\":\"dc\",\"user_code\":\"user-code\","
+                + "\"verification_uri\":\"https://verify.example.com\",\"expires_in\":0}");
+            var http = new RadiusOAuthHttp(
+                new RadiusOAuthConfig("Radius", server.gateway()), server.httpClient());
+
+            var thrown = catchThrowable(http::requestDevice);
+
+            assertThat(thrown).isInstanceOf(java.io.IOException.class)
+                .hasMessageContaining("missing required fields");
+        }
+    }
+
+    @Test
+    void deviceNotificationCarriesNormalizedUri() throws Exception {
+        try (var server = new FakeRadiusOAuthServer()) {
+            server.enqueueDeviceRaw("{\"device_code\":\"dc\",\"user_code\":\"user-code\","
+                + "\"verification_uri\":\"https://verify.example.com\",\"expires_in\":60,\"interval\":1}");
+            server.enqueueToken("access", "refresh", 3600);
+            var interaction = new ScriptedOAuthInteraction("device-code", server);
+            var flow = new RadiusOAuthFlow(
+                new RadiusOAuthConfig("Radius", server.gateway()), server.httpClient(), 0);
+
+            flow.login(interaction);
+
+            assertThat(interaction.notifications)
+                .anySatisfy(message -> assertThat(message)
+                    .contains("https://verify.example.com/"));
+        }
+    }
+
     /** Device/browser interaction with notification-driven local callback. */
     private static final class ScriptedOAuthInteraction implements OAuthInteraction {
         private final String method;
         private final FakeRadiusOAuthServer server;
+        private final java.util.List<String> notifications = new java.util.ArrayList<>();
 
         private ScriptedOAuthInteraction(String method, FakeRadiusOAuthServer server) {
             this.method = method;
@@ -83,6 +178,7 @@ class RadiusOAuthFlowTest {
 
         @Override
         public void notify(String message) {
+            notifications.add(message);
             if (message.contains("/authorize?")) {
                 var start = message.indexOf("http");
                 server.openAuthorization(message.substring(start).trim());
@@ -106,7 +202,7 @@ class RadiusOAuthFlowTest {
         private final HttpClient client = HttpClient.newHttpClient();
         private String deviceBody;
         private String tokenBody;
-        private boolean discovery;
+        private String authorizationEndpointBody;
         private volatile String deviceForm;
         private volatile String tokenForm;
         private volatile Map<String, String> authorizeQuery;
@@ -121,7 +217,8 @@ class RadiusOAuthFlowTest {
                 respond(exchange, 200, tokenBody);
             });
             server.createContext("/v1/oauth", exchange -> respond(exchange, 200,
-                "{\"authorizationEndpoint\":\"" + gateway() + "/authorize\"}"));
+                authorizationEndpointBody != null ? authorizationEndpointBody
+                    : "{\"authorizationEndpoint\":\"" + gateway() + "/authorize\"}"));
             server.createContext("/authorize", exchange -> {
                 authorizeQuery = query(exchange.getRequestURI().getRawQuery());
                 var redirect = authorizeQuery.get("redirect_uri");
@@ -139,13 +236,21 @@ class RadiusOAuthFlowTest {
                 + expiresIn + ",\"interval\":" + interval + "}";
         }
 
+        private void enqueueDeviceRaw(String body) {
+            deviceBody = body;
+        }
+
+        private void enqueueDiscoveryEndpoint(String endpoint) {
+            authorizationEndpointBody = "{\"authorizationEndpoint\":\"" + endpoint + "\"}";
+        }
+
         private void enqueueToken(String access, String refresh, long expiresIn) {
             tokenBody = "{\"access_token\":\"" + access + "\",\"refresh_token\":\"" + refresh
                 + "\",\"expires_in\":" + expiresIn + ",\"scope\":\"gateway offline_access\"}";
         }
 
         private void enqueueDiscovery() {
-            discovery = true;
+            // Default discovery body already points at the fake gateway; kept for readability.
         }
 
         private void openAuthorization(String url) {
