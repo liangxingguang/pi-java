@@ -26,7 +26,6 @@ Chord plugin 已按 R5 决定不做，不再是待拍板项。
 
 | 编号 | 当前结论 | 所属层 |
 |---|---|---|
-| B266 | 缺少 ClientIdentity 的 tri-state merge、User-Agent/归因头、Models wrapper 与上层 identity 输入。 | L1 AI |
 | B267 | Provider wire、usage、retry/overflow、OAuth/device/env、pi-ai CLI 权限与 Faux 余量未对齐；须按依赖继续拆设计。 | L1 AI |
 | B116 | 对外 JSON 的 usage 已改为 pi 扁平形状；Java 内部 `StreamDone` 仍保留嵌套方言，AI 重测时决定是否继续保留。 | L1 AI |
 | B156 | `ModelCompat` 逐组件重建存在漏字段风险；新增组件时必须同时检查构造点和 `withPartial` 类重建点。 | L1 AI |
@@ -40,7 +39,9 @@ B265 行为面（#31/#61/#83/#84）已于 2026-11-02 按 docs/11 实施并闭环
 
 B265b 目录数据与运行时（#16/#21/#33/#34）已于 2026-11-02 按 docs/12 分阶段闭环：阶段 A 落仓内 vendor 锚点生成器＋提交快照，重生成 18 分片（600 chat／64 image／Radius 28 基线）；阶段 B 落 OpenRouter `/models/user` 个性化、`RefreshModelsContext` 的 credential/baseUrl/signal、Radius legacy `gatewayConfig` 导入与 coding-agent 包装器。
 
-B263（#106）已于 2026-11-03 按 docs/13 实施并闭环：`AI_TELEMETRY_SCHEMA`、`pi.ai.request`/`pi.ai.poll` 观察者、content-free block events、request/first-chunk histogram、四类 token／cost counter、`provider_error` 500 UTF-16 上限与 abort 保持 ok 均已落地；`ApiOptions` 增加 `telemetry` 组件并逐点保真 11 个重建点。L1 账面 **196.0/240＝81.67%**。B266/B267 仍开放。
+B263（#106）已于 2026-11-03 按 docs/13 实施并闭环：`AI_TELEMETRY_SCHEMA`、`pi.ai.request`/`pi.ai.poll` 观察者、content-free block events、request/first-chunk histogram、四类 token／cost counter、`provider_error` 500 UTF-16 上限与 abort 保持 ok 均已落地；`ApiOptions` 增加 `telemetry` 组件并逐点保真 11 个重建点。
+
+B266（#105）已于 2026-11-03 按 docs/14 实施并闭环：新增 `AI/identity/` 包（`ClientIdentity` tri-state merge、`AttributionSetting`、三种 UA、OpenRouter／NVIDIA／OpenCode 归因头、OpenCode session 头、大小写不敏感头合并＋`null` 删除）；`ApiOptions` 增加 `identity` 组件并由 `ConfigurableProvider.createApi` 预计算 `extra["identityHeaders"]`；agent-core 的 `StreamOptions`／`HarnessConfig`／`PiLoop.Config`／`ExecutionContext` 逐点携带 identity，`AgentIdentity.DEFAULT` 提供 agent 默认归因；coding-agent 新增 `ClientIdentityProvider`（settings＋`PI_TELEMETRY` 门＋版本），删除旧锚点 `ProviderAttribution`。L1 账面 **199.0/240＝82.92%**。B267 仍开放。
 
 ## 3. MCP 开放项与复核项
 
@@ -118,6 +119,8 @@ SQLite 后端是 pi-java 独立实现，保留模块，不对齐已删除 schema
 | D201 | telemetry typed schema 保留运行时 identity、parent binding 与 metadata 合并；Java 无法复刻 TS 条件类型对 exact attributes、required keys、schema 名与 instrument kind 的编译期约束，不新增 pi 没有的运行时校验。 |
 | D202 | malformed 工具参数沿用 Jackson syntax-error 前缀；非对象文案、`{}`＋raw suffix 与 raw 原文逐字保持，不引入 V8 文案兼容层。 |
 | D203 | `pi.ai.poll` 观察者、schema 与单测已落地，但 Java 的 `StreamApi` 没有 `streamDeferred`／`fetchDeferred` 生产入口；真实 poll 入口由 B267 #75 接管。 |
+| D204 | pi 的 `withClientIdentity(models, identity)` 包装器没有 Java 对应物：Java 无 `Models`／`MutableModels` 门面，identity 合并落在 `DefaultProviders`／`ConfigurableProvider.createApi` 两个请求组装点；行为面（请求头）已对齐。 |
+| D205 | detailed `User-Agent` 的品牌与运行时 token 不同：pi 为 `pi/<ver> (platform; node/<ver>; arch)`，pi-java 为 `pi-java/<ver> (os.name; java/<java.version>; os.arch)`；归因头仍用 pi 品牌值。属 D77 族工具自述差异。 |
 | B83 | pi 自身三处 sanitize 缺口保持同样行为；pi 修补时同步。 |
 | B100 | compat 探测的 baseUrl 在内置模型上行为等价；出现可观察差异再重裁。 |
 | B126 | Codex 车道及其 transport 等随 R2/R5 出分母。 |
@@ -137,4 +140,4 @@ SQLite 后端是 pi-java 独立实现，保留模块，不对齐已删除 schema
 3. 条目关闭后从开放表移除，历史由 git 保存，编号不复用。
 4. 每层重测后同步更新对应地图；全部层完成前不发布新全仓百分比。
 5. 每个实施工作包仍需独立设计稿和用户审核。
-6. 下一新文档号为 **docs/14**；`docs/13` 为 B263 请求遥测设计，已闭环（2026-11-03）。
+6. 下一新文档号为 **docs/15**；`docs/14` 为 B266 Client Identity 设计，已闭环（2026-11-03）。
