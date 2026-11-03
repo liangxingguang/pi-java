@@ -111,10 +111,12 @@ final class AnthropicThinking {
      * thinkingEnabled === false && map.off !== null → {type:"disabled"}
      * }</pre>
      *
-     * <p>B99（批 4）：{@code supportsMidConvoEffort} 顶支已接通 —— managed 模型无条件
+     * <p>B99（批 4）：{@code supportsMidConvoEffort} 顶支已接通 —— managed 模型发
      * adaptive＋{@code block_binding:{prefix_mismatch_behavior:"drop_block"}}（原始 JSON
      * 树经 {@code putAdditionalBodyProperty}，stable SDK 2.66.0 的 typed adaptive 仍无
-     * blockBinding）＋顶层 {@code output_config:{effort:"high"}}，与是否开思考无关。</p>
+     * blockBinding）＋顶层 {@code output_config:{effort:"low"}}。#1（docs/17 §2）：
+     * 若无 reasoning 且模型能表达 {@code off}，先落到 {@code thinking:{type:"disabled"}}，
+     * 此时不发光任何 effort marker。</p>
      *
      * <p>包 A-10 前后这里变了两处：<b>① </b>{@code clampMaxTokensToContext} 现在**在**内
      * （pi {@code anthropic-messages.ts:896} 在 {@code adjustMaxTokensForThinking} **之后**
@@ -136,12 +138,19 @@ final class AnthropicThinking {
             return new Resolved(Optional.empty(), Optional.empty(), OptionalInt.empty(),
                 Optional.empty());
         }
-        // B99（pi :1235-1241）：managed effort 顶支在 reasoning 空判定**之前**，
-        // 与 thinkingEnabled 无关 —— 无 reasoning 也恒发 adaptive＋block_binding＋
-        // 顶层 output_config:{effort:"high"}，不抬 maxTokens、不吃 thinkingBudgets。
+        // #1（docs/17 §2，pi :1197-1213）：thinking 被显式关闭且模型能表达 off ⇒
+        // 不发 managed thinking/marker，落到 {type:"disabled"}（Anthropic 拒绝
+        // block_binding 与 disabled thinking 并存）。
+        if (thinkingDisabled(model, reasoning)) {
+            return new Resolved(Optional.of(disabledParam()), Optional.empty(),
+                OptionalInt.empty(), Optional.empty());
+        }
+        // B99（pi :1241）：managed effort 顶支在 reasoning 空判定**之前**。顶层
+        // output_config 固定 "low"（它属于缓存前缀，组织可封顶 effort）；
+        // 真实级别由消息级 marker 表达。
         if (compat != null && Boolean.TRUE.equals(compat.supportsMidConvoEffort())) {
             return new Resolved(Optional.empty(),
-                Optional.of(outputConfigHigh()), OptionalInt.empty(),
+                Optional.of(outputConfigLow()), OptionalInt.empty(),
                 Optional.of(managedThinkingTree()));
         }
         if (reasoning.isEmpty()) {
@@ -173,12 +182,28 @@ final class AnthropicThinking {
     }
 
     /**
+     * pi {@code anthropic-messages.ts:1199-1201} 的 {@code thinkingDisabled}：
+     * 模型有推理能力、请求关闭思考（无 reasoning）、且目录<b>没有</b>显式
+     * {@code off:null}（能表达 {@code thinking:{type:"disabled"}}）。
+     *
+     * <p>managed 与 providerThinkingLevel 两处共用本判据：为真时既有分支发
+     * {@code disabled}，也不再发任何 effort marker。
+     */
+    static boolean thinkingDisabled(ModelInfo model, Optional<ThinkingLevel> reasoning) {
+        return model != null
+            && model.capabilities().contains(ModelCapability.THINKING)
+            && reasoning.isEmpty()
+            && model.thinkingLevelMap().supportsExplicitOff();
+    }
+
+    /**
      * B99/B110：managed 模型的 active marker effort 与盖章值的<b>同一个</b>函数
      * （pi 的 {@code options?.effort ?? "high"}，{@code anthropic-messages.ts:1154-1161}
      * 与 {@code :581} 共用）。
      *
-     * <p>请求侧无 reasoning 时 options.effort 缺席 ⇒ {@code "high"}（managed 分支
-     * 无 reasoning 也恒发顶层 high）；有值 ⇒ {@link #mapLevelToEffort}（含目录映射）。</p>
+     * <p>请求侧无 reasoning 时 options.effort 缺席 ⇒ {@code "high"}（无 reasoning 且
+     * off 不可表达时 managed 分支仍发 marker high）；有值 ⇒ {@link #mapLevelToEffort}
+     * （含目录映射）。{@code thinkingDisabled} 时调用方不得取用本值。</p>
      */
     static String activeEffort(ModelInfo model, Optional<ThinkingLevel> reasoning) {
         return reasoning.<String>map(level -> mapLevelToEffort(model, level)).orElse("high");
@@ -240,8 +265,12 @@ final class AnthropicThinking {
             .build();
     }
 
-    /** B99：managed 支恒发 {@code output_config:{effort:"high"}}（pi {@code :1241}）。 */
-    private static OutputConfig outputConfigHigh() {
-        return OutputConfig.builder().effort(OutputConfig.Effort.HIGH).build();
+    /**
+     * #1（pi {@code :1257-1262}）：managed 支恒发 {@code output_config:{effort:"low"}}。
+     * 顶层 effort 属于缓存提示前缀，必须与逐步变化的 marker 解耦；"low" 给组织封顶留下
+     * 接受空间（pi 注释）。
+     */
+    private static OutputConfig outputConfigLow() {
+        return OutputConfig.builder().effort(OutputConfig.Effort.LOW).build();
     }
 }

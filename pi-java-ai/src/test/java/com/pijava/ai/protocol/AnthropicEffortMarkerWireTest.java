@@ -77,10 +77,10 @@ class AnthropicEffortMarkerWireTest {
         assertThat(historicalMarker.path("output_config").path("effort").asText())
             .isEqualTo("high");
         var activeMarker = messages.get(messages.size() - 1);
-        assertThat(activeMarker.path("output_config").path("effort").asText())
-            .isEqualTo("high");
-        // 无 reasoning ⇒ active effort 恒 high（顶层 output_config 同值）。
-        assertThat(body.path("output_config").path("effort").asText()).isEqualTo("high");
+        // 无 reasoning ⇒ active marker 仍 high；顶层 output_config 固定 low
+        // （#1 新锚点：它属于缓存前缀，组织可封顶 effort）。
+        assertThat(activeMarker.path("output_config").path("effort").asText()).isEqualTo("high");
+        assertThat(body.path("output_config").path("effort").asText()).isEqualTo("low");
     }
 
     /** active effort 跟随当前级别（fable-5-1 目录无映射 ⇒ low 原样）。 */
@@ -132,6 +132,7 @@ class AnthropicEffortMarkerWireTest {
         assertThat(activeMarker.path("output_config").path("effort").asText())
             .isEqualTo("high");
         assertThat(activeMarker.path("cache_control").isMissingNode()).isTrue();
+        assertThat(body.path("output_config").path("effort").asText()).isEqualTo("low");
         // 末条 user（marker 前一条）末块吃断点。
         var lastUser = messages.get(messages.size() - 2);
         var lastBlock = lastUser.get("content").get(lastUser.get("content").size() - 1);

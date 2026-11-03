@@ -61,31 +61,35 @@ final class AnthropicToolWire {
      * —— 占位符**不挂**（pi 对它们另调一次不带 {@code cacheControl} 的 {@code convertTools}），
      * 这样缓存前缀跨工具变更完整（探针 P7/P10 实测）。</p>
      */
-    static void addTools(MessageCreateParams.Builder builder,
-                         com.pijava.ai.api.TranscriptContext transcript,
-                         List<ToolDefinition> initialTools, boolean nativeToolChanges,
-                         CacheControlEphemeral toolCacheControl,
-                         boolean supportsStrictTools,
-                         boolean eagerToolInputStreaming,
-                         boolean oauth) {
+    static boolean addTools(MessageCreateParams.Builder builder,
+                            com.pijava.ai.api.TranscriptContext transcript,
+                            List<ToolDefinition> initialTools, boolean nativeToolChanges,
+                            CacheControlEphemeral toolCacheControl,
+                            boolean supportsStrictTools,
+                            boolean eagerToolInputStreaming,
+                            boolean oauth, boolean disablePreferredStrictTools) {
+        boolean hasPreferredStrictTools = false;
         if (!nativeToolChanges) {
             var tools = Transcripts.getCurrentTools(transcript.messages());
             for (int i = 0; i < tools.size(); i++) {
-                builder.addTool(ToolUnion.ofTool(
-                    toAnthropicTool(tools.get(i),
-                        atLast(i, tools.size(), toolCacheControl), supportsStrictTools,
-                        eagerToolInputStreaming, oauth)));
+                var wired = toAnthropicTool(tools.get(i),
+                    atLast(i, tools.size(), toolCacheControl), supportsStrictTools,
+                    eagerToolInputStreaming, oauth, disablePreferredStrictTools);
+                builder.addTool(ToolUnion.ofTool(wired.tool()));
+                hasPreferredStrictTools |= wired.preferredStrict();
             }
-            return;
+            return hasPreferredStrictTools;
         }
         for (int i = 0; i < initialTools.size(); i++) {
-            builder.addTool(ToolUnion.ofTool(
-                toAnthropicTool(initialTools.get(i),
-                    atLast(i, initialTools.size(), toolCacheControl), supportsStrictTools,
-                    eagerToolInputStreaming, oauth)));
+            var wired = toAnthropicTool(initialTools.get(i),
+                atLast(i, initialTools.size(), toolCacheControl), supportsStrictTools,
+                eagerToolInputStreaming, oauth, disablePreferredStrictTools);
+            builder.addTool(ToolUnion.ofTool(wired.tool()));
+            hasPreferredStrictTools |= wired.preferredStrict();
         }
         // B81：占位符不经过 toClaudeCodeName（pi 里它独立于 convertTools 构造）。
         builder.addTool(ToolUnion.ofTool(deferredToolPlaceholder()));
+        return hasPreferredStrictTools;
     }
 
     /** pi {@code :1489}：只有末项拿断点。 */
@@ -105,14 +109,21 @@ final class AnthropicToolWire {
      * {@link #toAnthropicTool} 事后挂上（pi 的 {@code convertTools} 里它是**最后一个**键，
      * 且只挂末项）；内联定义**没有** {@code cache_control}（pi 的回调实参缺省第 5 参）。</p>
      */
-    private static Map<String, Object> toDefinitionJson(ToolDefinition td, boolean supportsStrictTools,
+    private static ToolDefinitionJson toDefinitionJson(ToolDefinition td,
+                                                        boolean supportsStrictTools,
                                                         boolean eagerToolInputStreaming,
-                                                        boolean oauth) {
+                                                        boolean oauth,
+                                                        boolean disablePreferredStrictTools) {
         // 批1/#101：探测遍带 Anthropic 专有谓词（minimum/format 等命中 ⇒ prefer 回落非 strict、
         // require 抛错）；strict=true 时的实际转换走无谓词通用版（pi 同形两遍，
         // anthropic-messages.ts:1586-1590）。
+        // #101（pi :1631-1634）：降级轮只跳过 **prefer** 工具，其他 strict 工具照常解析。
+        var prefer = StrictSampling.prefersJsonSchemaStrictSampling(td);
         var strict = Boolean.TRUE.equals(
-            StrictSampling.resolveStrict(td, supportsStrictTools, AnthropicStrictKeywords.PREDICATE));
+            disablePreferredStrictTools && prefer ? null
+                : StrictSampling.resolveStrict(td, supportsStrictTools,
+                    AnthropicStrictKeywords.PREDICATE));
+        var preferredStrict = strict && prefer;
         var schema = strict
             ? StrictJsonSchema.convert(td.inputSchema()) : td.inputSchema();
         var definition = new LinkedHashMap<String, Object>();
@@ -130,20 +141,34 @@ final class AnthropicToolWire {
             definition.put("strict", true);
         }
         definition.put("input_schema", schema);
-        return definition;
+        return new ToolDefinitionJson(definition, preferredStrict);
     }
+
+    /** 定义 JSON ＋ 它是否算「prefer 且实际 strict」（pi {@code hasPreferredStrictTools} 的分子）。 */
+    private record ToolDefinitionJson(Map<String, Object> definition, boolean preferredStrict) {}
+
+    /** SDK 工具 ＋ 同一分子（顶层表与内联 {@code tool_addition} 共用）。 */
+    private record WiredTool(Tool tool, boolean preferredStrict) {}
+
+    /** 内联块 ＋ 同一分子（{@code tool_addition} 在消息侧上报给 buildParams）。 */
+    record WiredBlock(ContentBlockParam block, boolean preferredStrict) {}
 
     /**
      * 工具定义 → Anthropic 的 SDK {@link Tool}；{@code cacheControl} 非空时挂断点
      * （pi {@code :1611} —— 只有**末项**拿得到，由 {@link #atLast} 决定）。
      */
-    private static Tool toAnthropicTool(ToolDefinition td, CacheControlEphemeral cacheControl,
-                                        boolean supportsStrictTools,
-                                        boolean eagerToolInputStreaming,
-                                        boolean oauth) {
-        var tool = rawTool(toDefinitionJson(td, supportsStrictTools,
-            eagerToolInputStreaming, oauth));
-        return cacheControl == null ? tool : tool.toBuilder().cacheControl(cacheControl).build();
+    private static WiredTool toAnthropicTool(ToolDefinition td, CacheControlEphemeral cacheControl,
+                                             boolean supportsStrictTools,
+                                             boolean eagerToolInputStreaming,
+                                             boolean oauth,
+                                             boolean disablePreferredStrictTools) {
+        var definition = toDefinitionJson(td, supportsStrictTools,
+            eagerToolInputStreaming, oauth, disablePreferredStrictTools);
+        var tool = rawTool(definition.definition());
+        if (cacheControl != null) {
+            tool = tool.toBuilder().cacheControl(cacheControl).build();
+        }
+        return new WiredTool(tool, definition.preferredStrict());
     }
 
     /**
@@ -209,18 +234,20 @@ final class AnthropicToolWire {
      * （strict／eager／input_schema 三项全走），但**不带** {@code cache_control}
      * （pi 的回调实参缺省第 5 参）。见 {@link #toDefinitionJson}。</p>
      */
-    static ContentBlockParam toolDefinitionBlock(ToolDefinition td,
-                                                 boolean supportsStrictTools,
-                                                 boolean eagerToolInputStreaming,
-                                                 boolean oauth) {
+    static WiredBlock toolDefinitionBlock(ToolDefinition td,
+                                          boolean supportsStrictTools,
+                                          boolean eagerToolInputStreaming,
+                                          boolean oauth,
+                                          boolean disablePreferredStrictTools) {
+        var definition = toDefinitionJson(td, supportsStrictTools,
+            eagerToolInputStreaming, oauth, disablePreferredStrictTools);
         var tool = new LinkedHashMap<String, Object>();
         tool.put("type", "tool_definition");
-        tool.put("definition", toDefinitionJson(td, supportsStrictTools,
-            eagerToolInputStreaming, oauth));
+        tool.put("definition", definition.definition());
         var block = new LinkedHashMap<String, Object>();
         block.put("type", "tool_addition");
         block.put("tool", tool);
-        return rawContentBlock(block);
+        return new WiredBlock(rawContentBlock(block), definition.preferredStrict());
     }
 
     /**

@@ -36,6 +36,9 @@ final class RecordingHttpServer implements AutoCloseable {
 
     private final HttpServer server;
     private final AtomicReference<String> body = new AtomicReference<>("");
+    /** 每次请求的原始 body（按请求顺序；#101 的两轮请求各自可读）。 */
+    private final java.util.List<String> bodies =
+            java.util.Collections.synchronizedList(new java.util.ArrayList<>());
     private final AtomicReference<Map<String, String>> headers = new AtomicReference<>(Map.of());
     private final AtomicInteger requestCount = new AtomicInteger();
     private final ConcurrentLinkedQueue<Response> scripted = new ConcurrentLinkedQueue<>();
@@ -57,6 +60,11 @@ final class RecordingHttpServer implements AutoCloseable {
         return requestCount.get();
     }
 
+    /** 每次请求的 body（#101 观测两轮请求的字面差异）。 */
+    java.util.List<String> bodies() {
+        return java.util.List.copyOf(bodies);
+    }
+
     private void handle(HttpExchange exchange) throws IOException {
         // 请求头也录下来（凭证形态的观测面：Authorization ／ x-api-key ／ 身份头）。
         var captured = new LinkedHashMap<String, String>();
@@ -69,6 +77,7 @@ final class RecordingHttpServer implements AutoCloseable {
             // 6 个 ASCII 字符；若写成裸代理字节，UTF-8 解码会得到 U+FFFD。两种形态
             // 断言都要拒（见 原 docs/43 §10 的实测记录）。
             body.set(out.toString(StandardCharsets.UTF_8));
+            bodies.add(body.get());
         }
         requestCount.incrementAndGet();
 

@@ -16,6 +16,16 @@ public final class StrictSampling {
     private StrictSampling() {}
 
     /**
+     * #101（pi {@code constrained-sampling.ts:141-147}）：{@code constrainedSampling} 是
+     * {@code json_schema} 且 {@code strict:"prefer"}。只有这类工具允许运行时 400 一次性降级；
+     * {@code require} 与未声明 strict 的工具不得降级。
+     */
+    public static boolean prefersJsonSchemaStrictSampling(ToolDefinition tool) {
+        return tool.constrainedSampling() instanceof JsonSchemaSampling(StrictMode strict)
+            && strict == StrictMode.PREFER;
+    }
+
+    /**
      * Resolve whether the tool goes strict on this lane（通用子集，无 provider 专有谓词）。
      *
      * @param supportsStrictMode whether the lane/model supports strict tools

@@ -231,24 +231,42 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
                     request.transcript(), requestCompat).messages())
             : java.util.List.<com.pijava.ai.api.ToolDefinition>of();
         try {
-            var params = buildParams(request, affinitySessionId(), baseUrl,
-                effectiveHeaderNames, oauth);
-            // docs/17（pi :639-643 逐字）：载荷构建后、HTTP 前；非 null 返回 ⇒ 替换。
-            if (payloadHook != null) {
-                var next = payloadHook.onPayload(params, request.model());
-                if (next != null) {
-                    params = ProviderHooks.requirePayloadType(next, MessageCreateParams.class);
+            // #101（pi :649-689）：请求获取循环。只有「prefer 工具＋尚未开始流＋400＋
+            // invalid_request_error＋工具上限文案」才把该轮改为非 strict 重试一次。
+            // #101（pi :692）：start 移到请求成功之后 —— 失败路径只发 StreamError。
+            com.anthropic.core.http.HttpResponseFor<StreamResponse<RawMessageStreamEvent>>
+                rawResponse = null;
+            boolean disablePreferredStrictTools = false;
+            for (;;) {
+                var built = buildParams(request, affinitySessionId(), baseUrl,
+                    effectiveHeaderNames, oauth, disablePreferredStrictTools);
+                var params = built.params();
+                // docs/17（pi :639-643 逐字）：载荷构建后、HTTP 前；非 null 返回 ⇒ 替换。
+                if (payloadHook != null) {
+                    var next = payloadHook.onPayload(params, request.model());
+                    if (next != null) {
+                        params = ProviderHooks.requirePayloadType(next, MessageCreateParams.class);
+                    }
+                }
+                final var finalParams = params; // 替换臂后 lambda 捕获需要 effectively final
+                try {
+                    rawResponse = ProviderRetry.retry(
+                        () -> client.withRawResponse().messages().createStreaming(finalParams),
+                        ProviderRetry::ofAnthropic, providerRetry);
+                    break;
+                } catch (com.anthropic.errors.AnthropicServiceException error) {
+                    if (!shouldFallbackToNonStrict(error, built.hasPreferredStrictTools(),
+                            disablePreferredStrictTools)) {
+                        throw error;
+                    }
+                    disablePreferredStrictTools = true;
+                    builder.appendDiagnostic(
+                        AnthropicStrictFallback.diagnostic(error.getMessage()));
                 }
             }
             publisher.submit(builder.emitStart());
-
-            // A-14（R7）：只包初始请求获取；每次重试是全新 SDK 请求。
             // docs/17（pi :652-657）：withRawResponse 拿到 status/headers（pi .asResponse()
             // 对位）；成功获取后、流消费前 fire onResponse——重试耗尽在 retry 内抛 ⇒ 不发。
-            final var finalParams = params; // 替换臂后 lambda 捕获需要 effectively final
-            var rawResponse = ProviderRetry.retry(
-                    () -> client.withRawResponse().messages().createStreaming(finalParams),
-                    ProviderRetry::ofAnthropic, providerRetry);
             if (responseHook != null) {
                 responseHook.onResponse(rawResponse.statusCode(),
                     ProviderHooks.flattenHeaders(rawResponse.headers().names(),
@@ -307,12 +325,39 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
                                              String baseUrl,
                                              java.util.Set<String> headerNames,
                                              boolean oauth) {
+        return buildParams(request, affinitySessionId, baseUrl, headerNames, oauth, false)
+            .params();
+    }
+
+    private AnthropicRequestBuilder.BuiltParams buildParams(StreamRequest request,
+                                                             String affinitySessionId,
+                                                             String baseUrl,
+                                                             java.util.Set<String> headerNames,
+                                                             boolean oauth,
+                                                             boolean disablePreferredStrictTools) {
         // 包 A-01：断点规格在这里解析一次（三源的合并：请求期选项 ?? 环境变量 ?? "short"），
         // 随后由 AnthropicRequestBuilder 翻成 SDK 形状并挂到三处落点上。
         return AnthropicRequestBuilder.buildParams(request,
             CompatResolver.anthropicCacheControl(request.model(), cacheRetention,
                 System.getenv(CACHE_RETENTION_ENV)),
-            affinitySessionId, baseUrl, headerNames, oauth);
+            affinitySessionId, baseUrl, headerNames, oauth, disablePreferredStrictTools);
+    }
+
+    /**
+     * #101（pi :671-680）：降级的六条件。用 {@code Thread.currentThread().isInterrupted()}
+     * 对位 pi 的 {@code options.signal?.aborted}（车道层无可传信号，宿主层承担中断）。
+     */
+    private static boolean shouldFallbackToNonStrict(
+            com.anthropic.errors.AnthropicServiceException error,
+            boolean hasPreferredStrictTools, boolean disablePreferredStrictTools) {
+        return !Thread.currentThread().isInterrupted()
+            && !disablePreferredStrictTools
+            && hasPreferredStrictTools
+            && error.statusCode() == 400
+            && error.errorType()
+                .filter(type -> type == com.anthropic.models.ErrorType.INVALID_REQUEST_ERROR)
+                .isPresent()
+            && AnthropicStrictFallback.isStrictToolLimitErrorMessage(error.getMessage());
     }
 
     /**
@@ -327,7 +372,8 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
             return null;
         }
         var compat = CompatResolver.forAnthropic(request.model(), baseUrl);
-        if (!Boolean.TRUE.equals(compat.supportsMidConvoEffort())) {
+        if (!Boolean.TRUE.equals(compat.supportsMidConvoEffort())
+                || AnthropicThinking.thinkingDisabled(request.model(), request.reasoning())) {
             return null;
         }
         return AnthropicThinking.activeEffort(request.model(), request.reasoning());

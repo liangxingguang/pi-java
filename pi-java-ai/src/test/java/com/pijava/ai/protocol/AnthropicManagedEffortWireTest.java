@@ -37,9 +37,9 @@ class AnthropicManagedEffortWireTest {
         assertThat(model.compat().supportsMidConvoEffort()).isTrue();
     }
 
-    /** 夹具 1：managed 请求恒发 adaptive＋block_binding＋output_config.high，无 reasoning 也发。 */
+    /** 夹具 1：managed 请求恒发 adaptive＋block_binding＋output_config.low，无 reasoning 也发。 */
     @Test
-    void managedModelAlwaysSendsAdaptiveBlockBindingAndHighEffort() throws Exception {
+    void managedModelAlwaysSendsAdaptiveBlockBindingAndLowEffort() throws Exception {
         var captured = capture(managedModel(), Optional.empty(), 0.5, Map.of());
 
         var body = captured.body();
@@ -48,8 +48,8 @@ class AnthropicManagedEffortWireTest {
         assertThat(thinking.path("display").asText()).isEqualTo("summarized");
         assertThat(thinking.path("block_binding").path("prefix_mismatch_behavior").asText())
             .isEqualTo("drop_block");
-        // 顶层 output_config 恒 high（与用户当前级别无关）。
-        assertThat(body.path("output_config").path("effort").asText()).isEqualTo("high");
+        // 顶层 output_config 恒 low（与用户当前级别无关；组织可封顶 effort）。
+        assertThat(body.path("output_config").path("effort").asText()).isEqualTo("low");
         // managed 分支不吃 thinkingBudgets ⇒ 不抬 max_tokens。
         assertThat(body.has("max_tokens")).isTrue();
         // 两 beta 都在 anthropic-beta 头里。
@@ -60,15 +60,42 @@ class AnthropicManagedEffortWireTest {
         assertThat(body.has("temperature")).isFalse();
     }
 
-    /** 反直觉点：无 reasoning（thinkingEnabled=false）时 managed 体照样发（pi :1233 顶支）。 */
+    /**
+     * 夹具 2：无 reasoning，但目录把 {@code off} 标成 {@code null}（不支持显式关闭）⇒
+     * {@code thinkingDisabled} 为假，managed 体照样发（pi :1234-1241 顶支）。fable-5-1
+     * 的 {@code thinkingLevelMap.off === null} 正是这一格。
+     */
     @Test
-    void managedBodyIsSentWithoutReasoningToo() throws Exception {
+    void managedBodyIsStillSentWithoutReasoningWhenOffIsUnsupported() throws Exception {
         var captured = capture(managedModel(), Optional.empty(), -1, Map.of());
 
         assertThat(captured.body().path("thinking").path("block_binding").isMissingNode())
             .isFalse();
         assertThat(captured.body().path("output_config").path("effort").asText())
-            .isEqualTo("high");
+            .isEqualTo("low");
+    }
+
+    /**
+     * 夹具 3（#1 新锚点）：managed 且 {@code off} 可表达（按键缺席 ⇒ {@code undefined !== null}）
+     * ＋无 reasoning ⇒ {@code thinking:{type:"disabled"}}，顶层无 {@code output_config}，
+     * 请求里没有任何 effort marker，产出消息不盖章。
+     */
+    @Test
+    void managedModelWithSupportedOffDisablesThinkingAndAllEffortMarkers() throws Exception {
+        var model = BuiltinModelCatalogs.catalog("anthropic")
+            .find(ModelId.of("anthropic", "claude-opus-5")).orElseThrow();
+        var captured = capture(model, Optional.empty(), -1, Map.of());
+
+        assertThat(captured.body().path("thinking").path("type").asText())
+            .isEqualTo("disabled");
+        assertThat(captured.body().path("thinking").has("block_binding")).isFalse();
+        assertThat(captured.body().has("output_config")).isFalse();
+        // 只有请求自己的 user 消息：没有历史/队尾 marker。
+        assertThat(captured.body().path("messages")).hasSize(1);
+        var start = captured.events().stream()
+            .filter(e -> e instanceof StreamEvent.Start)
+            .map(e -> (StreamEvent.Start) e).findFirst().orElseThrow();
+        assertThat(start.partial().providerThinkingLevel()).isNull();
     }
 
     /** 夹具 13：盖章在 start 帧即在；无 reasoning ⇒ high。 */
@@ -166,6 +193,38 @@ class AnthropicManagedEffortWireTest {
 
     private record Captured(JsonNode body, String betaHeader, List<StreamEvent> events) {}
 
+    /**
+     * 最小成功 SSE —— docs/17 把 {@code emitStart} 移到请求成功之后（pi :692），
+     * 故观察 start 盖章需要一次能拿到的响应；此前默认桩恒 400 也看得到 start。
+     */
+    private static final byte[] SUCCESS_SSE = concat(
+        sse("message_start",
+            "{\"type\":\"message_start\",\"message\":{\"id\":\"m\",\"type\":\"message\","
+                + "\"role\":\"assistant\",\"content\":[],\"model\":\"claude\","
+                + "\"stop_reason\":null,\"stop_sequence\":null,"
+                + "\"usage\":{\"input_tokens\":1,\"output_tokens\":0}}}"),
+        sse("content_block_start",
+            "{\"type\":\"content_block_start\",\"index\":0,"
+                + "\"content_block\":{\"type\":\"text\",\"text\":\"\"}}"),
+        sse("content_block_stop", "{\"type\":\"content_block_stop\",\"index\":0}"),
+        sse("message_delta",
+            "{\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\","
+                + "\"stop_sequence\":null},\"usage\":{\"output_tokens\":1}}"),
+        sse("message_stop", "{\"type\":\"message_stop\"}"));
+
+    private static byte[] sse(String event, String data) {
+        return ("event: " + event + "\ndata: " + data + "\n\n")
+            .getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    }
+
+    private static byte[] concat(byte[]... parts) {
+        var out = new java.io.ByteArrayOutputStream();
+        for (byte[] part : parts) {
+            out.writeBytes(part);
+        }
+        return out.toByteArray();
+    }
+
     private static Captured capture(ModelInfo model, Optional<ThinkingLevel> reasoning,
                                      double temperature, Map<String, String> extraHeaders)
             throws Exception {
@@ -176,6 +235,8 @@ class AnthropicManagedEffortWireTest {
             extra.put("headers", extraHeaders);
         }
         try (var server = new RecordingHttpServer()) {
+            server.enqueue(new RecordingHttpServer.Response(
+                200, Map.of("Content-Type", "text/event-stream"), SUCCESS_SSE));
             var api = new AnthropicMessagesApi(
                 new ApiOptions(server.baseUrl(), "test-key",
                     java.time.Duration.ofSeconds(5), 0, extra),
@@ -188,7 +249,7 @@ class AnthropicManagedEffortWireTest {
                     events.add(iter.next());
                 }
             } catch (Exception ignored) {
-                // 桩恒回 400：请求体已录到。
+                // 请求体与事件已在流内观测到；终局异常与断言无关。
             }
             return new Captured(MAPPER.readTree(server.body()),
                 server.headers().getOrDefault("anthropic-beta", ""), events);
