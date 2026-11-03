@@ -81,7 +81,10 @@ final class PiLaneConfig {
                 sink.noteStreamEvent(event);
                 ctx.streamListener().get().accept(event);
             },
-            ctx.thinkingBudgets());
+            ctx.thinkingBudgets(),
+            // docs/14 B266：pi AgentOptions.identity 随 Config 进循环；默认合并由
+            // PiLoopRunner 统一做。
+            ctx.identity());
     }
 
     /**

@@ -13,6 +13,7 @@ import com.pijava.agent.skill.Skill;
 import com.pijava.agent.tool.AgentTool;
 import com.pijava.agent.tool.ToolContext;
 import com.pijava.agent.tool.ToolRegistry;
+import com.pijava.ai.identity.ClientIdentity;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.thinking.ModelThinkingLevel;
@@ -123,7 +124,12 @@ public record HarnessConfig(
      * {@code null} ≙ 不产出该段——SDK 默认（他们的模型不该被指向 pi-java 仓的
      * 文档，docs/42 裁决②）；生产由 coding-agent 宿主经 {@code PiJavaPaths} 供值。
      */
-    com.pijava.agent.prompt.SystemPromptOptions.DocumentationPaths documentation
+    com.pijava.agent.prompt.SystemPromptOptions.DocumentationPaths documentation,
+    /**
+     * docs/14 B266：pi {@code AgentOptions.identity}——agent loop 的请求身份，
+     * 逐字段覆盖 {@code DEFAULT_AGENT_IDENTITY}；{@code null} ≙ {@code undefined}。
+     */
+    @org.jspecify.annotations.Nullable ClientIdentity identity
 ) {
     /** Canonical constructor applying default values and defensive copies. */
     public HarnessConfig {
@@ -165,7 +171,7 @@ public record HarnessConfig(
              null, null, toolRegistry, toolContext, commandPrefix, compactionResolver,
              skills, telemetry, thinkingLevelMap, steeringMode,
              followUpMode, toolExecution, streamListener, SummaryGenerator.truncating(),
-             null, null, null, null, List.of(), "", null, null, null);
+             null, null, null, null, List.of(), "", null, null, null, null);
     }
 
     public static final class Builder {
@@ -198,6 +204,7 @@ public record HarnessConfig(
         private Supplier<List<com.pijava.agent.prompt.SystemPromptOptions.ContextFile>> contextFiles;
         private com.pijava.ai.thinking.ThinkingBudgets thinkingBudgets;
         private com.pijava.agent.prompt.SystemPromptOptions.DocumentationPaths documentation;
+        private ClientIdentity identity;
 
         public Builder streamFn(StreamFn fn) { this.streamFn = fn; return this; }
         public Builder model(ModelId<?> m) { this.model = m; return this; }
@@ -294,6 +301,11 @@ public record HarnessConfig(
             this.documentation = value; return this;
         }
 
+        /** docs/14 B266：pi {@code AgentOptions.identity}；默认 {@code null}。 */
+        public Builder identity(ClientIdentity value) {
+            this.identity = value; return this;
+        }
+
         /** Build the {@link HarnessConfig}, validating required fields. */
         public HarnessConfig build() {
             if (streamFn == null) {
@@ -312,7 +324,7 @@ public record HarnessConfig(
                                      streamListener, summaryGenerator, compactionObserver,
                                      retrySettings, retryAborted, retryObserver,
                                      promptGuidelines, appendSystemPrompt, contextFiles,
-                                     thinkingBudgets, documentation);
+                                     thinkingBudgets, documentation, identity);
         }
     }
 }

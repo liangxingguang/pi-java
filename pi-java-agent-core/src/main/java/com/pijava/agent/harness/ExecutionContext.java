@@ -76,7 +76,12 @@ record ExecutionContext(
      * 批 30（T6，B95）：pi-java 文档路径束（进 {@code docs} 段）；{@code null} ≙
      * 不产出。非 Supplier——装配期一次解析（发行根位置运行期不变）。
      */
-    com.pijava.agent.prompt.SystemPromptOptions.DocumentationPaths documentation
+    com.pijava.agent.prompt.SystemPromptOptions.DocumentationPaths documentation,
+    /**
+     * docs/14 B266：pi {@code AgentOptions.identity}（构造期固化，同 thinkingLevelMap）；
+     * {@code null} ≙ {@code undefined}。
+     */
+    com.pijava.ai.identity.ClientIdentity identity
 ) {
     /**
      * 批 30 之前的 33 参形状（{@code documentation} 默认 {@code null}——存量
@@ -122,8 +127,57 @@ record ExecutionContext(
             snapshotService, queueManager, toolExecution, streamListener, summaryGenerator,
             turnConfigApplier, telemetry, compactionObserver, retrySettings, retryAborted,
             retryObserver, promptGuidelines, appendSystemPrompt, contextFiles,
-            thinkingBudgets, promptSections, null);
+            thinkingBudgets, promptSections, null, null);
     }
+
+    /**
+     * docs/14 B266 之前的 34 参形状（{@code documentation} 已给、{@code identity}
+     * 缺席）——docs/13 批次的测试装配零改签。
+     */
+    ExecutionContext(
+        StreamFn streamFn,
+        Supplier<ModelId<?>> model,
+        Supplier<ModelThinkingLevel> thinkingLevel,
+        Supplier<String> systemPrompt,
+        Supplier<Set<AgentTool<?, ?>>> activeTools,
+        int maxInputTokens,
+        java.util.function.ToIntFunction<ModelId<?>> contextWindow,
+        java.util.function.ToIntFunction<ModelId<?>> maxOutputTokens,
+        ToolRegistry toolRegistry,
+        ToolContext toolContext,
+        SkillManager skillManager,
+        HookSystem hookSystem,
+        LaneState lane,
+        Supplier<CompactionSettings> compactionSettings,
+        ThinkingLevelMap thinkingLevelMap,
+        TokenCounter tokenCounter,
+        SnapshotService snapshotService,
+        QueueManager queueManager,
+        Supplier<ToolExecution> toolExecution,
+        Supplier<Consumer<StreamEvent>> streamListener,
+        SummaryGenerator summaryGenerator,
+        java.util.function.BiConsumer<ModelId<?>, String> turnConfigApplier,
+        TelemetryContext telemetry,
+        com.pijava.agent.compaction.CompactionObserver compactionObserver,
+        Supplier<RetrySettings> retrySettings,
+        BooleanSupplier retryAborted,
+        RetryObserver retryObserver,
+        Supplier<List<String>> promptGuidelines,
+        Supplier<String> appendSystemPrompt,
+        Supplier<List<com.pijava.agent.prompt.SystemPromptOptions.ContextFile>> contextFiles,
+        com.pijava.ai.thinking.ThinkingBudgets thinkingBudgets,
+        Supplier<java.util.Map<String, String>> promptSections,
+        com.pijava.agent.prompt.SystemPromptOptions.DocumentationPaths documentation
+    ) {
+        this(streamFn, model, thinkingLevel, systemPrompt, activeTools, maxInputTokens,
+            contextWindow, maxOutputTokens, toolRegistry, toolContext, skillManager,
+            hookSystem, lane, compactionSettings, thinkingLevelMap, tokenCounter,
+            snapshotService, queueManager, toolExecution, streamListener, summaryGenerator,
+            turnConfigApplier, telemetry, compactionObserver, retrySettings, retryAborted,
+            retryObserver, promptGuidelines, appendSystemPrompt, contextFiles,
+            thinkingBudgets, promptSections, documentation, null);
+    }
+
     ExecutionContext {
         // 与 HarnessConfig 的规范默认同置：直接构造 ExecutionContext 的装配（测试、
         // 未来的第二宿主）不许从这些槽读到 null（3d 起含 retrySettings/

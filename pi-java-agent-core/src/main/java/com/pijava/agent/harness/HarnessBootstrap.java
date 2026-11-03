@@ -133,7 +133,9 @@ abstract class HarnessBootstrap implements AutoCloseable {
             // 批 16（T3a）：自定义段晚读口（before_agent_start 写回后下一 run 生效）。
             () -> lane.promptSections,
             // 批 30（T6，B95）：docs 段路径束（null ⇒ 不产出）。
-            config.documentation());
+            config.documentation(),
+            // docs/14 B266：pi AgentOptions.identity。
+            config.identity());
         this.runLifecycle = new RunLifecycle(execCtx);
         this.piEngine = new PiLaneEngine(execCtx, runLifecycle);
     }

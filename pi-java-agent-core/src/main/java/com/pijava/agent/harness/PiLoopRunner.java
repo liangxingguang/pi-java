@@ -223,7 +223,7 @@ final class PiLoopRunner {
             config.streamFn(), config.signal(), config.steeringMessages(),
             config.followUpMessages(), config.transformContext(),
             config.prepareRequest(), config.prepareNextTurn(), config.finishTurn(),
-            config.streamListener(), config.thinkingBudgets());
+            config.streamListener(), config.thinkingBudgets(), config.identity());
     }
 
     /**
@@ -241,7 +241,7 @@ final class PiLoopRunner {
             config.streamFn(), config.signal(), config.steeringMessages(),
             config.followUpMessages(), config.transformContext(),
             config.prepareRequest(), config.prepareNextTurn(), config.finishTurn(),
-            config.streamListener(), config.thinkingBudgets());
+            config.streamListener(), config.thinkingBudgets(), config.identity());
     }
 
     private static ArrayList<Message> poll(Supplier<List<Message>> source) {
@@ -287,10 +287,14 @@ final class PiLoopRunner {
         // transformContext 只改消息（pi 的 transformContext 签名也不含 systemPrompt），
         // 系统提示与工具原样透传。
         var llmContext = new Context(context.systemPrompt(), llmMessages, context.tools());
+        // docs/14 B266（pi agent-loop.ts:411-417 对位）：agent 默认身份逐字段
+        // 合并 HarnessConfig.identity，再随请求选项交给 StreamFn。
+        var identity = com.pijava.ai.identity.ClientIdentity.merge(
+            AgentIdentity.DEFAULT, config.identity());
         var options = new StreamOptions(
             java.util.OptionalInt.empty(), java.util.OptionalDouble.empty(),
             reasoningOf(config), java.util.Optional.empty(), java.util.Optional.empty(),
-            config.thinkingBudgets());
+            config.thinkingBudgets(), identity);
 
         var signal = config.signal();
         // 进入本次拉取时信号是否**已经**中止。它区分两件事：

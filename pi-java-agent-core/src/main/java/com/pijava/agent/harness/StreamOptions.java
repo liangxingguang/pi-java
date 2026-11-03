@@ -4,6 +4,8 @@ import java.util.Optional;
 import java.util.OptionalDouble;
 import java.util.OptionalInt;
 
+import com.pijava.ai.identity.ClientIdentity;
+
 import com.pijava.ai.catalog.CacheRetention;
 import com.pijava.ai.thinking.ThinkingBudgets;
 import com.pijava.ai.thinking.ThinkingLevel;
@@ -42,6 +44,9 @@ import com.pijava.ai.thinking.ThinkingLevel;
  * @param thinkingBudgets B128：pi {@code SimpleStreamOptions.thinkingBudgets}（settings.json
  *                     四段）；{@code null} ≙ {@code undefined} ⇒ 默认表。摘要路径传
  *                     {@code null}（pi 的摘要调用不带用户 budget 表）。
+ * @param identity      docs/14 B266：pi {@code SimpleStreamOptions.identity}；agent-loop
+ *                     在构造时把 {@code DEFAULT_AGENT_IDENTITY} 与 agent 配置合并进来。
+ *                      {@code null} ≙ {@code undefined}。
  */
 public record StreamOptions(
     OptionalInt maxTokens,
@@ -49,8 +54,22 @@ public record StreamOptions(
     Optional<ThinkingLevel> reasoning,
     Optional<CacheRetention> cacheRetention,
     Optional<String> sessionId,
-    ThinkingBudgets thinkingBudgets
+    ThinkingBudgets thinkingBudgets,
+    @org.jspecify.annotations.Nullable ClientIdentity identity
 ) {
+    /**
+     * 六参便捷构造（B128 的**规范**构造）：{@code identity} 缺席 ≙ pi 的
+     * {@code undefined}。保留该形态使 B266 之前的构造点**零改签**。
+     */
+    public StreamOptions(OptionalInt maxTokens,
+                         OptionalDouble temperature,
+                         Optional<ThinkingLevel> reasoning,
+                         Optional<CacheRetention> cacheRetention,
+                         Optional<String> sessionId,
+                         ThinkingBudgets thinkingBudgets) {
+        this(maxTokens, temperature, reasoning, cacheRetention, sessionId, thinkingBudgets, null);
+    }
+
     /**
      * 五参便捷构造（B128 之前的**规范**构造）：{@code thinkingBudgets} 缺席 ≙ pi 的
      * {@code undefined}。保留该形态使 B128 之前的构造点**零改签**。
@@ -82,6 +101,12 @@ public record StreamOptions(
                          OptionalDouble temperature,
                          Optional<ThinkingLevel> reasoning) {
         this(maxTokens, temperature, reasoning, Optional.empty(), Optional.empty(), null);
+    }
+
+    /** Rebuild with a request identity（其余组件保真）。 */
+    public StreamOptions withIdentity(com.pijava.ai.identity.ClientIdentity newIdentity) {
+        return new StreamOptions(maxTokens, temperature, reasoning, cacheRetention,
+            sessionId, thinkingBudgets, newIdentity);
     }
 
     /** Default options: no max tokens, no temperature, no thinking, default cache retention. */

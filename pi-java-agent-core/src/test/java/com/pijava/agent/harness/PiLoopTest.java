@@ -158,6 +158,13 @@ class PiLoopTest {
     private static PiLoop.Config config(StreamFn streamFn, PiLoop.ToolRunner tools,
                                         java.util.function.Supplier<List<Message>> followUp,
                                         PiLoop.FinishTurnHook finishTurn) {
+        return config(streamFn, tools, followUp, finishTurn, null);
+    }
+
+    private static PiLoop.Config config(StreamFn streamFn, PiLoop.ToolRunner tools,
+                                        java.util.function.Supplier<List<Message>> followUp,
+                                        PiLoop.FinishTurnHook finishTurn,
+                                        com.pijava.ai.identity.ClientIdentity identity) {
         return new PiLoop.Config(
             ModelId.of("faux", "test-model"),
             ModelThinkingLevel.off(),
@@ -173,7 +180,8 @@ class PiLoopTest {
             null,
             finishTurn,
             null,
-            null);
+            null,
+            identity);
     }
 
     private static Message user(String text) {
@@ -181,6 +189,28 @@ class PiLoopTest {
     }
 
     // ── 用例 ───────────────────────────────────────────────────────
+
+    @Test
+    void mergesAgentIdentityIntoRequestOptions() {
+        var captured = new java.util.concurrent.atomic.AtomicReference<StreamOptions>();
+        var base = scripted(List.of(textTurn("hello")));
+        StreamFn capture = (model, context, options) -> {
+            captured.set(options);
+            return base.stream(model, context, options);
+        };
+        var configured = new com.pijava.ai.identity.ClientIdentity(
+            com.pijava.ai.identity.UserAgentMode.SHORT, null, "1.0.0");
+        var rec = new Recorder();
+
+        PiLoop.run(List.of(user("hi")), Context.of(new ArrayList<>()),
+            config(capture, null, null, null, configured), rec);
+
+        assertThat(captured.get().identity()).isEqualTo(
+            new com.pijava.ai.identity.ClientIdentity(
+                com.pijava.ai.identity.UserAgentMode.SHORT,
+                com.pijava.ai.identity.AttributionSetting.of(
+                    com.pijava.ai.identity.ClientAttribution.PI), "1.0.0"));
+    }
 
     @Test
     void singleTextTurnMatchesPiSequence() {

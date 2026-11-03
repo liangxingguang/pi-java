@@ -7,6 +7,7 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 import com.pijava.ai.AbortSignal;
+import com.pijava.ai.identity.ClientIdentity;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.stream.StreamEvent;
@@ -352,7 +353,29 @@ public final class PiLoop {
             FinishTurnHook finishTurn,
             Consumer<StreamEvent> streamListener,
             /** B128：pi {@code AgentLoopConfig.thinkingBudgets}；null ≙ {@code undefined}。 */
-            com.pijava.ai.thinking.ThinkingBudgets thinkingBudgets) {}
+            com.pijava.ai.thinking.ThinkingBudgets thinkingBudgets,
+            /** docs/14 B266：pi {@code AgentLoopConfig.identity}；null ≙ {@code undefined}。 */
+            @org.jspecify.annotations.Nullable ClientIdentity identity) {
+
+        /**
+         * 十五参便利构造（B266 之前的**规范**构造）：{@code identity} 缺席 ≙
+         * pi 的 {@code undefined}。保留该形态使既有夹具零改签。
+         */
+        public Config(ModelId<?> model, ModelThinkingLevel thinking,
+                      ThinkingLevelMap thinkingLevelMap, ToolExecution toolExecution,
+                      ToolRunner toolRunner, StreamFn streamFn, AbortSignal signal,
+                      Supplier<List<Message>> steeringMessages,
+                      Supplier<List<Message>> followUpMessages,
+                      ContextTransform transformContext, PrepareRequestHook prepareRequest,
+                      NextTurnHook prepareNextTurn, FinishTurnHook finishTurn,
+                      Consumer<StreamEvent> streamListener,
+                      com.pijava.ai.thinking.ThinkingBudgets thinkingBudgets) {
+            this(model, thinking, thinkingLevelMap, toolExecution, toolRunner, streamFn,
+                signal, steeringMessages, followUpMessages, transformContext,
+                prepareRequest, prepareNextTurn, finishTurn, streamListener,
+                thinkingBudgets, null);
+        }
+    }
 
     private PiLoop() {}
 
