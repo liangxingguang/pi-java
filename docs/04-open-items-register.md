@@ -27,6 +27,16 @@ Chord plugin 已按 R5 决定不做，不再是待拍板项。
 | 编号 | 当前结论 | 所属层 |
 |---|---|---|
 | B267 | usage／billing 已按 docs/15 闭环；15 个存疑行已按 docs/16 裁决并闭环；Provider wire 已按 docs/17 闭环；retry/overflow 已按 docs/18 闭环；OAuth/device/env 与 pi-ai CLI 权限已按 docs/19 闭环；Faux／deferred 余量已按 docs/20 闭环（2026-11-04）。B267 全闭环，L1 账面 232/232＝100%。 | L1 AI |
+| B268 | 模板命令引号空参数＋JS 空白集合已于 2026-11-05 按 docs/23（W1）实施并闭环：`parseCommandArgs` 加 `hasToken`，`""`／`''` 保留为空参数；空白改用 JS `/\s/` 精确集合（含 U+FEFF，不含 U+0085），命令正则共用。 | L3 agent-core |
+| B269 | 技能路径 Windows 大小写比较键于 2026-11-05 按 docs/23（W2）复核闭环：Java `WindowsPath` 的 `equals`／`startsWith` 本就大小写不敏感且按段比较，`toRealPath` 返回真实大小写，与 pi `getPathComparisonKey`／`isPathWithin` 等价；**无代码改动**，Windows 回归测试锁定。 | L3 agent-core |
+| B270 | grep 孤立 CR 行切分已于 2026-11-05 按 docs/23（W3）实施并闭环：`fileLines` 只做 CRLF→LF，孤立 CR 留在行内；`--no-config` 契约由纯 Java 引擎天然成立。 | L3 agent-core |
+| B271 | 恢复会话 active tools 按 docs/08 §5 归 L4（#77 转出，权重 0）：`usesDefaultTools` 门、分支全部 system 消息并集、`toolsAdded`／`toolsRemoved`、晚注册扩展工具、`+name/-name`。 | L4 session |
+| B272 | compaction 摘要语义归 L4（#24 转出，权重 0）：去掉固定输出上限、thinking 不进 `serializeConversation`、split-turn 应用 `/compact` 指令、summary auth 由 stream fn 解析、branch summary `thinkingLevel`。 | L4 session |
+| B273 | 恢复省略成对归 L4：`_prepareRetry` 按 toolCallId 在投影中找工具结果并一起省略；java 溢出压缩路已配对，auto-retry 路（`persistRetryOmission`）仍只省助手。 | L4 session |
+| B274 | 会话持久化细节归 L4：`pathsEqual`（session-manager 四处）、append 失败回滚内存、fork 单 fd 写；可与 W2 的路径比较判据复用。 | L4 session |
+| B275 | run 启动重构归 L5：`_startRun`／`_prepareRun`、启动即 busy、`before_agent_start` 期间 abort 在 `agent_start` 生效、flush 次序、settled 延迟动作；`before_agent_start` 的 user／custom 联合。 | L5 coding-agent |
+| B276 | 扩展工具投影归 L5：`getAllTools()` 透传 `reachesTools`；active tools 重设同名集合时保持原顺序。 | L5 coding-agent |
+| B277 | 其余 L5 新锚面：`sessionShareDestination`／`extensionChangelogVersions`、classifier compat、exec、package-manager、model-resolver、export-html、KeybindingHints／`blocked`。 | L5 coding-agent |
 | B116 | 对外 JSON 的 usage 已改为 pi 扁平形状；Java 内部 `StreamDone` 仍保留嵌套方言，AI 重测时决定是否继续保留。 | L1 AI |
 | B156 | `ModelCompat` 逐组件重建存在漏字段风险；新增组件时必须同时检查构造点和 `withPartial` 类重建点。 | L1 AI |
 | B259 | RPC `cycle_thinking_level` 对不支持 thinking 的模型仍返级别；`get_available_thinking_levels` 也未按模型能力过滤。pi 对应结果为 `null` 或可用子集。 | L5 coding-agent |
@@ -58,6 +68,8 @@ B267 第六批 Faux 可编程核心与 deferred（#80）已于 2026-11-04 按 do
 L2 MCP 新锚点重测与对齐（W1–W12）已于 2026-11-04 按 docs/21 实施并闭环：`structuredContent` 改为任意 JSON（含数组/`null`）；`reachesTools` 工具合约与命名空间别名；连接期不再枚举资源（`hasResources` 取 capability）；OAuth `clientRegistration` 三值决策树与 `--oauth-client-registration`；`mcp login/logout -l` 与拼错建议；`mcp.json` BOM 剥离、pi 键序与 `JSON.stringify` 数字；in-memory transport 发布面；每工具 outputSchema 的 `$ref` 重定位；transport send signal；本地真授权服务器端到端夹具。MCP 账面 **126.0/131＝96.18%**（对齐 81／存疑 10／缺失 0；未加权 81/91＝89.0%）；B181/B184/B194/B196/B202/B217 销号。
 
 L2 MCP 视口捕获收尾与跨层口径裁决已于 2026-11-04 按 docs/22 实施并闭环：`ExtensionComponent` 增加 `capturesViewportInput()`（默认 false）；`/mcp` 菜单非空时接管视口键，PageUp/PageDown 按可见页（`min(条目数, 12)`）移动选中；`tui.select.pageUp/pageDown` 只进 overlay 键位表；`ExtensionComponentOverlay` 透传属性、路由不改。用户裁决其余 9 条不属 MCP 层，从 MCP 分母转出（map/07 权重 0，行与证据保留）。MCP 账面 **122.0/122＝100%**（对齐 82／存疑 0／缺失 0；未加权 82/82；9 条转出）；D217 销号。
+
+L3 agent-core 新锚点重测与对齐已于 2026-11-05 按 docs/23 实施并闭环：90 个计分单元逐行重测后仅 3 行改判——W1 模板命令引号空参数＋JS `/\s/`、W3 grep 孤立 CR 行切分（实施），W2 技能路径比较键（复核后无改动，Java `WindowsPath` 语义已等价）；identity／`reachesTools`／AI 新类型适配经 docs/14／docs/21／B264 复核为对齐；#77（会话恢复）与 #24（branch summary）按层归属转出 L4（权重 0，行与证据保留）；#68 `streamProxy` 维持 R5。agent-core 账面 **177/177＝100%**（88 计分＋2 转出；对齐 88／存疑 0／缺失 0；未加权 88/88）。B268／B269／B270 随本包闭环；B271–B277 挂所属层。
 
 ## 3. MCP 开放项与复核项
 

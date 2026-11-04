@@ -1,11 +1,12 @@
 # 03 Agent 运行时核心（pi-java-agent-core）
 
-> 【背景摘要】本图保留 agent-core 旧基线的最终能力判定、权重与两侧证据。旧基线 90 个计分单元全部对齐；新目标锚点仍需全量重测。开放项见 docs/04，执行顺序见 docs/06。
+> 【背景摘要】本图保留 agent-core 的能力判定、权重与两侧证据。L3 已按新锚点 `56cae7823` 全量重测并闭环（docs/23，W1–W3）：88 个计分单元＋2 个转出（#77／#24 归 L4），全部对齐；账面 **177/177＝100%**。开放项见 docs/04，执行顺序见 docs/06。
 
 ## 基准
 
-- pi @ **`ea448f454`**（2026-10-11）；pi-java @ **`edc8749d`**（main，2026-10-11）。
-- 所有 pi 侧 `file:line` 均由 `git -C D:/workplaceForai/pi show ea448f454:<path>` 实读，**未读工作树**。
+- pi @ **`56cae782341c339d3bb820081f0f9425d8c5b1ec`**（L3 重测，docs/23）；pi-java @ **`14be51a9`**（main，2026-11-05）。
+- 所有 pi 侧 `file:line` 均由 `git -C D:/workplaceForai/pi show 56cae7823:<path>` 实读，**未读工作树**。
+- 旧基线读数（`ea448f454` / pi-java `edc8749d`）：90 行、Σ权重 180、180/180＝100%。
 
 ---
 
@@ -77,7 +78,7 @@ pi 工具定义现在**只有一处**：`packages/coding-agent/src/core/tools/`�
 | 2 | `read` | ✅ | ✅ | **对齐** | **3** | pi `{path, offset?, limit?}`（`core/tools/read.ts:15-17`）；java 同（`ReadTool.java:31`）。图片经批 9 缩放管线（`ReadTool.java` readImage：归一/转换/省略/非视觉注记，vs pi `core/tools/read.ts:88-153`） |
 | 3 | `write` | ✅ | ✅ | **对齐** | **3** | pi `{path, content}`（`core/tools/write.ts`）；java 同（`WriteTool.java:31`）＋ 同形状 `FileMutationQueue`（`WriteTool.java:29`） |
 | 4 | `edit` | ✅ | ✅ | **对齐** | **3** | pi `{path, edits:[{oldText,newText}]}`（`core/tools/edit.ts`）；java 同（`EditTool.java:39`） |
-| 5 | `grep` | ✅ | ✅ | **对齐** | **3** | pi 七参＋gitignore＋默认 100 匹配/50KB＋500 字行截＋`path:N:`/`path-N-` 两形＋告示序（`core/tools/grep.ts:22-32,78,86-318`）。java **批 3** 逐字：`GrepTool.java` 纯 Java 引擎（**裁决①**：不移植 rg 外壳/tools-manager 下载子系统）＋`ToolIgnoreFilter`（JGit 全语义，含 `**/` 零段 glob 翻译器）；窄差 D1–D3/D8 |
+| 5 | `grep` | ✅ | ✅ | **对齐** | **3** | pi 七参＋gitignore＋默认 100 匹配/50KB＋500 字行截＋`path:N:`/`path-N-` 两形＋告示序（`core/tools/grep.ts:22-32,78,86-318`）。java **批 3** 逐字：`GrepTool.java` 纯 Java 引擎（**裁决①**：不移植 rg 外壳/tools-manager 下载子系统）＋`ToolIgnoreFilter`（JGit 全语义，含 `**/` 零段 glob 翻译器）；窄差 D1–D3/D8。新锚 `core/tools/grep.ts:148-166`：`getFileLines` 只做 `\r\n→\n`，孤立 CR 留在行内（W3 已对齐）；`--no-config` 契约由纯 Java 引擎天然成立 |
 | 6 | `find` | ✅ | ✅（批 3 自 `glob` 改名） | **对齐** | **2** | pi `{pattern, path?, limit?}` 默认 1000，fd 语义：basename vs `--full-path`＋`**/` 前缀适配、目录入选、gitignore、`No files found matching pattern`（`core/tools/find.ts:26-41,201-213,261-299`）。java **批 3**：`FindTool.java`（full-path 模式对**绝对候选路径**匹配——java `**` 不吃零段，fd 本就匹配绝对路径）＋`ToolSetFactory` 注册序对齐 `createAllTools`；窄差 D5/D8 |
 | 7 | `ls` | ✅ | ✅ | **对齐** | **2** | pi `{path?, limit?}` 默认 500、裸名大小写不敏感排序＋`/` 目录后缀＋dotfiles＋三错误文本＋`(empty directory)`（`core/tools/ls.ts:11-15,62,86-172`）。java **批 3** 参数集换血（`LsTool.java`：`recursive`→`limit`，`[DIR]/[FILE]`＋size 列全删）；窄差 D4 |
 | 8 | `powershell` | ✅ | ✅ | **对齐** | **1** | pi `core/tools/powershell.ts`，工具名进 `allToolNames`（`core/tools/index.ts:96-104`）。java **批 4（2026-10-18，docs/09）**：`PowerShellTool.java` 六面逐字（UTF8 前缀/包装命令/pwsh→powershell 解析/门禁错文）＋`PowerShellShellExecutor`＋进 `createAllTools`（8 件）；**默认不激活**（pi `DEFAULT_TOOL_NAMES` 恒四件同形），激活面随 **B236**（裁决③，docs/09 §13.3）——~~B243~~ 销号 |
@@ -127,7 +128,7 @@ pi 侧证据锚定 `agent/src/*` 或 `coding-agent/src/core/*`。
 | 21 | `getLastAssistantUsage` | C | **对齐** | **2** | `core/compaction/compaction.ts:166` | `ContextUsageEstimator.java:87`（`assistantUsageOf`） | —— |
 | 22 | `findCutPoint` / `findTurnStartIndex` | C | **对齐** | **2** | `core/compaction/compaction.ts:446,412` | `CompactionService.java:211,268-269`（调用 `:83`） | —— |
 | 23 | 输出截断（2000 行 / 头/尾两种） | C | **对齐** | **3** | pi `core/tools/truncate.ts:11-12` = **2000 行 / 50KB（51,200）**；read 描述 `core/tools/read.ts:96` | `TruncationUtils.java:18` = 2000 行 / **51,200**；BashTool/ReadTool 描述与四处注记全由常量现算，`BashUpdateEmitter` 快照同值（夹具钉两口径合一） | ~~B158~~ 销号（2026-10-17 批 agent-core-1） |
-| 24 | **branch summary 生成** | C | **对齐** | **1** | `core/compaction/branch-summarization.ts:108,195`（`collectEntriesForBranchSummary`/`prepareBranchEntries`） | `BranchSummarization.java`（coding-agent/compaction，批 4）：公共祖先回溯收集、两遍扫（非 fromHook details 先累计＋新到旧预算装填＋摘要 0.9× 破格）、三态 Outcome、PREAMBLE/PROMPT 逐字、文件清单与压缩共用 `FileOperationLists` | ~~B1~~ 销号（2026-10-18 批 4） |
+| 24 | **branch summary 生成** | C | **转出（L4）** | 0 | 新锚 `core/compaction/branch-summarization.ts:302-360`：摘要请求携带 `thinkingLevel`（`269afc66a`）。按 docs/08 §5 归 L4，登记 **B272** | 旧证据：`core/compaction/branch-summarization.ts:108,195`；`BranchSummarization.java`（批 4）：公共祖先回溯、两遍扫、三态 Outcome、PREAMBLE/PROMPT 逐字 | 旧判对齐（批 4，~~B1~~ 销号）；转出后权重 0，不进分母 |
 | 25 | **会话树导航 `navigateTree`** | L | **对齐** | **1** | `core/agent-session.ts:3964-4156` | `AgentSession.navigateTree`（批 4）：双门错文逐字、目标=叶不动、user/custom 目标 叶=父＋editorText 回填、branchWithSummary/resetLeaf/moveLane 三分支、label 张贴、`replaceTranscript` 整体换上下文（pi `_refreshFinalizedContext`）；tree 扩展事件＋TUI 摘要流挂 **B245** | ~~B1 同族~~ 销号（2026-10-18 批 4） |
 | 26 | **per-model 压缩设置** | C | **对齐** | **3** | `core/settings-manager.ts:831-866`（`modelOverrides`，`getCompactionSettings(model)`） | `AgentSession.java:420`（`compactionResolver`）；`AgentHarness.java:136-140` 按车道当前模型现解析 | —— |
 | 27 | **branch summary 设置**（`reserveTokens`/`skipPrompt`） | C | **对齐** | **1** | `core/settings-manager.ts:867-875`（`getBranchSummarySettings`） | `Settings.BranchSummary` record＋`SettingsAccessors.getBranchSummaryReserveTokens`（16384）/`.SkipPrompt`（false）（批 4）；skipPrompt 弹窗门随 B245 | ~~B1 同族~~ 销号（2026-10-18 批 4） |
@@ -166,8 +167,8 @@ pi 侧证据锚定 `agent/src/*` 或 `coding-agent/src/core/*`。
 | 60 | ~~`PendingEntry` / `InboxItem` ⇒ 队列契约~~ | N | **作废（R1）** | 0 | 现锚点全仓零命中——Pico 实验 harness 类型，随 pi `7fd478a2e`（remove the experimental harness）整包删除 | `QueueManager.java`（队列契约以 pi `PendingMessageQueue` 为参照，#14 已核齐） | 见作废清单（2026-10-18 批 5，docs/10 §13） |
 | 61 | **`formatSkillsForSystemPrompt`** | P | **对齐** | **2** | `core/skills.ts:358`（`formatSkillsForPrompt`）；调用 `core/system-prompt.ts:180` | `SkillsPrompt.java:30-58`（三行指引 + XML 逐字） | 已闭环 |
 | 62 | **技能调用展开（`/skill:` → `<skill>` 块）** | P | **对齐** | **2** | 主流无独立函数（harness 旧 `formatSkillInvocation` 已随删）；现行为内联在 `core/agent-session.ts:2149-2162`（`_expandSkillCommand`：读 SKILL.md、剥 frontmatter、组 `<skill name location>…</skill>`） | `SkillCommandExpansion.java`（批 4，裁决④按内联形状落地不复活旧函数名）＋`AgentSession` processPrompt/steer/followUp 三接线＋`MarkdownSkill.filePath`；`skill:` slash 命令注册挂 **B244** | —— |
-| 63 | `loadSkills` / `loadSourcedSkills` | P | **对齐** | **2** | `core/skills.ts:414,168`（`loadSkillsFromDir`） | `SkillDiscovery`（批 4，归属维持 coding-agent——裁决②与 pi 同构）：同名先到赢（pi 序）＋realPath 去重＋来源推断＋collision/警告诊断；`LoadSkillsResult` 面 | —— |
-| 64 | `loadPromptTemplates` 等四函数 | P | **对齐** | **2** | `core/prompt-templates.ts:222,304` | `PromptTemplates.java`（批 4，归属同裁决②）：`argumentHint`/`filePath` 字段、`loadDefaults` 两默认目录、单正则五支 `substituteArgs`（JS 空串 falsy 语义）、缺失模板静默；`PromptTemplateRegistry.find` | —— |
+| 63 | `loadSkills` / `loadSourcedSkills` | P | **对齐** | **2** | 新锚 `core/skills.ts:425-434,462-475`：去重键 `getResourcePathKey`（realpath＋平台比较键）、来源推断 `isPathWithin`。java 复核（W2）：`LoadSkillsResult` 以 `toRealPath` 为键、`SkillDiscovery.inferSource` 用 `Path.startsWith`；Java `WindowsPath` 的 `equals`／`startsWith` 本就大小写不敏感且按段比较，行为等价 ⇒ **无改动**，Windows 回归用例锁定 | 旧证据：`core/skills.ts:414,168`；`SkillDiscovery`（批 4，裁决②）：同名先到赢＋realPath 去重＋来源推断＋collision/警告诊断；B269 随 docs/23 复核闭环 |
+| 64 | `loadPromptTemplates` 等四函数 | P | **对齐** | **2** | 新锚 `core/prompt-templates.ts:25-58,312`：`parseCommandArgs` 用 `hasToken` 保留引号空参数（`""`／`''`），空白用 JS `/\s/` 精确集合；命令正则同集合。java 实施（W1）：`PromptTemplates.parseCommandArgs` 加 `hasToken`＋`isJsWhitespace`，`COMMAND_PATTERN` 与 `PromptTemplateExpansion` 共用 | 旧证据：`core/prompt-templates.ts:222,304`；`PromptTemplates.java`（批 4，裁决②）：`argumentHint`/`filePath`、`loadDefaults` 两目录、单正则五支 `substituteArgs`（JS 空串 falsy）、缺失模板静默；B268 销 |
 | 65 | `sanitizeSurrogates` | A | **对齐** | **1** | pi `utils/sanitize-unicode.ts:21` | ✅ pi-java-ai 的 `SanitizeUnicode`，生产调用如 `AnthropicMessageConverter.java:55,135` —— **跨模块** | 已闭环 |
 | 66 | ~~`AdaptivePublisher`~~ | A | **作废（R1）** | 0 | `harness/utils/adaptive-publisher.ts` 已删 | 无 | —— |
 | 67 | ~~`applyShellOutputUpdate` / `ShellOutputView`~~ | A | **作废（R1）** | 0 | `harness/utils/output-capture.ts`/`shell-output.ts` 已删（主流量见 #28） | `ShellOutputSink.java` | —— |
@@ -180,7 +181,7 @@ pi 侧证据锚定 `agent/src/*` 或 `coding-agent/src/core/*`。
 | 74 | ~~存储 conformance / benchmark 套件~~ | S | **作废（R1）** | 0 | `harness/session/testing/*` 已删 | agent-core 无 | A17 |
 | 75 | session fork | S | **对齐** | **2** | `core/session-manager.ts:1815`（`SessionManager.forkFrom`）；`main.ts:380-386`（fork 支配并消费 `--session-id`） | `ForkOptions.java`＋调用面（批 5）：fork 分支提前于 sessionId 分支并消费之（`RepositoryHandle.fork` 4 参，jsonl/sqlite 双后端）；java 私加的 `" (fork)"` 名后缀删除（pi 不改名）；窄差 F-d：空/无头源文件的错误形是 load 期 DecodeError，非 pi 两条专属文案 | ——（2026-10-18 批 5，docs/10 §5） |
 | 76 | `session_start` / `resources_discover` | S | **对齐** | **2** | `core/agent-session.ts:509,3695`；resources `:3285`；扩展侧 `core/extensions/runner.ts:1487-1490` | `AgentSession.java:104,453-460,1156` | —— |
-| 77 | 会话恢复（resume seed + record replay） | S | **对齐** | **2** | `core/agent-session.ts:525,1809,4138`（`_restoreToolsFromTranscript`） | `RunLifecycle.java:284,330`（seed/restore）＋批 5 `restoreToolsFromTranscript`（navigateTree 后按新叶系统消息 `toolsAdded` 恢复激活装配，pi `:4138` 同序；未注册名静默落——`_pendingToolNames` 晚注册臂随 B221 ⑫b；CLI resume 臂 pi 自己也够不到：sdk 恒给 `initialActiveToolNames`） | ~~A2~~ 销号（2026-10-18 批 5，docs/10 §4） |
+| 77 | 会话恢复（resume seed + record replay） | S | **转出（L4）** | 0 | 新锚 `core/agent-session.ts:538,1846-1882`：`usesDefaultTools` 门；从分支**全部** system 消息恢复 `toolsAdded`/`toolsRemoved`、补晚注册扩展工具、应用 `+name/-name` 修饰（`6f2f164ab`／`bd3c9b823`）。按 docs/08 §5 归 L4，登记 **B271** | 旧证据：`core/agent-session.ts:525,1809,4138`；`RunLifecycle.java:284,330`＋批 5 `restoreToolsFromTranscript` | 旧判对齐（批 5，~~A2~~ 销号）；转出后权重 0，不进分母 |
 | 78 | `latest()` / `find()` 会话定位范围 | S | **对齐（裁决）** | **3** | `core/session-manager.ts:749`（`findMostRecentSession` 只读一个项目目录）；`listSessions` 按**最后活动时间** desc（`:858-864`，mtime 仅兜底） | 裁决（docs/04 §4 map/03-#78）：latest/resume 等价；`find(idOrPrefix)` 跨项目扫描保留（CLI `--resume <id>` 需要）；**排序键差留痕**——java list 按 mtime desc（`JsonlSessionRepository.java:85-90`），pi 的 lastActivity 需全量扫 entry（正是 java 优化掉的成本），追加写下 mtime 序 ≈ 活动序；**分级阶梯批 4 落地**（`SessionPersistence` 路径快车道＋`findById` header-only 精确＋项目前缀＋跨项目精确胜前缀，docs/09 §9） | ~~B53~~ 销号（2026-10-18 批 4） |
 | 79 | 会话列表 `onProgress` | S | **对齐** | **1** | `core/session-manager.ts:943-965` | `RichSessionLister.java`（批 4）：`listRich` onProgress 回调＋AbortSignal＋`mapWithConcurrency` 虚拟线程并发；`AgentSession.listSessionsSummary` 已迁移 | ~~B55~~ 销号（2026-10-18 批 4） |
 | 80 | 宿主 `prompt()` 的 `streamingBehavior` | L | **对齐（裁决）** | **2** | `core/agent-session.ts:320,1921,1997-2019`（steer/followUp 两门） | `PromptRouter` 两门抛文逐字（`:1988`/`:2016` 同文）＋展开先于门（`AgentSession.java:808`→`:812` 同序）＋steer/followUp 入队＋`queue_update`（B34）；引擎门 `PiLaneEngine.java:87-91` | ~~A5/F4~~ 裁决（2026-10-18 批 5，docs/04 §4，docs/10 §12.3） |
@@ -237,7 +238,7 @@ pi 侧证据锚定 `agent/src/*` 或 `coding-agent/src/core/*`。
 
 **本轮无独立计权项** —— 旧表 11 条中：① drive（作废）、③ effect gate（作废）、④ 存储套件（作废）、
 ⑥ `AdaptivePublisher`（作废）、⑦ values.ts（作废）、⑩ pico3（作废）、⑪ durable（作废）；
-② branch summary+导航、⑤ proxy、⑧ skills、⑨ sanitize 仍作**能力单元**（#24/#25、#68、#61/#62、#65）逐条计权。
+② branch summary+导航（#24 branch summary 转出 L4／B272，#25 导航计权）、⑤ proxy、⑧ skills、⑨ sanitize 仍作**能力单元**（#25、#68、#61/#62、#65）逐条计权。
 
 ---
 
@@ -246,11 +247,11 @@ pi 侧证据锚定 `agent/src/*` 或 `coding-agent/src/core/*`。
 | 表 | 对齐 | 缺失 | 存疑 | 合计 | 完成度 |
 |---|---:|---:|---:|---:|---:|
 | 内置工具 | 9 | 0 | 0 | 9 | **100%** |
-| 能力单元（除工具） | 81 | 0 | 0 | 81 | **100%** |
+| 能力单元（除工具，79 计分＋2 转出） | 79 | 0 | 0 | 79 | **100%** |
 | 整块缺失（无独立计权项） | 0 | 0 | 0 | 0 | —— |
-| **合计** | **90** | **0** | **0** | **90** | **100%** |
+| **合计（88 计分＋2 转出）** | **88** | **0** | **0** | **88** | **100%** |
 
-**旧基线未加权完成度 = 90 / 90 = 100%**。
+**当前未加权完成度 = 88 / 88 = 100%**（#77／#24 权重 0、判定「转出（L4）」，不进分母）。旧基线：90/90。
 
 ---
 
@@ -259,19 +260,22 @@ pi 侧证据锚定 `agent/src/*` 或 `coding-agent/src/core/*`。
 | 域 | Σ权重 | Σ(w×系数) | 加权完成度 | 未加权完成度 |
 |---|---:|---:|---:|---:|
 | 内置工具（9） | 21 | 21.0 | **100%** | 100% |
-| 能力单元（除工具，81） | 159 | 159.0 | **100%** | 100% |
-| **模块合计（90）** | **180** | **180.0** | **100%** | **100%** |
+| 能力单元（除工具，79 计分＋2 转出） | 156 | 156.0 | **100%** | 100% |
+| **模块合计（88 计分＋2 转出）** | **177** | **177.0** | **100%** | **100%** |
 
-**旧基线模块合计**：Σ权重 180 ／ Σ(w×c) 180.0 ／ **加权完成度 = 180/180 = 100%**（未加权 100%）。
+**当前模块合计**：Σ权重 177 ／ Σ(w×c) 177.0 ／ **加权完成度 = 177/177 = 100%**（未加权 88/88）。
+复算：177＝旧 180 − #77（2）− #24（1）。旧基线：180/180。
 
 按权重分层（能力单元表，81 条）：
 
 | 权重 | 条数 | Σ权重 | 对齐 | 存疑 | 缺失 | Σ(w×c) | 层完成度 |
 |---:|---:|---:|---:|---:|---:|---:|---:|
 | 3 | 22 | 66 | 22 | 0 | 0 | 66.0 | **100%** |
-| 2 | 34 | 68 | 34 | 0 | 0 | 68.0 | **100%** |
-| 1 | 25 | 25 | 25 | 0 | 0 | 25.0 | **100%** |
-| 合计 | 81 | 159 | 81 | 0 | 0 | 159.0 | 100% |
+| 2 | 33 | 66 | 33 | 0 | 0 | 66.0 | **100%** |
+| 1 | 24 | 24 | 24 | 0 | 0 | 24.0 | **100%** |
+| 合计 | 79 | 156 | 79 | 0 | 0 | 156.0 | 100% |
+
+（#77 权重 2、#24 权重 1 转出 L4，不进分母与分层表。）
 
 ### 权重 3 的单元清单（旧基线 27/27 对齐）
 
