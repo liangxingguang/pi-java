@@ -1,7 +1,5 @@
 package com.pijava.mcp.transport;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
@@ -15,9 +13,17 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class InMemoryTransportTest {
 
+    /** A pair whose both sides were started, as the client does before sending. */
+    private static InMemoryTransports.Pair startedPair() {
+        var pair = InMemoryTransports.create();
+        pair.client().start();
+        pair.server().start();
+        return pair;
+    }
+
     @Test
     void deliversAsynchronouslyWithoutReEnteringOnSend() throws Exception {
-        var pair = InMemoryTransports.create();
+        var pair = startedPair();
         var received = new CountDownLatch(1);
         var delivered = new CopyOnWriteArrayList<Object>();
         var listenerThread = new AtomicReference<Thread>();
@@ -39,7 +45,7 @@ class InMemoryTransportTest {
 
     @Test
     void isolatesDeliveredMessagesFromLaterMutation() throws Exception {
-        var pair = InMemoryTransports.create();
+        var pair = startedPair();
         var received = new CountDownLatch(1);
         var delivered = new CopyOnWriteArrayList<Object>();
         pair.server().onMessage(message -> {
@@ -59,30 +65,68 @@ class InMemoryTransportTest {
     }
 
     @Test
-    void closesBothSidesAndDropsQueuedDeliveries() throws Exception {
-        var pair = InMemoryTransports.create();
+    void closingOneSideClosesItsPeer() throws Exception {
+        var pair = startedPair();
         var serverClosed = new CountDownLatch(1);
+        var clientClosed = new CountDownLatch(1);
         pair.server().onClose(serverClosed::countDown);
-        var messages = new ArrayList<Object>();
-        pair.server().onMessage(messages::add);
+        pair.client().onClose(clientClosed::countDown);
 
         pair.server().close();
         assertThat(serverClosed.await(5, TimeUnit.SECONDS)).isTrue();
-
-        // The client side can still send; delivery to a closed peer is dropped.
-        pair.client().send(Map.of());
-        Thread.sleep(50);
-        assertThat(messages).isEmpty();
-
-        // Sending after one's own close is rejected.
-        pair.client().close();
+        // pi's close cascades to the peer, so sending from either side is rejected.
+        assertThat(clientClosed.await(5, TimeUnit.SECONDS)).isTrue();
         assertThatThrownBy(() -> pair.client().send(Map.of()))
                 .isInstanceOf(com.pijava.mcp.protocol.jsonrpc.McpConnectionClosedError.class);
     }
 
     @Test
-    void transportsAreIndependentInBothDirections() throws Exception {
+    void sendingBeforeStartIsRejected() throws Exception {
         var pair = InMemoryTransports.create();
+        assertThatThrownBy(() -> pair.client().send(Map.of()))
+                .isInstanceOf(com.pijava.mcp.protocol.jsonrpc.McpConnectionClosedError.class);
+        pair.client().start();
+        pair.server().start();
+        pair.client().send(Map.of());
+        pair.client().close();
+    }
+
+    @Test
+    void sendingToAnUnstartedPeerIsRejected() throws Exception {
+        var pair = InMemoryTransports.create();
+        pair.client().start();
+        assertThatThrownBy(() -> pair.client().send(Map.of()))
+                .isInstanceOf(com.pijava.mcp.protocol.jsonrpc.McpConnectionClosedError.class)
+                .hasMessage("In-memory MCP peer is not connected");
+        pair.client().close();
+    }
+
+    @Test
+    void closingCascadesAndIsIdempotent() {
+        var pair = startedPair();
+        var clientClosed = new java.util.concurrent.CountDownLatch(1);
+        pair.client().onClose(clientClosed::countDown);
+        pair.client().close();
+        // The pair's other side closes with it, with or without a listener.
+        assertThat(pair.server().isClosed()).isTrue();
+        pair.client().close();
+        pair.server().close();
+        assertThat(clientClosed.getCount()).isZero();
+    }
+
+    @Test
+    void errorsCanBeEmittedFromTests() throws Exception {
+        var pair = InMemoryTransports.create();
+        var errors = new CopyOnWriteArrayList<Throwable>();
+        pair.client().onError(errors::add);
+        pair.client().emitError(new IllegalStateException("boom"));
+        assertThat(errors).hasSize(1);
+        pair.client().close();
+    }
+
+    @Test
+    void transportsAreIndependentInBothDirections() throws Exception {
+        var pair = startedPair();
         var clientGot = new CountDownLatch(1);
         var serverGot = new CountDownLatch(1);
         pair.client().onMessage(message -> clientGot.countDown());

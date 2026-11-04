@@ -7,7 +7,11 @@ import org.jspecify.annotations.Nullable;
 import com.pijava.mcp.protocol.jsonrpc.McpConnectionClosedError;
 
 /**
- * Bidirectional in-process transport for tests (in-memory.ts:10-43).
+ * Bidirectional in-process transport (pi {@code in-memory.ts:1-51}).
+ *
+ * <p>Useful for tests and for driving an MCP client and server in one process
+ * without a transport: {@link InMemoryTransports#create()} returns a connected
+ * pair. Both sides must be started before messages flow.</p>
  *
  * <p>Messages are delivered on a new virtual thread, mirroring the
  * {@code queueMicrotask} semantics: {@code send} never re-enters the peer's
@@ -20,6 +24,7 @@ public final class InMemoryTransport extends AbstractMcpTransport {
     }
 
     private @Nullable InMemoryTransport peer;
+    private volatile boolean started;
     private volatile boolean closed;
 
     /** Connect two transports as peers. */
@@ -33,14 +38,20 @@ public final class InMemoryTransport extends AbstractMcpTransport {
 
     @Override
     public void start() {
-        // Ready immediately once paired.
+        if (closed) {
+            throw new McpConnectionClosedError();
+        }
+        started = true;
     }
 
     @Override
     public void send(Map<String, Object> message) {
         var target = peer;
-        if (closed || target == null) {
+        if (!started || closed) {
             throw new McpConnectionClosedError();
+        }
+        if (target == null || !target.started || target.closed) {
+            throw new McpConnectionClosedError("In-memory MCP peer is not connected");
         }
         var copy = deepCopy(message);
         Thread.startVirtualThread(() -> target.deliver(copy));
@@ -53,6 +64,23 @@ public final class InMemoryTransport extends AbstractMcpTransport {
         }
         closed = true;
         emitClose();
+        // Closing one side closes the pair, so a client that closes its transport
+        // does not leave a peer listening (in-memory.ts:37-42).
+        var target = peer;
+        if (target != null) {
+            target.close();
+        }
+    }
+
+    /** Whether this side has been closed, by itself or through its peer. */
+    public boolean isClosed() {
+        return closed;
+    }
+
+    /** Exposed so tests can simulate transport-level failures ({@code in-memory.ts:44-46}). */
+    @Override
+    public void emitError(Throwable error) {
+        super.emitError(error);
     }
 
     private void deliver(Object message) {

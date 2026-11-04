@@ -1,7 +1,9 @@
 package com.pijava.mcp.transport;
 
 /**
- * Factory for connected in-memory transport pairs (in-memory.ts:45-51).
+ * Factory for connected in-memory transport pairs (in-memory.ts:48-51).
+ *
+ * <p>Both sides are unstarted: whoever drives them calls {@link InMemoryTransport#start()}.</p>
  */
 public final class InMemoryTransports {
 
