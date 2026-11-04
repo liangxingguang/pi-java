@@ -159,6 +159,22 @@ class McpAddRemoveCommandTest {
     }
 
     @Test
+    void theClientRegistrationModeIsWrittenToTheOauthObject() throws IOException {
+        assertThat(run("add", "files", "--url", "http://x",
+                "--oauth-client-registration", "auto")).isZero();
+
+        assertThat(read(globalConfig())).contains("\"clientRegistration\": \"auto\"");
+    }
+
+    @Test
+    void theClientRegistrationModeIsHttpOnly() {
+        assertThat(run("add", "docs", "--oauth-client-registration", "auto",
+                "--", "npx")).isEqualTo(1);
+        assertThat(err).containsExactly(
+                "--oauth-client-registration only applies to HTTP servers (--url).");
+    }
+
+    @Test
     void aHeaderWithoutAnEqualsIsRejected() throws IOException {
         assertThat(run("add", "files", "--url", "http://x", "--header", "nope")).isEqualTo(1);
         assertThat(err).containsExactly("--header expects KEY=VALUE, got \"nope\".");

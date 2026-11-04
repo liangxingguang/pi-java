@@ -105,19 +105,18 @@ class McpCallbackSettingsTest {
     }
 
     @Test
-    void anUnsupportingServerIsRefusedWithItsOwnMessage() {
-        assertThatThrownBy(() -> McpClientMetadataDocuments.create("http://example.test/mcp",
-                "http://127.0.0.1:1234/callback", metadata(true, false, List.of("client_secret_post"))))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessage("The authorization server does not support Client ID Metadata Documents"
-                        + " for public clients; remove oauth.clientRegistration \"cimd\"");
+    void anUnsupportingServerOffersNoDocument() {
+        // `auto` falls back to dynamic registration instead of failing; only an explicit
+        // `cimd` turns the null into the error (McpAuthProviders).
+        assertThat(McpClientMetadataDocuments.create("http://example.test/mcp",
+                "http://127.0.0.1:1234/callback",
+                metadata(true, false, List.of("client_secret_post")))).isNull();
     }
 
     @Test
-    void noMetadataAtAllIsAlsoRefused() {
-        assertThatThrownBy(() -> McpClientMetadataDocuments.create("http://example.test/mcp",
-                "http://127.0.0.1:1234/callback", null))
-                .isInstanceOf(IllegalStateException.class);
+    void noMetadataAtAllOffersNoDocumentEither() {
+        assertThat(McpClientMetadataDocuments.create("http://example.test/mcp",
+                "http://127.0.0.1:1234/callback", null)).isNull();
     }
 
     @Test

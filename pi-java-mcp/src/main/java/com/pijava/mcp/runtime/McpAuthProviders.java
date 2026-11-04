@@ -93,12 +93,26 @@ public final class McpAuthProviders {
         var metadata = new OAuthClientMetadata(List.of(), null, null, null,
                 settings.clientName() != null ? settings.clientName() : clientName,
                 null, null, null, null, null, null, null, null, null, null, null);
+        // `auto` offers the document only for pi itself on a compatible callback; with a
+        // renamed build it never does, so sign-in goes straight to dynamic registration.
+        var offersDocument = McpOAuthSettings.offersClientMetadataDocument(settings, clientName);
+        // An explicit `cimd` must fail when the server has no support, where `auto` falls
+        // back to dynamic registration.
+        var explicitCimd = settings.clientRegistration() == McpOAuthSettings.Registration.CIMD;
         return new McpOAuthProvider(new McpOAuthProviderOptions(
                 URI.create(serverUrl),
                 URI.create(redirectUrl),
                 metadata,
-                settings.clientRegistration() == McpOAuthSettings.Registration.CIMD
-                        ? value -> McpClientMetadataDocuments.create(serverUrl, redirectUrl, value)
+                offersDocument
+                        ? value -> {
+                            var document = McpClientMetadataDocuments.create(serverUrl, redirectUrl, value);
+                            if (document == null && explicitCimd) {
+                                throw new IllegalStateException("The authorization server does not support"
+                                        + " Client ID Metadata Documents for public clients;"
+                                        + " remove oauth.clientRegistration \"cimd\"");
+                            }
+                            return document;
+                        }
                         : null,
                 settings.clientId(),
                 settings.clientSecret(),

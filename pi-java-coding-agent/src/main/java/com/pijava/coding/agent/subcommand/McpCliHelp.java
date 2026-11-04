@@ -56,6 +56,8 @@ final class McpCliHelp {
                                       Fixed OAuth callback port
               --oauth-client-name <name>
                                       Client name sent when registering with the OAuth server
+              --oauth-client-registration <mode>
+                                      auto (default), cimd, or dcr
               --exposure <mode>       codemode (default), deferred, direct, or hidden
               --description <text>    What the server offers, shown in the system prompt
 

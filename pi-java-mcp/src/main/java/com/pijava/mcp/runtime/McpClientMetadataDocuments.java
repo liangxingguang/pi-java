@@ -55,16 +55,16 @@ final class McpClientMetadataDocuments {
      * @param serverUrl the MCP server URL
      * @param redirectUrl the redirect URI the flow picked
      * @param metadata the authorization server's metadata, when it has any
-     * @return the document URL and the redirect URI it lists
+     * @return the document URL and the redirect URI it lists, or {@code null} when
+     *         the server does not support documents for public clients
      */
-    static ClientMetadataDocument create(
+    static @Nullable ClientMetadataDocument create(
             String serverUrl, String redirectUrl, @Nullable AuthorizationServerMetadata metadata) {
         if (metadata == null
                 || !Boolean.TRUE.equals(metadata.clientIdMetadataDocumentSupported())
                 || metadata.tokenEndpointAuthMethodsSupported() == null
                 || !metadata.tokenEndpointAuthMethodsSupported().contains("none")) {
-            throw new IllegalStateException("The authorization server does not support Client ID Metadata"
-                    + " Documents for public clients; remove oauth.clientRegistration \"cimd\"");
+            return null;
         }
         if (Boolean.TRUE.equals(metadata.authorizationResponseIssParameterSupported())) {
             return new Document(CLIENT_METADATA_BASE_URL + "/client.json", redirectUrl);

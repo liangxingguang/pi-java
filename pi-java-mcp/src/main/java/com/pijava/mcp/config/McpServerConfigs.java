@@ -224,6 +224,22 @@ public final class McpServerConfigs {
         return config.exposure() == null ? McpExposure.CODEMODE : config.exposure();
     }
 
+    /**
+     * Whether pi's Client ID Metadata Documents list a redirect URI for the loopback
+     * {@code callbackUrl}: they list {@code /callback} on localhost and 127.0.0.1,
+     * on any port. Without a {@code callbackUrl}, pi uses such a URI ({@code :96-110}).
+     *
+     * @param callbackUrl the configured callback URL, or {@code null}
+     * @return whether the document covers it
+     */
+    public static boolean isClientMetadataDocumentCallback(@Nullable String callbackUrl) {
+        if (callbackUrl == null) {
+            return true;
+        }
+        var url = URI.create(callbackUrl);
+        return !"[::1]".equals(url.getHost()) && "/callback".equals(url.getPath());
+    }
+
     /** Whether a redirect URI can be served by the loopback callback server ({@code :96-100}). */
     public static boolean isLoopbackRedirectUri(String value) {
         var url = parseUrl(value);
@@ -286,20 +302,18 @@ public final class McpServerConfigs {
         var registrationNode = oauth.get("clientRegistration");
         if (registrationNode != null) {
             var registration = registrationNode.isTextual() ? registrationNode.textValue() : null;
-            if (!"dcr".equals(registration)) {
+            if (!"auto".equals(registration) && !"dcr".equals(registration)) {
                 if (!"cimd".equals(registration)) {
-                    return "oauth.clientRegistration must be \"dcr\" or \"cimd\"";
+                    return "oauth.clientRegistration must be \"auto\", \"dcr\", or \"cimd\"";
                 }
                 if (oauth.has("clientId") || oauth.has("clientName")) {
                     return "oauth.clientRegistration \"cimd\" cannot be combined"
                             + " with oauth.clientId or oauth.clientName";
                 }
-                if (callbackNode != null) {
-                    var callback = URI.create(callbackNode.textValue());
-                    if ("[::1]".equals(callback.getHost()) || !"/callback".equals(callback.getPath())) {
-                        return "oauth.clientRegistration \"cimd\" requires oauth.callbackUrl"
-                                + " on localhost or 127.0.0.1 with path /callback";
-                    }
+                if (!isClientMetadataDocumentCallback(
+                        callbackNode != null ? callbackNode.textValue() : null)) {
+                    return "oauth.clientRegistration \"cimd\" requires oauth.callbackUrl"
+                            + " on localhost or 127.0.0.1 with path /callback";
                 }
             }
         }

@@ -37,6 +37,7 @@ final class McpAddRemoveCommand {
                 Map.entry("oauth-client-secret", McpCliOptions.Kind.VALUE),
                 Map.entry("oauth-callback-port", McpCliOptions.Kind.VALUE),
                 Map.entry("oauth-client-name", McpCliOptions.Kind.VALUE),
+                Map.entry("oauth-client-registration", McpCliOptions.Kind.VALUE),
                 Map.entry("exposure", McpCliOptions.Kind.VALUE),
                 Map.entry("description", McpCliOptions.Kind.VALUE));
         // Two positionals end the options, so a command's own flags pass through.
@@ -54,7 +55,8 @@ final class McpAddRemoveCommand {
             return 1;
         }
         List<String> httpOnly = List.of("header", "bearer-token-env-var", "oauth-client-id",
-                "oauth-client-secret", "oauth-callback-port", "oauth-client-name");
+                "oauth-client-secret", "oauth-callback-port", "oauth-client-name",
+                "oauth-client-registration");
         List<String> stdioOnly = List.of("env", "cwd");
         var misplaced = (url == null ? httpOnly : stdioOnly).stream()
                 .filter(option -> parsed.values().containsKey(option) || parsed.lists().containsKey(option))
@@ -90,6 +92,9 @@ final class McpAddRemoveCommand {
             }
             if (parsed.value("oauth-client-name") != null) {
                 oauth.put("clientName", parsed.value("oauth-client-name"));
+            }
+            if (parsed.value("oauth-client-registration") != null) {
+                oauth.put("clientRegistration", parsed.value("oauth-client-registration"));
             }
             // Key order is the file's key order, so the object is assembled the way pi writes it.
             config.put("url", url);

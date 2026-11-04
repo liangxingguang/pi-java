@@ -124,14 +124,21 @@ class McpServerConfigsTest {
         assertThat(errorOf("plain", prefix + "{\"authServerMetadataUrl\":\"http://idp.example/m\"}}"))
                 .isEqualTo("server \"plain\": oauth.authServerMetadataUrl must be an https URL,"
                         + " or http on localhost, 127.0.0.1, or [::1]");
-        assertThat(errorOf("bad", prefix + "{\"clientRegistration\":\"auto\"}}"))
-                .isEqualTo("server \"bad\": oauth.clientRegistration must be \"dcr\" or \"cimd\"");
+        assertThat(errorOf("bad", prefix + "{\"clientRegistration\":\"oauth\"}}"))
+                .isEqualTo("server \"bad\": oauth.clientRegistration must be \"auto\", \"dcr\", or \"cimd\"");
+        // auto is the default and passes validation.
+        assertThat(validate("auto", prefix + "{\"clientRegistration\":\"auto\"}}"))
+                .isInstanceOf(McpConfigValidation.Valid.class);
         assertThat(errorOf("cimdClient", prefix + "{\"clientRegistration\":\"cimd\",\"clientId\":\"x\"}}"))
                 .isEqualTo("server \"cimdClient\": oauth.clientRegistration \"cimd\" cannot be combined"
                         + " with oauth.clientId or oauth.clientName");
         assertThat(errorOf("cimdPath",
                 prefix + "{\"clientRegistration\":\"cimd\",\"callbackUrl\":\"http://127.0.0.1/cb\"}}"))
                 .isEqualTo("server \"cimdPath\": oauth.clientRegistration \"cimd\" requires"
+                        + " oauth.callbackUrl on localhost or 127.0.0.1 with path /callback");
+        assertThat(errorOf("cimdIpv6",
+                prefix + "{\"clientRegistration\":\"cimd\",\"callbackUrl\":\"http://[::1]/callback\"}}"))
+                .isEqualTo("server \"cimdIpv6\": oauth.clientRegistration \"cimd\" requires"
                         + " oauth.callbackUrl on localhost or 127.0.0.1 with path /callback");
         assertThat(errorOf("notobj", prefix + "5}")).isEqualTo("server \"notobj\": oauth must be an object");
     }
@@ -144,7 +151,9 @@ class McpServerConfigsTest {
                 "{\"url\":\"https://a.example/mcp\",\"oauth\":{\"callbackUrl\":\"http://127.0.0.1:2/cb\",\"callbackPort\":2}}",
                 "{\"url\":\"https://a.example/mcp\",\"oauth\":{\"clientName\":\"Claude Code\"}}",
                 "{\"url\":\"https://a.example/mcp\",\"oauth\":{\"authServerMetadataUrl\":\"https://idp.example/m\"}}",
-                "{\"url\":\"https://a.example/mcp\",\"oauth\":{\"clientRegistration\":\"cimd\",\"callbackUrl\":\"http://localhost/callback\"}}")) {
+                "{\"url\":\"https://a.example/mcp\",\"oauth\":{\"clientRegistration\":\"cimd\",\"callbackUrl\":\"http://localhost/callback\"}}",
+                "{\"url\":\"https://a.example/mcp\",\"oauth\":{\"clientRegistration\":\"cimd\"}}",
+                "{\"url\":\"https://a.example/mcp\",\"oauth\":{\"clientRegistration\":\"dcr\"}}")) {
             assertThat(validate("ok", json)).isInstanceOf(McpConfigValidation.Valid.class);
         }
     }

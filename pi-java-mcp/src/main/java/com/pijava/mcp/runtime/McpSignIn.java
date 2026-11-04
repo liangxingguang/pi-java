@@ -87,10 +87,11 @@ public final class McpSignIn {
                 stored == null ? null : stored.clientInformation());
         var preferredPort = callbackOptions.port() != null ? callbackOptions.port()
                 : registered == null ? null : WebUrls.port(URI.create(registered));
-        var cimd = settings.clientRegistration() == McpOAuthSettings.Registration.CIMD;
+        var offersDocument = McpOAuthSettings.offersClientMetadataDocument(
+                settings, options.clientName());
         var callback = listenForCallback(callbackOptions,
                 // The redirect URI of a server-specific Client ID Metadata Document.
-                cimd ? List.of(McpCallbackSettings.CALLBACK_PATH + "/"
+                offersDocument ? List.of(McpCallbackSettings.CALLBACK_PATH + "/"
                         + McpClientMetadataDocuments.callbackId(serverUrl)) : List.of(),
                 preferredPort,
                 callbackOptions.port() != null);
@@ -98,7 +99,7 @@ public final class McpSignIn {
                 ? callbackOptions.fixedRedirectUrl() : callback.redirectUrl();
         try {
             if (stored != null) {
-                store.save(prepare(stored, settings, cimd, redirectUrl));
+                store.save(prepare(stored, settings, offersDocument, redirectUrl));
             }
             var authorizationUrl = new AtomicReference<URI>();
             var provider = McpAuthProviders.createProvider(serverUrl, store, settings, redirectUrl,
@@ -137,13 +138,13 @@ public final class McpSignIn {
 
     /** The state a sign-in starts from ({@code oauth.ts:481-496}). */
     static McpOAuthState prepare(McpOAuthState stored, McpOAuthSettings settings,
-                                         boolean cimd, String redirectUrl) {
+                                         boolean offersDocument, String redirectUrl) {
         // Every sign-in gets a fresh `state` parameter.
         // A registered client cannot use another redirect URI, and its tokens belong to it. A
         // Client ID Metadata Document is not stored, so with one, a stored client was registered
         // before and is replaced.
         var keepClient = settings.clientId() != null
-                || (cimd ? stored.clientInformation() == null
+                || (offersDocument ? stored.clientInformation() == null
                         : registeredRedirectUrls(stored.clientInformation()).contains(redirectUrl));
         return new McpOAuthState(stored.serverUrl(),
                 keepClient ? stored.clientInformation() : null,
