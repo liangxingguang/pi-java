@@ -114,4 +114,17 @@ public record ApiOptions(
             options.maxRetries(), options.extra(), options.authKind(), options.telemetry(),
             options.identity(), env);
     }
+
+    /**
+     * docs/20 §6.3：把 {@code extra} 整体替换为 {@code extra} 的副本。
+     *
+     * <p>编码侧唯一的“语义重写 extra”入口 —— 与 {@link #withIdentity}／{@link #withEnv}
+     * 同法逐组件保真，避免手写九组件时丢字段（docs/19 的 15 重建点教训）。deferred
+     * 取回前按 pi 剥离 {@code deferred}／{@code onResponse} 两键就走这里。</p>
+     */
+    public static ApiOptions withExtra(ApiOptions options, Map<String, Object> extra) {
+        return new ApiOptions(options.baseUrl(), options.apiKey(), options.timeout(),
+            options.maxRetries(), extra, options.authKind(), options.telemetry(),
+            options.identity(), options.env());
+    }
 }

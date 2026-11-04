@@ -9,6 +9,7 @@ import com.pijava.ai.Usage;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.AssistantMessageDiagnostic;
 import com.pijava.ai.message.ContentBlock;
+import com.pijava.ai.message.DeferredHandle;
 import com.pijava.ai.message.StopReason;
 
 /**
@@ -70,6 +71,8 @@ public final class StreamPartialBuilder {
     /** Provider response metadata, distinct from the local message id. */
     private String responseId;
 
+    private DeferredHandle deferred;
+
     /**
      * B148：provider/运行时诊断（pi {@code output.diagnostics}）。
      * 默认 null（≙ undefined，键省略）；{@link #appendDiagnostic} 按需建表追加。
@@ -110,7 +113,12 @@ public final class StreamPartialBuilder {
         return new AssistantMessage(messageId, List.copyOf(blocks), usage, stopReason,
             null, null, null, responseModel, providerThinkingLevel,
             diagnostics == null ? null : List.copyOf(diagnostics),
-            null, null, rawStopReason, null, responseId);
+            null, null, rawStopReason, null, responseId, deferred);
+    }
+
+    /** docs/20：记下 deferred handle（pi {@code output.deferred}）；此后每个快照都携带。 */
+    public void noteDeferred(DeferredHandle handle) {
+        this.deferred = handle;
     }
 
     /**
@@ -122,14 +130,7 @@ public final class StreamPartialBuilder {
         this.providerThinkingLevel = level;
     }
 
-    /**
-     * B148：记下 provider 实际服务的模型 id（pi {@code output.responseModel}）。
-     *
-     * <p><b>首值胜</b>：对位 completions 车道的
-     * {@code output.responseModel ||= chunk.model}（openai-completions.ts:566）——
-     * 已设非空值时后续 chunk 不覆盖；传 null/空白忽略。anthropic 车道一条流只有
-     * 一次 message_start，同函数收口。</p>
-     */
+    /** B148：记下 provider 实际服务的模型 id；<b>首值胜</b>（completions 的 {@code ||=}，null/空白忽略）。 */
     public void noteResponseModel(String model) {
         if (this.responseModel == null && model != null && !model.isEmpty()) {
             this.responseModel = model;

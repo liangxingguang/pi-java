@@ -282,13 +282,17 @@ public sealed interface Message
          * <p>{@code thinkingLevel} 恒为 null：partial 流中不盖该字段
          * （pi 只在 agent-loop 终局 {@code Object.assign}），它由 loop 层
          * 在投影之后经 {@link #withThinkingLevel} 单点盖上。</p>
+         *
+         * <p>docs/20：{@code deferred} 随 partial 流动 —— pi 的 partial 与终局同一形状
+         * （{@code assistant-message-frame.ts:77-92}），deferred 提交帧必须能把 handle
+         * 交给调用方，否则只能造事件旁路。</p>
          */
         public static AssistantMessage fromPartial(
                 com.pijava.ai.message.AssistantMessage partial) {
             return new AssistantMessage(
                 partial.content(),
                 partial.stopReason(),
-                null,
+                partial.deferred(),
                 partial.api(),
                 partial.provider(),
                 partial.model(),

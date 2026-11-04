@@ -66,6 +66,9 @@ import com.pijava.ai.stream.StreamEvent;
  *                     Google 还拿它当收尾文案的唯一来源（{@code google-generative-ai.ts:272}）。</p>
  * @param durationMs   B234（pi {@code types.ts:595}）：响应从流创建到终局的单调钟毫秒数；
  *                     只有终局消息携带（身份缝加盖），流中帧为 null
+ * @param responseId   主流 provider 的响应元数据（pi {@code responseId}）；缺席为 null
+ * @param deferred     docs/20（pi {@code types.ts:600}）：deferred 响应的 provider handle；
+ *                     只有 {@code stopReason = DEFERRED} 的提交帧与取回帧携带，其余为 null
  */
 public record AssistantMessage(
     String id,
@@ -82,12 +85,28 @@ public record AssistantMessage(
     String errorMessage,
     String rawStopReason,
     Long durationMs,
-    @org.jspecify.annotations.Nullable String responseId
+    @org.jspecify.annotations.Nullable String responseId,
+    @org.jspecify.annotations.Nullable DeferredHandle deferred
 ) {
     /** Compact constructor that defensively copies the content blocks. */
     public AssistantMessage {
         content = List.copyOf(content);
         diagnostics = diagnostics == null ? null : List.copyOf(diagnostics);
+    }
+
+    /**
+     * docs/20：加 {@code deferred} 组件之前的完整形状（15 参）。
+     *
+     * <p>保留它使存量全参构造点零改签；新字段缺席 ≙ pi 的 {@code undefined}。</p>
+     */
+    public AssistantMessage(String id, List<ContentBlock> content, StreamEvent.UsageInfo usage,
+            StopReason stopReason, String api, String provider, String model, String responseModel,
+            String providerThinkingLevel, List<AssistantMessageDiagnostic> diagnostics,
+            Instant timestamp, String errorMessage, String rawStopReason, Long durationMs,
+            String responseId) {
+        this(id, content, usage, stopReason, api, provider, model, responseModel,
+            providerThinkingLevel, diagnostics, timestamp, errorMessage, rawStopReason, durationMs,
+            responseId, null);
     }
 
     /** Backwards-compatible full pre-responseId shape. */
@@ -96,7 +115,8 @@ public record AssistantMessage(
             String providerThinkingLevel, List<AssistantMessageDiagnostic> diagnostics,
             Instant timestamp, String errorMessage, String rawStopReason, Long durationMs) {
         this(id, content, usage, stopReason, api, provider, model, responseModel,
-            providerThinkingLevel, diagnostics, timestamp, errorMessage, rawStopReason, durationMs, null);
+            providerThinkingLevel, diagnostics, timestamp, errorMessage, rawStopReason, durationMs,
+            null, null);
     }
 
     /** Constructor for pre-3a snapshots without identity fields. */
@@ -136,28 +156,28 @@ public record AssistantMessage(
     public AssistantMessage withId(String newId) {
         return new AssistantMessage(newId, content, usage, stopReason,
             api, provider, model, responseModel, providerThinkingLevel, diagnostics,
-            timestamp, errorMessage, rawStopReason, durationMs, responseId);
+            timestamp, errorMessage, rawStopReason, durationMs, responseId, deferred);
     }
 
     /** Create a copy with updated content blocks. */
     public AssistantMessage withContent(List<ContentBlock> newContent) {
         return new AssistantMessage(id, newContent, usage, stopReason,
             api, provider, model, responseModel, providerThinkingLevel, diagnostics,
-            timestamp, errorMessage, rawStopReason, durationMs, responseId);
+            timestamp, errorMessage, rawStopReason, durationMs, responseId, deferred);
     }
 
     /** Create a copy with updated usage. */
     public AssistantMessage withUsage(StreamEvent.UsageInfo newUsage) {
         return new AssistantMessage(id, content, newUsage, stopReason,
             api, provider, model, responseModel, providerThinkingLevel, diagnostics,
-            timestamp, errorMessage, rawStopReason, durationMs, responseId);
+            timestamp, errorMessage, rawStopReason, durationMs, responseId, deferred);
     }
 
     /** Create a copy with an updated stop reason. */
     public AssistantMessage withStopReason(StopReason newStopReason) {
         return new AssistantMessage(id, content, usage, newStopReason,
             api, provider, model, responseModel, providerThinkingLevel, diagnostics,
-            timestamp, errorMessage, rawStopReason, durationMs, responseId);
+            timestamp, errorMessage, rawStopReason, durationMs, responseId, deferred);
     }
 
     /** Create a copy with the provider identity + creation time attached. */
@@ -165,7 +185,7 @@ public record AssistantMessage(
                                          Instant newTimestamp) {
         return new AssistantMessage(id, content, usage, stopReason,
             newApi, newProvider, newModel, responseModel, providerThinkingLevel, diagnostics,
-            newTimestamp, errorMessage, rawStopReason, durationMs, responseId);
+            newTimestamp, errorMessage, rawStopReason, durationMs, responseId, deferred);
     }
 
     /**
@@ -176,7 +196,7 @@ public record AssistantMessage(
     public AssistantMessage withProviderThinkingLevel(String newProviderThinkingLevel) {
         return new AssistantMessage(id, content, usage, stopReason,
             api, provider, model, responseModel, newProviderThinkingLevel, diagnostics,
-            timestamp, errorMessage, rawStopReason, durationMs, responseId);
+            timestamp, errorMessage, rawStopReason, durationMs, responseId, deferred);
     }
 
     /**
@@ -186,21 +206,21 @@ public record AssistantMessage(
     public AssistantMessage withResponseModel(String newResponseModel) {
         return new AssistantMessage(id, content, usage, stopReason,
             api, provider, model, newResponseModel, providerThinkingLevel, diagnostics,
-            timestamp, errorMessage, rawStopReason, durationMs, responseId);
+            timestamp, errorMessage, rawStopReason, durationMs, responseId, deferred);
     }
 
     /** B148：盖上诊断列表的<b>当前快照</b>（builder 持可变累加器，每帧不可变拷贝）。 */
     public AssistantMessage withDiagnostics(List<AssistantMessageDiagnostic> newDiagnostics) {
         return new AssistantMessage(id, content, usage, stopReason,
             api, provider, model, responseModel, providerThinkingLevel, newDiagnostics,
-            timestamp, errorMessage, rawStopReason, durationMs, responseId);
+            timestamp, errorMessage, rawStopReason, durationMs, responseId, deferred);
     }
 
     /** Create a copy with an error-path message text attached (pi {@code errorMessage}). */
     public AssistantMessage withErrorMessage(String newErrorMessage) {
         return new AssistantMessage(id, content, usage, stopReason,
             api, provider, model, responseModel, providerThinkingLevel, diagnostics,
-            timestamp, newErrorMessage, rawStopReason, durationMs, responseId);
+            timestamp, newErrorMessage, rawStopReason, durationMs, responseId, deferred);
     }
 
     /**
@@ -215,7 +235,7 @@ public record AssistantMessage(
     public AssistantMessage withRawStopReason(String newRawStopReason) {
         return new AssistantMessage(id, content, usage, stopReason,
             api, provider, model, responseModel, providerThinkingLevel, diagnostics,
-            timestamp, errorMessage, newRawStopReason, durationMs, responseId);
+            timestamp, errorMessage, newRawStopReason, durationMs, responseId, deferred);
     }
 
     /**
@@ -225,6 +245,19 @@ public record AssistantMessage(
     public AssistantMessage withDurationMs(Long newDurationMs) {
         return new AssistantMessage(id, content, usage, stopReason,
             api, provider, model, responseModel, providerThinkingLevel, diagnostics,
-            timestamp, errorMessage, rawStopReason, newDurationMs, responseId);
+            timestamp, errorMessage, rawStopReason, newDurationMs, responseId, deferred);
+    }
+
+    /**
+     * docs/20 §6.2：盖上 deferred 响应的 provider handle（pi
+     * {@code AssistantMessage.deferred}，{@code types.ts:600}）。
+     *
+     * <p>传 {@code null} 即 pi 的赋 {@code undefined}（键省略）；deferred 提交帧与
+     * 取回帧各自经本方法/构造期设置，不依赖别的事件旁路。</p>
+     */
+    public AssistantMessage withDeferred(DeferredHandle newDeferred) {
+        return new AssistantMessage(id, content, usage, stopReason,
+            api, provider, model, responseModel, providerThinkingLevel, diagnostics,
+            timestamp, errorMessage, rawStopReason, durationMs, responseId, newDeferred);
     }
 }
