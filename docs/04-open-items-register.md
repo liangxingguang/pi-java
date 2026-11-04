@@ -55,33 +55,29 @@ B267 第五批 OAuth／device／env 与 pi-ai CLI 权限（#43／#44／#45／#50
 
 B267 第六批 Faux 可编程核心与 deferred（#80）已于 2026-11-04 按 docs/20 实施并闭环：新增 `AI/provider/faux/`（`FauxProviderOptions`、模型定义、响应步/工厂、`FauxMessages`、`FauxUsageEstimator`、`FauxStreamSynthesis`、`FauxCore`、`FauxProgrammable` 与 `FauxChatApi`）；usage 估算与 prompt-cache 模拟逐字对位 `faux.ts:246-287`（`cacheWrite = promptTokens - cacheRead`、`input = 0`、工具 JSON 只投影 pi `Tool` 形状）；工具参数按 token 大小分块并经 `ToolCallArgumentsStream` 增量解析；`AssistantMessage` 追加 `deferred` 组件并逐点传播（11 个 wither、`empty`、`StreamPartialBuilder.snapshot`、`Message.fromPartial`）；`StreamApi` 新增 `fetchDeferred`/`fetchDeferredBlocking`/`cancelDeferred` 默认方法；`ApiOptions.withExtra` 成为唯一 extra 重建入口；`AiRequestTelemetry.attachPoll` 经 `AbstractChatApi.attachPollTelemetry` 成为 `pi.ai.poll` 的第一条生产入口。L1 账面 **232.0/232＝100%**（对齐 125／缺失 0）；#80 对齐。
 
+L2 MCP 新锚点重测与对齐（W1–W12）已于 2026-11-04 按 docs/21 实施并闭环：`structuredContent` 改为任意 JSON（含数组/`null`）；`reachesTools` 工具合约与命名空间别名；连接期不再枚举资源（`hasResources` 取 capability）；OAuth `clientRegistration` 三值决策树与 `--oauth-client-registration`；`mcp login/logout -l` 与拼错建议；`mcp.json` BOM 剥离、pi 键序与 `JSON.stringify` 数字；in-memory transport 发布面；每工具 outputSchema 的 `$ref` 重定位；transport send signal；本地真授权服务器端到端夹具。MCP 账面 **126.0/131＝96.18%**（对齐 81／存疑 10／缺失 0；未加权 81/91＝89.0%）；B181/B184/B194/B196/B202/B217 销号，新登记 D217（`/mcp` 视口捕获转 L7）。
+
 ## 3. MCP 开放项与复核项
 
-以下条目全部在 L2 按新锚点重测。新 MCP OAuth、取消传播和 `structuredContent` 变化可能改变旧结论，不得原样照抄。
+以下条目已按新锚点（`56cae7823`）在 L2（docs/21）重测；未关闭项保留为当前结论。
 
 | 编号 | 当前待复核结论 |
 |---|---|
-| B181 | Java record 不保留 MCP 配置未知键；写路径虽重读 JSON 树，仍需核对新锚点行为。 |
-| B182 | 项目配置目录硬编码为 `.pi-java`；pi 支持 `package.json` 的 `piConfig.configDir`。 |
-| B183 | `mcp.json` 解析错误结构与 pi 接近，但空文件和部分错误文案不同。 |
-| B184 | Java 特有错误类型、JSON 数字写出和键序与 pi 有差异。 |
+| B182 | 项目配置目录硬编码为 `.pi-java`；pi 支持 `package.json` 的 `piConfig.configDir`。（L5 配置子系统，行为对固定改名等价） |
+| B183 | `mcp.json` 解析错误结构与 pi 接近；BOM 部分已由 #95（W8）关闭，只剩 `JSON.parse` 与 Jackson 的错误正文差异。 |
 | B185 | `OAuthMetadataParsers.optionalBoolean` 的 SpotBugs 排除仍需保留或有代码级替代。 |
 | B190 | Java 以 `IOException` 判瞬断，范围宽于 pi 的网络错误分类。 |
 | B191/B197 | 自建 WHATWG URL 归一化尚未完整互读验证；相对引用和剩余 URL 入口需逐点检查。 |
-| B192 | CIMD 文档仍依托 pi.dev；需结合新 `clientRegistration: auto \| cimd \| dcr` 决策树重新裁决。 |
-| B193 | `mcp-auth.json` 的嵌套键、null 省略和字节形态与 pi 不同。 |
-| B194 | OAuth 请求的超时、abort 和 transport `signal` 需按新实现重测。 |
-| B196 | 工具与资源当前顺序拉取；新锚点已改变连接期资源枚举行为，需整体复核。 |
+| B192 | CIMD 文档仍依托 pi.dev；`auto` 决策树已按 W5 补齐（改名 build 恒回落 DCR），清它＝pi-java 自建域名托管文档。 |
+| B193 | `mcp-auth.json` 的嵌套键、null 省略和字节形态与 pi 不同（可解析性等价）。 |
 | B198 | OAuth 页面仅有 CSS 空白差异，计算样式等价。 |
-| B202 | `structuredContent` 消费链未完整。codemode 消费者按 R5 排除；`after_tool` 等主流消费者不能一并排除。 |
 | B205 | MCP 的 AgentTool 适配位于 coding-agent，这是模块依赖方向决定的现状，不强行搬入 mcp 模块。 |
 | B208 | `ImageContent(mediaType, data)` 与 MCP 转换链的参数序不同，必须维持换序点测试。 |
 | B210 | `pi mcp` 选项解析为自建实现，需核对位置参数后 flag 透传语义。 |
 | B211 | `BrowserLauncher` 是 pi-java 平台替代件，headless 环境只展示 URL。 |
 | B212 | TTY 检测以 `System.console()` 替代，readline/abort 以虚拟线程竞速替代，并非完全等价。 |
-| B213 | CLI 使用 `pi-java` 品牌与 `.pi-java` 目录，不做 pi 的 chalk 着色。 |
-| B216 | 跨包公开面包括 OAuth settings、challenge 清理、状态 wire 和指定目录 settings 装载；重测是否仍是最小面。 |
-| B217 | 缺少真实授权服务器的 MCP login 端到端夹具。 |
+| B213 | CLI 使用 `pi-java` 品牌与 `.pi-java` 目录，不做 pi 的 chalk 着色；W6 已补齐 `-l`／建议／帮助文案内容。 |
+| B216 | 跨包公开面包括 OAuth settings、challenge 清理、状态 wire 和指定目录 settings 装载；重测后仍是最小面。 |
 | B219 | `mcp_servers` 排序使用 `String.compareTo`，非 ASCII 名称可能与 `localeCompare` 不同。 |
 | B220 | 尾部裁剪字符集与 pi 不同，窄角空格等边界需逐字测试。 |
 
@@ -144,6 +140,7 @@ SQLite 后端是 pi-java 独立实现，保留模块，不对齐已删除 schema
 | D214 | Faux 响应工厂只支持同步函数：pi 的 `FauxResponseFactory` 可返回 `Promise<AssistantMessage>`，`resolveResponse` 会 `await`；Java 的工厂返回 `AssistantMessage`，等价性依赖测试在虚拟线程上自行阻塞。出现必须真异步的夹具时复核。 |
 | D215 | Faux usage 估算的文本投影与 pi 的 `Tool` 形状对齐：工具 JSON 只含 `name／description／parameters／constrainedSampling`，Java `ToolDefinition` 的 `label／promptSnippet／promptGuidelines／renderShell` 不进估算文本；`UrlImageContent` 用 `[image-url:<url 长度>]` 稳定占位。差异只影响测试断言的 token 数字，不影响任何请求体。 |
 | D216 | Java 的 `StreamApi` 没有 pi 的 `AbortSignal` 通道：faux 的 deferred 提交/取回不移植「起始或块间中止 ⇒ aborted」分支；aborted 终局仍可由预置消息显式声明（`stopReason = ABORTED`）。与全仓既有取消模型一致。 |
+| D217 | `/mcp` 管理器在 pi-java 无 `capturesViewportInput` 等价物：扩展组件是文本级 `ExtensionComponent`，TUI 适配层也没有“视口键路由”概念，且 `/mcp` 挂在 overlay、按键已直达。PageUp/PageDown 的菜单分页行为随 L7 TUI 视口键路由一并设计；L7 若改 overlay 按键路由，须回头补 `/mcp` 分页。 |
 | B83 | pi 自身三处 sanitize 缺口保持同样行为；pi 修补时同步。 |
 | B100 | compat 探测的 baseUrl 在内置模型上行为等价；出现可观察差异再重裁。 |
 | B126 | Codex 车道及其 transport 等随 R2/R5 出分母。 |
@@ -163,4 +160,4 @@ SQLite 后端是 pi-java 独立实现，保留模块，不对齐已删除 schema
 3. 条目关闭后从开放表移除，历史由 git 保存，编号不复用。
 4. 每层重测后同步更新对应地图；全部层完成前不发布新全仓百分比。
 5. 每个实施工作包仍需独立设计稿和用户审核。
-6. 下一新文档号为 **docs/21**（L2 mcp 首个设计）；`docs/20` 已闭环（2026-11-04，L1 完成）；`docs/19` 已闭环（2026-11-03）；`docs/18` 已闭环（2026-11-03）；`docs/17` 已闭环（2026-11-03）；`docs/16` 已闭环（2026-11-03）。
+6. 下一新文档号为 **docs/22**（L3 agent-core 首个设计）；`docs/21` 已闭环（2026-11-04，L2 mcp 完成）；`docs/20` 已闭环（2026-11-04，L1 完成）；`docs/19` 已闭环（2026-11-03）；`docs/18`、`docs/17`、`docs/16` 已闭环（2026-11-03）。
