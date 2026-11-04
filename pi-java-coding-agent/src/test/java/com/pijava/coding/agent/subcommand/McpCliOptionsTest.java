@@ -67,6 +67,15 @@ class McpCliOptionsTest {
     }
 
     @Test
+    void anUnknownAliasIsReportedAsTyped() {
+        // -l maps to --local; a command without `local` reports the user's spelling.
+        var parsed = McpCliOptions.parse(new String[] {"-l"}, Map.of(
+                "url", McpCliOptions.Kind.VALUE), errors::add, Integer.MAX_VALUE);
+        assertThat(parsed).isNull();
+        assertThat(errors).containsExactly("Unknown option -l.\n" + McpCliHelp.HINT);
+    }
+
+    @Test
     void anOptionWithoutItsValueIsReported() {
         assertThat(parse("--url")).isNull();
         assertThat(errors).containsExactly("--url needs a value.");

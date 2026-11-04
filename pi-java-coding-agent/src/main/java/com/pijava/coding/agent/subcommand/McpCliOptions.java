@@ -75,7 +75,8 @@ final class McpCliOptions {
         var flags = new LinkedHashSet<String>();
         var lists = new LinkedHashMap<String, List<String>>();
         for (var index = 0; index < args.length; index++) {
-            var arg = ALIASES.getOrDefault(args[index], args[index]);
+            var typed = args[index];
+            var arg = ALIASES.getOrDefault(typed, typed);
             if ("--".equals(arg) || positional.size() >= maxPositionals) {
                 for (var rest = "--".equals(arg) ? index + 1 : index; rest < args.length; rest++) {
                     positional.add(args[rest]);
@@ -89,7 +90,8 @@ final class McpCliOptions {
             var name = arg.substring(2);
             var kind = known.get(name);
             if (kind == null) {
-                error.accept("Unknown option " + arg + ".\n" + McpCliHelp.HINT);
+                // pi reports the spelling the user typed, not the alias it maps to.
+                error.accept("Unknown option " + typed + ".\n" + McpCliHelp.HINT);
                 return null;
             }
             if (kind == Kind.FLAG) {

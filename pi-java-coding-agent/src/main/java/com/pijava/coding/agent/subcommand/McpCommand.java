@@ -140,8 +140,8 @@ public final class McpCommand {
         var log = options.log();
         var error = options.error();
         var known = "login".equals(command)
-                ? Map.of("timeout", McpCliOptions.Kind.VALUE)
-                : Map.<String, McpCliOptions.Kind>of();
+                ? Map.of("local", McpCliOptions.Kind.FLAG, "timeout", McpCliOptions.Kind.VALUE)
+                : Map.of("local", McpCliOptions.Kind.FLAG);
         var parsed = McpCliOptions.parse(args, known, error, Integer.MAX_VALUE);
         if (parsed == null) {
             return 1;
@@ -149,7 +149,7 @@ public final class McpCommand {
         var positional = parsed.positional();
         String name = positional.isEmpty() ? null : positional.get(0);
         if (name == null || positional.size() > 1) {
-            error.accept("Usage: " + McpCliHelp.APP_NAME + " mcp " + command + " <server>\n"
+            error.accept("Usage: " + McpCliHelp.APP_NAME + " mcp " + command + " <server> [-l]\n"
                     + McpCliHelp.HINT);
             return 1;
         }
@@ -157,9 +157,19 @@ public final class McpCommand {
                 .filter(server -> server.name().equals(name)).findFirst().orElse(null);
         if (entry == null) {
             var configured = loaded.servers().stream().map(McpServerEntry::name).toList();
+            // Suggest the first configured name within two edits of the typo (cli.ts:228-243).
+            var suggestion = configured.stream()
+                    .filter(candidate -> editDistance(candidate, name) <= 2)
+                    .findFirst().orElse(null);
             error.accept("No MCP server named \"" + name + "\"."
+                    + (suggestion == null ? "" : " Did you mean \"" + suggestion + "\"?")
                     + (untrustedNote == null ? "" : " " + untrustedNote) + " Configured: "
                     + (configured.isEmpty() ? "none" : String.join(", ", configured)) + ".");
+            return 1;
+        }
+        if (parsed.has("local") && entry.scope() != com.pijava.mcp.config.McpScope.PROJECT) {
+            error.accept("MCP server \"" + name + "\" is defined in " + entry.source()
+                    + ", not in the project; omit --local.");
             return 1;
         }
         var connection = McpCommandSupport.connection(entry, options, credentials);
@@ -189,6 +199,24 @@ public final class McpCommand {
         } finally {
             connection.close().join();
         }
+    }
+
+    /** Levenshtein distance, to suggest a configured name for a mistyped one ({@code cli.ts:276-287}). */
+    static int editDistance(String a, String b) {
+        var previous = new int[b.length() + 1];
+        for (var j = 0; j <= b.length(); j++) {
+            previous[j] = j;
+        }
+        for (var i = 1; i <= a.length(); i++) {
+            var current = new int[b.length() + 1];
+            current[0] = i;
+            for (var j = 1; j <= b.length(); j++) {
+                current[j] = Math.min(Math.min(previous[j] + 1, current[j - 1] + 1),
+                        previous[j - 1] + (a.charAt(i - 1) == b.charAt(j - 1) ? 0 : 1));
+            }
+            previous = current;
+        }
+        return previous[b.length()];
     }
 
     /** {@code cli.ts:521-577}. */

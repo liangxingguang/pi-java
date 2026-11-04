@@ -56,6 +56,7 @@ public final class HelpText {
               pi-java list                      List installed extensions (Phase 6)
               pi-java config [-l]               Open TUI resource switches (Phase 6)
               pi-java auth <command>            Print credentials or check provider readiness
+              pi-java mcp <command>             Manage MCP servers
 
             Options:
               --provider <name>              Provider name (default: google)

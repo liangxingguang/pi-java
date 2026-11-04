@@ -49,6 +49,45 @@ class McpLoginCommandTest {
     }
 
     @Test
+    void aMistypedServerNameGetsASuggestion() throws IOException {
+        configure("{ \"mcpServers\": { \"docs\": { \"url\": \"http://x\" } } }");
+        assertThat(run("login", "docc")).isEqualTo(1);
+        assertThat(err).containsExactly(
+                "No MCP server named \"docc\". Did you mean \"docs\"? Configured: docs.");
+    }
+
+    @Test
+    void noSuggestionWhenNoNameIsCloseEnough() throws IOException {
+        configure("{ \"mcpServers\": { \"docs\": { \"url\": \"http://x\" } } }");
+        assertThat(run("login", "zzzz")).isEqualTo(1);
+        assertThat(err).containsExactly("No MCP server named \"zzzz\". Configured: docs.");
+    }
+
+    @Test
+    void localOnlyAppliesToProjectServers() throws IOException {
+        configure("{ \"mcpServers\": { \"files\": { \"url\": \"http://127.0.0.1:1/mcp\" } } }");
+        assertThat(run("login", "files", "-l")).isEqualTo(1);
+        assertThat(err).containsExactly("MCP server \"files\" is defined in "
+                + agentDir.resolve("mcp.json") + ", not in the project; omit --local.");
+
+        err.clear();
+        assertThat(run("logout", "files", "-l")).isEqualTo(1);
+        assertThat(err).containsExactly("MCP server \"files\" is defined in "
+                + agentDir.resolve("mcp.json") + ", not in the project; omit --local.");
+    }
+
+    @Test
+    void theUsageMentionsTheLocalFlag() throws IOException {
+        configure("{ \"mcpServers\": {} }");
+        assertThat(run("login")).isEqualTo(1);
+        assertThat(err.get(0)).startsWith("Usage: pi-java mcp login <server> [-l]");
+
+        err.clear();
+        assertThat(run("logout")).isEqualTo(1);
+        assertThat(err.get(0)).startsWith("Usage: pi-java mcp logout <server> [-l]");
+    }
+
+    @Test
     void anUnknownServerListsTheConfiguredOnes() throws IOException {
         configure("{ \"mcpServers\": { \"files\": { \"url\": \"http://x\" } } }");
         assertThat(run("login", "nope")).isEqualTo(1);

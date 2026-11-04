@@ -26,8 +26,8 @@ final class McpCliHelp {
               pi-java mcp add <server> [options] --url <url>
               pi-java mcp remove <server> [-l]
               pi-java mcp list [--json]
-              pi-java mcp login <server> [--timeout <seconds>]
-              pi-java mcp logout <server>
+              pi-java mcp login <server> [-l] [--timeout <seconds>]
+              pi-java mcp logout <server> [-l]
 
             Configure and check MCP servers and sign in to OAuth servers without starting a session.
             Reads ~/.pi-java/agent/mcp.json and, in trusted projects, .pi-java/mcp.json.
@@ -39,7 +39,7 @@ final class McpCliHelp {
               login <server>          Sign in through the browser
               logout <server>         Delete the stored OAuth credentials
 
-            Options for add and remove:
+            Options for add, remove, login, and logout:
               -l, --local             Use .pi-java/mcp.json in the current project instead of the global file
 
             Options for add:
@@ -63,7 +63,7 @@ final class McpCliHelp {
 
             Other options:
               --json                  Print the list as JSON
-              --timeout <seconds>     How long login waits for the browser (default: 300)""";
+              --timeout <seconds>     Time limit for the whole sign-in (default: 300)""";
 
     private McpCliHelp() {
     }

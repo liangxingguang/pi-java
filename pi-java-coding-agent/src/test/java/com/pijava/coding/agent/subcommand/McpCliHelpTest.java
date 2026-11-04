@@ -51,13 +51,22 @@ class McpCliHelpTest {
                 .contains("pi-java mcp add <server>")
                 .contains("pi-java mcp remove <server> [-l]")
                 .contains("pi-java mcp list [--json]")
-                .contains("pi-java mcp login <server> [--timeout <seconds>]")
-                .contains("pi-java mcp logout <server>")
+                .contains("pi-java mcp login <server> [-l] [--timeout <seconds>]")
+                .contains("pi-java mcp logout <server> [-l]")
+                .contains("Options for add, remove, login, and logout")
+                .contains("--oauth-client-registration <mode>")
+                .contains("Time limit for the whole sign-in (default: 300)")
                 .contains("--bearer-token-env-var")
                 // pi writes `.pi/` here without interpolating its own constant; pi-java does not.
                 .contains("~/.pi-java/agent/mcp.json")
                 .contains(".pi-java/mcp.json");
         assertThat(McpCliHelp.HELP).doesNotContain(".pi/mcp.json");
+    }
+
+    @Test
+    void theMainHelpListsTheMcpCommand() {
+        assertThat(com.pijava.coding.agent.cli.HelpText.text())
+                .contains("  pi-java mcp <command>             Manage MCP servers");
     }
 
     @Test
