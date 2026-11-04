@@ -93,19 +93,23 @@ final class McpClientValidators {
     /** {@code client.ts:142-151} */
     static CallToolResult validateCallToolResult(Object value) {
         if (!(value instanceof Map<?, ?> map)
-                || (map.get("content") != null && !(map.get("content") instanceof List<?>))
-                || (map.get("structuredContent") != null && !isObject(map.get("structuredContent")))) {
+                || (map.get("content") != null && !(map.get("content") instanceof List<?>))) {
             throw new McpError(JsonRpcErrorCode.INVALID_REQUEST, "Invalid MCP tools/call result");
         }
-        var normalized = map;
-        if (map.get("content") == null) {
-            // content is required by the spec, but the SDK defaults it too.
-            var copy = new java.util.LinkedHashMap<String, Object>();
-            map.forEach((k, v) -> copy.put((String) k, v));
-            copy.put("content", List.of());
-            normalized = copy;
-        }
-        return McpJson.mapper().convertValue(normalized, CallToolResult.class);
+        // content is required by the spec, but the SDK defaults it too.
+        var content = map.get("content") == null ? List.<com.pijava.mcp.protocol.content.McpContentBlock>of()
+                : McpJson.mapper().convertValue(map.get("content"),
+                        new com.fasterxml.jackson.core.type.TypeReference<
+                                List<com.pijava.mcp.protocol.content.McpContentBlock>>() { });
+        // An explicit JSON null must stay distinguishable from an absent field: pi's
+        // `structuredContent !== undefined` is true for it, and the fallback prints `null`.
+        var structured = map.containsKey("structuredContent")
+                ? McpJson.mapper().valueToTree(map.get("structuredContent")) : null;
+        var error = map.get("isError") instanceof Boolean flag ? flag : null;
+        // JSON object keys are strings; the wildcard capture cannot say so.
+        @SuppressWarnings("unchecked")
+        var meta = map.get("_meta") instanceof Map<?, ?> raw ? (Map<String, Object>) raw : null;
+        return new CallToolResult(content, structured, error, meta);
     }
 
     /** {@code client.ts:109}: name string and inputSchema object. */

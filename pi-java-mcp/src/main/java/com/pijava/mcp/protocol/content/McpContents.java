@@ -1,10 +1,9 @@
 package com.pijava.mcp.protocol.content;
 
-import java.io.UncheckedIOException;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import com.pijava.mcp.McpJson;
+import com.pijava.mcp.config.JsJson;
 
 /**
  * Conversion of MCP tool results to model-facing content
@@ -36,20 +35,17 @@ public final class McpContents {
     /**
      * Convert a tool result to text and image content for a model
      * ({@code content.ts:111-117}). A result without content blocks but with
-     * {@code structuredContent} becomes its pretty-printed JSON.
+     * {@code structuredContent} becomes its pretty-printed JSON, whatever JSON
+     * value it is (arrays and an explicit {@code null} included).
      */
     public static List<LlmContent> toLlmContent(CallToolResult result) {
         var blocks = result.content() == null ? List.<McpContentBlock>of() : result.content();
         var content = blocks.stream()
                 .map(McpContents::blockToLlmContent)
                 .collect(Collectors.toList());
+        // `!== undefined` in pi: an explicit JSON null is NullNode here, not null.
         if (content.isEmpty() && result.structuredContent() != null) {
-            try {
-                content.add(new LlmContent.Text(McpJson.mapper().writerWithDefaultPrettyPrinter()
-                        .writeValueAsString(result.structuredContent())));
-            } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
-                throw new UncheckedIOException(e);
-            }
+            content.add(new LlmContent.Text(JsJson.stringify(result.structuredContent(), "  ")));
         }
         return content;
     }

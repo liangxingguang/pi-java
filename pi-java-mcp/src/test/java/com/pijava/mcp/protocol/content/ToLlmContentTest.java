@@ -45,11 +45,28 @@ class ToLlmContentTest {
     }
 
     @Test
+    void fallsBackToAnyJsonStructuredContent() throws Exception {
+        var mapper = com.pijava.mcp.McpJson.mapper();
+        var array = mapper.readValue("{\"structuredContent\":[1,2]}", CallToolResult.class);
+        assertThat(McpContents.toLlmContent(array))
+                .containsExactly(new LlmContent.Text("[\n  1,\n  2\n]"));
+
+        var nil = mapper.readValue("{\"structuredContent\":null}", CallToolResult.class);
+        assertThat(McpContents.toLlmContent(nil))
+                .containsExactly(new LlmContent.Text("null"));
+
+        var scalar = mapper.readValue("{\"structuredContent\":\"text\"}", CallToolResult.class);
+        assertThat(McpContents.toLlmContent(scalar))
+                .containsExactly(new LlmContent.Text("\"text\""));
+    }
+
+    @Test
     void fallsBackToStructuredContentJsonWhenBlocksAreEmpty() {
-        var withStructured = new CallToolResult(null, Map.of("a", 1), null, null);
+        var withStructured = new CallToolResult(null,
+                com.pijava.mcp.McpJson.mapper().valueToTree(Map.of("a", 1)), null, null);
         var converted = McpContents.toLlmContent(withStructured);
         assertThat(converted).hasSize(1);
-        assertThat(((LlmContent.Text) converted.get(0)).text()).contains("\"a\" : 1");
+        assertThat(((LlmContent.Text) converted.get(0)).text()).contains("\"a\": 1");
 
         var empty = new CallToolResult(List.of(), null, null, null);
         assertThat(McpContents.toLlmContent(empty)).isEmpty();

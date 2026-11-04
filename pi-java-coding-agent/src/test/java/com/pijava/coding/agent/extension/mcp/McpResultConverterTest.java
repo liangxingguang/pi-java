@@ -19,8 +19,11 @@ class McpResultConverterTest {
     private static final McpResultContent.Options PLAIN = McpResultContent.Options.defaults();
 
     private static CallToolResult result(List<McpContentBlock> content, Boolean error,
-                                         Map<String, Object> structured, Map<String, Object> meta) {
-        return new CallToolResult(content, structured, error, meta);
+                                         java.util.Map<String, Object> structured,
+                                         Map<String, Object> meta) {
+        return new CallToolResult(content,
+                structured == null ? null : com.pijava.mcp.McpJson.mapper().valueToTree(structured),
+                error, meta);
     }
 
     private static McpContentBlock.Text text(String value) {

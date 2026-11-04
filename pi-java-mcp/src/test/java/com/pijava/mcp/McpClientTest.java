@@ -182,7 +182,7 @@ class McpClientTest {
                 .isEqualTo(new com.pijava.mcp.protocol.content.CallToolResult(
                         List.of(new com.pijava.mcp.protocol.content.McpContentBlock.Text(
                                 "ok", null, null)),
-                        Map.of("count", 3), null, null));
+                        McpJson.mapper().valueToTree(Map.of("count", 3)), null, null));
 
         var failure = failureOf(client.callTool("fail", null, McpRequestOptions.none()));
         assertThat(failure).isInstanceOf(com.pijava.mcp.protocol.jsonrpc.McpError.class);
@@ -295,6 +295,36 @@ class McpClientTest {
     }
 
     @Test
+    void acceptsAnyJsonStructuredContent() throws Exception {
+        for (var value : new Object[] {List.of(Map.of("id", 1), Map.of("id", 2)),
+                "text", 3, false, null}) {
+            var server = RecordingTransport.create();
+            server.setHandler("tools/call", params -> {
+                var result = new java.util.LinkedHashMap<String, Object>();
+                result.put("content", List.of());
+                result.put("structuredContent", value);
+                return result;
+            });
+            var expected = value == null
+                    ? McpJson.mapper().getNodeFactory().nullNode()
+                    : McpJson.mapper().valueToTree(value);
+            assertThat(callStructured(server).structuredContent())
+                    .as("structuredContent %s", value)
+                    .isEqualTo(expected);
+        }
+    }
+
+    private static com.pijava.mcp.protocol.content.CallToolResult callStructured(
+            RecordingTransport server) throws Exception {
+        var client = connect(server);
+        try {
+            return client.callTool("structured", null, McpRequestOptions.none()).get();
+        } finally {
+            client.close();
+        }
+    }
+
+    @Test
     void defaultsMissingToolResultContentToEmptyList() throws Exception {
         var server = RecordingTransport.create();
         server.setHandler("tools/call", params -> Map.of(
@@ -302,7 +332,7 @@ class McpClientTest {
         var client = connect(server);
         assertThat(client.callTool("structured", null, McpRequestOptions.none()).get())
                 .isEqualTo(new com.pijava.mcp.protocol.content.CallToolResult(
-                        List.of(), Map.of("ok", true), null, null));
+                        List.of(), McpJson.mapper().valueToTree(Map.of("ok", true)), null, null));
 
         server.setHandler("tools/call", params -> Map.of("content", "not a list"));
         assertThat(failureOf(client.callTool("broken", null, McpRequestOptions.none())))
