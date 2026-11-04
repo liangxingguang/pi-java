@@ -116,11 +116,14 @@ class McpToolDefinitionTest {
     }
 
     @Test
-    void theOutputSchemaOmitsStructuredContentWithoutOne() {
+    void theOutputSchemaAlwaysCarriesStructuredContentAndNoMeta() {
         var definition = definitions(tool("echo", null, "d", Map.of(), null, null), (n, a, o) -> null);
         @SuppressWarnings("unchecked")
         var properties = (Map<String, Object>) definition.outputSchema().get("properties");
-        assertThat(properties).containsOnlyKeys("content", "isError", "_meta");
+        assertThat(properties).containsOnlyKeys("content", "structuredContent", "isError");
+        // Without a declared schema, any JSON value is allowed.
+        assertThat(properties.get("structuredContent")).isEqualTo(Map.of());
+        assertThat(definition.outputSchema()).containsEntry("additionalProperties", true);
     }
 
     // ----------------------------------------------------------------- execution
