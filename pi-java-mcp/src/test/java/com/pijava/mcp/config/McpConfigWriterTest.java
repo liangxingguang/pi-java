@@ -45,6 +45,74 @@ class McpConfigWriterTest {
     }
 
     @Test
+    void addWritesAnHttpServerInPiKeyOrder() throws Exception {
+        var oauth = new McpServerConfig.OAuth("cid", "sec", 8080,
+                "http://127.0.0.1:8080/callback", null, "client name", "auto", null);
+        var config = new McpServerConfig.Http(null, McpExposure.DIRECT, "Docs server", null,
+                null, null, "https://example.test/mcp", Map.of("A", "1"), oauth, null);
+        McpConfig.add(file, "remote", config);
+
+        assertThat(Files.readString(file)).isEqualTo("""
+                {
+                  "mcpServers": {
+                    "remote": {
+                      "url": "https://example.test/mcp",
+                      "headers": {
+                        "A": "1"
+                      },
+                      "oauth": {
+                        "clientId": "cid",
+                        "clientSecret": "sec",
+                        "callbackPort": 8080,
+                        "callbackUrl": "http://127.0.0.1:8080/callback",
+                        "clientName": "client name",
+                        "clientRegistration": "auto"
+                      },
+                      "exposure": "direct",
+                      "description": "Docs server"
+                    }
+                  }
+                }
+                """);
+    }
+
+    @Test
+    void addWritesAStdioServerInPiKeyOrder() throws Exception {
+        var config = new McpServerConfig.Stdio(null, McpExposure.DEFERRED, "Docs", null, null,
+                null, "node", List.of("server.js"), Map.of("A", "1"), "sub");
+        McpConfig.add(file, "docs", config);
+
+        assertThat(Files.readString(file)).isEqualTo("""
+                {
+                  "mcpServers": {
+                    "docs": {
+                      "command": "node",
+                      "args": [
+                        "server.js"
+                      ],
+                      "env": {
+                        "A": "1"
+                      },
+                      "cwd": "sub",
+                      "exposure": "deferred",
+                      "description": "Docs"
+                    }
+                  }
+                }
+                """);
+    }
+
+    @Test
+    void integralNumbersAreWrittenLikeJsonStringify() throws Exception {
+        var config = new McpServerConfig.Stdio(null, null, null, null, null, 1.0,
+                "node", null, null, null);
+        McpConfig.add(file, "docs", config);
+        var written = Files.readString(file);
+        assertThat(written).contains("\"timeout\": 1\n");
+        assertThat(written).doesNotContain("1.0");
+    }
+
+    @Test
     void addCreatesTheFileAndReportsReplacement() throws Exception {
         var docs = stdio("node", List.of("server.js"));
         assertThat(McpConfig.add(file, "docs", docs)).isFalse();

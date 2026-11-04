@@ -130,11 +130,104 @@ public final class McpConfig {
         editMcpServers(path, (servers, parsed) -> {
             var target = servers == null ? McpJson.mapper().createObjectNode() : servers;
             replaced.set(target.has(name));
-            target.set(name, McpJson.mapper().valueToTree(config));
+            target.set(name, writeServerConfig(config));
             parsed.set("mcpServers", target);
             return true;
         });
         return replaced.get();
+    }
+
+    /**
+     * Write one entry in the key order pi's CLI produces ({@code cli.ts:340-394}): the transport
+     * keys, {@code exposure}, {@code description}, then the remaining known keys in a fixed order
+     * ({@code mcp-servers.ts:24-113}). The CLI itself sets no remaining keys; writing them keeps
+     * the other callers (Radius) deterministic.
+     */
+    private static ObjectNode writeServerConfig(McpServerConfig config) {
+        var out = McpJson.mapper().createObjectNode();
+        var type = switch (config) {
+            case McpServerConfig.Http http -> http.type();
+            case McpServerConfig.Stdio stdio -> stdio.type();
+        };
+        if (config instanceof McpServerConfig.Http http) {
+            out.put("url", http.url());
+            if (http.headers() != null && !http.headers().isEmpty()) {
+                out.set("headers", McpJson.mapper().valueToTree(http.headers()));
+            }
+            if (http.oauth() != null && !isEmpty(http.oauth())) {
+                out.set("oauth", writeOAuth(http.oauth()));
+            }
+        } else if (config instanceof McpServerConfig.Stdio stdio) {
+            out.put("command", stdio.command());
+            if (stdio.args() != null && !stdio.args().isEmpty()) {
+                out.set("args", McpJson.mapper().valueToTree(stdio.args()));
+            }
+            if (stdio.env() != null && !stdio.env().isEmpty()) {
+                out.set("env", McpJson.mapper().valueToTree(stdio.env()));
+            }
+            if (stdio.cwd() != null) {
+                out.put("cwd", stdio.cwd());
+            }
+        }
+        if (config.exposure() != null) {
+            out.put("exposure", config.exposure().wire());
+        }
+        if (config.description() != null) {
+            out.put("description", config.description());
+        }
+        if (type != null) {
+            out.put("type", type);
+        }
+        if (config.toolExposure() != null) {
+            out.set("toolExposure", McpJson.mapper().valueToTree(config.toolExposure()));
+        }
+        if (config.enabled() != null) {
+            out.put("enabled", config.enabled());
+        }
+        if (config.timeout() != null) {
+            out.set("timeout", McpJson.mapper().valueToTree(config.timeout()));
+        }
+        if (config instanceof McpServerConfig.Http http && http.auth() != null) {
+            out.set("auth", McpJson.mapper().valueToTree(http.auth()));
+        }
+        return out;
+    }
+
+    /** The OAuth settings in the schema's field order ({@code mcp-servers.ts:80-100}). */
+    private static ObjectNode writeOAuth(McpServerConfig.OAuth oauth) {
+        var out = McpJson.mapper().createObjectNode();
+        if (oauth.clientId() != null) {
+            out.put("clientId", oauth.clientId());
+        }
+        if (oauth.clientSecret() != null) {
+            out.put("clientSecret", oauth.clientSecret());
+        }
+        if (oauth.callbackPort() != null) {
+            out.put("callbackPort", oauth.callbackPort());
+        }
+        if (oauth.callbackUrl() != null) {
+            out.put("callbackUrl", oauth.callbackUrl());
+        }
+        if (oauth.scope() != null) {
+            out.put("scope", oauth.scope());
+        }
+        if (oauth.clientName() != null) {
+            out.put("clientName", oauth.clientName());
+        }
+        if (oauth.clientRegistration() != null) {
+            out.put("clientRegistration", oauth.clientRegistration());
+        }
+        if (oauth.authServerMetadataUrl() != null) {
+            out.put("authServerMetadataUrl", oauth.authServerMetadataUrl());
+        }
+        return out;
+    }
+
+    /** Whether every OAuth field is unset, so the CLI writes no {@code oauth} object at all. */
+    private static boolean isEmpty(McpServerConfig.OAuth oauth) {
+        return oauth.clientId() == null && oauth.clientSecret() == null && oauth.callbackPort() == null
+                && oauth.callbackUrl() == null && oauth.scope() == null && oauth.clientName() == null
+                && oauth.clientRegistration() == null && oauth.authServerMetadataUrl() == null;
     }
 
     /**

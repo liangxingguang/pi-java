@@ -92,6 +92,16 @@ public final class JsJson {
             out.append(indent.repeat(depth)).append(']');
             return;
         }
+        // `JSON.stringify` writes an integral number without a fraction (`1.0` → `1`); Jackson
+        // would keep the `DoubleNode` literal.
+        if (node.isFloatingPointNumber()) {
+            var value = node.doubleValue();
+            if (Double.isFinite(value) && value == Math.rint(value)
+                    && value >= Long.MIN_VALUE && value <= Long.MAX_VALUE) {
+                out.append(node.longValue());
+                return;
+            }
+        }
         out.append(node);
     }
 
