@@ -49,6 +49,15 @@ class McpConfigLoadTest {
     }
 
     @Test
+    void stripsTheUtf8BomFromBothConfigFiles() throws Exception {
+        setup("﻿{\"mcpServers\":{\"global\":{\"command\":\"run-g\"}}}",
+                "﻿{\"mcpServers\":{\"project\":{\"command\":\"run-p\"}}}");
+        var loaded = McpConfig.load(agentDir, cwd, true);
+        assertThat(names(loaded)).containsExactly("global", "project");
+        assertThat(loaded.errors()).isEmpty();
+    }
+
+    @Test
     void mergesGlobalAndTrustedProjectServersAndValidatesEntries() throws Exception {
         setup("""
                 {"mcpServers":{

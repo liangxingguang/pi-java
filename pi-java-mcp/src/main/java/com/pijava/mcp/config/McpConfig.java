@@ -35,6 +35,12 @@ public final class McpConfig {
     /** The only keys a project entry may override ({@code config.ts:74}). */
     private static final List<String> OVERRIDE_KEYS = List.of("enabled", "exposure", "toolExposure");
 
+    /**
+     * UTF-8 byte order mark. Written as an escape so no invisible character sits in
+     * the source (the same reason {@code SettingsManager} escapes it).
+     */
+    private static final String BOM = String.valueOf((char) 0xFEFF);
+
     private McpConfig() {
     }
 
@@ -161,7 +167,7 @@ public final class McpConfig {
         }
         JsonNode parsed;
         try {
-            parsed = McpJson.mapper().readTree(Files.readString(path));
+            parsed = McpJson.mapper().readTree(stripBom(Files.readString(path)));
         } catch (IOException | RuntimeException error) {
             state.errors.add(path + ": " + error.getMessage());
             return;
@@ -261,7 +267,7 @@ public final class McpConfig {
         String text = null;
         if (Files.exists(path)) {
             try {
-                text = Files.readString(path);
+                text = stripBom(Files.readString(path));
             } catch (IOException error) {
                 throw new McpConfigError(path + ": " + error.getMessage(), error);
             }
@@ -289,6 +295,11 @@ public final class McpConfig {
         } catch (IOException error) {
             throw new McpConfigError(path + ": " + error.getMessage(), error);
         }
+    }
+
+    /** Drop a leading UTF-8 BOM, which {@code JSON.parse} rejects ({@code config.ts:92-100,229-232}). */
+    private static String stripBom(String text) {
+        return text.startsWith(BOM) ? text.substring(BOM.length()) : text;
     }
 
     private static @Nullable ObjectNode asObject(@Nullable JsonNode node) {

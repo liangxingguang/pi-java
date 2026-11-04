@@ -57,6 +57,22 @@ class McpConfigWriterTest {
     }
 
     @Test
+    void readsAndWritesAUtf8BomFile() throws Exception {
+        Files.createDirectories(file.getParent());
+        Files.writeString(file,
+                "﻿{\"mcpServers\":{\"docs\":{\"command\":\"node\"}}}");
+
+        assertThat(McpConfig.add(file, "files", stdio("bun", null))).isFalse();
+        // The rewrite drops the BOM and stays loadable.
+        assertThat(Files.readString(file)).doesNotStartWith("﻿");
+        assertThat(tree(file).get("mcpServers").has("docs")).isTrue();
+        assertThat(tree(file).get("mcpServers").has("files")).isTrue();
+
+        assertThat(McpConfig.remove(file, "docs")).isTrue();
+        assertThat(tree(file).get("mcpServers").has("docs")).isFalse();
+    }
+
+    @Test
     void removeReportsWhetherAnEntryWasRemoved() throws Exception {
         assertThat(McpConfig.remove(file, "docs")).isFalse();
 
