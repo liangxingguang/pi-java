@@ -41,9 +41,21 @@ class KeybindingsManagerTest {
     @Test
     void exposesAllActionIds() {
         // 11 实键全局＋4 空绑定 session＋12 tree/copy＋6 选择器 session
-        // ＋5 扩展对话框＋6 scoped-models（批 31）＋1 thinking-save（批 34，均 overlay 表）。
-        assertThat(keys.actionIds()).hasSize(45);
+        // ＋5 扩展对话框＋6 scoped-models（批 31）＋1 thinking-save（批 34）
+        // ＋2 选择器翻页（docs/22，均 overlay 表）。
+        assertThat(keys.actionIds()).hasSize(47);
         assertThat(keys.actionIds()).contains(KeybindingsManager.INTERRUPT);
+    }
+
+    /** docs/22（pi tui keybindings 默认 pageUp/pageDown）：翻页键只在 overlay 表。 */
+    @Test
+    void selectPageKeysLiveInTheOverlayTable() {
+        assertThat(keys.resolve(KeybindingsManager.KeyStroke.of("pageup", false, false, false)))
+            .as("PageUp 不进全局表（主屏翻页由 GlobalKeyRouter 直管）").isNull();
+        assertThat(keys.matches(KeybindingsManager.SELECT_PAGE_UP,
+            KeybindingsManager.KeyStroke.of("pageup", false, false, false))).isTrue();
+        assertThat(keys.matches(KeybindingsManager.SELECT_PAGE_DOWN,
+            KeybindingsManager.KeyStroke.of("pagedown", false, false, false))).isTrue();
     }
 
     /** 批 17（T4）：扩展对话框五键在 overlay 表——enter/esc 等主屏键全局 resolve 零污染。 */

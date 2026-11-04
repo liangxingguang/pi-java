@@ -79,6 +79,9 @@ public final class KeybindingsManager {
     public static final String SELECT_DOWN = "tui.select.down";       // down
     public static final String SELECT_CONFIRM = "tui.select.confirm"; // enter
     public static final String SELECT_CANCEL = "tui.select.cancel";   // escape, ctrl+c
+    // docs/22：pi tui keybindings.ts 的 tui.select.pageUp/pageDown 默认键。
+    public static final String SELECT_PAGE_UP = "tui.select.pageUp";     // pageup
+    public static final String SELECT_PAGE_DOWN = "tui.select.pageDown"; // pagedown
     public static final String INPUT_NEW_LINE = "tui.input.newLine";  // shift+enter, ctrl+j
 
     /**
@@ -187,6 +190,8 @@ public final class KeybindingsManager {
         // 批 17（T4）：pi tui/keybindings.ts:143-158 默认键逐字——扩展对话框五键。
         overlayBindings.put(SELECT_UP, List.of(KeyStroke.of("up", false, false, false)));
         overlayBindings.put(SELECT_DOWN, List.of(KeyStroke.of("down", false, false, false)));
+        overlayBindings.put(SELECT_PAGE_UP, List.of(KeyStroke.of("pageup", false, false, false)));
+        overlayBindings.put(SELECT_PAGE_DOWN, List.of(KeyStroke.of("pagedown", false, false, false)));
         overlayBindings.put(SELECT_CONFIRM, List.of(KeyStroke.of("enter", false, false, false)));
         overlayBindings.put(SELECT_CANCEL, List.of(
             KeyStroke.of("esc", false, false, false),

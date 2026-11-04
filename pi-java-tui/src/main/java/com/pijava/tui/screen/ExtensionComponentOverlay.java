@@ -93,6 +93,17 @@ public final class ExtensionComponentOverlay implements ScreenOverlay, Extension
         return component;
     }
 
+    /**
+     * 被挂组件是否接管视口键（pi {@code Component.capturesViewportInput} 的适配层透传）。
+     *
+     * <p>当前无路由消费者：{@link com.pijava.tui.app.GlobalKeyRouter} 对活动 overlay
+     * 已转发全部按键并返回 {@code HANDLED}，视口滚动分支不可达；此访问器只做对位，
+     * 若未来路由在 overlay 之前分流视口键再查询它。</p>
+     */
+    public boolean capturesViewportInput() {
+        return component.capturesViewportInput();
+    }
+
     @Override
     public Element render() {
         var children = new ArrayList<Element>();

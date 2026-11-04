@@ -19,6 +19,19 @@ public interface ExtensionComponent {
     /** 处理一次按键（pi {@code handleInput(data)}；KeyStroke 为中性键表示）。 */
     void handleInput(KeybindingsManager.KeyStroke key);
 
+    /**
+     * 是否由本组件接管视口键（PageUp/PageDown）（pi {@code Component.capturesViewportInput}）。
+     *
+     * <p>pi 的 alt screen 在组件接管时把视口键发给组件而不是滚动转录；TUI 侧
+     * {@code ctx.ui.custom} 挂载的组件始终在模态 overlay 内，所有键已先到组件
+     * （模态语义即捕获），因此这里只需暴露属性供测试与扩展本体对位。</p>
+     *
+     * @return whether viewport keys belong to this component
+     */
+    default boolean capturesViewportInput() {
+        return false;
+    }
+
     /** 卸载清理（pi {@code dispose?()}）。 */
     default void dispose() { }
 }

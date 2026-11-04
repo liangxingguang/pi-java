@@ -35,6 +35,7 @@ class ExtensionCustomOverlayTest {
         final List<String> keys = new java.util.concurrent.CopyOnWriteArrayList<>();
         final AtomicInteger disposeCalls = new AtomicInteger();
         volatile boolean throwOnDispose;
+        volatile boolean capturesViewport;
 
         @Override
         public List<String> render(int width) {
@@ -52,6 +53,11 @@ class ExtensionCustomOverlayTest {
             if (throwOnDispose) {
                 throw new IllegalStateException("dispose boom");
             }
+        }
+
+        @Override
+        public boolean capturesViewportInput() {
+            return capturesViewport;
         }
     }
 
@@ -164,6 +170,20 @@ class ExtensionCustomOverlayTest {
         overlay.resultFuture().complete(null);
         dispatcher.drain();
         overlay.apply(null, s -> { });
+        call.get(5, TimeUnit.SECONDS);
+    }
+
+    // docs/22：overlay 透传组件的 capturesViewportInput（pi Component 属性），现读不缓存。
+    @Test
+    void overlayExposesComponentViewportCapture() throws Exception {
+        var component = new FakeComponent();
+        var call = callCustom((env, keys, done) -> component, null);
+        var overlay = (ExtensionComponentOverlay) awaitOverlay();
+        assertThat(overlay.capturesViewportInput()).isFalse();
+        component.capturesViewport = true;
+        assertThat(overlay.capturesViewportInput()).isTrue();
+        overlay.cancel();
+        overlay.resultFuture().complete(null);
         call.get(5, TimeUnit.SECONDS);
     }
 

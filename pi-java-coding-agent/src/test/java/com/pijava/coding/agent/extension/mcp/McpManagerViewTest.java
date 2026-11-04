@@ -101,6 +101,59 @@ class McpManagerViewTest {
         assertThat(view.render(80)).anyMatch(l -> l.contains("(1/15)"));
     }
 
+    // docs/22（pi mcp-manager-view.test.ts:44-64，#7629）：菜单列表展示时接管视口键；
+    // 20 项时 PageDown 走一页（可见 12 项），到末页钳制在最后一项。
+    @Test
+    void pageKeysMoveSelectionByOneVisiblePage() {
+        var view = view();
+        var items = new java.util.ArrayList<McpMenuItem>();
+        for (var i = 0; i < 20; i++) {
+            items.add(new McpMenuItem("s" + i, "server-" + i, null));
+        }
+        var future = view.menu(() -> menu(items), null);
+        view.render(80); // 落初始选中 server-0
+        view.handleInput(key("pagedown"));
+        assertThat(view.render(80)).anyMatch(l -> l.contains("→ server-12"));
+        view.handleInput(key("pagedown"));
+        assertThat(view.render(80)).anyMatch(l -> l.contains("→ server-19"));
+        view.handleInput(key("pagedown"));
+        assertThat(view.render(80)).anyMatch(l -> l.contains("→ server-19"));
+        view.handleInput(key("pageup"));
+        assertThat(view.render(80)).anyMatch(l -> l.contains("→ server-7"));
+        view.handleInput(key("enter"));
+        assertThat(future).succeedsWithin(1, TimeUnit.SECONDS).isEqualTo("s7");
+    }
+
+    // docs/22（pi select-list.ts:148-164）：页大小＝min(条目数, 可见 12 项)——短列表一页即到底。
+    @Test
+    void pageSizeIsTheVisibleItemCount() {
+        var view = view();
+        var items = new java.util.ArrayList<McpMenuItem>();
+        for (var i = 0; i < 5; i++) {
+            items.add(new McpMenuItem("s" + i, "server-" + i, null));
+        }
+        view.menu(() -> menu(items), null);
+        view.render(80);
+        view.handleInput(key("pagedown"));
+        assertThat(view.render(80)).anyMatch(l -> l.contains("→ server-4"));
+        view.handleInput(key("pageup"));
+        assertThat(view.render(80)).anyMatch(l -> l.contains("→ server-0"));
+    }
+
+    // docs/22（pi ui.ts:100-101）：只有菜单列表（非空）接管视口键；状态/redirect/空菜单不接管。
+    @Test
+    void capturesViewportInputOnlyWhileAMenuListIsShown() {
+        var view = view();
+        view.menu(() -> menu(List.of(new McpMenuItem("a", "alpha", null))), null);
+        assertThat(view.capturesViewportInput()).isTrue();
+        view.menu(() -> menu(List.of()), null);
+        assertThat(view.capturesViewportInput()).isFalse();
+        view.status("Sign in to docs", "Connecting…", null);
+        assertThat(view.capturesViewportInput()).isFalse();
+        view.redirectUrl("Sign in to docs", "https://as.example/x", AbortSignal.create());
+        assertThat(view.capturesViewportInput()).isFalse();
+    }
+
     @Test
     void statusScreenCancelFiresCallback() {
         var view = view();

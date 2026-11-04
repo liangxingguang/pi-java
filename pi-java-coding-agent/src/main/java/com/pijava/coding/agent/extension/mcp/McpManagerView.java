@@ -103,6 +103,12 @@ final class McpManagerView implements ExtensionComponent, McpManagerUi {
         }
     }
 
+    /** pi {@code ui.ts:100-101}：只有展示中的菜单列表（非空）接管视口键。 */
+    @Override
+    public boolean capturesViewportInput() {
+        return screen instanceof MenuScreen menuScreen && menuScreen.hasItems();
+    }
+
     @Override
     public void dispose() {
         if (screen instanceof MenuScreen menuScreen && menuScreen.unsubscribe != null) {
@@ -247,6 +253,10 @@ final class McpManagerView implements ExtensionComponent, McpManagerUi {
                 selected = menu.items().get(Math.max(0, index - 1)).value();
             } else if (keybindings.matches(KeybindingsManager.SELECT_DOWN, key)) {
                 selected = menu.items().get(Math.min(menu.items().size() - 1, index + 1)).value();
+            } else if (keybindings.matches(KeybindingsManager.SELECT_PAGE_UP, key)) {
+                selected = menu.items().get(pageIndex(menu, index, -1)).value();
+            } else if (keybindings.matches(KeybindingsManager.SELECT_PAGE_DOWN, key)) {
+                selected = menu.items().get(pageIndex(menu, index, 1)).value();
             } else if (keybindings.matches(KeybindingsManager.SELECT_CONFIRM, key)) {
                 finish(selected);
             } else if (keybindings.matches(KeybindingsManager.SELECT_CANCEL, key)) {
@@ -261,6 +271,17 @@ final class McpManagerView implements ExtensionComponent, McpManagerUi {
                 }
             }
             return 0;
+        }
+
+        /** Whether the list has items, which is when pi's SelectList (and not a bare handler) is shown. */
+        boolean hasItems() {
+            return !build.get().items().isEmpty();
+        }
+
+        /** pi {@code getSelectPageIndex}（tui keybindings.ts:327-339）：一页可见项，钳制到列表边界。 */
+        private int pageIndex(McpMenu menu, int index, int direction) {
+            var pageSize = Math.min(menu.items().size(), MAX_VISIBLE_ITEMS);
+            return Math.max(0, Math.min(menu.items().size() - 1, index + direction * pageSize));
         }
     }
 
