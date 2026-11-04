@@ -195,6 +195,20 @@ class OAuthFlowTest {
         assertThat(fetch.sentTo(TOKEN).get(0).body()).contains("code=matching");
     }
 
+    @Test
+    void issuerWithoutMetadataIsAMismatch() {
+        assertThatThrownBy(() -> OAuthFlow.checkIssuer(null, "https://issuer.example"))
+                .isInstanceOf(OAuthIssuerMismatchError.class)
+                .satisfies(thrown -> {
+                    var mismatch = (OAuthIssuerMismatchError) thrown;
+                    assertThat(mismatch.expected()).isNull();
+                    assertThat(mismatch).hasMessage(
+                            "OAuth issuer mismatch: expected none, received \"https://issuer.example\"");
+                });
+        // No metadata and no iss: nothing to compare, so the exchange proceeds.
+        OAuthFlow.checkIssuer(null, null);
+    }
+
     private static OAuthClientInformation client() {
         return new OAuthClientInformation("client", null, null, null, null,
                 java.util.List.of(), null);

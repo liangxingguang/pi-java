@@ -73,6 +73,44 @@ class OAuthMetadataParsersTest {
     }
 
     @Test
+    void rejectsEveryNonHttpUrlField() {
+        // The platform URL handler would launch files and custom protocols; only
+        // http and https are allowed (flow.ts:189-191, types.ts:126-136).
+        for (var dangerous : List.of(
+                "file://attacker/share/x.exe", "search-ms:query=x", "ms-msdt:/id")) {
+            assertThatThrownBy(() -> OAuthMetadataParsers.parseProtectedResourceMetadata(
+                    map("{\"resource\":\"" + dangerous + "\"}")))
+                    .as(dangerous).isInstanceOf(RuntimeException.class);
+            assertThatThrownBy(() -> OAuthMetadataParsers.parseProtectedResourceMetadata(
+                    map("{\"resource\":\"https://s.example\",\"authorization_servers\":[\""
+                            + dangerous + "\"]}")))
+                    .as(dangerous).isInstanceOf(RuntimeException.class);
+            assertThatThrownBy(() -> OAuthMetadataParsers.parseAuthorizationServerMetadata(map(
+                    "{\"issuer\":\"" + dangerous + "\","
+                            + "\"authorization_endpoint\":\"https://as.example/authorize\","
+                            + "\"token_endpoint\":\"https://as.example/token\","
+                            + "\"response_types_supported\":[\"code\"]}")))
+                    .as(dangerous).isInstanceOf(RuntimeException.class);
+            assertThatThrownBy(() -> OAuthMetadataParsers.parseAuthorizationServerMetadata(map(
+                    "{\"issuer\":\"https://as.example\","
+                            + "\"authorization_endpoint\":\"https://as.example/authorize\","
+                            + "\"token_endpoint\":\"" + dangerous + "\","
+                            + "\"response_types_supported\":[\"code\"]}")))
+                    .as(dangerous).isInstanceOf(RuntimeException.class);
+            assertThatThrownBy(() -> OAuthMetadataParsers.parseAuthorizationServerMetadata(map(
+                    "{\"issuer\":\"https://as.example\","
+                            + "\"authorization_endpoint\":\"https://as.example/authorize\","
+                            + "\"token_endpoint\":\"https://as.example/token\","
+                            + "\"registration_endpoint\":\"" + dangerous + "\","
+                            + "\"response_types_supported\":[\"code\"]}")))
+                    .as(dangerous).isInstanceOf(RuntimeException.class);
+        }
+        assertThat(OAuthMetadataParsers.parseProtectedResourceMetadata(
+                map("{\"resource\":\"http://127.0.0.1:9/mcp\"}")).resource())
+                .isEqualTo("http://127.0.0.1:9/mcp");
+    }
+
+    @Test
     void rejectsInvalidAuthorizationServersAndScopes() {
         assertThatThrownBy(() -> OAuthMetadataParsers.parseProtectedResourceMetadata(
                 map("{\"resource\":\"https://s.example\",\"authorization_servers\":\"x\"}")))

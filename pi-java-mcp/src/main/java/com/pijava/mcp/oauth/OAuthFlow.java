@@ -165,15 +165,17 @@ public final class OAuthFlow {
         return new OAuthClientInformation(document.url(), null, null, null, null, List.of(), null);
     }
 
-    /** RFC 9207: never send a code from another authorization server to this one. */
-    private static void checkIssuer(@Nullable AuthorizationServerMetadata metadata,
-                                    @Nullable String iss) {
-        if (metadata == null) {
-            return;
-        }
-        if (iss != null || Boolean.TRUE.equals(metadata.authorizationResponseIssParameterSupported())) {
-            if (!Objects.equals(iss, metadata.issuer())) {
-                throw new OAuthIssuerMismatchError(metadata.issuer(), iss);
+    /**
+     * RFC 9207: never send a code from another authorization server to this one.
+     * Without metadata there is no expected issuer, so any received {@code iss}
+     * is a mismatch ({@code flow.ts:385-392}).
+     */
+    static void checkIssuer(@Nullable AuthorizationServerMetadata metadata,
+                            @Nullable String iss) {
+        if (iss != null || (metadata != null
+                && Boolean.TRUE.equals(metadata.authorizationResponseIssParameterSupported()))) {
+            if (!Objects.equals(iss, metadata == null ? null : metadata.issuer())) {
+                throw new OAuthIssuerMismatchError(metadata == null ? null : metadata.issuer(), iss);
             }
         }
     }

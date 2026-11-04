@@ -145,6 +145,17 @@ class OAuthEndpointsTest {
     }
 
     @Test
+    void startAuthorizationRejectsANonHttpAuthorizationEndpoint() {
+        var metadata = new AuthorizationServerMetadata("https://as.example",
+                "file://attacker/share/x.exe", "https://as.example/token", null, null,
+                List.of("code"), null, null, null, null, null, null);
+        assertThatThrownBy(() -> OAuthEndpoints.startAuthorization(URI.create("https://as.example"),
+                metadata, client("id", null), "http://127.0.0.1/callback", null, null, null))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("Invalid authorization endpoint file://attacker/share/x.exe");
+    }
+
+    @Test
     void registerClientRequiresAnEndpointWhenMetadataIsKnown() {
         var metadata = OAuthFlowTest.metadata("{\"issuer\":\"https://as.example\","
                 + "\"authorization_endpoint\":\"https://as.example/authorize\","

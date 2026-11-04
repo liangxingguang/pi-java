@@ -5,7 +5,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
 import org.jspecify.annotations.Nullable;
@@ -14,9 +13,9 @@ import org.jspecify.annotations.Nullable;
  * Structural parsers for OAuth metadata documents (pi types.ts:134-176).
  *
  * <p>Dependency-free, like pi: documents are parsed into generic maps and
- * validated field by field. Note that {@code safeUrl} does <b>not</b> enforce
- * https; it rejects only unparseable values and {@code javascript:},
- * {@code data:}, {@code vbscript:} schemes.</p>
+ * validated field by field. Every URL field must be an absolute {@code http}
+ * or {@code https} URL: the platform URL handler also launches files and
+ * custom protocols.</p>
  */
 public final class OAuthMetadataParsers {
 
@@ -178,14 +177,22 @@ public final class OAuthMetadataParsers {
         } catch (IllegalArgumentException e) {
             throw new IllegalArgumentException("Invalid " + name);
         }
-        if (!uri.isAbsolute() || uri.getScheme() == null) {
-            throw new IllegalArgumentException("Invalid " + name);
-        }
-        var scheme = uri.getScheme().toLowerCase(Locale.ROOT);
-        if (scheme.equals("javascript") || scheme.equals("data") || scheme.equals("vbscript")) {
+        if (!isHttpUrl(uri)) {
             throw new IllegalArgumentException("Invalid " + name);
         }
         return text;
+    }
+
+    /**
+     * Whether a URL uses {@code http} or {@code https} ({@code types.ts:126-136}).
+     *
+     * @param url the parsed URL
+     * @return whether it is an HTTP(S) URL
+     */
+    public static boolean isHttpUrl(URI url) {
+        var scheme = url.getScheme();
+        return url.isAbsolute() && scheme != null
+                && ("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme));
     }
 
     private static @Nullable String optionalUrl(@Nullable Object value, String name) {

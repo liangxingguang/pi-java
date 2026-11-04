@@ -105,6 +105,11 @@ public final class OAuthEndpoints {
         var base = metadata != null && metadata.authorizationEndpoint() != null
                 ? URI.create(metadata.authorizationEndpoint())
                 : authorizationServerUrl.resolve("/authorize");
+        // Callers open this URL with the platform URL handler, which also launches files
+        // and custom protocols (flow.ts:189-191).
+        if (!OAuthMetadataParsers.isHttpUrl(base)) {
+            throw new IllegalStateException("Invalid authorization endpoint " + base);
+        }
         var pkce = OAuthPkce.generate();
         var params = new LinkedHashMap<String, String>();
         params.put("response_type", "code");

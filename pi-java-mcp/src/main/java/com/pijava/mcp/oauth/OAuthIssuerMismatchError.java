@@ -8,13 +8,14 @@ import org.jspecify.annotations.Nullable;
  */
 public class OAuthIssuerMismatchError extends RuntimeException {
 
-    private final String expected;
+    /** Null when there was no metadata naming an expected issuer. */
+    private final @Nullable String expected;
     /** Null when an authorization response lacks the promised {@code iss} parameter (RFC 9207). */
     private final @Nullable String received;
 
     /** Create with the expected issuer and the received one (or null). */
-    public OAuthIssuerMismatchError(String expected, @Nullable String received) {
-        super("OAuth issuer mismatch: expected " + quote(expected)
+    public OAuthIssuerMismatchError(@Nullable String expected, @Nullable String received) {
+        super("OAuth issuer mismatch: expected " + (expected == null ? "none" : quote(expected))
                 + ", received " + (received == null ? "none" : quote(received)));
         this.expected = expected;
         this.received = received;
@@ -24,8 +25,8 @@ public class OAuthIssuerMismatchError extends RuntimeException {
         return "\"" + value.replace("\"", "\\\"") + "\"";
     }
 
-    /** The issuer discovery expected. */
-    public String expected() {
+    /** The issuer discovery expected, or null when it had no metadata. */
+    public @Nullable String expected() {
         return expected;
     }
 
