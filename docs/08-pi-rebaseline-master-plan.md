@@ -332,7 +332,7 @@ AI 的设计不得只引用 changelog。流式与消息形状工作包必须附�
 | 层 | 新地图重测 | 详细设计审核 | 实施闭环 | 新层账面 |
 |---|---|---|---|---|
 | L0 telemetry | 已完成（map/01 A 节，2026-11-01） | 已通过（docs/09，2026-11-01） | 已闭环（B260–B262，2026-11-01） | **36/36＝100%** |
-| L1 ai | 已完成（map/02，2026-11-01） | docs/10 B264、docs/11 行为面、docs/12 目录数据与运行时、docs/13 请求遥测、docs/14 Client Identity、docs/15 usage 与账单、docs/16 存疑复核、docs/17 provider wire、docs/18 retry/overflow 均已通过 | 实施中（B264、docs/11、docs/12、docs/13、docs/14、docs/15、docs/16、docs/17、docs/18 已闭环；B267 其余面待拆） | **223.0/232＝96.12%** |
+| L1 ai | 已完成（map/02，2026-11-01） | docs/10 B264、docs/11 行为面、docs/12 目录数据与运行时、docs/13 请求遥测、docs/14 Client Identity、docs/15 usage 与账单、docs/16 存疑复核、docs/17 provider wire、docs/18 retry/overflow、docs/19 OAuth／device／env＋CLI 权限、docs/20 Faux／deferred 均已通过 | 已闭环（B264、docs/11–docs/20 全部闭环，2026-11-04） | **232.0/232＝100%** |
 | L2 mcp | 未开始 | 未开始 | 未开始 | 不发布 |
 | L3 agent-core | 未开始 | 未开始 | 未开始 | 不发布 |
 | L4 session | 未开始 | 未开始 | 未开始 | 不发布 |
@@ -367,8 +367,8 @@ AI 的设计不得只引用 changelog。流式与消息形状工作包必须附�
 ## 11. 下一步
 
 1. L0 telemetry 与 B264 已闭环；B264 的窄纵贯适配已收口。
-2. L1 AI 继续按 B267 拆分并与用户审核，不把 B264/docs/11/docs/12/docs/13/docs/14/docs/15/docs/16/docs/17/docs/18 的批准外推到这些包。docs/11 行为面（#31/#61/#83/#84）、docs/12 目录数据与运行时（#16/#21/#33/#34）、docs/13 请求遥测（#106）、docs/14 Client Identity（#105）、docs/15 usage／账单（#53/#59/#107）、docs/16 存疑复核（15 行，D206–D212）、docs/17 Provider wire（#1／#2／#108／#101／#110／#111，前置 openai-java 4.96 升级）与 docs/18 retry／overflow（#70／#71）均已闭环。
-3. 其余层待 L1 对应接口稳定后按序重测与设计。
+2. L1 AI 已全闭环（docs/11–docs/20，2026-11-04）；账面 232/232＝100%，见 `map/02-ai.md`。其设计批准不外推到其它层。
+3. 下一步按 docs/21 启动 L2 mcp 的新锚点重测与首个详细设计（structuredContent、连接、OAuth 与安全复核）。
 4. 任一工作包未取得明确批准前，不写对应实现代码。
 
 ## 12. 总体完成定义

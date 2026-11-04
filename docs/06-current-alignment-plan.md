@@ -17,15 +17,17 @@
 - `docs/15` 是 L1 usage 与 OpenRouter 账单设计（B267 第一批：#53／#59／#107），已实施并闭环（2026-11-03）。
 - `docs/17` 是 L1 Provider wire 对齐设计（B267 第三批：#1／#2／#108／#101／#110／#111），已实施并闭环（2026-11-03）；前置 `openai-java 4.42.0 → 4.96.0` 升级（用户已批准）。
 - `docs/18` 是 L1 retry 与 overflow 判定设计（B267 第四批：#70／#71），已实施并闭环（2026-11-03）。
-- `docs/19` 是 L1 OAuth／device／env 与 CLI 凭证权限设计（B267 第五批：#43／#44／#45／#50／#112），已实施并闭环（2026-11-03）；Faux 余量（#80）留待 docs/20。
+- `docs/19` 是 L1 OAuth／device／env 与 CLI 凭证权限设计（B267 第五批：#43／#44／#45／#50／#112），已实施并闭环（2026-11-03）。
+- `docs/20` 是 L1 Faux 可编程核心与 deferred 设计（B267 第六批：#80），已实施并闭环（2026-11-04）；L1 账面 232/232＝100%。
+- `docs/16` 是 L1 存疑行复核设计（B267 第二批：15 个存疑行），已裁决并闭环（2026-11-03）。
 
 ## 2. 层级顺序与状态
 
 | 层 | 范围 | 当前状态 | 下一步产出 |
 |---|---|---|---|
 | L0 | telemetry | 已闭环 | B260–B262 已验收；账面 36/36＝100%；B263 随 L1 设计 |
-| L1 | ai | 实施中 | B264、docs/11 行为面（#31/#61/#83/#84）、docs/12 目录数据与运行时（#16/#21/#33/#34）、docs/13 请求遥测（#106）、docs/14 Client Identity（#105）、docs/15 usage 与 OpenRouter 账单（B267 第一批：#53/#59/#107）、docs/16 存疑复核（B267 第二批：15 个存疑行）均已闭环；docs/17 provider wire（#1／#2／#108／#101／#110／#111，前置 openai-java 4.96 升级）已闭环；docs/18 retry/overflow（#70／#71）已闭环；docs/19 OAuth／device／env＋CLI 权限（#43／#44／#45／#50／#112）已闭环；Faux／deferred fetch（#80）待 docs/20；账面 **231.0/232＝99.57%**（分母因 6 个 Java 扩展作废由 240 缩至 232） |
-| L2 | mcp | 未开始 | structuredContent、连接、OAuth 与安全复核 |
+| L1 | ai | 已闭环 | B264、docs/11 行为面（#31/#61/#83/#84）、docs/12 目录数据与运行时（#16/#21/#33/#34）、docs/13 请求遥测（#106）、docs/14 Client Identity（#105）、docs/15 usage 与 OpenRouter 账单（B267 第一批：#53/#59/#107）、docs/16 存疑复核（B267 第二批）、docs/17 provider wire（#1／#2／#108／#101／#110／#111）、docs/18 retry/overflow（#70／#71）、docs/19 OAuth／device／env＋CLI 权限（#43／#44／#45／#50／#112）与 docs/20 Faux／deferred（#80）全部闭环；账面 **232.0/232＝100%**（分母因 6 个 Java 扩展作废由 240 缩至 232）。下一步按 docs/21 启动 L2 mcp |
+| L2 | mcp | 未开始 | 重测与首个设计（structuredContent、连接、OAuth 与安全复核） |
 | L3 | agent-core | 未开始 | identity、streamProxy 和 AI 新类型适配复核 |
 | L4 | session / SQLite | 未开始 | 恢复、截断、压缩和持久化复核 |
 | L5 | coding-agent | 未开始 | 扩展启动、设置、分享、自更新和工具加载复核 |

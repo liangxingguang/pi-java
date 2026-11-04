@@ -26,7 +26,7 @@ Chord plugin 已按 R5 决定不做，不再是待拍板项。
 
 | 编号 | 当前结论 | 所属层 |
 |---|---|---|
-| B267 | usage／billing 已按 docs/15 闭环；15 个存疑行已按 docs/16 裁决并闭环；Provider wire 已按 docs/17 闭环；retry/overflow 已按 docs/18 闭环；OAuth/device/env 与 pi-ai CLI 权限已按 docs/19 闭环；仅剩 Faux／deferred 余量，待 docs/20。 | L1 AI |
+| B267 | usage／billing 已按 docs/15 闭环；15 个存疑行已按 docs/16 裁决并闭环；Provider wire 已按 docs/17 闭环；retry/overflow 已按 docs/18 闭环；OAuth/device/env 与 pi-ai CLI 权限已按 docs/19 闭环；Faux／deferred 余量已按 docs/20 闭环（2026-11-04）。B267 全闭环，L1 账面 232/232＝100%。 | L1 AI |
 | B116 | 对外 JSON 的 usage 已改为 pi 扁平形状；Java 内部 `StreamDone` 仍保留嵌套方言，AI 重测时决定是否继续保留。 | L1 AI |
 | B156 | `ModelCompat` 逐组件重建存在漏字段风险；新增组件时必须同时检查构造点和 `withPartial` 类重建点。 | L1 AI |
 | B259 | RPC `cycle_thinking_level` 对不支持 thinking 的模型仍返级别；`get_available_thinking_levels` 也未按模型能力过滤。pi 对应结果为 `null` 或可用子集。 | L5 coding-agent |
@@ -52,6 +52,8 @@ B267 第三批 provider wire（#1／#2／#108／#101／#110／#111）已于 2026
 B267 第四批 retry／overflow（#70／#71）已于 2026-11-03 按 docs/18 实施并闭环：`ContextOverflow` 补 LiteLLM `context window exceeded` 预检文案与厂商无关的 HTTP 413 模式（`^(?:[\w -]+ API error \(413\):|413(?:\s|:|$))`，body 内提及 413 与 `4130` 不命中）；`RetryableError` 排除表补 ChatGPT Business 工作区限额与 z.ai `1308` 正则，白名单补 7 条网关／node-fetch／Codex 文案，状态码由裸子串收紧为 `(?<![a-z0-9])…(?![a-z0-9])` 独立 token。
 
 B267 第五批 OAuth／device／env 与 pi-ai CLI 权限（#43／#44／#45／#50／#112）已于 2026-11-03 按 docs/19 实施并闭环：新增 `TrustedHttpUrl`（HTTP(S) 归一/白名单，xAI `HTTPS_ONLY`、Kimi complete `REQUIRE`）并接入 `DeviceCodeFlow`／`RadiusOAuthHttp`；`OAuthEvent` 结构化设备码事件（两确认开关默认 true），TUI 登录对话框一次消费；`ApiOptions` 增加请求级 `env`（第九组件）与 `ProviderEnv`，15 个重建点保真，`DefaultProviders` 投影凭证 env；两个凭证存储在建文件/覆写前收紧到 `0600`（非 POSIX no-op）。L1 账面 **231.0/232＝99.57%**（对齐 124／缺失 1，仅剩 #80）。B267 仅剩 Faux 余量待 docs/20。
+
+B267 第六批 Faux 可编程核心与 deferred（#80）已于 2026-11-04 按 docs/20 实施并闭环：新增 `AI/provider/faux/`（`FauxProviderOptions`、模型定义、响应步/工厂、`FauxMessages`、`FauxUsageEstimator`、`FauxStreamSynthesis`、`FauxCore`、`FauxProgrammable` 与 `FauxChatApi`）；usage 估算与 prompt-cache 模拟逐字对位 `faux.ts:246-287`（`cacheWrite = promptTokens - cacheRead`、`input = 0`、工具 JSON 只投影 pi `Tool` 形状）；工具参数按 token 大小分块并经 `ToolCallArgumentsStream` 增量解析；`AssistantMessage` 追加 `deferred` 组件并逐点传播（11 个 wither、`empty`、`StreamPartialBuilder.snapshot`、`Message.fromPartial`）；`StreamApi` 新增 `fetchDeferred`/`fetchDeferredBlocking`/`cancelDeferred` 默认方法；`ApiOptions.withExtra` 成为唯一 extra 重建入口；`AiRequestTelemetry.attachPoll` 经 `AbstractChatApi.attachPollTelemetry` 成为 `pi.ai.poll` 的第一条生产入口。L1 账面 **232.0/232＝100%**（对齐 125／缺失 0）；#80 对齐。
 
 ## 3. MCP 开放项与复核项
 
@@ -128,7 +130,7 @@ SQLite 后端是 pi-java 独立实现，保留模块，不对齐已删除 schema
 | B18（已销号） | 2026-11-03 销号：pi 固定锚点 `packages/ai/src/api/pi-messages.ts` 已存在同一 `POST /messages` SSE 协议，旧「pi-java 自有 wire」描述失效；细差归 #110。 |
 | D201 | telemetry typed schema 保留运行时 identity、parent binding 与 metadata 合并；Java 无法复刻 TS 条件类型对 exact attributes、required keys、schema 名与 instrument kind 的编译期约束，不新增 pi 没有的运行时校验。 |
 | D202 | malformed 工具参数沿用 Jackson syntax-error 前缀；非对象文案、`{}`＋raw suffix 与 raw 原文逐字保持，不引入 V8 文案兼容层。 |
-| D203 | `pi.ai.poll` 观察者、schema 与单测已落地，但 Java 的 `StreamApi` 没有 `streamDeferred`／`fetchDeferred` 生产入口；真实 poll 入口仍由 B267 的 deferred fetch 与 Faux #80 跟踪。docs/16 已将 #75 的类型面判对齐（D212），生产入口缺席不重复扣分。 |
+| D203（已关闭，2026-11-04） | `pi.ai.poll` 观察者、schema 与单测此前已落地但无生产入口。docs/20 关闭：`StreamApi.fetchDeferred`/`cancelDeferred` 成为入口，`FauxChatApi.fetchDeferred` 在生产者启动前以 `poll=true` 挂观察者；Faux 是唯一实现，其它 provider 保持 pi 的「方法不存在」语义（默认抛 `UnsupportedOperationException`）。 |
 | D204 | pi 的 `withClientIdentity(models, identity)` 包装器没有 Java 对应物：Java 无 `Models`／`MutableModels` 门面，identity 合并落在 `DefaultProviders`／`ConfigurableProvider.createApi` 两个请求组装点；行为面（请求头）已对齐。 |
 | D205 | detailed `User-Agent` 的品牌与运行时 token 不同：pi 为 `pi/<ver> (platform; node/<ver>; arch)`，pi-java 为 `pi-java/<ver> (os.name; java/<java.version>; os.arch)`；归因头仍用 pi 品牌值。属 D77 族工具自述差异。 |
 | D206 | `StreamError` 的 `Throwable` 是内部扩展，不得进入任何序列化投影；所有线投影走 `StreamError.textOf`（`JsonEventMapper`／`PrintMode`／web translator／payload recorder）。模型可见错误体与 pi 的 `AssistantMessage` 同形；新增投影若直接序列化 `StreamError` 即回归。 |
@@ -137,8 +139,11 @@ SQLite 后端是 pi-java 独立实现，保留模块，不对齐已删除 schema
 | D209 | Java 以静态协议注册表从 models.json 建 provider，按模型 `api` 派发；不能加载任意 JS api 模块。新增 wire 协议须先在 Java 实现适配器并注册，未跟进时按缺失行登记，不藏在本行。 |
 | D210 | Java 无动态模块加载；setup 失败在 `createApi` 同步抛出，错误文本／时序与 pi 的 `error` 事件不完全同形；`fetchDeferred`／`cancelDeferred` 懒包装无对应物（与 D203 同族）。宿主异常处理变更时须复核。 |
 | D211 | `PiMessagesEvent` 是 Java record 方言，字段与 pi TS 联合逐项对应但不共享代码；#110 若扩面到请求／响应外壳，须回头复核 #7／#63。 |
-| D212 | `DeferredHandle.data` 用 `Map<String,Object>` 承载 pi 的 `JsonValue`；若需顶层数组或标量须复核。Faux deferred（#80）落地时补生产→poll→重建的集成测试。 |
+| D212 | `DeferredHandle.data` 用 `Map<String,Object>` 承载 pi 的 `JsonValue`；若需顶层数组或标量须复核。docs/20 已补生产（faux 提交）→ 取回 → 持久化 `Message.AssistantMessage` 重建的纵贯测试（`FauxDeferredTest#d212ProductionToFetchToRebuildRoundTrips`）。 |
 | D213 | pi-messages `contentIndex` 校验比 pi 更严：pi 的 `"contentIndex" in event` 对缺键直接跳过，Java 对九个带下标事件统一要求键在场（缺键 ⇒ `Invalid contentIndex null …`）。这是 docs/17 §6 的刻意裁决：Jackson 缺键填 `null`，不显式拒绝会把「缺键」误当合法下标。 |
+| D214 | Faux 响应工厂只支持同步函数：pi 的 `FauxResponseFactory` 可返回 `Promise<AssistantMessage>`，`resolveResponse` 会 `await`；Java 的工厂返回 `AssistantMessage`，等价性依赖测试在虚拟线程上自行阻塞。出现必须真异步的夹具时复核。 |
+| D215 | Faux usage 估算的文本投影与 pi 的 `Tool` 形状对齐：工具 JSON 只含 `name／description／parameters／constrainedSampling`，Java `ToolDefinition` 的 `label／promptSnippet／promptGuidelines／renderShell` 不进估算文本；`UrlImageContent` 用 `[image-url:<url 长度>]` 稳定占位。差异只影响测试断言的 token 数字，不影响任何请求体。 |
+| D216 | Java 的 `StreamApi` 没有 pi 的 `AbortSignal` 通道：faux 的 deferred 提交/取回不移植「起始或块间中止 ⇒ aborted」分支；aborted 终局仍可由预置消息显式声明（`stopReason = ABORTED`）。与全仓既有取消模型一致。 |
 | B83 | pi 自身三处 sanitize 缺口保持同样行为；pi 修补时同步。 |
 | B100 | compat 探测的 baseUrl 在内置模型上行为等价；出现可观察差异再重裁。 |
 | B126 | Codex 车道及其 transport 等随 R2/R5 出分母。 |
@@ -158,4 +163,4 @@ SQLite 后端是 pi-java 独立实现，保留模块，不对齐已删除 schema
 3. 条目关闭后从开放表移除，历史由 git 保存，编号不复用。
 4. 每层重测后同步更新对应地图；全部层完成前不发布新全仓百分比。
 5. 每个实施工作包仍需独立设计稿和用户审核。
-6. 下一新文档号为 **docs/20**（L1 Faux／deferred 余量）；`docs/19` 已闭环（2026-11-03）；`docs/18` 已闭环（2026-11-03）；`docs/17` 已闭环（2026-11-03）；`docs/16` 已闭环（2026-11-03）。
+6. 下一新文档号为 **docs/21**（L2 mcp 首个设计）；`docs/20` 已闭环（2026-11-04，L1 完成）；`docs/19` 已闭环（2026-11-03）；`docs/18` 已闭环（2026-11-03）；`docs/17` 已闭环（2026-11-03）；`docs/16` 已闭环（2026-11-03）。
