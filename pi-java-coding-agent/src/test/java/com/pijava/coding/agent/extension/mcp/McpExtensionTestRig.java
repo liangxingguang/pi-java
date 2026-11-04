@@ -130,10 +130,15 @@ final class McpExtensionTestRig {
 
     /** tool_call 直发（ EngineHookBridge 的净效果）。 */
     void fireToolCall(String toolName) throws Exception {
+        fireToolCall(toolName, java.util.Map.of());
+    }
+
+    /** tool_call 直发，带工具入参（reachesTools 按入参求值）。 */
+    void fireToolCall(String toolName, java.util.Map<String, Object> input) throws Exception {
         for (var handler : bus.snapshot(
                 com.pijava.coding.agent.extension.event.ExtensionEventSpec.TOOL_CALL)) {
             handler.handle(new com.pijava.coding.agent.extension.event.ExtensionEvent.ToolCallEvent(
-                "call-1", toolName, java.util.Map.of()), base);
+                "call-1", toolName, input), base);
         }
     }
 

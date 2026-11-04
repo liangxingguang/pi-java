@@ -49,12 +49,14 @@ final class McpToolRegistrar {
      * {@code connection.instructions}（缺席 ≙ null）。
      */
     private static com.pijava.agent.tool.ToolNamespace namespaceOf(
-            String namespace, String description, String instructions) {
+            String namespace, String server, String description, String instructions) {
         if (namespace == null) {
             return null;
         }
         var trimmed = description == null ? null : description.trim();
+        // `describeNamespace("docs")` finds `mcp__docs` (index.ts:388-396).
         return new com.pijava.agent.tool.ToolNamespace(namespace,
+            java.util.List.of(server),
             trimmed == null || trimmed.isEmpty() ? null : trimmed, instructions);
     }
     /** 资源工具最近一次注册的 exposure；null = 尚无服务器有资源。 */
@@ -92,7 +94,7 @@ final class McpToolRegistrar {
             var exposure = McpServerConfigs.getMcpToolExposure(entry.config(), tool.name());
             var definition = McpToolDefinition.create(new McpToolDefinition.Options(
                 server, tool, name, exposure,
-                namespaceOf(namespace, description, connection.instructions()),
+                namespaceOf(namespace, server, description, connection.instructions()),
                 connection.timeoutMs(),
                 callerSource(server, tool.name()),
                 () -> resourceServers().stream().anyMatch(c -> c.name().equals(server))));

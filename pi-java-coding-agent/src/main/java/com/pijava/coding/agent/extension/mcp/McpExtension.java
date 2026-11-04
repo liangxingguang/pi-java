@@ -297,14 +297,17 @@ public final class McpExtension implements PiExtension {
             return null;
         }
         List<McpServerHandle> waiting;
-        // 批 27（docs/38 T8）：pi :1199 的 tool_search 臂——搜索前等全部 enabled
-        // 服务器就绪（工具注册完整再搜）。同名第三方不算（schema 引用判等，
-        // pi isToolSearchTool :168-171 对位——经注册表的 inputSchema() 同锚）。
-        if (RESOURCE_TOOL_NAMES.contains(event.toolName())
-                || (com.pijava.coding.agent.extension.toolsearch.ToolSearchTool.NAME
-                        .equals(event.toolName())
-                    && called.inputSchema()
-                        == com.pijava.coding.agent.extension.toolsearch.ToolSearchTool.SCHEMA)) {
+        // pi :1190-1207：a tool that reaches other tools waits for the servers it may
+        // reach — tool_search for every server, a codemode script for the servers it
+        // names. Without a reach, the resource tools wait for all and a direct call
+        // waits only for its own server.
+        var reachFunction = called.reachesTools();
+        var reach = reachFunction == null ? null : reachFunction.apply(event.input());
+        if (reach != null) {
+            waiting = readyServers.stream()
+                .filter(server -> reachesServer(reach, server.entry.name()))
+                .toList();
+        } else if (RESOURCE_TOOL_NAMES.contains(event.toolName())) {
             waiting = readyServers;
         } else {
             var owner = registrar.ownerServerOf(event.toolName());
@@ -399,6 +402,21 @@ public final class McpExtension implements PiExtension {
         }
         currentScope.abortAndAwait();
         return null;
+    }
+
+    /**
+     * Whether a call that reaches {@code reach} needs the server: it reaches every
+     * tool, or one of its words contains the server's namespace
+     * ({@code index.ts:224-232}). Words may over-match on purpose.
+     */
+    static boolean reachesServer(com.pijava.agent.tool.ToolReach reach, String server) {
+        return switch (reach) {
+            case com.pijava.agent.tool.ToolReach.All all -> true;
+            case com.pijava.agent.tool.ToolReach.Words words -> {
+                var namespace = McpServerConfigs.namespace(server);
+                yield words.words().stream().anyMatch(word -> word.contains(namespace));
+            }
+        };
     }
 
     static String errorMessage(Throwable error) {

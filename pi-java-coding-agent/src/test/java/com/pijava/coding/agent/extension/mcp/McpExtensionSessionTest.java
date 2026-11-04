@@ -188,6 +188,168 @@ class McpExtensionSessionTest {
         rig.shutdownSession();
     }
 
+    /** A tool whose name is not its own: it reaches whatever {@code reach} says. */
+    private static com.pijava.agent.tool.AgentTool<java.util.Map<String, Object>, Object> probe(
+            String name, java.util.function.Function<java.util.Map<String, Object>,
+                    com.pijava.agent.tool.ToolReach> reach) {
+        return new com.pijava.agent.tool.AgentTool<>() {
+            @Override public String name() {
+                return name;
+            }
+
+            @Override public String label() {
+                return name;
+            }
+
+            @Override public String description() {
+                return "probe";
+            }
+
+            @Override public java.util.Map<String, Object> inputSchema() {
+                return java.util.Map.of("type", "object");
+            }
+
+            @Override public com.pijava.agent.tool.ExecutionMode executionMode() {
+                return new com.pijava.agent.tool.ExecutionMode.Parallel();
+            }
+
+            @Override public java.util.function.Function<java.util.Map<String, Object>,
+                    com.pijava.agent.tool.ToolReach> reachesTools() {
+                return reach;
+            }
+
+            @Override public com.pijava.agent.tool.ToolResult<Object> execute(
+                    String toolCallId, java.util.Map<String, Object> params,
+                    com.pijava.ai.AbortSignal signal,
+                    com.pijava.agent.tool.ToolUpdateCallback<Object> onUpdate,
+                    com.pijava.agent.tool.ToolContext context) {
+                return com.pijava.agent.tool.ToolResult.success("x");
+            }
+        };
+    }
+
+    @Test
+    void aToolReachingTheServerWaitsForItToBeReady() throws Exception {
+        var server = ScriptedMcpServer.withTools("search");
+        writeGlobalMcpJson(directStdio("docs"));
+        var rig = McpExtensionTestRig.create(agentDir, cwd, false, server);
+        rig.startSession();
+        awaitPending(rig);
+        rig.tools.register(probe("reacher", input -> new com.pijava.agent.tool.ToolReach.Words(
+                java.util.List.of("mcp__docs"))));
+        var gate = server.hold("tools/list");
+        rig.shutdownSession();
+        rig.startSession();
+        var fired = CompletableFuture.runAsync(() -> {
+            try {
+                rig.fireToolCall("reacher");
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        }, Thread::startVirtualThread);
+        Thread.sleep(150);
+        assertThat(fired).isNotDone();
+        gate.complete(null);
+        fired.get(5, TimeUnit.SECONDS);
+        rig.shutdownSession();
+    }
+
+    @Test
+    void aToolReachingAnotherServerDoesNotWaitForThisOne() throws Exception {
+        var server = ScriptedMcpServer.withTools("search");
+        writeGlobalMcpJson(directStdio("docs"));
+        var rig = McpExtensionTestRig.create(agentDir, cwd, false, server);
+        rig.startSession();
+        awaitPending(rig);
+        rig.tools.register(probe("other_reacher", input -> new com.pijava.agent.tool.ToolReach.Words(
+                java.util.List.of("mcp__elsewhere"))));
+        var gate = server.hold("tools/list");
+        rig.shutdownSession();
+        rig.startSession();
+        // The word names no configured server, so nothing is awaited.
+        rig.fireToolCall("other_reacher");
+        gate.complete(null);
+        rig.shutdownSession();
+    }
+
+    @Test
+    void aToolReachingEverythingWaitsForEveryServer() throws Exception {
+        var server = ScriptedMcpServer.withTools("search");
+        writeGlobalMcpJson(directStdio("docs"));
+        var rig = McpExtensionTestRig.create(agentDir, cwd, false, server);
+        rig.startSession();
+        awaitPending(rig);
+        rig.tools.register(probe("tool_search_like",
+                input -> new com.pijava.agent.tool.ToolReach.All()));
+        var gate = server.hold("tools/list");
+        rig.shutdownSession();
+        rig.startSession();
+        var fired = CompletableFuture.runAsync(() -> {
+            try {
+                rig.fireToolCall("tool_search_like");
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
+        }, Thread::startVirtualThread);
+        Thread.sleep(150);
+        assertThat(fired).isNotDone();
+        gate.complete(null);
+        fired.get(5, TimeUnit.SECONDS);
+        rig.shutdownSession();
+    }
+
+    @Test
+    void reachesServerUsesWordContainment() {
+        // Words may over-match: any word containing the namespace counts.
+        assertThat(McpExtension.reachesServer(
+                new com.pijava.agent.tool.ToolReach.Words(
+                        java.util.List.of("await mcp__docs__search()")), "docs")).isTrue();
+        assertThat(McpExtension.reachesServer(
+                new com.pijava.agent.tool.ToolReach.Words(java.util.List.of("mcp__other")),
+                "docs")).isFalse();
+        assertThat(McpExtension.reachesServer(
+                new com.pijava.agent.tool.ToolReach.All(), "docs")).isTrue();
+    }
+
+    @Test
+    void onlyAToolSearchDeclaringReachesToolsCounts() {
+        var rig = McpExtensionTestRig.create(agentDir, cwd, false, null);
+        rig.tools.register(new com.pijava.agent.tool.AgentTool<java.util.Map<String, Object>, Object>() {
+            @Override public String name() {
+                return "tool_search";
+            }
+
+            @Override public String label() {
+                return "tool_search";
+            }
+
+            @Override public String description() {
+                return "impostor";
+            }
+
+            @Override public java.util.Map<String, Object> inputSchema() {
+                return com.pijava.coding.agent.extension.toolsearch.ToolSearchTool.SCHEMA;
+            }
+
+            @Override public com.pijava.agent.tool.ExecutionMode executionMode() {
+                return new com.pijava.agent.tool.ExecutionMode.Parallel();
+            }
+
+            @Override public com.pijava.agent.tool.ToolResult<Object> execute(
+                    String toolCallId, java.util.Map<String, Object> params,
+                    com.pijava.ai.AbortSignal signal,
+                    com.pijava.agent.tool.ToolUpdateCallback<Object> onUpdate,
+                    com.pijava.agent.tool.ToolContext context) {
+                return com.pijava.agent.tool.ToolResult.success("x");
+            }
+        });
+        // Same name and even the same schema object, but no reachesTools: not genuine.
+        assertThat(McpLifecycle.hasReachingTool(rig.base, "tool_search")).isFalse();
+
+        rig.tools.register(new com.pijava.coding.agent.extension.toolsearch.ToolSearchTool(null));
+        assertThat(McpLifecycle.hasReachingTool(rig.base, "tool_search")).isTrue();
+    }
+
     @Test
     void toolCallIgnoresUnknownTools() throws Exception {
         writeGlobalMcpJson(directStdio("docs"));

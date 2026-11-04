@@ -278,11 +278,11 @@ final class McpLifecycle {
         if (!exposures.contains(McpExposure.CODEMODE) && !needsToolSearch) {
             return;
         }
-        // pi :507-508：Other extensions' tools of the same names cannot reach MCP tools
-        var registered = ctx.tools().get(
+        // pi :505-515: only a tool of that name that declares `reachesTools` can
+        // reach MCP tools; another extension's tool of the same name without it is
+        // never activated. The check is the property's presence, not a call.
+        var hasToolSearch = hasReachingTool(ctx,
             com.pijava.coding.agent.extension.toolsearch.ToolSearchTool.NAME);
-        var hasToolSearch = registered != null && registered.inputSchema()
-            == com.pijava.coding.agent.extension.toolsearch.ToolSearchTool.SCHEMA;
         // 无宿主会话的轻量路径（测试 rig／--help 轻量道）激活面不可得——跳过激活臂，
         // 按「不可达」落警告（pi 恒在会话内，无此臂；java 方言，内部）。
         java.util.List<String> active;
@@ -311,6 +311,12 @@ final class McpLifecycle {
         // pi :525-528 逐字（reason 段只盖 codemode/autoEnableCodemode 臂 ⇒ java 恒空）
         ctx.ui().notify("MCP tools are only reachable from the codemode or tool_search tool,"
             + " but neither is active; they cannot be called.", NotifyType.WARNING);
+    }
+
+    /** Whether a registered tool of {@code name} declares {@code reachesTools} ({@code index.ts:507-515}). */
+    static boolean hasReachingTool(ExtensionContext ctx, String name) {
+        var registered = ctx.tools().get(name);
+        return registered != null && registered.reachesTools() != null;
     }
 
     // ── 进程外登录拾取（pi :536-560） ──

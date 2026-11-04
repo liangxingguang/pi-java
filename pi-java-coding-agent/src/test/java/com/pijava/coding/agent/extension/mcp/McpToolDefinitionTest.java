@@ -36,7 +36,7 @@ class McpToolDefinitionTest {
     private static McpToolDefinition definitions(McpTool tool, McpToolCaller caller) {
         return McpToolDefinition.create(new McpToolDefinition.Options(
                 "files", tool, "mcp__files__" + tool.name(), McpExposure.CODEMODE,
-                new com.pijava.agent.tool.ToolNamespace("mcp__files", null, null),
+                new com.pijava.agent.tool.ToolNamespace("mcp__files", List.of("files"), null, null),
                 30_000L, () -> caller, null));
     }
 
@@ -57,7 +57,7 @@ class McpToolDefinitionTest {
         // codemode is exposed as deferred to the tool layer.
         assertThat(definition.exposure()).isEqualTo(com.pijava.agent.tool.ToolExposure.DEFERRED);
         assertThat(definition.namespace())
-                .isEqualTo(new com.pijava.agent.tool.ToolNamespace("mcp__files", null, null));
+                .isEqualTo(new com.pijava.agent.tool.ToolNamespace("mcp__files", List.of("files"), null, null));
         assertThat(definition.annotations()).isEqualTo(
                 new com.pijava.agent.tool.ToolAnnotations(true, false, null, true));
         assertThat(definition.outputSchema())
@@ -139,7 +139,7 @@ class McpToolDefinitionTest {
         var index = new int[] {0};
         var definition = McpToolDefinition.create(new McpToolDefinition.Options(
                 "files", tool("echo", null, "d", Map.of(), null, null), "mcp__files__echo",
-                McpExposure.DIRECT, new com.pijava.agent.tool.ToolNamespace("mcp__files", null, null),
+                McpExposure.DIRECT, new com.pijava.agent.tool.ToolNamespace("mcp__files", List.of("files"), null, null),
                 30_000L,
                 () -> callers.get(index[0]++), null));
 

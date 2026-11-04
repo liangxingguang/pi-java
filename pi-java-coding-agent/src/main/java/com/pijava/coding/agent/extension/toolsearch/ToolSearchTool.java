@@ -174,6 +174,13 @@ public final class ToolSearchTool implements AgentTool<Map<String, Object>, Tool
         return false;
     }
 
+    /** pi {@code reachesTools: () => "all"}（tool.ts:320-323）：searching reaches every tool. */
+    @Override
+    public java.util.function.Function<Map<String, Object>, com.pijava.agent.tool.ToolReach>
+            reachesTools() {
+        return input -> new com.pijava.agent.tool.ToolReach.All();
+    }
+
     @Override
     public Map<String, Object> inputSchema() {
         return SCHEMA;

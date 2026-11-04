@@ -4,6 +4,8 @@ import com.pijava.ai.AbortSignal;
 import java.util.List;
 import java.util.Map;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * A tool definition executed by the agent runtime.
  *
@@ -77,6 +79,17 @@ public interface AgentTool<TParams, TDetails> {
      * （如它的 MCP 服务器）。默认 {@code null}（无组）。
      */
     default ToolNamespace namespace() {
+        return null;
+    }
+
+    /**
+     * pi {@code ToolDefinition.reachesTools}（{@code core/extensions/types.ts:635-648}）
+     * ——一次调用用这对入参可能触达哪些其他工具。默认 {@code null}（不触达）。
+     *
+     * <p>这是 pi 的<b>函数属性</b>，不是“按入参求值”的单方法：MCP 的激活门只看
+     * 它是否缺席（工具是否声明了可达性），调用点才拿入参求值。</p>
+     */
+    default java.util.function.@Nullable Function<Map<String, Object>, ToolReach> reachesTools() {
         return null;
     }
 
