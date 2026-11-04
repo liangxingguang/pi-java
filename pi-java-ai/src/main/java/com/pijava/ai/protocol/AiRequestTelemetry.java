@@ -76,6 +76,30 @@ final class AiRequestTelemetry {
         var api = model.api() != null ? model.api() : apiName;
         var observer = observe(id.provider(), api, id.modelName(), request.reasoning(),
             options.telemetry(), false, System::nanoTime);
+        wire(publisher, observer);
+    }
+
+    /**
+     * docs/20 §6.6：给 deferred 取回挂 {@code pi.ai.poll} 观察者（关闭 D203）。
+     *
+     * <p>与 {@link #attach} 同形，但 {@code poll=true}、推理级别为空 —— pi 的
+     * {@code DeferredFetchOptions} 没有 {@code reasoning} 字段。</p>
+     */
+    static void attachPoll(SubmissionPublisher<StreamEvent> publisher,
+                           com.pijava.ai.catalog.ModelInfo model,
+                           ApiOptions options, String apiName) {
+        if (options == null || options.telemetry() == null || model == null
+                || model.id() == null) {
+            return;
+        }
+        var api = model.api() != null ? model.api() : apiName;
+        var observer = observe(model.id().provider(), api, model.id().modelName(),
+            Optional.empty(), options.telemetry(), true, System::nanoTime);
+        wire(publisher, observer);
+    }
+
+    /** 观察者的订阅接线；跟随生产端终止，不跟随单个消费者。 */
+    private static void wire(SubmissionPublisher<StreamEvent> publisher, Observer observer) {
         var ended = new AtomicBoolean();
         publisher.subscribe(new Flow.Subscriber<>() {
             @Override

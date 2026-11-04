@@ -109,7 +109,7 @@ public abstract class AbstractChatApi implements ChatApi {
             if (first) {
                 Thread.startVirtualThread(() -> {
                     try {
-                        streamInternal(effective, publisher);
+                        streamInternal(effective, options, publisher);
                         publisher.close();
                     } catch (Exception e) {
                         // Best-effort logging must never break error delivery.
@@ -346,6 +346,39 @@ public abstract class AbstractChatApi implements ChatApi {
      */
     protected abstract void streamInternal(StreamRequest request,
                                            SubmissionPublisher<StreamEvent> publisher);
+
+    /**
+     * docs/20 §6.2：带请求选项的流式入口。
+     *
+     * <p>默认转调两参版本，既有车道零改签；可编程 faux 核心需要请求期选项
+     * （{@code sessionId}／{@code deferred}／{@code onResponse}）才能估算用量与提交
+     * deferred，故覆写本重载。选项仍是 {@code stream(...)} 收到的那一份。</p>
+     *
+     * @param request   请求（已过请求侧选项解析）
+     * @param options   调用方传入的选项
+     * @param publisher 事件发布器
+     */
+    protected void streamInternal(StreamRequest request, ApiOptions options,
+                                  SubmissionPublisher<StreamEvent> publisher) {
+        streamInternal(request, publisher);
+    }
+
+    /**
+     * docs/20 §6.6（关闭 D203）：给 deferred 取回挂 {@code pi.ai.poll} 观察者。
+     *
+     * <p>{@link AiRequestTelemetry} 是 {@code protocol} 包私有类，{@code provider}
+     * 包不能直接引用；本方法把唯一的挂载点暴露给需要 deferred 的车道。</p>
+     *
+     * @param publisher 取回事件的发布器
+     * @param model     请求的模型
+     * @param options   取回选项（遥测父跨度在其中）
+     * @param apiName   车道 api 名（模型未声明 api 时兜底）
+     */
+    protected static void attachPollTelemetry(SubmissionPublisher<StreamEvent> publisher,
+                                              com.pijava.ai.catalog.ModelInfo model,
+                                              ApiOptions options, String apiName) {
+        AiRequestTelemetry.attachPoll(publisher, model, options, apiName);
+    }
 
     /**
      * docs/14 B266：读取 provider 预计算的 identity 头（{@code extra["identityHeaders"]}）。

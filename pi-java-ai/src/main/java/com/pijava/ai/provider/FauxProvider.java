@@ -11,10 +11,14 @@ import com.pijava.ai.api.ChatApi;
 import com.pijava.ai.api.ProviderApi;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.catalog.ModelCatalog;
+import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.StopReason;
+import com.pijava.ai.model.ModelId;
 import com.pijava.ai.protocol.AbstractChatApi;
+import com.pijava.ai.provider.faux.FauxProgrammable;
+import com.pijava.ai.provider.faux.FauxProviderOptions;
 import com.pijava.ai.stream.StreamEvent;
 
 /**
@@ -32,6 +36,8 @@ public final class FauxProvider implements Provider {
     private final List<List<StreamEvent>> responses;
     private final long delayMs;
     private final AtomicInteger nextCall = new AtomicInteger();
+    /** docs/20：可编程核心；重放模式为 null。 */
+    private final FauxProgrammable programmable;
 
     /**
      * Create a provider that replays the given events on every call.
@@ -49,6 +55,36 @@ public final class FauxProvider implements Provider {
         this.name = name;
         this.responses = List.copyOf(responses);
         this.delayMs = delayMs;
+        this.programmable = null;
+    }
+
+    /**
+     * docs/20 §3.4：可编程模式的 provider 外壳。
+     *
+     * <p>由 {@link FauxProgrammable#provider()} 调用；普通使用者应走
+     * {@link #programmable(FauxProviderOptions)}。</p>
+     *
+     * @param programmable 可编程核心
+     */
+    public FauxProvider(FauxProgrammable programmable) {
+        this.name = programmable.providerName();
+        this.responses = List.of();
+        this.delayMs = 0;
+        this.programmable = programmable;
+    }
+
+    /**
+     * docs/20 §3.1：pi {@code fauxProvider(...)}（{@code providers/faux.ts:709-732}）
+     * 的 Java 入口。
+     *
+     * <p>重放工厂（{@link #text}／{@link #toolCall}／{@link #error}／{@link #sequence}）
+     * 保持逐事件语义；本入口是唯一携带模型、usage 估算、分块与 deferred 的形状。</p>
+     *
+     * @param options pi 的 {@code RegisterFauxProviderOptions}
+     * @return 可编程句柄（{@code provider()}、{@code setResponses()} 等）
+     */
+    public static FauxProgrammable programmable(FauxProviderOptions options) {
+        return new FauxProgrammable(options == null ? FauxProviderOptions.defaults() : options);
     }
 
     /**
@@ -160,14 +196,41 @@ public final class FauxProvider implements Provider {
     @SuppressWarnings("unchecked")  // safe: apiType equality check guarantees T is the expected API type
     public <T extends ProviderApi> T createApi(Class<T> apiType, ApiOptions options) {
         if (apiType.equals(ChatApi.class)) {
-            return (T) new FauxChatApi(this, delayMs);
+            return (T) (programmable != null
+                ? programmable.newApi()
+                : new FauxChatApi(this, delayMs));
         }
         throw new IllegalArgumentException("Unsupported API type: " + apiType);
     }
 
     @Override
     public ModelCatalog builtinModels() {
-        return ModelCatalog.empty();
+        if (programmable == null) {
+            return ModelCatalog.empty();
+        }
+        var models = programmable.models();
+        return new ModelCatalog() {
+            @Override
+            public List<ModelInfo> listModels() {
+                return models;
+            }
+
+            @Override
+            public java.util.Optional<ModelInfo> find(ModelId<?> id) {
+                return models.stream()
+                    .filter(model -> model.id().provider().equals(id.provider())
+                        && model.id().modelName().equals(id.modelName()))
+                    .findFirst();
+            }
+
+            @Override
+            public List<ModelInfo> search(String query) {
+                return models.stream()
+                    .filter(model -> model.displayName().contains(query)
+                        || model.id().modelName().contains(query))
+                    .toList();
+            }
+        };
     }
 
     // ── FauxChatApi ───────────────────────────────────────────
