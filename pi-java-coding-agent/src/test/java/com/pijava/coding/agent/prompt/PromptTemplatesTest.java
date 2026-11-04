@@ -24,6 +24,25 @@ class PromptTemplatesTest {
     }
 
     @Test
+    void parseCommandArgsKeepsQuotedEmptyArgs() {
+        // pi prompt-templates.ts:25-58：hasToken 让 "" / '' 成为真实参数，不再按空串丢弃。
+        assertThat(PromptTemplates.parseCommandArgs("\"\" x")).containsExactly("", "x");
+        assertThat(PromptTemplates.parseCommandArgs("'' ")).containsExactly("");
+        assertThat(PromptTemplates.parseCommandArgs("a \"\" b")).containsExactly("a", "", "b");
+        assertThat(PromptTemplates.parseCommandArgs("  ''  ")).containsExactly("");
+    }
+
+    @Test
+    void parseCommandArgsUsesJsWhitespaceSet() {
+        // JS /\s/：含 NBSP、U+3000、U+FEFF、U+2028/U+2029；不含 U+0085。
+        assertThat(PromptTemplates.parseCommandArgs("a b")).containsExactly("a", "b");
+        assertThat(PromptTemplates.parseCommandArgs("　　")).isEmpty();
+        assertThat(PromptTemplates.parseCommandArgs("﻿x")).containsExactly("x");
+        assertThat(PromptTemplates.parseCommandArgs(" a b")).containsExactly("a", "b");
+        assertThat(PromptTemplates.parseCommandArgs("a\u0085b")).containsExactly("a\u0085b");
+    }
+
+    @Test
     void substituteArgsHandlesAllPlaceholders() {
         var args = List.of("a", "b", "c");
         assertThat(PromptTemplates.substituteArgs("$1 and $2", args)).isEqualTo("a and b");

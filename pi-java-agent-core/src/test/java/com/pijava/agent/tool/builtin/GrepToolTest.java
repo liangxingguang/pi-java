@@ -149,6 +149,49 @@ class GrepToolTest {
             "f.txt:1: l1 needle\nf.txt-2- l2\nf.txt-3- l3");
     }
 
+    @Test
+    void loneCarriageReturnIsNotALineBreak() throws Exception {
+        // pi grep.ts:148-160：只做 \r\n→\n，孤立 CR 留在行内（ripgrep 也只按 \n 切行）。
+        Files.writeString(tmp.resolve("f.txt"), "before\rinside needle\nafter");
+
+        var result = grep(new GrepTool.GrepInput("needle",
+            Optional.empty(), Optional.empty(), Optional.empty(),
+            Optional.empty(), Optional.of(1), Optional.empty()));
+
+        assertThat(textOf(result)).isEqualTo(
+            "f.txt:1: before\rinside needle\nf.txt-2- after");
+    }
+
+    @Test
+    void loneCarriageReturnWithoutContextKeepsLine() throws Exception {
+        Files.writeString(tmp.resolve("f.txt"), "before\rinside needle\nafter");
+
+        var result = grep(input("needle"));
+
+        assertThat(textOf(result)).isEqualTo("f.txt:1: before\rinside needle");
+    }
+
+    @Test
+    void crlfIsStillNormalizedToLineBreak() throws Exception {
+        Files.writeString(tmp.resolve("f.txt"), "l1\r\nl2 needle\r\n");
+
+        var result = grep(input("needle"));
+
+        assertThat(textOf(result)).isEqualTo("f.txt:2: l2 needle");
+    }
+
+    @Test
+    void trailingEmptyLineIsSearchable() throws Exception {
+        // split("\n", -1) 保留尾空段：^$ 命中第 2 行。
+        Files.writeString(tmp.resolve("f.txt"), "l1\n");
+
+        var result = grep(new GrepTool.GrepInput("^$",
+            Optional.empty(), Optional.empty(), Optional.empty(),
+            Optional.empty(), Optional.empty(), Optional.empty()));
+
+        assertThat(textOf(result)).isEqualTo("f.txt:2: ");
+    }
+
     // ── 参数行为 ───────────────────────────────────────────────────
 
     @Test

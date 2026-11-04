@@ -33,6 +33,13 @@ class PromptTemplateExpansionTest {
     }
 
     @Test
+    void nbspSeparatesTemplateCommandArgs() {
+        // pi 命令正则 prompt-templates.ts:312 的 \s 同样吃 NBSP；旧 java \s 不吃 ⇒ 整体透传。
+        assertThat(PromptTemplateExpansion.expand("/review \"\"", registry()))
+            .isEqualTo("Review  for issues. All: ");
+    }
+
+    @Test
     void expandsTemplateWithoutArgs() {
         assertThat(PromptTemplateExpansion.expand("/review", registry()))
             .isEqualTo("Review  for issues. All: ");

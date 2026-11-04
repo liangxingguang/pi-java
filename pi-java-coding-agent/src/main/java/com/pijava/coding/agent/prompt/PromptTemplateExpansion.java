@@ -10,7 +10,7 @@ import java.util.regex.Pattern;
  */
 public final class PromptTemplateExpansion {
 
-    private static final Pattern COMMAND = Pattern.compile("^/([^\\s]+)(?:\\s+([\\s\\S]*))?$");
+    private static final Pattern COMMAND = PromptTemplates.COMMAND_PATTERN;
 
     private PromptTemplateExpansion() {}
 

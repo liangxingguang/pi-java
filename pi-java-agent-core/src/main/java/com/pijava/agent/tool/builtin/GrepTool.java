@@ -356,11 +356,14 @@ public final class GrepTool {
         return fileName == null ? file.toString() : fileName.toString();
     }
 
-    /** pi getFileLines（grep.ts:148-160）：\r\n/\r → \n 归一后按 \n 切（保留尾空段，同 JS split）。 */
+    /**
+     * pi getFileLines（grep.ts:148-160）：只做 \r\n→\n，按 \n 切（保留尾空段，同 JS split）；
+     * 孤立 \r 留在行内。
+     */
     private static List<String> fileLines(Path file) {
         try {
             String content = new String(Files.readAllBytes(file), StandardCharsets.UTF_8);
-            return List.of(content.replace("\r\n", "\n").replace("\r", "\n").split("\n", -1));
+            return List.of(content.replace("\r\n", "\n").split("\n", -1));
         } catch (IOException e) {
             return List.of();   // pi: catch ⇒ lines = []
         }

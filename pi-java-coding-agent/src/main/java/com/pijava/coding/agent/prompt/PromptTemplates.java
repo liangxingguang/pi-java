@@ -223,11 +223,52 @@ public final class PromptTemplates {
 
     // ── 参数解析 / 替换 ─────────────────────────────────────────────────
 
-    /** 用 shell 式单/双引号解析参数字符串（pi {@code parseCommandArgs}）。 */
+    /**
+     * JS {@code /\s/} 的精确字符集（ECMAScript WhiteSpace ＋ LineTerminator）：
+     * U+0009 U+000A U+000B U+000C U+000D U+0020 U+00A0 U+1680
+     * U+2000–U+200A U+2028 U+2029 U+202F U+205F U+3000 U+FEFF。
+     * 注意不含 U+0085（NEL 不是 JS WhiteSpace）；U+FEFF 是 JS WhiteSpace
+     * 但不属 {@link Character#isWhitespace(char)}，故必须显式列出。
+     */
+    private static final String JS_WS_BODY = String.join("",
+        String.valueOf((char) 0x09), String.valueOf((char) 0x0A),
+        String.valueOf((char) 0x0B), String.valueOf((char) 0x0C),
+        String.valueOf((char) 0x0D), String.valueOf((char) 0x20),
+        String.valueOf((char) 0xA0), String.valueOf((char) 0x1680),
+        String.valueOf((char) 0x2000), "-", String.valueOf((char) 0x200A),
+        String.valueOf((char) 0x2028), String.valueOf((char) 0x2029),
+        String.valueOf((char) 0x202F), String.valueOf((char) 0x205F),
+        String.valueOf((char) 0x3000), String.valueOf((char) 0xFEFF));
+
+    /**
+     * pi 命令识别正则 {@code /^\/([^\s]+)(?:\s+([\s\S]*))?$/}（prompt-templates.ts:312），
+     * 其中 {@code \s} 用上面的 JS 集合；{@code [\s\S]}（任意字符含换行）用 DOTALL 的
+     * {@code (?s:.*)} 表达。
+     */
+    static final Pattern COMMAND_PATTERN = Pattern.compile(
+        "^/([^" + JS_WS_BODY + "]+)(?:[" + JS_WS_BODY + "]+((?s:.*)))?$");
+
+    /** JS {@code /\s/} 成员判定（逐 UTF-16 代码单元，与 JS 的 char 测试同形）。 */
+    static boolean isJsWhitespace(char c) {
+        int cp = c;
+        return cp == 0x09 || cp == 0x0A || cp == 0x0B || cp == 0x0C || cp == 0x0D
+            || cp == 0x20 || cp == 0xA0 || cp == 0x1680
+            || (cp >= 0x2000 && cp <= 0x200A)
+            || cp == 0x2028 || cp == 0x2029 || cp == 0x202F || cp == 0x205F
+            || cp == 0x3000 || cp == 0xFEFF;
+    }
+
+    /**
+     * 用 shell 式单/双引号解析参数字符串（pi {@code parseCommandArgs}）。
+     *
+     * <p>{@code hasToken} 跟踪「token 已开始」，引号包住的空参数（{@code ""}/{@code ''}）
+     * 因此保留为真实参数（prompt-templates.ts:25-58）；空白按 JS {@code /\s/} 判定。</p>
+     */
     public static List<String> parseCommandArgs(String argsString) {
         var args = new ArrayList<String>();
         var current = new StringBuilder();
         Character inQuote = null;
+        boolean hasToken = false;
         for (int i = 0; i < argsString.length(); i++) {
             char c = argsString.charAt(i);
             if (inQuote != null) {
@@ -238,16 +279,19 @@ public final class PromptTemplates {
                 }
             } else if (c == '"' || c == '\'') {
                 inQuote = c;
-            } else if (c == ' ' || c == '\t') {
-                if (current.length() > 0) {
+                hasToken = true;
+            } else if (isJsWhitespace(c)) {
+                if (hasToken) {
                     args.add(current.toString());
                     current.setLength(0);
+                    hasToken = false;
                 }
             } else {
                 current.append(c);
+                hasToken = true;
             }
         }
-        if (current.length() > 0) {
+        if (hasToken) {
             args.add(current.toString());
         }
         return args;

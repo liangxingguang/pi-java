@@ -160,6 +160,47 @@ class SkillDiscoveryTest {
     }
 
     @Test
+    void inferSourceUsesCaseInsensitiveKeysForWindows() throws Exception {
+        // pi utils/paths.ts:46-70：Windows 比较键小写；来源推断按比较键判定。
+        org.junit.jupiter.api.Assumptions.assumeTrue(
+            java.io.File.separatorChar == '\\', "Windows path comparison only");
+        var agentDir = Files.createDirectories(tmp.resolve("Agent"));
+        var userSkill = Files.createDirectories(tmp.resolve("agent/skills/mine"));
+        Files.writeString(userSkill.resolve("SKILL.md"),
+            "---\nname: mine\ndescription: x\n---\nbody");
+        var projSkill = Files.createDirectories(tmp.resolve(".PI-JAVA/skills/ours"));
+        Files.writeString(projSkill.resolve("SKILL.md"),
+            "---\nname: ours\ndescription: x\n---\nbody");
+
+        var discovery = new SkillDiscovery(tmp, agentDir);
+        var result = discovery.discoverAll(false, List.of(userSkill, projSkill));
+
+        var byName = new java.util.HashMap<String, SkillSource>();
+        for (var s : result.skills()) {
+            byName.put(s.name(), s.sourceInfo());
+        }
+        assertThat(byName.get("mine")).isEqualTo(SkillSource.USER);
+        assertThat(byName.get("ours")).isEqualTo(SkillSource.PROJECT);
+    }
+
+    @Test
+    void dedupeTreatsCaseVariantsAsSameFileOnWindows() throws Exception {
+        org.junit.jupiter.api.Assumptions.assumeTrue(
+            java.io.File.separatorChar == '\\', "Windows path comparison only");
+        var dir = Files.createDirectories(tmp.resolve("CaseSkills"));
+        Files.writeString(dir.resolve("SKILL.md"),
+            "---\nname: cased\ndescription: x\n---\nbody");
+
+        var discovery = new SkillDiscovery(tmp, tmp);
+        var upper = discovery.loadDirectory(tmp.resolve("CaseSkills"), SkillSource.EXPLICIT, true);
+        var lower = discovery.loadDirectory(tmp.resolve("caseskills"), SkillSource.EXPLICIT, true);
+        var merged = LoadSkillsResult.dedupe(LoadSkillsResult.merge(List.of(upper, lower)));
+
+        assertThat(merged.skills()).hasSize(1);
+        assertThat(merged.diagnostics()).as("同文件经大小写变体 ⇒ 静默跳过").isEmpty();
+    }
+
+    @Test
     void baseDirIsSkillMdDirectory() throws Exception {
         var skillDir = Files.createDirectories(tmp.resolve("my-skill"));
         Files.writeString(skillDir.resolve("SKILL.md"),
