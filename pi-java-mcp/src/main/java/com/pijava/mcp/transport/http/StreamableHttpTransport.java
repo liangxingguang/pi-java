@@ -13,6 +13,7 @@ import org.jspecify.annotations.Nullable;
 import com.pijava.ai.AbortSignal;
 import com.pijava.mcp.AuthProvider;
 import com.pijava.mcp.McpFetch;
+import com.pijava.mcp.protocol.jsonrpc.McpAbortError;
 import com.pijava.mcp.protocol.jsonrpc.McpConnectionClosedError;
 import com.pijava.mcp.transport.AbstractMcpTransport;
 
@@ -85,12 +86,19 @@ public final class StreamableHttpTransport extends AbstractMcpTransport {
 
     @Override
     public void send(Map<String, Object> message) throws Exception {
+        send(message, new com.pijava.mcp.transport.McpTransportSendOptions(null));
+    }
+
+    @Override
+    public void send(Map<String, Object> message,
+                     com.pijava.mcp.transport.McpTransportSendOptions options) throws Exception {
         if (!started || closed) {
             throw new McpConnectionClosedError();
         }
         var body = com.pijava.mcp.McpJson.mapper().writeValueAsBytes(message);
         var baseHeaders = Map.of("Accept", ACCEPT, "Content-Type", "application/json");
-        var response = authorizedFetch("POST", baseHeaders, body);
+        var response = authorizedFetch("POST", baseHeaders, body,
+                options == null ? null : options.signal());
         checkResponse(response);
         captureSession(response);
 
@@ -129,9 +137,23 @@ public final class StreamableHttpTransport extends AbstractMcpTransport {
     /** GET/POST with auth headers and one challenge-driven retry. */
     McpHttpResponse authorizedFetch(String method, Map<String, String> baseHeaders,
                                     byte @Nullable [] body) throws Exception {
+        return authorizedFetch(method, baseHeaders, body, null);
+    }
+
+    /**
+     * GET/POST with auth headers and one challenge-driven retry, refusing to
+     * dispatch once the sender stopped waiting ({@code streamable-http.ts:295-305}).
+     * The signal only stops the dispatch: a message already sent is not undone.
+     */
+    McpHttpResponse authorizedFetch(String method, Map<String, String> baseHeaders,
+                                    byte @Nullable [] body, @Nullable AbortSignal sendSignal)
+            throws Exception {
         var auth = options.authProvider();
         for (var attempt = 0; ; attempt++) {
             var built = buildHeaders(baseHeaders);
+            if (sendSignal != null && sendSignal.isAborted()) {
+                throw new McpAbortError();
+            }
             var request = new McpHttpRequest(method, options.url(), built.headers(), body);
             var response = fetch.execute(request, abort);
             if (attempt > 0 || auth == null || !needsAuthorization(response)) {

@@ -18,6 +18,12 @@ public interface McpTransport {
     /** Send one JSON-RPC wire message. */
     void send(Map<String, Object> message) throws Exception;
 
+    /** Send one message with its options; transports without signals ignore them. */
+    default void send(Map<String, Object> message, McpTransportSendOptions options)
+            throws Exception {
+        send(message);
+    }
+
     /** Close the transport. */
     void close() throws Exception;
 

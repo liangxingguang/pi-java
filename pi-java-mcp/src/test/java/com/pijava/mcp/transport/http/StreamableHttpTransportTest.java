@@ -98,6 +98,74 @@ class StreamableHttpTransportTest {
     }
 
     @Test
+    void abortedSendsAreNotDispatchedAfterAuthorizationRefresh() throws Exception {
+        var bothEntered = new CountDownLatch(2);
+        var refreshDone = new CountDownLatch(1);
+        var authorized = new java.util.concurrent.atomic.AtomicBoolean();
+        var server = ScriptedHttpServer.start(exchange -> {
+            if ("Bearer tok".equals(header(exchange.getRequestHeaders(), "Authorization"))) {
+                ScriptedHttpServer.json(exchange, 200,
+                        "{\"jsonrpc\":\"2.0\",\"id\":1,\"result\":{}}", Map.of());
+            } else {
+                ScriptedHttpServer.json(exchange, 401, "{}",
+                        Map.of("WWW-Authenticate", "Bearer"));
+            }
+        });
+        var auth = new com.pijava.mcp.AuthProvider() {
+            @Override
+            public String token() {
+                return authorized.get() ? "tok" : null;
+            }
+
+            @Override
+            public void onUnauthorized(Context context) throws Exception {
+                bothEntered.countDown();
+                refreshDone.await(5, TimeUnit.SECONDS);
+                authorized.set(true);
+            }
+        };
+        var transport = new StreamableHttpTransport(
+                new StreamableHttpTransportOptions(server.url(), null, null, false, 0, auth, null));
+        transport.start();
+        var aborted = com.pijava.ai.AbortSignal.create();
+        var abortedFailure = new java.util.concurrent.atomic.AtomicReference<Throwable>();
+        var keptFailure = new java.util.concurrent.atomic.AtomicReference<Throwable>();
+        var abortedSender = Thread.startVirtualThread(() -> {
+            try {
+                transport.send(request(1, "tools/call"),
+                        new com.pijava.mcp.transport.McpTransportSendOptions(aborted));
+            } catch (Throwable failure) {
+                abortedFailure.set(failure);
+            }
+        });
+        var keptSender = Thread.startVirtualThread(() -> {
+            try {
+                transport.send(request(1, "tools/call"));
+            } catch (Throwable failure) {
+                keptFailure.set(failure);
+            }
+        });
+        assertThat(bothEntered.await(5, TimeUnit.SECONDS)).isTrue();
+        aborted.abort();
+        refreshDone.countDown();
+        abortedSender.join(5000);
+        keptSender.join(5000);
+        assertThat(keptFailure.get()).isNull();
+        assertThat(abortedFailure.get())
+                .isInstanceOf(com.pijava.mcp.protocol.jsonrpc.McpAbortError.class);
+        // Two challenged requests, then only the kept one is dispatched after the refresh.
+        assertThat(server.received()).hasSize(3);
+        assertThat(server.received().get(2).headers().get("Authorization"))
+                .isEqualTo("Bearer tok");
+        transport.close();
+        server.stop();
+    }
+
+    private static String header(com.sun.net.httpserver.Headers headers, String name) {
+        return headers.getFirst(name);
+    }
+
+    @Test
     void surfaces401WithChallenge() throws Exception {
         var server = ScriptedHttpServer.start(exchange -> ScriptedHttpServer.json(
                 exchange, 401, "{}",

@@ -295,6 +295,34 @@ class McpClientTest {
     }
 
     @Test
+    void abortsTheSendSignalWhenARequestSettles() throws Exception {
+        var server = RecordingTransport.create();
+        server.setHandler("tools/call", params -> Map.of("content", List.of()));
+        var client = connect(server);
+        client.callTool("ping", null, McpRequestOptions.none()).get();
+        var last = server.sendOptions().get(server.sendOptions().size() - 1);
+        assertThat(last.signal()).isNotNull();
+        assertThat(last.signal().isAborted()).isTrue();
+        client.close();
+
+        var timedOut = RecordingTransport.create();
+        var never = new CountDownLatch(1);
+        timedOut.setHandler("tools/call", params -> {
+            TestAwait.await(never);
+            return null;
+        });
+        var slow = new McpClient(new McpClientOptions(
+                "test-client", "1.0.0", null, null, null, 50, null));
+        slow.connect(timedOut);
+        assertThat(failureOf(slow.callTool("slow", null, McpRequestOptions.none())))
+                .isInstanceOf(McpTimeoutError.class);
+        var call = timedOut.sendOptions().get(timedOut.sendOptions().size() - 1);
+        assertThat(call.signal()).isNotNull();
+        assertThat(call.signal().isAborted()).isTrue();
+        slow.close();
+    }
+
+    @Test
     void acceptsAnyJsonStructuredContent() throws Exception {
         for (var value : new Object[] {List.of(Map.of("id", 1), Map.of("id", 2)),
                 "text", 3, false, null}) {

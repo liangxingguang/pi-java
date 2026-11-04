@@ -45,6 +45,7 @@ public final class McpClient {
     record Pending(CompletableFuture<Object> future, long timeoutMs,
                    @Nullable AbortSignal signal,
                    @Nullable Runnable signalHandle,
+                   AbortSignal sendController,
                    boolean cancellable,
                    @Nullable Consumer<ProgressNotification> onProgress,
                    @Nullable Long progressToken) {
@@ -196,8 +197,10 @@ public final class McpClient {
             };
             var signalHandle = options.signal() == null ? null
                     : options.signal().onAbort(abortListener);
+            // Aborted when this request settles, so a transport does not dispatch it
+            // after an authorization refresh (client.ts:60-70,431,439-441).
             entry = new Pending(future, timeoutMs, options.signal(), signalHandle,
-                    cancellable, options.onProgress(),
+                    AbortSignal.create(), cancellable, options.onProgress(),
                     options.onProgress() == null ? null : id);
             pending.put(id, entry);
             if (entry.progressToken() != null) {
@@ -206,7 +209,8 @@ public final class McpClient {
             armTimeout(id, timeoutMs, cancellable);
         }
         try {
-            t.send(McpClientWires.request(id, method, params));
+            t.send(McpClientWires.request(id, method, params),
+                    new com.pijava.mcp.transport.McpTransportSendOptions(entry.sendController()));
         } catch (Throwable sendError) {
             cancelPending(id, sendError, false);
         }
@@ -352,6 +356,8 @@ public final class McpClient {
             if (entry.signalHandle() != null) {
                 entry.signalHandle().run();
             }
+            // Answered, cancelled, timed out, or closed: the reply will not be awaited.
+            entry.sendController().abort();
         }
     }
 

@@ -24,6 +24,8 @@ final class RecordingTransport implements McpTransport {
 
     private final List<Map<String, Object>> recorded = new CopyOnWriteArrayList<>();
     private final Map<String, Function<Object, Object>> handlers = new java.util.concurrent.ConcurrentHashMap<>();
+    private final List<com.pijava.mcp.transport.McpTransportSendOptions> sendOptions =
+            new CopyOnWriteArrayList<>();
     private final List<Consumer<Object>> messageListeners = new CopyOnWriteArrayList<>();
     private final List<Consumer<Throwable>> errorListeners = new CopyOnWriteArrayList<>();
     private final List<Runnable> closeListeners = new CopyOnWriteArrayList<>();
@@ -77,6 +79,18 @@ final class RecordingTransport implements McpTransport {
             throw new IllegalStateException("transport already started");
         }
         started = true;
+    }
+
+    /** Send options of every message, in send order. */
+    List<com.pijava.mcp.transport.McpTransportSendOptions> sendOptions() {
+        return sendOptions;
+    }
+
+    @Override
+    public void send(Map<String, Object> message,
+                     com.pijava.mcp.transport.McpTransportSendOptions options) {
+        sendOptions.add(options);
+        send(message);
     }
 
     @Override
