@@ -46,40 +46,40 @@ class McpServerPresentationTest {
 
     @Test
     void needsAuthReadsAsNeedsSignIn() {
-        assertThat(McpServerPresentation.describeState("needs-auth", null, 0, 0, true))
+        assertThat(McpServerPresentation.describeState("needs-auth", null, 0, false, true))
                 .isEqualTo("needs sign-in");
         assertThat(McpServerPresentation.attentionRank(true, "needs-auth")).isZero();
     }
 
     @Test
     void aFailureCarriesItsFirstLineOnlyWhenAsked() {
-        assertThat(McpServerPresentation.describeState("failed", "boom\nsecond line", 0, 0, true))
+        assertThat(McpServerPresentation.describeState("failed", "boom\nsecond line", 0, false, true))
                 .isEqualTo("failed: boom");
-        assertThat(McpServerPresentation.describeState("failed", "boom\nsecond line", 0, 0, false))
+        assertThat(McpServerPresentation.describeState("failed", "boom\nsecond line", 0, false, false))
                 .isEqualTo("failed");
-        assertThat(McpServerPresentation.describeState("failed", null, 0, 0, true))
+        assertThat(McpServerPresentation.describeState("failed", null, 0, false, true))
                 .isEqualTo("failed: unknown error");
         assertThat(McpServerPresentation.attentionRank(true, "failed")).isEqualTo(1);
     }
 
     @Test
-    void connectedCountsToolsAndResources() {
-        assertThat(McpServerPresentation.describeState("connected", null, 0, 0, true))
+    void connectedCountsToolsAndSaysWhetherResourcesAreOffered() {
+        assertThat(McpServerPresentation.describeState("connected", null, 0, false, true))
                 .isEqualTo("connected · 0 tools");
-        assertThat(McpServerPresentation.describeState("connected", null, 1, 0, true))
+        assertThat(McpServerPresentation.describeState("connected", null, 1, false, true))
                 .isEqualTo("connected · 1 tool");
-        assertThat(McpServerPresentation.describeState("connected", null, 2, 3, true))
-                .isEqualTo("connected · 2 tools · 3 resources");
-        assertThat(McpServerPresentation.describeState("connected", null, 1, 1, true))
-                .isEqualTo("connected · 1 tool · 1 resource");
+        assertThat(McpServerPresentation.describeState("connected", null, 2, true, true))
+                .isEqualTo("connected · 2 tools · resources");
+        assertThat(McpServerPresentation.describeState("connected", null, 1, true, true))
+                .isEqualTo("connected · 1 tool · resources");
         assertThat(McpServerPresentation.attentionRank(true, "connected")).isEqualTo(4);
     }
 
     @Test
     void connectingAndDisconnectedKeepTheirOwnWords() {
-        assertThat(McpServerPresentation.describeState("connecting", null, 0, 0, true))
+        assertThat(McpServerPresentation.describeState("connecting", null, 0, false, true))
                 .isEqualTo("connecting…");
-        assertThat(McpServerPresentation.describeState("disconnected", null, 0, 0, true))
+        assertThat(McpServerPresentation.describeState("disconnected", null, 0, false, true))
                 .isEqualTo("disconnected");
         assertThat(McpServerPresentation.attentionRank(true, "disconnected")).isEqualTo(2);
         assertThat(McpServerPresentation.attentionRank(true, "connecting")).isEqualTo(3);
@@ -88,7 +88,7 @@ class McpServerPresentationTest {
     @Test
     void theStateAndTheCommandListingWriteDifferently() {
         // The `pi-java mcp list` command writes `connected, 1 tool`; this one writes a middle dot.
-        assertThat(McpServerPresentation.describeState("connected", null, 1, 0, true))
+        assertThat(McpServerPresentation.describeState("connected", null, 1, false, true))
                 .doesNotContain(",");
     }
 

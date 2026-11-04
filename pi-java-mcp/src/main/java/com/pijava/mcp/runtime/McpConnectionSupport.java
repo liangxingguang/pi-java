@@ -2,8 +2,6 @@ package com.pijava.mcp.runtime;
 
 import java.io.IOException;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
@@ -14,12 +12,8 @@ import java.util.function.Supplier;
 
 import org.jspecify.annotations.Nullable;
 
-import com.pijava.mcp.McpClient;
-import com.pijava.mcp.McpRequestOptions;
 import com.pijava.mcp.config.McpServerConfig;
 import com.pijava.mcp.config.McpServerEntry;
-import com.pijava.mcp.protocol.Resource;
-import com.pijava.mcp.protocol.ResourceTemplate;
 import com.pijava.mcp.protocol.jsonrpc.JsonRpcErrorCode;
 import com.pijava.mcp.protocol.jsonrpc.McpError;
 import com.pijava.mcp.transport.http.McpHttpError;
@@ -172,54 +166,6 @@ final class McpConnectionSupport {
             }
             return CompletableFuture.<T>failedFuture(cause);
         }).thenCompose(result -> result);
-    }
-
-    /** {@code listTemplates} ({@code runtime.ts:133-135}). */
-    static List<ResourceTemplate> listTemplates(McpClient client, McpRequestOptions requestOptions)
-            throws Exception {
-        try {
-            return client.listResourceTemplates(requestOptions).get();
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
-            throw interrupted;
-        } catch (ExecutionException failure) {
-            var cause = unwrap(failure);
-            if (cause instanceof McpError mcp && mcp.code() == JsonRpcErrorCode.METHOD_NOT_FOUND.code()) {
-                return List.of();
-            }
-            throw asException(cause);
-        }
-    }
-
-    /**
-     * Resources and templates at connect time, for the counts in {@code /mcp} and
-     * {@code pi mcp list} ({@code runtime.ts:137-152}).
-     *
-     * <p>A server whose lists fail still connects: the resource tools list and read its
-     * resources on demand.</p>
-     */
-    static ResourceLists fetchResources(McpClient client) {
-        var resources = new ArrayList<Resource>();
-        try {
-            resources.addAll(client.listResources(McpRequestOptions.none()).get());
-        } catch (InterruptedException interrupted) {
-            Thread.currentThread().interrupt();
-        } catch (ExecutionException ignored) {
-            // The list is best effort.
-        }
-        var templates = new ArrayList<ResourceTemplate>();
-        try {
-            templates.addAll(listTemplates(client, McpRequestOptions.none()));
-        } catch (Exception ignored) {
-            // The list is best effort.
-        }
-        return new ResourceLists(
-                resources.stream().filter(resource -> !McpAppResources.isMcpAppResource(resource)).toList(),
-                templates.stream().filter(template -> !McpAppResources.isMcpAppResource(template)).toList());
-    }
-
-    /** What one {@code fetchResources} found ({@code runtime.ts:141-143}). */
-    record ResourceLists(List<Resource> resources, List<ResourceTemplate> templates) {
     }
 
     /** A provider that reads a pi provider's token on every request ({@code runtime.ts:213-216}). */

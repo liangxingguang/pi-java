@@ -69,18 +69,15 @@ final class McpConnector {
             transport = conn.options.createTransport().create(conn.entry, conn.cwd, conn.authProvider);
             client.connect(transport);
             client.onNotification("notifications/tools/list_changed", params -> refreshTools(conn, client));
-            client.onNotification("notifications/resources/list_changed",
-                    params -> refreshResources(conn, client));
             var stdio = transport instanceof StdioTransport value ? value : null;
             client.onClose(() -> handleClientClose(conn, client, stdio));
             var capabilities = client.serverCapabilities();
             // Servers without the tools capability (prompts or resources only) do not answer
-            // tools/list, and servers without the resources capability do not answer resources/list.
-            var offersResources = capabilities != null && capabilities.resources() != null;
+            // tools/list. Resources are not listed at connect: listing every resource can
+            // take long (a large drive, say), and the resource tools read them on demand
+            // (runtime.ts:139-160,359-390).
             var tools = capabilities != null && capabilities.tools() != null
                     ? client.listTools(McpRequestOptions.none()).get() : List.<McpTool>of();
-            var listed = offersResources ? McpConnectionSupport.fetchResources(client)
-                    : new McpConnectionSupport.ResourceLists(List.of(), List.of());
             if (conn.closed) {
                 throw new IllegalStateException("shut down while connecting");
             }
@@ -89,9 +86,7 @@ final class McpConnector {
             }
             conn.client = client;
             conn.tools = tools;
-            conn.hasResources = offersResources;
-            conn.resources = listed.resources();
-            conn.resourceTemplates = listed.templates();
+            conn.hasResources = capabilities != null && capabilities.resources() != null;
             var instructions = client.instructions();
             conn.instructions = instructions == null || instructions.isBlank()
                     ? null : instructions.strip();
@@ -164,19 +159,4 @@ final class McpConnector {
         conn.changed();
     }
 
-    /** {@code runtime.ts:454-461}. */
-    private static void refreshResources(McpServerConnection conn, McpClient client) {
-        try {
-            var listed = McpConnectionSupport.fetchResources(client);
-            if (conn.client != client || conn.closed) {
-                return;
-            }
-            conn.resources = listed.resources();
-            conn.resourceTemplates = listed.templates();
-            conn.options.onTools().accept(conn);
-        } catch (RuntimeException failure) {
-            conn.error = "Failed to refresh resources: " + McpConnectionSupport.errorMessage(failure);
-        }
-        conn.changed();
-    }
 }

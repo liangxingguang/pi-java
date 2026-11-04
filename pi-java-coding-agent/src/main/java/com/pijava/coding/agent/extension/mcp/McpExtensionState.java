@@ -158,10 +158,10 @@ final class McpExtensionState {
                 : "failed";
             case CONNECTED -> {
                 var tools = connection.tools().size();
-                var resources = connection.resources().size();
-                var resourceCount = resources > 0
-                    ? " · " + resources + " resource" + (resources == 1 ? "" : "s") : "";
-                yield "connected · " + tools + " tool" + (tools == 1 ? "" : "s") + resourceCount;
+                // Resources are not listed at connect; the capability alone decides
+                // (pi index.ts:234-252).
+                var resources = connection.hasResources() ? " · resources" : "";
+                yield "connected · " + tools + " tool" + (tools == 1 ? "" : "s") + resources;
             }
             case CONNECTING -> "connecting…";
             default -> connection.state().wire();

@@ -37,8 +37,7 @@ final class McpListCommand {
             String state,
             List<String> tools,
             @Nullable Map<String, String> toolExposure,
-            @Nullable Integer resources,
-            @Nullable Integer resourceTemplates,
+            @Nullable Boolean resources,
             @Nullable String error) {
     }
 
@@ -119,7 +118,7 @@ final class McpListCommand {
             return new ServerReport(entry.name(), scopeOf(entry), entry.source().toString(),
                     entry.override() == null ? null : entry.override().toString(),
                     false, exposure, McpCommandSupport.describeTransport(entry), "disabled", List.of(),
-                    null, null, null, null);
+                    null, null, null);
         }
         try {
             connection.getClient().join();
@@ -139,12 +138,8 @@ final class McpListCommand {
             overrides = Map.copyOf(differing);
         }
         var state = connection.state().wire();
-        Integer resources = null;
-        Integer templates = null;
-        if (connection.hasResources()) {
-            resources = connection.resources().size();
-            templates = connection.resourceTemplates().size();
-        }
+        // Resources are not listed: listing every one can take long (cli.ts:91-107).
+        var resources = connection.hasResources() ? Boolean.TRUE : null;
         var error = !"connected".equals(state) ? connection.error() : null;
         try {
             connection.close().join();
@@ -154,7 +149,7 @@ final class McpListCommand {
         return new ServerReport(entry.name(), scopeOf(entry), entry.source().toString(),
                 entry.override() == null ? null : entry.override().toString(),
                 true, exposure, McpCommandSupport.describeTransport(entry), state, tools, overrides,
-                resources, templates, error);
+                resources, error);
     }
 
     private static String scopeOf(McpServerEntry entry) {
@@ -200,10 +195,7 @@ final class McpListCommand {
             report.toolExposure().forEach(exposures::put);
         }
         if (report.resources() != null) {
-            node.put("resources", report.resources());
-        }
-        if (report.resourceTemplates() != null) {
-            node.put("resourceTemplates", report.resourceTemplates());
+            node.put("resources", true);
         }
         if (report.error() != null) {
             node.put("error", report.error());
@@ -231,8 +223,7 @@ final class McpListCommand {
             log.accept("  tools: " + String.join(", ", tools));
         }
         if (report.resources() != null) {
-            log.accept("  resources: " + report.resources() + ", URI templates: "
-                    + (report.resourceTemplates() == null ? 0 : report.resourceTemplates()));
+            log.accept("  offers resources");
         }
         if (report.error() != null) {
             log.accept("  " + report.error().replace("\n", "\n  "));

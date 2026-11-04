@@ -146,7 +146,7 @@ public final class McpServerPresentation {
             return "starting";
         }
         return describeState(connection.state().wire(), connection.error(),
-                connection.tools().size(), connection.resources().size(), withError);
+                connection.tools().size(), connection.hasResources(), withError);
     }
 
     /**
@@ -155,22 +155,19 @@ public final class McpServerPresentation {
      * @param state the connection state as it is written on the wire
      * @param error the failure message, when there is one
      * @param toolCount tools the server offers
-     * @param resourceCount resources it listed
+     * @param hasResources whether the server offers resources; they are not listed
      * @param withError appends the first line of a failure
      * @return the state, as the manager writes it
      */
     public static String describeState(String state, @Nullable String error, int toolCount,
-                                       int resourceCount, boolean withError) {
+                                       boolean hasResources, boolean withError) {
         return switch (state) {
             case "needs-auth" -> "needs sign-in";
             case "failed" -> withError
                     ? "failed: " + firstLine(error == null ? "unknown error" : error)
                     : "failed";
-            case "connected" -> {
-                var resourcePart = resourceCount > 0
-                        ? " · " + resourceCount + (resourceCount == 1 ? " resource" : " resources") : "";
-                yield "connected · " + toolCount + (toolCount == 1 ? " tool" : " tools") + resourcePart;
-            }
+            case "connected" -> "connected · " + toolCount
+                    + (toolCount == 1 ? " tool" : " tools") + (hasResources ? " · resources" : "");
             case "connecting" -> "connecting…";
             default -> state;
         };

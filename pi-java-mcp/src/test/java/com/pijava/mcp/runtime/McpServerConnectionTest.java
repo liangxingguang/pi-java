@@ -209,20 +209,36 @@ class McpServerConnectionTest {
     }
 
     @Test
-    void aServerWithResourcesListsThemWithoutTheApps() throws Exception {
+    void connectDoesNotListTheServersResources() throws Exception {
         var server = new ScriptedServer();
         server.answer("initialize", params -> ScriptedServer.initializeResult(true, true));
         server.answer("tools/list", params -> oneTool());
         server.answer("resources/list", params -> Map.of("resources", List.of(
-                Map.of("uri", "file:///a.txt", "name", "a"),
-                Map.of("uri", "ui://widget", "name", "widget", "mimeType", "text/html"))));
+                Map.of("uri", "file:///a.txt", "name", "a"))));
         server.answer("resources/templates/list", params -> Map.of("resourceTemplates", List.of()));
         var connection = connection(server);
         connection.getClient().get(TIMEOUT_MS, TimeUnit.MILLISECONDS);
 
+        // Listing every resource at connect can take long (a large drive, say), so
+        // the capability alone decides (runtime.ts:139-160,359-390).
         assertThat(connection.hasResources()).isTrue();
-        assertThat(connection.resources()).extracting(resource -> resource.uri())
-                .containsExactly("file:///a.txt");
+        assertThat(server.calls("resources/list")).isZero();
+        assertThat(server.calls("resources/templates/list")).isZero();
+    }
+
+    @Test
+    void aResourcesListChangedNotificationIsIgnored() throws Exception {
+        var server = new ScriptedServer();
+        server.answer("initialize", params -> ScriptedServer.initializeResult(true, true));
+        server.answer("tools/list", params -> oneTool());
+        server.answer("resources/list", params -> Map.of("resources", List.of()));
+        var connection = connection(server);
+        connection.getClient().get(TIMEOUT_MS, TimeUnit.MILLISECONDS);
+
+        server.notifyClient("notifications/resources/list_changed", Map.of());
+        Thread.sleep(100);
+        assertThat(server.calls("resources/list")).isZero();
+        assertThat(connection.tools()).extracting(McpTool::name).containsExactly("echo");
     }
 
     @Test

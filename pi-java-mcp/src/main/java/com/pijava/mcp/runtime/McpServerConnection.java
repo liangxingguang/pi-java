@@ -48,8 +48,6 @@ public final class McpServerConnection implements McpToolCaller, McpResourceServ
     volatile @Nullable String error;
     volatile List<McpTool> tools = List.of();
     volatile boolean hasResources;
-    volatile List<Resource> resources = List.of();
-    volatile List<ResourceTemplate> resourceTemplates = List.of();
     volatile @Nullable String instructions;
     volatile @Nullable OAuthChallenge challenge;
 
@@ -108,19 +106,12 @@ public final class McpServerConnection implements McpToolCaller, McpResourceServ
         return tools;
     }
 
-    /** Whether the server offers resources. */
+    /**
+     * Whether the server offers resources. They are listed and read on demand by
+     * the resource tools, not at connect (runtime.ts:139-160).
+     */
     public boolean hasResources() {
         return hasResources;
-    }
-
-    /** The resources listed at the last connect or change, without MCP App resources. */
-    public List<Resource> resources() {
-        return resources;
-    }
-
-    /** The resource templates listed at the last connect or change. */
-    public List<ResourceTemplate> resourceTemplates() {
-        return resourceTemplates;
     }
 
     /** Server instructions from {@code initialize}, describing its tools as a group. */

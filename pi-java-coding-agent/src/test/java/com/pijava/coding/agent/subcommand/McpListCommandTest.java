@@ -77,7 +77,7 @@ class McpListCommandTest {
         assertThat(out).anyMatch(line -> line.equals("files: connected, 1 tool (codemode, global)"));
         assertThat(out).anyMatch(line -> line.startsWith("  " + javaBin()));
         assertThat(out).anyMatch(line -> line.equals("  tools: echo"));
-        assertThat(out).anyMatch(line -> line.equals("  resources: 1, URI templates: 1"));
+        assertThat(out).anyMatch(line -> line.equals("  offers resources"));
         assertThat(err).isEmpty();
     }
 
@@ -178,8 +178,9 @@ class McpListCommandTest {
         assertThat(server.path("exposure").asText()).isEqualTo("codemode");
         assertThat(server.path("state").asText()).isEqualTo("connected");
         assertThat(server.path("tools").get(0).asText()).isEqualTo("echo");
-        assertThat(server.path("resources").asInt()).isEqualTo(1);
-        assertThat(server.path("resourceTemplates").asInt()).isEqualTo(1);
+        // Resources are not listed: the report only says whether the server offers any.
+        assertThat(server.path("resources").asBoolean()).isTrue();
+        assertThat(server.has("resourceTemplates")).isFalse();
         assertThat(server.has("error")).isFalse();
         assertThat(payload.path("errors")).isEmpty();
         assertThat(payload.has("note")).isFalse();
@@ -194,7 +195,6 @@ class McpListCommandTest {
         assertThat(server.has("override")).isFalse();
         assertThat(server.has("toolExposure")).isFalse();
         assertThat(server.has("resources")).isFalse();
-        assertThat(server.has("resourceTemplates")).isFalse();
         assertThat(server.has("error")).isFalse();
     }
 
