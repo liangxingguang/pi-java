@@ -8,7 +8,6 @@ import com.pijava.agent.harness.QueueMode;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.model.ModelId;
 import com.pijava.ai.thinking.ModelThinkingLevel;
-import com.pijava.ai.thinking.ThinkingLevel;
 import com.pijava.coding.agent.core.AgentSession;
 import com.pijava.coding.agent.core.SessionTreeNode;
 
@@ -117,12 +116,40 @@ final class RpcSessionPayloads {
             .orElseThrow(() -> new IllegalArgumentException("Unknown model: " + pattern));
     }
 
+    /**
+     * L5 W9（B259）：pi {@code cycleThinkingLevel}（agent-session.ts:2726-2739）——
+     * 模型不支持思考 ⇒ {@code null}（RPC 的 {@code success(..., null)}）；
+     * 否则在**可用集**（{@link com.pijava.coding.agent.core.slash.builtin.ThinkingCommands#availableLevels}）
+     * 上轮转。无模型 ⇒ {@code supportsThinking()} 为 false ⇒ {@code null}（pi 同）。
+     */
     static ModelThinkingLevel cycleThinking(AgentSession session) {
-        var levels = ThinkingLevel.ordered();
+        var model = session.harness().getModel();
+        if (model == null || !supportsThinking(session)) {
+            return null;
+        }
+        var levels = com.pijava.coding.agent.core.slash.builtin.ThinkingCommands
+            .availableLevels(session);
+        if (levels.isEmpty()) {
+            return null;
+        }
         ModelThinkingLevel current = session.harness().getThinkingLevel();
-        int idx = current instanceof ModelThinkingLevel.Enabled e
-            ? levels.indexOf(e.level()) : -1;
-        return ModelThinkingLevel.of(levels.get((idx + 1) % levels.size()));
+        int idx = levels.indexOf(current);
+        return levels.get((idx + 1) % levels.size());
+    }
+
+    /**
+     * pi {@code supportsThinking()}（agent-session.ts:2748-2750）：{@code model.reasoning}。
+     * 目录未编目 ⇒ 能力未知，沿用 {@code availableLevels} 的全集口径（true）。
+     */
+    private static boolean supportsThinking(AgentSession session) {
+        var model = session.harness().getModel();
+        if (model == null) {
+            return false;
+        }
+        return session.modelCatalog().find(model)
+            .map(info -> info.capabilities().contains(
+                com.pijava.ai.model.ModelCapability.THINKING))
+            .orElse(true);
     }
 
     static List<String> availableModels() {
@@ -132,9 +159,14 @@ final class RpcSessionPayloads {
             .sorted().toList();
     }
 
-    static List<String> availableThinkingLevels() {
-        return ThinkingLevel.ordered().stream()
-            .map(ThinkingLevel::label).toList();
+    /**
+     * L5 W9（B259）：pi {@code getAvailableThinkingLevels}（agent-session.ts:2742-2745）——
+     * 无模型 ⇒ 七值全集；否则按目录能力过滤（RPC 的 {@code get_available_thinking_levels}）。
+     */
+    static List<String> availableThinkingLevels(AgentSession session) {
+        return com.pijava.coding.agent.core.slash.builtin.ThinkingCommands
+            .availableLevels(session).stream()
+            .map(ModelThinkingLevel::label).toList();
     }
 
     static RpcSessionStats buildStats(AgentSession session) {

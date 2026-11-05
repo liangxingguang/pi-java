@@ -162,12 +162,16 @@ public final class RpcDispatcher {
                     out.write(RpcResponse.ok(s.id(), "set_thinking_level"));
                 }
                 case RpcCommand.CycleThinkingLevel c -> {
-                    session.setThinkingLevel(RpcSessionPayloads.cycleThinking(session));
+                    // L5 W9（B259）：模型不支持思考 ⇒ pi success(..., null)，不设档。
+                    var next = RpcSessionPayloads.cycleThinking(session);
+                    if (next != null) {
+                        session.setThinkingLevel(next);
+                    }
                     out.write(RpcResponse.ok(c.id(), "cycle_thinking_level"));
                 }
                 case RpcCommand.GetAvailableThinkingLevels g ->
                     out.write(RpcResponse.ok(g.id(), "get_available_thinking_levels",
-                        RpcSessionPayloads.availableThinkingLevels()));
+                        RpcSessionPayloads.availableThinkingLevels(session)));
                 case RpcCommand.Compact c -> {
                     // B176（原 docs/27）：pi void handleInputLine(line)（rpc-mode.ts:809）
                     // —— 压缩跑 worker 虚拟线程，读线程立即处理后续命令；响应压缩

@@ -40,6 +40,10 @@ class ExtensionToolActivationTest {
 
     static final String PROBE_TOOL = "activation-probe-tool";
     static final String PROBE_MCP_TOOL = "mcp__probe-srv__probe-tool";
+    static final String REACH_TOOL = "activation-reach-tool";
+    /** W2（B276）：可比较引用的 reachesTools 函数。 */
+    static final java.util.function.Function<Map<String, Object>, com.pijava.agent.tool.ToolReach>
+        REACH = params -> new com.pijava.agent.tool.ToolReach.Words(List.of("read"));
     /** 探针捕获的 per-extension 上下文（扩展面三件套的驱动口）。 */
     static final List<ExtensionContext> CAPTURED = new java.util.concurrent.CopyOnWriteArrayList<>();
 
@@ -54,7 +58,33 @@ class ExtensionToolActivationTest {
             CAPTURED.add(ctx);
             ctx.tools().register(probeTool(PROBE_TOOL));
             ctx.tools().register(probeTool(PROBE_MCP_TOOL));
+            ctx.tools().register(reachTool());
         }
+    }
+
+    /** W2：带 reachesTools 的探针工具（函数为本类静态引用，便于判等）。 */
+    private static AgentTool<Map<String, Object>, Void> reachTool() {
+        return new AgentTool<>() {
+            @Override public String name() { return REACH_TOOL; }
+            @Override public String label() { return REACH_TOOL; }
+            @Override public String description() { return "reach probe"; }
+            @Override public Map<String, Object> inputSchema() {
+                return Map.of("type", "object");
+            }
+            @Override public ExecutionMode executionMode() {
+                return new ExecutionMode.Parallel();
+            }
+            @Override
+            public java.util.function.Function<Map<String, Object>,
+                    com.pijava.agent.tool.ToolReach> reachesTools() {
+                return REACH;
+            }
+            @Override
+            public ToolResult<Void> execute(String toolCallId, Map<String, Object> params,
+                    AbortSignal signal, ToolUpdateCallback<Void> onUpdate, ToolContext context) {
+                return ToolResult.success("done");
+            }
+        };
     }
 
     private static AgentTool<Map<String, Object>, Void> probeTool(String name) {
@@ -169,6 +199,56 @@ class ExtensionToolActivationTest {
                 });
             ctx.setActiveTools(List.of("bash"));
             assertThat(s.getActiveToolNames()).containsExactly("bash");
+        }
+    }
+
+    /** W2（B276）：getAllTools 投影 reachesTools（pi agent-session.ts:1530-1545）。 */
+    @Test
+    void getAllToolsProjectsReachesTools() {
+        try (var s = session("--provider", "faux", "--model", "hello", "--no-session")) {
+            var info = s.getAllTools().stream()
+                .filter(tool -> tool.name().equals(REACH_TOOL))
+                .findFirst().orElseThrow();
+            assertThat(info.reachesTools())
+                .as("扩展面拿到的函数与工具本体同一引用")
+                .isSameAs(REACH);
+            assertThat(info.reachesTools().apply(Map.of()))
+                .isInstanceOf(com.pijava.agent.tool.ToolReach.Words.class);
+            assertThat(s.getAllTools().stream()
+                .filter(tool -> !tool.name().equals(REACH_TOOL))
+                .filter(tool -> !tool.name().equals(
+                    com.pijava.coding.agent.extension.toolsearch.ToolSearchTool.NAME))
+                .map(com.pijava.coding.agent.extension.ExtensionToolInfo::reachesTools))
+                .as("未声明者投影为 null（pi 的缺席）")
+                .containsOnlyNulls();
+        }
+    }
+
+    /** W2：tool_search 的 reachesTools:()=>"all"（pi tool.ts:320-323）经投影可见。 */
+    @Test
+    void toolSearchReachesAllIsProjected() {
+        try (var s = session("--provider", "faux", "--model", "hello", "--no-session")) {
+            var info = s.getAllTools().stream()
+                .filter(tool -> tool.name()
+                    .equals(com.pijava.coding.agent.extension.toolsearch.ToolSearchTool.NAME))
+                .findFirst().orElseThrow();
+            assertThat(info.reachesTools().apply(Map.of()))
+                .isInstanceOf(com.pijava.agent.tool.ToolReach.All.class);
+        }
+    }
+
+    /**
+     * W2：同名集合乱序重设 ⇒ 声明顺序不变（pi {@code _applyToolLoadout}
+     * 保持 kept 序；Java 以注册表序为稳定源，D219）。
+     */
+    @Test
+    void sameNameSetResetKeepsDeclarationOrder() {
+        try (var s = session("--provider", "faux", "--model", "hello", "--no-session")) {
+            var before = s.getActiveToolNames();
+            var reversed = new java.util.ArrayList<>(before);
+            java.util.Collections.reverse(reversed);
+            s.setActiveToolsByName(reversed);
+            assertThat(s.getActiveToolNames()).containsExactlyElementsOf(before);
         }
     }
 

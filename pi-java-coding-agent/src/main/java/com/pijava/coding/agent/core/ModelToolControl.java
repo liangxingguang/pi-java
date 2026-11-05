@@ -338,7 +338,7 @@ final class ModelToolControl {
                     : java.util.List.copyOf(t.promptGuidelines()),
                 t.exposure(),
                 t.inputSchema() == null ? java.util.Map.of() : t.inputSchema(),
-                t.namespace(), t.annotations()))
+                t.namespace(), t.annotations(), t.reachesTools()))
             .toList();
     }
 
