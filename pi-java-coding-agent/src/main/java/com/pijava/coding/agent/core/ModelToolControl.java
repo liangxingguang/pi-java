@@ -23,6 +23,8 @@ final class ModelToolControl {
         com.pijava.ai.catalog.ModelCatalog.empty();
     /** T5a：工具选择策略（reload 的 defaultTools diff／装配后激活臂的操作数）。 */
     private ToolSelection.Resolved toolSelection;
+    /** 内置工具名集（pi {@code _baseToolDefinitions}）：恢复时不把它们当「晚注册扩展工具」。 */
+    private java.util.Set<String> baseToolNames = java.util.Set.of();
 
     ModelToolControl(AgentSession owner) {
         this.owner = owner;
@@ -80,6 +82,21 @@ final class ModelToolControl {
     /** 工具选择策略读面（{@link SessionReload}／{@link ExtensionLoading}）。 */
     ToolSelection.Resolved toolSelection() {
         return toolSelection;
+    }
+
+    /** 内置工具名集写面（{@code wireSession} 装配期回填，B271）。 */
+    void baseToolNames(java.util.Set<String> names) {
+        this.baseToolNames = java.util.Set.copyOf(names);
+    }
+
+    /** B271（docs/24 W1）：pi {@code _usesDefaultTools} 的 Java 读面。 */
+    boolean usesDefaultTools() {
+        return toolSelection != null && toolSelection.usesDefaultTools();
+    }
+
+    /** B271：pi {@code _defaultToolModifiers} 的 Java 读面（空表 ≙ undefined）。 */
+    java.util.List<String> defaultToolModifiers() {
+        return toolSelection == null ? java.util.List.of() : toolSelection.defaultToolModifiers();
     }
 
     /**
@@ -184,27 +201,88 @@ final class ModelToolControl {
      */
     void setActiveToolsByName(java.util.List<String> names) {
         var previous = getActiveToolNames();
-        var deduped = new java.util.LinkedHashSet<>(names);
-        var tools = new java.util.LinkedHashSet<AgentTool<?, ?>>();
-        for (var name : deduped) {
-            var tool = owner.services().tools().get(name);
-            // 批 27（docs/38 T6）：pi _applyToolLoadout 的过滤臂（:1578-1580
-            // 逐字）——hidden 与不可激活（allowlist 保留 MCP 且无 tool_search）
-            // 不进活跃集。
-            if (tool != null
-                    && toolExposureOf(name)
-                        != com.pijava.agent.tool.ToolExposure.HIDDEN
-                    && isActivatableTool(name)) {
-                tools.add(tool);
-            }
-        }
-        owner.harness().setActiveTools(tools);
+        applyToolLoadout(names);
         var active = new java.util.HashSet<>(getActiveToolNames());
         if (previous.stream().anyMatch(name -> !active.contains(name))) {
             owner.harness().pendingToolNames().clear();
         }
         owner.harness().pendingToolNames()
             .removeIf(name -> owner.services().tools().get(name) != null);
+    }
+
+    /**
+     * pi {@code _applyToolLoadout}（:1614-1621）的 Java 激活面：hidden 与不可激活
+     * （allowlist 保留 MCP 且无 tool_search）的工具不进活跃集。
+     */
+    private void applyToolLoadout(java.util.List<String> names) {
+        var deduped = new java.util.LinkedHashSet<>(names);
+        var tools = new java.util.LinkedHashSet<AgentTool<?, ?>>();
+        for (var name : deduped) {
+            var tool = owner.services().tools().get(name);
+            if (tool != null
+                    && toolExposureOf(name) != com.pijava.agent.tool.ToolExposure.HIDDEN
+                    && isActivatableTool(name)) {
+                tools.add(tool);
+            }
+        }
+        owner.harness().setActiveTools(tools);
+    }
+
+    /**
+     * B271（docs/24 W1）：pi {@code _restoreToolsFromTranscript}（:1851-1882）——
+     * 按**分支原始 entry**（不是压缩后的投影）重放全部 system 消息恢复激活装配。
+     *
+     * <ol>
+     *   <li>取路径上所有 system 消息（含压缩前的），无则保留当前工具；</li>
+     *   <li>{@code mentioned}＝全部 {@code toolsAdded}＋{@code toolsRemoved} 名；</li>
+     *   <li>晚注册扩展工具＝注册表中未被提及、非内置、且注册即激活者；</li>
+     *   <li>按时间序重放得到当前工具，再叠 {@code +name/-name} 修饰符；</li>
+     *   <li>允许的名进 pending（未注册者后续注册时激活），随后只把**实际激活**的名
+     *       移出 pending（隐藏但已注册者按 pi 保留）；</li>
+     *   <li>按 loadout 过滤后写激活集。</li>
+     * </ol>
+     */
+    void restoreToolsFromTranscript(
+            java.util.List<com.pijava.agent.entry.Entry> branchEntries,
+            java.util.List<String> modifiers) {
+        var pending = owner.harness().pendingToolNames();
+        pending.clear();
+        var systemMessages = new java.util.ArrayList<com.pijava.ai.message.Message>();
+        for (var entry : branchEntries) {
+            if (entry instanceof com.pijava.agent.entry.Entry.Message m
+                    && m.message() instanceof com.pijava.ai.message.Message.SystemMessage sm) {
+                systemMessages.add(sm);
+            }
+        }
+        if (systemMessages.isEmpty()) {
+            return;
+        }
+        var mentioned = new java.util.HashSet<String>();
+        for (var message : systemMessages) {
+            var sm = (com.pijava.ai.message.Message.SystemMessage) message;
+            sm.toolsAdded().forEach(tool -> mentioned.add(tool.name()));
+            sm.toolsRemoved().forEach(tool -> mentioned.add(tool.name()));
+        }
+        var registry = owner.services().tools();
+        var newTools = registry.all().stream()
+            .map(AgentTool::name)
+            .filter(name -> !mentioned.contains(name))
+            .filter(name -> !baseToolNames.contains(name))
+            .filter(this::isActivatedOnRegistration)
+            .toList();
+        var names = new java.util.ArrayList<String>();
+        com.pijava.ai.api.Transcripts.getCurrentTools(systemMessages)
+            .forEach(tool -> names.add(tool.name()));
+        names.addAll(newTools);
+        var restored = ToolSelection.applyToolModifiers(names, modifiers);
+        for (var name : restored) {
+            if (toolSelection == null || toolSelection.isAllowed(name)) {
+                pending.add(name);
+            }
+        }
+        applyToolLoadout(restored);
+        var active = new java.util.HashSet<>(getActiveToolNames());
+        pending.removeIf(active::contains);
     }
 
     /**

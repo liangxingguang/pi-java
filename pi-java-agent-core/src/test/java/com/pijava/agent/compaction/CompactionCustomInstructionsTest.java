@@ -14,7 +14,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * B174（{@code docs/23}）：{@code CompactionService.compact} 把
  * customInstructions 透传给历史摘要调用 —— 普通路与 split-turn 历史路都传
- * （pi {@code compaction.ts:1005}）。turn-prefix 调用不接该参数。
+ * （pi {@code compaction.ts:1005}）。
+ *
+ * <p>B272（docs/24 W2）：split-turn 的 turn-prefix 调用同样接该参数，
+ * pi 在 prompt 尾部追加 {@code Additional focus}（{@code compaction.ts:1082-1085}）。</p>
  */
 class CompactionCustomInstructionsTest {
 
@@ -34,8 +37,13 @@ class CompactionCustomInstructionsTest {
         @Override
         public SummaryResult summarizeTurnPrefix(List<Message> messages, int reserveTokens,
                                                  String reason) {
-            // 签名上没有 customInstructions 位置 —— 记录位仅为对照断言。
-            prefixCustom.add(null);
+            return summarizeTurnPrefix(messages, reserveTokens, null, reason);
+        }
+
+        @Override
+        public SummaryResult summarizeTurnPrefix(List<Message> messages, int reserveTokens,
+                                                 String customInstructions, String reason) {
+            prefixCustom.add(customInstructions);
             return new SummaryResult("PREFIX", null);
         }
     }
@@ -64,7 +72,7 @@ class CompactionCustomInstructionsTest {
     }
 
     /**
-     * split-turn 路：历史摘要与 turn-prefix 各一次调用，customInstructions 只进历史。
+     * split-turn 路：历史摘要与 turn-prefix 各一次调用，两路都带 customInstructions。
      */
     @Test
     void splitTurnForwardsCustomInstructionsToHistorySummarizeOnly() {
@@ -84,7 +92,9 @@ class CompactionCustomInstructionsTest {
         assertThat(recording.summarizeCustom)
             .as("pi compaction.ts:1005：split 历史摘要同样透传")
             .containsExactly("Focus on auth");
-        assertThat(recording.prefixCustom).hasSize(1);
+        assertThat(recording.prefixCustom)
+            .as("B272：split turn-prefix 同样带上 /compact 指令")
+            .containsExactly("Focus on auth");
     }
 
     private static Message user(String text) {

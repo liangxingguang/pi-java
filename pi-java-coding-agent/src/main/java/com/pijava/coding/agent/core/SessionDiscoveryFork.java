@@ -392,6 +392,9 @@ final class SessionDiscoveryFork {
     private AgentSession forkInMemory(String branchName, List<Entry> seedEntries) {
         var forked = wireForkSession(branchName);
         forked.harness().seedTranscript(AgentHarness.DEFAULT_LANE, seedEntries);
+        // B271（docs/24 W1）：与持久化 fork 同序——播种后按分支原始 system 消息恢复。
+        if (forked.modelTools().usesDefaultTools()) forked.modelTools()
+            .restoreToolsFromTranscript(seedEntries, forked.modelTools().defaultToolModifiers());
         forked.inMemoryRepository(owner.inMemoryRepository());
         owner.inMemoryRepository().create(forked);
         return forked;

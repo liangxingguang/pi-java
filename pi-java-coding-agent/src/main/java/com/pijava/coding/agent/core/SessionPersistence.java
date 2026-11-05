@@ -104,6 +104,13 @@ final class SessionPersistence {
         String leafId = entries.isEmpty() ? null : entries.get(entries.size() - 1).id();
         owner.harness().seedTranscript(owner.laneName(),
             ContextEntries.contextEntries(ContextEntries.pathToLeaf(entries, leafId)));
+        // B271（docs/24 W1）：pi 构造器的 usesDefaultTools 门——恢复会话按分支**原始**
+        // system 消息重放工具装配（含压缩前缀，不能用上面的投影）。
+        if (owner.modelTools().usesDefaultTools()) {
+            owner.modelTools().restoreToolsFromTranscript(
+                leafId == null ? List.of() : ContextEntries.pathToLeaf(entries, leafId),
+                owner.modelTools().defaultToolModifiers());
+        }
     }
 
     /**

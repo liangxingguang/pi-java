@@ -23,9 +23,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * B171（{@code docs/18}）：turn-prefix 摘要调用的请求形状 —— pi
  * {@code generateTurnPrefixSummary}（{@code compaction.ts:1076-1120}）：用户消息是
- * {@code # Conversation / # Instructions} 包装的逐字 {@code TURN_PREFIX_SUMMARIZATION_PROMPT}，
- * 输出上限 {@code floor(0.5*reserveTokens)}，再被模型 {@code maxOutputTokens} 封顶，
- * 缓存门 {@code none}。
+ * {@code # Conversation / # Instructions} 包装的逐字 {@code TURN_PREFIX_SUMMARIZATION_PROMPT}；
+ * B272（docs/24 W2）后不再发固定输出上限（{@code maxTokens} 空 ⇒ 模型默认，pi #9512），
+ * 并接 {@code /compact} 的 {@code Additional focus} 指令，缓存门 {@code none}。
  */
 class LlmTurnPrefixRequestTest {
 
@@ -90,7 +90,7 @@ class LlmTurnPrefixRequestTest {
     }
 
     @Test
-    void sendsTheVerbatimTurnPrefixPromptAtHalfReserve() {
+    void sendsTheVerbatimTurnPrefixPrompt() {
         var captured = new Captured();
 
         generator(captured.fn(), new IntSupplierCap(0))
@@ -102,34 +102,24 @@ class LlmTurnPrefixRequestTest {
         assertThat(captured.contexts.get(0).systemPrompt())
             .as("与历史摘要同一个系统提示")
             .isNotBlank();
-        int maxTokens = captured.options.get(0).maxTokens().orElseThrow();
-        assertThat(maxTokens)
-            .as("floor(0.5 * 16384) = 8192")
-            .isEqualTo(8_192);
+        assertThat(captured.options.get(0).maxTokens())
+            .as("B272：不再发固定上限，交给模型默认")
+            .isEmpty();
         assertThat(captured.options.get(0).cacheRetention())
             .contains(CacheRetention.NONE);
     }
 
     @Test
-    void smallerModelOutputCapWins() {
+    void customInstructionsAppendAdditionalFocus() {
         var captured = new Captured();
 
         generator(captured.fn(), new IntSupplierCap(4_096))
-            .summarizeTurnPrefix(ONE, 16_384, "manual");
+            .summarizeTurnPrefix(ONE, 16_384, "只保留测试相关的决定", "manual");
 
-        assertThat(captured.options.get(0).maxTokens())
-            .as("min(8192, model maxOutputTokens=4096)")
-            .hasValue(4_096);
-    }
-
-    @Test
-    void largerModelCapDoesNotRaiseTheHalfReserve() {
-        var captured = new Captured();
-
-        generator(captured.fn(), new IntSupplierCap(99_999))
-            .summarizeTurnPrefix(ONE, 16_384, "manual");
-
-        assertThat(captured.options.get(0).maxTokens())
-            .hasValue(8_192);
+        assertThat(captured.promptText())
+            .as("pi compaction.ts:1082-1085：turn-prefix 也接 /compact 指令")
+            .isEqualTo("# Conversation\n[User]: hi\n\n# Instructions\n" + EXPECTED_PROMPT
+                + "\n\nAdditional focus: 只保留测试相关的决定");
+        assertThat(captured.options.get(0).maxTokens()).isEmpty();
     }
 }

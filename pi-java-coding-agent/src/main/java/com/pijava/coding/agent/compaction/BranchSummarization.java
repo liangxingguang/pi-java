@@ -91,12 +91,13 @@ public final class BranchSummarization {
         record Failed(String error) implements Outcome {}
     }
 
-    /** 生成选项。{@code contextWindow}/{@code maxOutputTokens} 由调用方从目录解析
-     *  （pi {@code model.contextWindow \|\| 128000}；{@code maxTokens > 0} 守卫的假
-     *  分支 ⇒ 0）。 */
-    public record Options(ModelId<?> model, int contextWindow, int maxOutputTokens,
+    /** 生成选项。{@code contextWindow} 由调用方从目录解析（pi
+     *  {@code model.contextWindow \|\| 128000}）；B272 去掉输出上限，改为透传
+     *  会话当前思考级别（模型不支持时由生成器丢弃）。 */
+    public record Options(ModelId<?> model, int contextWindow,
                           int reserveTokens, String customInstructions,
-                          boolean replaceInstructions) {}
+                          boolean replaceInstructions,
+                          com.pijava.ai.thinking.ModelThinkingLevel thinkingLevel) {}
 
     /** pi {@code CollectEntriesResult}。 */
     public record Collected(List<Entry> entries, String commonAncestorId) {}
@@ -169,10 +170,10 @@ public final class BranchSummarization {
         }
         String promptText =
             "<conversation>\n" + conversationText + "\n</conversation>\n\n" + instructions;
-        // pi :338：min(4096, model.maxTokens > 0 ? model.maxTokens : ∞)。
-        int maxTokens = options.maxOutputTokens() > 0
-            ? Math.min(4096, options.maxOutputTokens()) : 4096;
-        var response = generator.callBranch(promptText, maxTokens, "branchSummary");
+        // B272（docs/24 W2）：pi :353-356 去掉 4096 上限，输出用模型默认；
+        // reasoning 由生成器按模型能力与会话级别判定。
+        var response = generator.callBranch(promptText, java.util.OptionalInt.empty(),
+            options.thinkingLevel(), "branchSummary");
         if (response.stopReason() == StopReason.ABORTED) {
             return new Outcome.Aborted();
         }

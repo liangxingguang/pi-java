@@ -201,9 +201,9 @@ final class TreeCompaction {
                 }
                 var outcome = branchSummarization.generate(entriesToSummarize,
                     new BranchSummarization.Options(model, contextWindow,
-                        modelResolver.maxOutputTokens(model),
                         owner.services().settings().compaction().getBranchSummaryReserveTokens(),
-                        effectiveInstructions, effectiveReplace));
+                        effectiveInstructions, effectiveReplace,
+                        owner.harness().getThinkingLevel()));
                 // 中止检查点：生成后、落库前（CompactionAbortToken 同款窄差——LLM
                 // 流内不可中断，docs/09 §12.2#2）；pi 的 result.aborted 对位（:4069）。
                 if (branchSummaryAbort.isAborted()) {
@@ -272,8 +272,11 @@ final class TreeCompaction {
             owner.harness().replaceTranscript(owner.laneName(),
                 leafId == null ? List.of()
                     : ContextEntries.contextEntries(ContextEntries.pathToLeaf(entries, leafId)));
-            // pi :4138（#77）：导航后按新叶最新系统消息的 toolsAdded 恢复激活装配。
-            owner.harness().restoreToolsFromTranscript(owner.laneName());
+            // pi :4219（#77／B271）：导航后按新叶分支的**全部** system 消息恢复
+            // 激活装配（无参 ⇒ 不叠 +name/-name 修饰符）。
+            owner.modelTools().restoreToolsFromTranscript(
+                leafId == null ? List.of() : ContextEntries.pathToLeaf(entries, leafId),
+                List.of());
             // pi :4140-4147：session_tree（newLeafId＝导航后当前叶；fromExtension
             // 仅在有摘要时有值——pi 同取 truthiness：summaryText ? fromExtension : undefined）。
             if (owner.extensionFirer() != null) {

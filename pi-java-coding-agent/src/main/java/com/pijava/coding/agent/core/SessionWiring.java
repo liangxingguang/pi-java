@@ -374,6 +374,10 @@ final class SessionWiring {
         // 批 16（T5a）：选择策略随会话存（fork 经 wireSession 公共路径自动继承——
         // pi 的 fork 重建带同配置）。
         agentSession.modelTools().toolSelection(selection);
+        // B271（docs/24 W1）：pi {@code _baseToolDefinitions} 对位——内置工具名集。
+        agentSession.modelTools().baseToolNames(toolList.stream()
+            .map(com.pijava.agent.tool.AgentTool::name)
+            .collect(java.util.stream.Collectors.toSet()));
         agentSession.setScopedModels(scope.models());
         agentSession.modelTools().modelCatalog(catalog);
         // B1（map #24/#25）：分支摘要生成器 —— 与压缩同源的 StreamFn/retry 环，

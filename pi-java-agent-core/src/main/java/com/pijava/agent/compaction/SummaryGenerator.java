@@ -40,10 +40,22 @@ public interface SummaryGenerator {
     /**
      * Summarize the turn prefix of a split turn (B171, {@code docs/18}；pi
      * {@code generateTurnPrefixSummary})：用 {@code TURN_PREFIX_SUMMARIZATION_PROMPT}
-     * 对本轮 user→切点之间的消息做第二次摘要调用，输出上限取
-     * {@code floor(0.5*reserveTokens)}（再被模型 maxOutputTokens 封顶）。
+     * 对本轮 user→切点之间的消息做第二次摘要调用。
+     *
+     * <p>B272（docs/24 W2）：{@code reserveTokens} 仅为接口兼容保留，**不再**参与输出
+     * 上限（pi 改为使用模型默认输出上限）；{@code customInstructions} 非空时按 pi
+     * 追加 {@code Additional focus} 后缀。</p>
      */
     SummaryResult summarizeTurnPrefix(List<Message> messages, int reserveTokens, String reason);
+
+    /**
+     * B272：带自定义指令的形态。默认实现忽略指令、回落到旧三参方法——存量测试
+     * 生成器无需改签名；{@link LlmSummaryGenerator} 覆写此方法真正追加指令。
+     */
+    default SummaryResult summarizeTurnPrefix(List<Message> messages, int reserveTokens,
+                                              String customInstructions, String reason) {
+        return summarizeTurnPrefix(messages, reserveTokens, reason);
+    }
 
     /** 无原因的旧式调用（测试/非环 B 路）：{@code reason = null}。 */
     default SummaryResult summarize(List<Message> compressed, String previousSummary,

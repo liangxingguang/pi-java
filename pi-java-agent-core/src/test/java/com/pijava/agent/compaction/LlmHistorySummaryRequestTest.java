@@ -26,8 +26,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * {@code generateSummaryWithUsage}（{@code compaction.ts:696-760}）：会话经
  * {@code <conversation>} 标签包裹、旧摘要经 {@code <previous-summary>} 标签，
  * 按旧摘要有无切换两套逐字指令，{@code customInstructions} 追
- * {@code Additional focus} 后缀；输出上限 {@code floor(0.8*reserveTokens)}，
- * 再被模型 {@code maxOutputTokens} 封顶，缓存门 {@code none}。
+ * {@code Additional focus} 后缀；B272（docs/24 W2）后不再发固定输出上限
+ * （{@code maxTokens} 空 ⇒ 模型默认，pi #9512），缓存门 {@code none}。
  */
 class LlmHistorySummaryRequestTest {
 
@@ -123,7 +123,7 @@ class LlmHistorySummaryRequestTest {
     }
 
     @Test
-    void initialSummaryWrapsConversationAndSendsVerbatimPromptAtEightyPercentReserve() {
+    void initialSummaryWrapsConversationAndSendsVerbatimPrompt() {
         var captured = new Captured();
 
         generator(captured.fn(), 0)
@@ -136,10 +136,9 @@ class LlmHistorySummaryRequestTest {
             .as("pi compaction.ts:729-733 的 conversation 标签 + 逐字指令")
             .isEqualTo("<conversation>\n[User]: hi\n</conversation>\n\n"
                 + EXPECTED_SUMMARIZATION_PROMPT);
-        int maxTokens = captured.options.get(0).maxTokens().orElseThrow();
-        assertThat(maxTokens)
-            .as("floor(0.8 * 20000) = 16000")
-            .isEqualTo(16_000);
+        assertThat(captured.options.get(0).maxTokens())
+            .as("B272：不再发固定上限，交给模型默认")
+            .isEmpty();
         assertThat(captured.options.get(0).cacheRetention())
             .contains(CacheRetention.NONE);
     }
@@ -237,19 +236,17 @@ class LlmHistorySummaryRequestTest {
     }
 
     @Test
-    void modelOutputCapClampsTheEightyPercentReserve() {
+    void summariesUseTheModelDefaultOutputLimitRegardlessOfReserve() {
         var capped = new Captured();
         generator(capped.fn(), 4_096)
             .summarize(ONE, null, null, 20_000, "manual");
         assertThat(capped.options.get(0).maxTokens())
-            .as("min(16000, model maxOutputTokens=4096)")
-            .hasValue(4_096);
+            .as("B272：模型上限不再是摘要请求的上限")
+            .isEmpty();
 
         var uncapped = new Captured();
         generator(uncapped.fn(), 0)
             .summarize(ONE, null, null, 20_000, "manual");
-        assertThat(uncapped.options.get(0).maxTokens())
-            .as("未编目（0）⇒ 不封顶，16000")
-            .hasValue(16_000);
+        assertThat(uncapped.options.get(0).maxTokens()).isEmpty();
     }
 }

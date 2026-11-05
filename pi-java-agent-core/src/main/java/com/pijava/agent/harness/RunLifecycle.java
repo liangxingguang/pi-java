@@ -1,7 +1,6 @@
 package com.pijava.agent.harness;
 
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
 
 import com.pijava.agent.compaction.CompactionSettings;
@@ -10,7 +9,6 @@ import com.pijava.agent.hook.RunContext;
 import com.pijava.agent.hook.RunEndContext;
 import com.pijava.agent.record.LaneRecord;
 import com.pijava.agent.record.OperationOutcome;
-import com.pijava.ai.api.ToolDefinition;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.message.MessageTexts;
 import com.pijava.ai.thinking.ModelThinkingLevel;
@@ -330,37 +328,6 @@ final class RunLifecycle {
         lane.appendEntry((seq, parentId) -> entry.committed(seq, parentId,
             entry.timestamp() != null ? entry.timestamp() : java.time.Instant.now()));
         HarnessUtils.rebuildLaneMessages(lane);
-    }
-
-    /**
-     * pi {@code _restoreToolsFromTranscript}（agent-session.ts:1809-1820）：树导航后按
-     * 新叶最新系统消息的 {@code toolsAdded} 恢复激活装配（pi 的调用点
-     * {@code navigateTree:4138}）。批 24（docs/35 D4 销号）：未注册名进
-     * {@code pendingToolNames} 晚注册臂（pi :1810-1814 逐字——先清、播种只留未注册名；
-     * pi 的 {@code _isAllowedTool} 播种过滤在 java 移到消费点，净效果同）。
-     * 无系统消息 ⇒ 不动（pi {@code if (!current) return}）。
-     *
-     * <p>调用方须先于本方法重建工作副本（{@link #replaceTranscript}）：
-     * pi 读的是 {@code buildSessionContext().messages}，这里读 {@code lane.messages}。</p>
-     */
-    void restoreToolsFromTranscript(String laneName) {
-        var lane = ctx.requireLane(laneName);
-        if (ctx.toolRegistry() == null) {
-            return;
-        }
-        for (int i = lane.messages.size() - 1; i >= 0; i--) {
-            if (lane.messages.get(i) instanceof Message.SystemMessage sm) {
-                var names = sm.toolsAdded().stream().map(ToolDefinition::name).toList();
-                lane.pendingToolNames.clear();
-                for (var name : names) {
-                    if (ctx.toolRegistry().get(name) == null) {
-                        lane.pendingToolNames.add(name);
-                    }
-                }
-                lane.activeTools = Set.copyOf(ctx.toolRegistry().activeOf(names));
-                return;
-            }
-        }
     }
 
     /** 日志里最后一条 {@code ThinkingLevelChange} 的标签；没有则为 {@code null}。 */

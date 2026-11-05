@@ -36,25 +36,20 @@ public final class ConversationSerializer {
                     }
                 }
                 case Message.AssistantMessage assistant -> {
-                    List<String> thinking = new ArrayList<>();
+                    // B272（docs/24 W2）：thinking 不参与摘要序列化（pi utils.ts:114-119：
+                    // 回放的 thinking 常不属于模型当前上下文，带上会让请求大于被摘要上下文）。
                     List<String> toolCalls = new ArrayList<>();
                     boolean hasText = false;
                     for (ContentBlock block : assistant.content()) {
                         switch (block) {
-                            case ContentBlock.ThinkingContent t -> {
-                                thinking.add(t.text());
-                            }
                             case ContentBlock.ToolUseContent t -> {
                                 toolCalls.add(t.name() + "(" + argsOf(t.arguments()) + ")");
                             }
                             case ContentBlock.TextContent t -> {
                                 hasText = true;
                             }
-                            default -> { /* 其它块不参与序列化 */ }
+                            default -> { /* 其它块不参与序列化（thinking 亦不参与） */ }
                         }
-                    }
-                    if (!thinking.isEmpty()) {
-                        parts.add("[Assistant thinking]: " + String.join("\n", thinking));
                     }
                     if (hasText) {
                         parts.add("[Assistant]: " + textOf(assistant.content()));

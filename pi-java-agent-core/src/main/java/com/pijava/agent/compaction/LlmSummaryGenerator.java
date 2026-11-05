@@ -59,7 +59,6 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
     private final Supplier<RetrySettings> retrySettings;
     private final BooleanSupplier retryAborted;
     private final RetryObserver retryObserver;
-    private final IntSupplier modelMaxOutputTokens;
     /** 会话当前思考级别（每次 request 现读，pi {@code this.thinkingLevel}）。 */
     private final Supplier<ModelThinkingLevel> currentThinking;
     /** pi {@code model.reasoning} 的事实口（{@code DefaultModelResolver#supportsThinking}）。 */
@@ -85,9 +84,9 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
     }
 
     /**
-     * @param modelMaxOutputTokens pi {@code model.maxTokens} 来源（目录
-     *                             {@code maxOutputTokens}）；{@code 0}（未编目）⇒
-     *                             不封顶，即 pi {@code > 0} 守卫的假分支形状
+     * @param modelMaxOutputTokens B272（docs/24 W2）后<b>不再使用</b>（pi #9512：
+     *                             摘要改用模型默认输出上限）；形参保留以兼容既有
+     *                             调用点，删除需同时改所有装配点。
      */
     public LlmSummaryGenerator(StreamFn streamFn, Supplier<ModelId<?>> model,
                                Supplier<RetrySettings> retrySettings,
@@ -115,7 +114,6 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
         this.retrySettings = retrySettings;
         this.retryAborted = retryAborted;
         this.retryObserver = retryObserver;
-        this.modelMaxOutputTokens = modelMaxOutputTokens;
         this.currentThinking = currentThinking;
         this.reasoningSupported = reasoningSupported;
     }
@@ -123,8 +121,9 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
     @Override
     public SummaryResult summarize(List<Message> compressed, String previousSummary,
                                    String customInstructions, int reserveTokens, String reason) {
+        // B272（docs/24 W2）：reserveTokens 不再参与输出上限（pi #9512）。
         var response = callWithRetries(() -> produceOnce(compressed, previousSummary,
-            customInstructions, reserveTokens), reason);
+            customInstructions), reason);
         // pi generateSummaryWithUsage 的后半（:715-725）：failure 文案 → toolCall 守卫 → 文本。
         var failure = getSummarizationFailure(response, "Summarization");
         if (failure != null) {
@@ -141,12 +140,21 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
     @Override
     public SummaryResult summarizeTurnPrefix(List<Message> messages, int reserveTokens,
                                              String reason) {
-        // pi generateTurnPrefixSummary（compaction.ts:1076-1120）：0.5×reserve 上限
-        // （模型 cap 封顶）+ # Conversation/# Instructions 包装的逐字 prompt。
-        int maxTokens = turnPrefixMaxTokens(reserveTokens);
-        String promptText = "# Conversation\n" + ConversationSerializer.serialize(messages)
+        return summarizeTurnPrefix(messages, reserveTokens, null, reason);
+    }
+
+    @Override
+    public SummaryResult summarizeTurnPrefix(List<Message> messages, int reserveTokens,
+                                             String customInstructions, String reason) {
+        // pi generateTurnPrefixSummary（compaction.ts:1062-1095）：# Conversation/
+        // # Instructions 包装的逐字 prompt；B272 去固定输出上限，并接 /compact 指令。
+        var promptText = "# Conversation\n" + ConversationSerializer.serialize(messages)
             + "\n\n# Instructions\n" + SummaryPrompts.TURN_PREFIX;
-        var response = callWithRetries(() -> produceOnce(promptText, maxTokens), reason);
+        if (customInstructions != null && !customInstructions.isEmpty()) {
+            promptText = promptText + "\n\nAdditional focus: " + customInstructions;
+        }
+        final var prompt = promptText;
+        var response = callWithRetries(() -> produceOnce(prompt), reason);
         var failure = getSummarizationFailure(response, "Turn prefix summarization");
         if (failure != null) {
             throw new IllegalStateException(failure);
@@ -162,12 +170,21 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
     /**
      * pi {@code generateBranchSummary} 的 LLM 调用段（branch-summarization.ts:340-356）：
      * 与压缩摘要同一套 retry 环（reason 传 {@code "branchSummary"}）＋ 同一请求形状
-     * （系统提示词 / 单 user message / cacheRetention none）；{@code maxTokens} 由
-     * 调用方按 {@code min(4096, model.maxTokens)} 算好传入。原样响应（aborted /
+     * （系统提示词 / 单 user message / cacheRetention none）。原样响应（aborted /
      * failure / toolCall 的判定在调用方 —— 分支摘要路是返回值不是抛）。
      */
     public Message.AssistantMessage callBranch(String promptText, int maxTokens, String reason) {
         return callBranch(promptText, maxTokens, reason, SummaryPrompts.SYSTEM);
+    }
+
+    /**
+     * B272（docs/24 W2）：分支摘要的新形态——输出上限用模型默认（{@code maxTokens}
+     * 可空），并按 pi 透传思考级别（模型支持且级别非 off 才发 reasoning）。
+     */
+    public Message.AssistantMessage callBranch(String promptText, OptionalInt maxTokens,
+                                               ModelThinkingLevel thinkingLevel, String reason) {
+        return callWithRetries(() -> request(promptText, maxTokens,
+            reasoningOption(thinkingLevel), SummaryPrompts.SYSTEM), reason);
     }
 
     /**
@@ -178,8 +195,8 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
      */
     public Message.AssistantMessage callBranch(String promptText, int maxTokens, String reason,
                                                String systemPrompt) {
-        return callWithRetries(() -> request(promptText, OptionalInt.of(maxTokens), systemPrompt),
-            reason);
+        return callWithRetries(() -> request(promptText, OptionalInt.of(maxTokens),
+            reasoningOption(), systemPrompt), reason);
     }
 
     /** pi {@code getSummarizationFailure(response, label)}（compaction.ts:580-588）。 */
@@ -190,16 +207,6 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
     /** pi {@code contentText}（text.ts:6-12）：text 块以 \n 连接，无 strip。 */
     public static String contentTextOf(List<ContentBlock> content) {
         return contentText(content);
-    }
-
-    /**
-     * pi {@code compaction.ts:1083-1087}：{@code min(floor(0.5*reserveTokens),
-     * model.maxTokens > 0 ? model.maxTokens : Infinity)}。
-     */
-    private int turnPrefixMaxTokens(int reserveTokens) {
-        int halfReserve = (int) Math.floor(0.5 * reserveTokens);
-        int modelCap = modelMaxOutputTokens.getAsInt();
-        return modelCap > 0 ? Math.min(halfReserve, modelCap) : halfReserve;
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -312,26 +319,16 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
     // produce —— pi 的 produce = (await streamFn(...)).result()
     // ═══════════════════════════════════════════════════════════
 
-    /**
-     * 历史摘要路：标签包裹的逐字 prompt，maxTokens = {@code min(0.8×reserve, 模型 cap)}
-     * （pi {@code compaction.ts:712-715}）。
-     */
+    /** 历史摘要路：标签包裹的逐字 prompt；输出上限用模型默认（pi #9512）。 */
     private Message.AssistantMessage produceOnce(List<Message> compressed, String previousSummary,
-                                                 String customInstructions, int reserveTokens) {
+                                                 String customInstructions) {
         return request(buildPrompt(compressed, previousSummary, customInstructions),
-            OptionalInt.of(historyMaxTokens(reserveTokens)), SummaryPrompts.SYSTEM);
+            OptionalInt.empty(), reasoningOption(), SummaryPrompts.SYSTEM);
     }
 
-    /** pi {@code compaction.ts:712-715}：{@code min(floor(0.8*reserveTokens), cap > 0 ? cap : ∞)}。 */
-    private int historyMaxTokens(int reserveTokens) {
-        int eightyReserve = (int) Math.floor(0.8 * reserveTokens);
-        int cap = modelMaxOutputTokens.getAsInt();
-        return cap > 0 ? Math.min(eightyReserve, cap) : eightyReserve;
-    }
-
-    /** turn-prefix 路：prompt 已按 prefix 形状构造，maxTokens 带 0.5×reserve 上限。 */
-    private Message.AssistantMessage produceOnce(String promptText, int maxTokens) {
-        return request(promptText, OptionalInt.of(maxTokens), SummaryPrompts.SYSTEM);
+    /** turn-prefix 路：prompt 已按 prefix 形状构造；输出上限用模型默认（pi #9512）。 */
+    private Message.AssistantMessage produceOnce(String promptText) {
+        return request(promptText, OptionalInt.empty(), reasoningOption(), SummaryPrompts.SYSTEM);
     }
 
     /**
@@ -340,10 +337,15 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
      * 循环 {@code PiLoopRunner#reasoningOf} 同形；每次请求现读。
      */
     private Optional<ThinkingLevel> reasoningOption() {
+        return reasoningOption(currentThinking.get());
+    }
+
+    /** B272：显式级别的同一门（分支摘要用会话当前级别）。 */
+    private Optional<ThinkingLevel> reasoningOption(ModelThinkingLevel level) {
         if (!reasoningSupported.test(model.get())) {
             return Optional.empty();
         }
-        return switch (currentThinking.get()) {
+        return switch (level) {
             case ModelThinkingLevel.Off o -> Optional.empty();
             case ModelThinkingLevel.Enabled e -> Optional.of(e.level());
         };
@@ -357,6 +359,7 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
      * 异常文本；流被截断没有终局 ⇒ 中止方言，与 PiLoopRunner 的 cutShort 同形）。
      */
     private Message.AssistantMessage request(String promptText, OptionalInt maxTokens,
+                                             Optional<ThinkingLevel> reasoning,
                                              String systemPrompt) {
         // 原 docs/71 G1：摘要请求的用户消息在构造点盖时间戳（pi compaction.ts:582 的 Date.now()）。
         var user = new Message.UserMessage(
@@ -368,7 +371,7 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
         // 既无收益、又会与主会话的缓存竞争。⚠️ pi 同一处还发 `sessionId: … ?? uuidv7()`
         // （routing id），那属于会话亲和线、本包不做（原 docs/54 §1.2 的 B103）。
         var options = new StreamOptions(
-            maxTokens, OptionalDouble.empty(), reasoningOption(),
+            maxTokens, OptionalDouble.empty(), reasoning,
             Optional.of(CacheRetention.NONE));
         var toolCalls = new ArrayList<ContentBlock>();
         StringBuilder text = new StringBuilder();

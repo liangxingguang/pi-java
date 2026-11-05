@@ -157,8 +157,9 @@ public final class CompactionService {
                 historyText = historyResult.text();
                 historyUsage = historyResult.usage();
             }
+            // B272（docs/24 W2）：split-turn 的 turn-prefix 也接 /compact 指令（pi :1082-1085）。
             var prefixResult = summaryGenerator.summarizeTurnPrefix(
-                plan.turnPrefix(), settings.reserveTokens(), reason);
+                plan.turnPrefix(), settings.reserveTokens(), customInstructions, reason);
             summary = historyText
                 + "\n\n---\n\n**Turn Context (split turn):**\n\n"
                 + prefixResult.text();

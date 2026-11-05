@@ -80,8 +80,13 @@ class BranchSummarizationTest {
     }
 
     private static BranchSummarization.Options options(int contextWindow) {
-        return new BranchSummarization.Options(MODEL, contextWindow, 0,
-            BranchSummarization.DEFAULT_RESERVE_TOKENS, null, false);
+        return options(contextWindow, com.pijava.ai.thinking.ModelThinkingLevel.off());
+    }
+
+    private static BranchSummarization.Options options(int contextWindow,
+            com.pijava.ai.thinking.ModelThinkingLevel thinkingLevel) {
+        return new BranchSummarization.Options(MODEL, contextWindow,
+            BranchSummarization.DEFAULT_RESERVE_TOKENS, null, false, thinkingLevel);
     }
 
     // ── collectEntries（pi :108-146）──────────────────────────────
@@ -192,6 +197,63 @@ class BranchSummarizationTest {
             .generate(List.of(entry("e1", null, user("q"))), options(200_000));
         var failed = (BranchSummarization.Outcome.Failed) outcome;
         assertThat(failed.error()).startsWith("Branch summarization failed:");
+    }
+
+    // ── B272（docs/24 W2）：分支摘要请求形状 ───────────────────────
+
+    private static final class Captured {
+        final List<com.pijava.agent.harness.StreamOptions> requests = new java.util.ArrayList<>();
+
+        com.pijava.agent.harness.StreamFn fn() {
+            return (model, context, options) -> {
+                requests.add(options);
+                return okStream("## Goal\nexplore");
+            };
+        }
+    }
+
+    private static BranchSummarization capturing(Captured captured, boolean reasoningSupported,
+                                                 com.pijava.ai.thinking.ModelThinkingLevel level) {
+        var generator = new LlmSummaryGenerator(captured.fn(), () -> MODEL,
+            com.pijava.agent.harness.RetrySettings::defaults, () -> false,
+            com.pijava.agent.harness.RetryObserver.NOOP, () -> 0,
+            () -> level, id -> reasoningSupported);
+        return new BranchSummarization(generator);
+    }
+
+    @Test
+    void branchRequestUsesModelDefaultOutputLimitAndPassesThinking() {
+        var captured = new Captured();
+        var level = com.pijava.ai.thinking.ModelThinkingLevel.of(
+            new com.pijava.ai.thinking.ThinkingLevel.High());
+        var entries = List.<Entry>of(entry("e1", null, user("q")));
+
+        capturing(captured, true, level).generate(entries, options(200_000, level));
+
+        assertThat(captured.requests.get(0).maxTokens())
+            .as("B272：不再发 4096 固定上限")
+            .isEmpty();
+        assertThat(captured.requests.get(0).reasoning())
+            .as("模型支持 reasoning ⇒ 透传会话级别")
+            .contains(new com.pijava.ai.thinking.ThinkingLevel.High());
+    }
+
+    @Test
+    void offThinkingOrNonReasoningModelSendsNoReasoning() {
+        var off = new Captured();
+        capturing(off, true, com.pijava.ai.thinking.ModelThinkingLevel.off())
+            .generate(List.<Entry>of(entry("e1", null, user("q")),
+                entry("e2", "e1", assistantCalling("read", "a.ts"))),
+                options(200_000));
+
+        var nonReasoning = new Captured();
+        var level = com.pijava.ai.thinking.ModelThinkingLevel.of(
+            new com.pijava.ai.thinking.ThinkingLevel.High());
+        capturing(nonReasoning, false, level)
+            .generate(List.<Entry>of(entry("e1", null, user("q"))), options(200_000, level));
+
+        assertThat(off.requests.get(0).reasoning()).isEmpty();
+        assertThat(nonReasoning.requests.get(0).reasoning()).isEmpty();
     }
 
     @Test
