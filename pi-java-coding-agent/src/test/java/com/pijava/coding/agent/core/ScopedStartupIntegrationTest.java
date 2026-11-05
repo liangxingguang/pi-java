@@ -92,7 +92,7 @@ class ScopedStartupIntegrationTest {
         String cwd = System.getProperty("user.dir");
 
         // 先在 resumeRoot 放一个带消息的存量会话。
-        try (var handle = PersistentSessionRepositories.jsonl(resumeRoot)) {
+        try (var handle = PersistentSessionRepositories.jsonlSession(resumeRoot)) {
             var stored = handle.create(cwd, null);
             stored.createLane("default", null);
             stored.appendEntry(new ProvisionedEntry<>(new Entry.Message(

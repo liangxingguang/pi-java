@@ -72,7 +72,7 @@ class SessionResumeFoldTest {
     /** Persist a session whose lane carries the given records. */
     private static Path seed(RecordSeed seed) throws Exception {
         Path root = Files.createTempDirectory("pi-resume-fold");
-        var handle = PersistentSessionRepositories.jsonl(root);
+        var handle = PersistentSessionRepositories.jsonlSession(root);
         try {
             var session = handle.create(CWD, null);
             session.createLane(LANE, null);
@@ -208,7 +208,7 @@ class SessionResumeFoldTest {
 
     /** Re-open the persisted session to inspect what was actually written. */
     private static List<LaneRecord.OperationStarted> openOperations(Path root) {
-        var handle = PersistentSessionRepositories.jsonl(root);
+        var handle = PersistentSessionRepositories.jsonlSession(root);
         try {
             var meta = handle.latest(CWD).orElseThrow();
             return handle.open(meta).findOpenOperations(LANE, 10);
@@ -219,7 +219,7 @@ class SessionResumeFoldTest {
 
     /** Every record on the lane, read back from disk. */
     private static List<LaneRecord> recordsFrom(Path root) {
-        var handle = PersistentSessionRepositories.jsonl(root);
+        var handle = PersistentSessionRepositories.jsonlSession(root);
         try {
             var meta = handle.latest(CWD).orElseThrow();
             return handle.open(meta).findRecords(new RecordQuery(
@@ -239,7 +239,7 @@ class SessionResumeFoldTest {
             session.appendRecord(new NewRecord<>(finish("run-1", OperationOutcome.COMPLETED)));
         });
 
-        var handle = PersistentSessionRepositories.jsonl(root);
+        var handle = PersistentSessionRepositories.jsonlSession(root);
         try {
             var meta = handle.latest(CWD).orElseThrow();
             var records = handle.open(meta).findRecords(new RecordQuery(

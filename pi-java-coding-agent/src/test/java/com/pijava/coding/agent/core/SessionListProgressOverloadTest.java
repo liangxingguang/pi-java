@@ -33,13 +33,18 @@ class SessionListProgressOverloadTest {
     Path root;
 
     private static void seed(Path root, String text) throws Exception {
-        var repo = JsonlSessionRepository.over(root);
-        var session = repo.create(new JsonlSessionCreateOptions(null, CWD, null, null));
-        session.appendEntry(new ProvisionedEntry<>(new Entry.Message(
-            UUID.randomUUID().toString(), 0, null, null,
-            new Message.UserMessage(List.of(new ContentBlock.TextContent(text))), null)),
-            "main");
-        session.storage().drain();
+        // B278（docs/24 W4c）：--session-dir 已是平铺目录，夹具按同一形态播种。
+        var handle = PersistentSessionRepositories.jsonlSession(root);
+        try {
+            var session = handle.create(CWD, null);
+            session.appendEntry(new ProvisionedEntry<>(new Entry.Message(
+                UUID.randomUUID().toString(), 0, null, null,
+                new Message.UserMessage(List.of(new ContentBlock.TextContent(text))), null)),
+                "main");
+            session.storage().drain();
+        } finally {
+            handle.close();
+        }
     }
 
     private AgentSession session() {

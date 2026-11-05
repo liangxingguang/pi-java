@@ -43,7 +43,7 @@ class SessionResumeCompactionTest {
     void attachSeedsCompactedContextNotAllEntries() throws Exception {
         Path root = Files.createTempDirectory("pi-resume-compaction");
         // Seed a compacted session: [m1, m2, c1, m3]
-        var handle = PersistentSessionRepositories.jsonl(root);
+        var handle = PersistentSessionRepositories.jsonlSession(root);
         try {
             var session = handle.create(CWD, null);
             session.appendEntry(message("m1", null, "q1"), "main");
@@ -76,7 +76,7 @@ class SessionResumeCompactionTest {
     void repersistAfterAttachDoesNotDuplicateCompaction() throws Exception {
         Path root = Files.createTempDirectory("pi-resume-idem");
         // Seed a compacted session: [m1, c1, m2]
-        var handle = PersistentSessionRepositories.jsonl(root);
+        var handle = PersistentSessionRepositories.jsonlSession(root);
         try {
             var session = handle.create(CWD, null);
             session.appendEntry(message("m1", null, "q1"), "main");

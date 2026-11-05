@@ -28,12 +28,15 @@ final class RichSessionLister {
     private final JsonlSessionRepoFileSystem fs;
     private final Path sessionsRoot;
     private final Function<String, List<Path>> directoryResolver;
+    private final java.util.function.BiPredicate<String, String> cwdMatches;
 
     RichSessionLister(Path sessionsRoot, JsonlSessionRepoFileSystem fs,
-                      Function<String, List<Path>> directoryResolver) {
+                      Function<String, List<Path>> directoryResolver,
+                      java.util.function.BiPredicate<String, String> cwdMatches) {
         this.sessionsRoot = sessionsRoot;
         this.fs = fs;
         this.directoryResolver = directoryResolver;
+        this.cwdMatches = cwdMatches;
     }
 
 
@@ -71,6 +74,10 @@ final class RichSessionLister {
         var loaded = new AtomicInteger();
         var results = mapWithConcurrency(files, MAX_CONCURRENT_INFO_LOADS, (file, index) -> {
             var info = buildRichInfo(file, mtimeOf(file), signal);
+            // B278（docs/24 W4c）：pi list 的 includeSession 过滤（进度快照同过滤）。
+            if (info != null && cwdMatches != null && !cwdMatches.test(cwd, info.cwd())) {
+                info = null;
+            }
             int n = loaded.incrementAndGet();
             if (info != null) {
                 partial.add(info);

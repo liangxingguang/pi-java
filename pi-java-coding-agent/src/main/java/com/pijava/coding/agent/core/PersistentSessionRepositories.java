@@ -49,7 +49,29 @@ final class PersistentSessionRepositories {
      * deterministic stand-in for the timing question A12 was about.
      */
     static RepositoryHandle jsonl(Path sessionsRoot, JsonlSessionRepoFileSystem fs) {
-        var repo = new JsonlSessionRepository(sessionsRoot, fs);
+        return jsonlHandle(new JsonlSessionRepository(sessionsRoot, fs), fs);
+    }
+
+    /**
+     * B278（docs/24 W4c）：pi 显式 {@code --session-dir}／{@code settings.sessionDir}
+     * 形态——会话文件**平铺**在该目录，列表/精确查找按 cwd 过滤。
+     */
+    static RepositoryHandle jsonlSession(Path sessionDirectory) {
+        return jsonlSession(sessionDirectory, new DefaultJsonlFileSystem());
+    }
+
+    static RepositoryHandle jsonlSession(Path sessionDirectory, JsonlSessionRepoFileSystem fs) {
+        return jsonlHandle(new JsonlSessionRepository(sessionDirectory,
+            defaultSessionsRoot(), true, fs), fs);
+    }
+
+    /** pi 默认根（{@code ~/.pi-java/agent/sessions}）。 */
+    static Path defaultSessionsRoot() {
+        return Path.of(System.getProperty("user.home"), ".pi-java", "agent", "sessions");
+    }
+
+    private static RepositoryHandle jsonlHandle(JsonlSessionRepository repo,
+                                                JsonlSessionRepoFileSystem fs) {
         return new RepositoryHandle() {
             @Override
             public Session<?> create(String cwd, String parentSessionId) {

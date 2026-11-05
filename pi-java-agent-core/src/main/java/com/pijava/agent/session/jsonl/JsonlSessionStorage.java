@@ -64,16 +64,6 @@ public final class JsonlSessionStorage implements SessionStorage<JsonlSessionMet
         return storage;
     }
 
-    /** fork 专用：目标必须立即可 load，故写头并把 {@code flushed} 置真。 */
-    private static JsonlSessionStorage createImmediate(JsonlSessionRepoFileSystem fs, Path path,
-                                                       JsonlV4Header header) {
-        fs.writeFile(path, JsonlCodec.encodeHeader(header));
-        var storage = new JsonlSessionStorage(fs, header,
-            metadataFromHeader(header, path, fs.fileInfoMtimeMs(path)));
-        storage.flushed = true;
-        return storage;
-    }
-
     /** Load a storage from an existing file, repairing a torn tail. */
     public static JsonlSessionStorage load(JsonlSessionRepoFileSystem fs, Path path) {
         String content = fs.readTextFile(path);
@@ -140,11 +130,14 @@ public final class JsonlSessionStorage implements SessionStorage<JsonlSessionMet
         var mutations = state.createForkMutations(options);
         String tempPath = path + ".tmp";
         try {
-            var target = createImmediate(fs, Path.of(tempPath), header);
+            // B274（docs/24 W4b）：pi :1868-1877 用单个 fd 写头＋全部条目；Java 的
+            // fs 边界没有 fd 概念，等价做法是把整份内容一次 writeFile 后再 rename
+            // （避免逐条 open/close，失败原子性不变：要么 tmp 不存在、要么完整）。
+            var content = new StringBuilder(JsonlCodec.encodeHeader(header));
             for (var mutation : mutations) {
-                fs.appendFile(Path.of(tempPath), JsonlCodec.encodeMutation(mutation));
-                target.applyMutation(mutation);
+                content.append(JsonlCodec.encodeMutation(mutation));
             }
+            fs.writeFile(Path.of(tempPath), content.toString());
             fs.renameFile(Path.of(tempPath), path);
         } catch (RuntimeException e) {
             fs.remove(Path.of(tempPath), true);

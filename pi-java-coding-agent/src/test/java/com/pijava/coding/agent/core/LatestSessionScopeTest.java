@@ -53,10 +53,20 @@ class LatestSessionScopeTest {
 
     /** 造 6 个会话（3 个项目 × 2 个），并把 mtime 钉成 a1 &lt; a2 &lt; b1 … &lt; c2。 */
     private static Fixture threeProjects(Path root) throws IOException {
-        List<Seeded> mine = List.of(seed(root, CWD, "a1"), seed(root, CWD, "a2"));
+        return threeProjects(root, true);
+    }
+
+    /** 计数夹具需要默认根（按 cwd 分子目录）的布局。 */
+    private static Fixture threeProjectsScoped(Path root) throws IOException {
+        return threeProjects(root, false);
+    }
+
+    private static Fixture threeProjects(Path root, boolean flat) throws IOException {
+        List<Seeded> mine = List.of(
+            seed(root, CWD, "a1", flat), seed(root, CWD, "a2", flat));
         List<Seeded> others = List.of(
-            seed(root, OTHER_A, "b1"), seed(root, OTHER_A, "b2"),
-            seed(root, OTHER_B, "c1"), seed(root, OTHER_B, "c2"));
+            seed(root, OTHER_A, "b1", flat), seed(root, OTHER_A, "b2", flat),
+            seed(root, OTHER_B, "c1", flat), seed(root, OTHER_B, "c2", flat));
 
         // mtime 由夹具钉死，**不能**靠「先建谁后建谁」：同一毫秒内创建会让
         // 「全局最新」变成掷骰子，变异探针就没有牙了（本项目纪律：确定性代理量）。
@@ -69,8 +79,11 @@ class LatestSessionScopeTest {
     }
 
     /** 在 {@code root} 下按 {@code cwd} 建一个带一条消息的会话。 */
-    private static Seeded seed(Path root, String cwd, String text) throws IOException {
-        var handle = PersistentSessionRepositories.jsonl(root);
+    private static Seeded seed(Path root, String cwd, String text, boolean flat)
+            throws IOException {
+        var handle = flat
+            ? PersistentSessionRepositories.jsonlSession(root)
+            : PersistentSessionRepositories.jsonl(root);
         try {
             var session = handle.create(cwd, null);
             session.createLane(LANE, null);
@@ -97,7 +110,7 @@ class LatestSessionScopeTest {
     @Test
     void latestOpensOnlyThisProjectsSessionFiles() throws Exception {
         Path root = Files.createTempDirectory("pi-latest-scope");
-        var fixture = threeProjects(root);
+        var fixture = threeProjectsScoped(root);
         var counting = new CountingFileSystem();
 
         var handle = PersistentSessionRepositories.jsonl(root, counting);
@@ -117,7 +130,7 @@ class LatestSessionScopeTest {
         Path root = Files.createTempDirectory("pi-latest-scope-newest");
         var fixture = threeProjects(root);
 
-        var handle = PersistentSessionRepositories.jsonl(root);
+        var handle = PersistentSessionRepositories.jsonlSession(root);
         try {
             var latest = handle.latest(CWD).orElseThrow();
             // 全局最新其实是 c2（别的项目），恢复的必须是本项目较新的那个 a2。

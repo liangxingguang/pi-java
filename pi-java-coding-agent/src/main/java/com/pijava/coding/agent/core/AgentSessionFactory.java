@@ -41,12 +41,12 @@ final class AgentSessionFactory {
         var trustWarnings = ProjectTrustSetup.apply(args, settings, null);
         var effective = settings.effective();
         var backend = effective.sessionBackend == null ? "jsonl" : effective.sessionBackend;
-        var sessionsRoot = Path.of(args.sessionDir() != null ? args.sessionDir()
-            : (effective.sessionDir != null ? effective.sessionDir
-                : Path.of(System.getProperty("user.home"), ".pi-java", "agent", "sessions").toString()));
+        var sessionDir = resolveSessionDir(args, effective);
         var handle = "sqlite".equals(backend)
-            ? PersistentSessionRepositories.sqlite(sessionsRoot)
-            : PersistentSessionRepositories.jsonl(sessionsRoot);
+            ? PersistentSessionRepositories.sqlite(sessionDir.path())
+            : sessionDir.flat()
+                ? PersistentSessionRepositories.jsonlSession(sessionDir.path())
+                : PersistentSessionRepositories.jsonl(sessionDir.path());
         var session = assemble(args, settings,
             DefaultProviders.defaultProviders(effective.catalogBaseUrl),
             new ToolContext(
@@ -81,12 +81,12 @@ final class AgentSessionFactory {
         var trustWarnings = ProjectTrustSetup.apply(args, settings, null);
         var effective = settings.effective();
         var backend = effective.sessionBackend == null ? "jsonl" : effective.sessionBackend;
-        var sessionsRoot = Path.of(args.sessionDir() != null ? args.sessionDir()
-            : (effective.sessionDir != null ? effective.sessionDir
-                : Path.of(System.getProperty("user.home"), ".pi-java", "agent", "sessions").toString()));
+        var sessionDir = resolveSessionDir(args, effective);
         var handle = "sqlite".equals(backend)
-            ? PersistentSessionRepositories.sqlite(sessionsRoot)
-            : PersistentSessionRepositories.jsonl(sessionsRoot);
+            ? PersistentSessionRepositories.sqlite(sessionDir.path())
+            : sessionDir.flat()
+                ? PersistentSessionRepositories.jsonlSession(sessionDir.path())
+                : PersistentSessionRepositories.jsonl(sessionDir.path());
         var session = assemble(args, settings, providers, toolContext,
             handle, handle.repository(),
             handle.latest(System.getProperty("user.dir")).isPresent());
@@ -130,12 +130,12 @@ final class AgentSessionFactory {
         var trustWarnings = ProjectTrustSetup.apply(args, settings, prompter);
         var effective = settings.effective();
         var backend = effective.sessionBackend == null ? "jsonl" : effective.sessionBackend;
-        var sessionsRoot = Path.of(args.sessionDir() != null ? args.sessionDir()
-            : (effective.sessionDir != null ? effective.sessionDir
-                : Path.of(System.getProperty("user.home"), ".pi-java", "agent", "sessions").toString()));
+        var sessionDir = resolveSessionDir(args, effective);
         var handle = "sqlite".equals(backend)
-            ? PersistentSessionRepositories.sqlite(sessionsRoot)
-            : PersistentSessionRepositories.jsonl(sessionsRoot);
+            ? PersistentSessionRepositories.sqlite(sessionDir.path())
+            : sessionDir.flat()
+                ? PersistentSessionRepositories.jsonlSession(sessionDir.path())
+                : PersistentSessionRepositories.jsonl(sessionDir.path());
         var session = create(args, handle, DefaultProviders.defaultProviders(effective.catalogBaseUrl),
             new ToolContext(
                 System.getProperty("user.dir"),
@@ -180,12 +180,12 @@ final class AgentSessionFactory {
         var trustWarnings = ProjectTrustSetup.apply(args, settings, null);
         var effective = settings.effective();
         var backend = effective.sessionBackend == null ? "jsonl" : effective.sessionBackend;
-        var sessionsRoot = Path.of(args.sessionDir() != null ? args.sessionDir()
-            : (effective.sessionDir != null ? effective.sessionDir
-                : Path.of(System.getProperty("user.home"), ".pi-java", "agent", "sessions").toString()));
+        var sessionDir = resolveSessionDir(args, effective);
         var handle = "sqlite".equals(backend)
-            ? PersistentSessionRepositories.sqlite(sessionsRoot)
-            : PersistentSessionRepositories.jsonl(sessionsRoot);
+            ? PersistentSessionRepositories.sqlite(sessionDir.path())
+            : sessionDir.flat()
+                ? PersistentSessionRepositories.jsonlSession(sessionDir.path())
+                : PersistentSessionRepositories.jsonl(sessionDir.path());
         var session = create(args, handle, DefaultProviders.defaultProviders(effective.catalogBaseUrl),
             new ToolContext(
                 System.getProperty("user.dir"),
@@ -311,6 +311,34 @@ final class AgentSessionFactory {
     private static boolean resumeLike(Args args) {
         return args.continue_() || args.resume() || args.session() != null
             || args.sessionId() != null || args.fork() != null;
+    }
+
+    /**
+     * B278（docs/24 W4c）：pi {@code SessionManager.create(cwd, sessionDir)} 的目录
+     * 形态。显式 {@code --session-dir}／{@code settings.sessionDir} ⇒ 平铺目录；
+     * 缺省 ⇒ 默认根（按 cwd 分子目录）。
+     */
+    record ResolvedSessionDir(Path path, boolean flat) {}
+
+    static ResolvedSessionDir resolveSessionDir(Args args, Settings effective) {
+        String explicit = args.sessionDir() != null ? args.sessionDir() : effective.sessionDir;
+        if (explicit != null) {
+            return new ResolvedSessionDir(Path.of(expandTilde(explicit)), true);
+        }
+        return new ResolvedSessionDir(PersistentSessionRepositories.defaultSessionsRoot(), false);
+    }
+
+    /** pi {@code normalizePath} 的 {@code ~} 展开（`~` / `~/…`；Windows 也认 `~\\…`）。 */
+    private static String expandTilde(String path) {
+        String home = System.getProperty("user.home");
+        if (path.equals("~")) {
+            return home;
+        }
+        if (path.startsWith("~/")
+                || (java.io.File.separatorChar == '\\' && path.startsWith("~\\"))) {
+            return home + path.substring(1);
+        }
+        return path;
     }
 
     /** docs/15（B250）：替换式新建的 {@code session_start} 载荷（null ⇒ 初始 {@code "startup"}）。 */

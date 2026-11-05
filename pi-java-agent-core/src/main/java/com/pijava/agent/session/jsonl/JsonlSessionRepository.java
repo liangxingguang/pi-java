@@ -13,6 +13,7 @@ import com.pijava.agent.session.ForkOptions;
 import com.pijava.agent.session.Session;
 import com.pijava.agent.session.SessionError;
 import com.pijava.agent.session.SessionErrorCode;
+import com.pijava.agent.session.SessionPaths;
 import com.pijava.agent.session.SessionRepository;
 import com.pijava.agent.session.UuidV7;
 import com.pijava.ai.AbortSignal;
@@ -29,14 +30,35 @@ public final class JsonlSessionRepository implements
 
     private final JsonlSessionRepoFileSystem fs;
     private final Path sessionsRoot;
+    /** 默认根（{@code ~/.pi-java/agent/sessions}）；显式目录模式下用于 cwd 过滤判据。 */
+    private final Path defaultSessionsRoot;
+    /** {@code true}＝显式会话目录（pi {@code --session-dir}）：文件平铺，不拼 cwd 子目录。 */
+    private final boolean flat;
     private final Set<String> activeCreateDestinations = new HashSet<>();
     private final RichSessionLister richLister;
 
-    /** Create a JSONL repository rooted at {@code sessionsRoot}. */
+    /** Create a JSONL repository rooted at {@code sessionsRoot}（默认根布局）。 */
     public JsonlSessionRepository(Path sessionsRoot, JsonlSessionRepoFileSystem fs) {
-        this.sessionsRoot = sessionsRoot;
+        this(sessionsRoot, sessionsRoot, false, fs);
+    }
+
+    /**
+     * B278（docs/24 W4c）：pi {@code SessionManager.create(cwd, sessionDir)} 的两种
+     * 目录形态。
+     *
+     * @param sessionDirectory  会话文件所在目录（flat）或默认根（非 flat）
+     * @param defaultSessionsRoot 默认根；flat 模式下与 `默认根/--cwd--/` 比较决定是否按 cwd 过滤
+     * @param flat              {@code true}＝显式目录（文件平铺）
+     * @param fs                文件系统边界
+     */
+    public JsonlSessionRepository(Path sessionDirectory, Path defaultSessionsRoot,
+                                  boolean flat, JsonlSessionRepoFileSystem fs) {
+        this.sessionsRoot = sessionDirectory;
+        this.defaultSessionsRoot = defaultSessionsRoot;
+        this.flat = flat;
         this.fs = fs;
-        this.richLister = new RichSessionLister(sessionsRoot, fs, this::sessionDirectories);
+        this.richLister = new RichSessionLister(sessionDirectory, fs, this::sessionDirectories,
+            this::cwdMatches);
     }
 
     /** Default file system over {@code sessionsRoot}. */
@@ -86,8 +108,13 @@ public final class JsonlSessionRepository implements
                 if (!headerResult.ok()) {
                     continue;
                 }
-                metadata.add(JsonlSessionStorage.metadataFromHeader(
-                    headerResult.value(), entry.path(), entry.mtimeMs()));
+                var parsed = JsonlSessionStorage.metadataFromHeader(
+                    headerResult.value(), entry.path(), entry.mtimeMs());
+                // B278（docs/24 W4c）：pi SessionManager.list 的 includeSession 过滤。
+                if (!cwdMatches(options.cwd(), parsed.cwd())) {
+                    continue;
+                }
+                metadata.add(parsed);
             }
         }
         metadata.sort((left, right) -> Long.compare(right.modifiedAtMs(), left.modifiedAtMs()));
@@ -137,7 +164,7 @@ public final class JsonlSessionRepository implements
                 }
                 var metadata = JsonlSessionStorage.metadataFromHeader(
                     headerResult.value(), entry.path(), entry.mtimeMs());
-                if (metadata.id().equals(id)) {
+                if (metadata.id().equals(id) && cwdMatches(cwd, metadata.cwd())) {
                     return Optional.of(metadata);
                 }
             }
@@ -274,6 +301,10 @@ public final class JsonlSessionRepository implements
     }
 
     List<Path> sessionDirectories(String cwd) {
+        if (flat) {
+            // B278（docs/24 W4c）：显式会话目录平铺——项目内列表与全量列表都只扫该目录。
+            return fs.exists(sessionsRoot) ? List.of(sessionsRoot) : List.of();
+        }
         if (cwd != null) {
             String resolved = fs.absolutePath(cwd);
             String directory = sessionDirectory(resolved);
@@ -289,7 +320,33 @@ public final class JsonlSessionRepository implements
     }
 
     private String sessionDirectory(String cwd) {
+        if (flat) {
+            return sessionsRoot.toString();
+        }
         return fs.joinPath(List.of(sessionsRoot.toString(), sessionDirectoryName(cwd)));
+    }
+
+    /**
+     * pi {@code filterCwd}（session-manager.ts:744-745,1805,1891,1922）：显式目录
+     * 与「默认根/--编码 cwd--」不是同一位置时，列表与精确查找按 cwd 过滤。
+     */
+    private boolean filterCwd(String cwd) {
+        if (!flat || cwd == null) {
+            return false;
+        }
+        String resolved = fs.absolutePath(cwd);
+        String defaultDir = fs.joinPath(List.of(
+            defaultSessionsRoot.toString(), sessionDirectoryName(resolved)));
+        return !SessionPaths.same(sessionsRoot.toString(), defaultDir);
+    }
+
+    /** pi {@code includeSession}：不启用过滤或 header cwd 与当前 cwd 相同 ⇒ 收入。 */
+    private boolean cwdMatches(String cwd, String sessionCwd) {
+        if (!filterCwd(cwd)) {
+            return true;
+        }
+        return sessionCwd != null && !sessionCwd.isEmpty()
+            && SessionPaths.same(sessionCwd, fs.absolutePath(cwd));
     }
 
     static String sessionDirectoryName(String cwd) {
