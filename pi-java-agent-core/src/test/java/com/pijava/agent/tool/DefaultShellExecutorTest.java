@@ -63,6 +63,15 @@ class DefaultShellExecutorTest {
         assertThat(result.output()).hasSize(3_000_000);
     }
 
+    /** L5 W10：pi {@code shellPathExists} 的可达判定（Windows 不做额外 stat）。 */
+    @Test
+    void shellPathExistsChecksReachability() throws Exception {
+        Path file = Files.createFile(tmp.resolve("probe-shell"));
+        assertThat(DefaultShellExecutor.shellPathExists(file.toString())).isTrue();
+        assertThat(DefaultShellExecutor.shellPathExists(
+            tmp.resolve("no-such-shell").toString())).isFalse();
+    }
+
     private Path createFakeBash() throws Exception {
         if (isWindows()) {
             // A .cmd is spawnable directly on Windows; it reads the command

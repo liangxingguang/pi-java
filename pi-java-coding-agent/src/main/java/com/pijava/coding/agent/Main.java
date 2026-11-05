@@ -39,6 +39,14 @@ public final class Main {
             return SubcommandHandler.dispatch(subcommand, args);
         }
 
+        // L5 W10（pi main.ts:591-599）：当前工作目录已不存在 ⇒ 红字错误 exit 1。
+        // 放在子命令之后：仍允许 auth 等不依赖 cwd 的命令（pi runAuthCommand 同序）。
+        if (!workingDirectoryExists()) {
+            System.err.println("Error: The current working directory no longer exists. "
+                + "Change to an existing directory and try again.");
+            return 1;
+        }
+
         var parsed = ArgsParser.parse(args);
         // tui=true detaches the CONSOLE appender (alternate-screen safety);
         // only the interactive TUI actually needs that — web/json/rpc keep it.
@@ -156,6 +164,20 @@ public final class Main {
         } catch (RuntimeException e) {
             // 主题初始化失败不阻断 headless 主流程（pi initTheme 内部已静默回落，
             // 此 catch 防 settings 读取等外围失败）。
+        }
+    }
+
+    /**
+     * pi {@code process.cwd()} 的 ENOENT 对位：{@code user.dir} 不是现存目录。
+     * 其他 IO 错误按 pi 的非 ENOENT 臂直接抛出——这里 all-or-nothing 判可达即可。
+     */
+    private static boolean workingDirectoryExists() {
+        try {
+            var dir = System.getProperty("user.dir");
+            return dir != null && java.nio.file.Files.isDirectory(
+                java.nio.file.Path.of(dir));
+        } catch (RuntimeException e) {
+            return false;
         }
     }
 

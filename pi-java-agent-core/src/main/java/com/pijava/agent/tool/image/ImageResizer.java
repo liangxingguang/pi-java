@@ -27,7 +27,8 @@ import com.pijava.ai.catalog.InputLimits;
  * <ol>
  *   <li>限内（宽高 ≤ max 且 base64 体积 &lt; maxBytes）⇒ 原字节直通；</li>
  *   <li>按 maxWidth/maxHeight 等比收目标边；</li>
- *   <li>每档尺寸：PNG 候选先，再 JPEG 质量阶梯（默认 80,85,70,55,40 去重保序），
+ *   <li>每档尺寸：配置质量下 PNG/JPEG 取<b>较小者</b>优先（同质量相等时 PNG 先，
+ *       与 pi 一致），再按 JPEG 质量阶梯（默认 80,85,70,55,40 去重保序）兜底，
  *       取首个低于 maxBytes 的；</li>
  *   <li>仍超 ⇒ 宽高各 floor(*0.75)（≥1）直到 1×1；不可推进/解码失败 ⇒ null。</li>
  * </ol>
@@ -122,16 +123,27 @@ final class ImageResizer {
         while (true) {
             var resized = scale(oriented, currentWidth, currentHeight);
             try {
-                // pi：PNG 候选恒第一。
+                // L5 W10（B282，pi image-resize-core.ts:134-147）：配置质量下 PNG/JPEG
+                // 取较小者优先；低质量 JPEG 只作兜底。
                 String pngBase64 = encodePng(resized);
-                if (base64Length(pngBase64) < opt.maxBytes) {
-                    return new Result(pngBase64, "image/png", originalWidth, originalHeight,
-                        currentWidth, currentHeight, true);
+                String jpegBase64 = encodeJpeg(resized, qualitySteps.get(0));
+                boolean jpegSmaller = base64Length(jpegBase64) < base64Length(pngBase64);
+                var preferred = jpegSmaller
+                    ? new String[] {jpegBase64, pngBase64}
+                    : new String[] {pngBase64, jpegBase64};
+                var mimes = jpegSmaller
+                    ? new String[] {"image/jpeg", "image/png"}
+                    : new String[] {"image/png", "image/jpeg"};
+                for (int i = 0; i < preferred.length; i++) {
+                    if (base64Length(preferred[i]) < opt.maxBytes) {
+                        return new Result(preferred[i], mimes[i], originalWidth, originalHeight,
+                            currentWidth, currentHeight, true);
+                    }
                 }
-                for (int quality : qualitySteps) {
-                    String jpegBase64 = encodeJpeg(resized, quality);
-                    if (base64Length(jpegBase64) < opt.maxBytes) {
-                        return new Result(jpegBase64, "image/jpeg", originalWidth, originalHeight,
+                for (int i = 1; i < qualitySteps.size(); i++) {
+                    String lowerBase64 = encodeJpeg(resized, qualitySteps.get(i));
+                    if (base64Length(lowerBase64) < opt.maxBytes) {
+                        return new Result(lowerBase64, "image/jpeg", originalWidth, originalHeight,
                             currentWidth, currentHeight, true);
                     }
                 }

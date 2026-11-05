@@ -50,9 +50,12 @@ public final class ProjectTrustResolver {
         if (trustOverride != null) {
             return trustOverride;
         }
-        // ② 无敏感资源恒 true
+        // ② 无敏感资源：先读已存决策，再回落 true（pi project-trust.ts:52
+        //    `trustStore.get(cwd) ?? true`；W10 修正：此前直接恒 true，抹掉了
+        //    之前显式 setProjectTrusted(false) 的存盘决策）。
         if (!ProjectTrustResources.hasTrustRequiringProjectResources(cwd)) {
-            return true;
+            var stored = store.get(cwd);
+            return stored != null ? stored : true;
         }
         // ③ 扩展 project_trust 事件
         if (firer != null) {

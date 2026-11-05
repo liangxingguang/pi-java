@@ -56,7 +56,9 @@ public final class MiscCommands {
                     return "Failed to export session: " + e.getMessage();  // pi :6535 逐字
                 }
             }));
-        registry.register(simple("import", "Import session from JSONL", "<file>",
+        // L5 W10：pi slash-commands.ts:35-36 描述逐字。
+        registry.register(simple("import",
+            "Import a JSONL session, preserving its ID and working directory", "<file>",
             (args, ctx) -> {
                 if (args.isBlank()) {
                     return "Usage: /import <file>.jsonl";
@@ -81,7 +83,8 @@ public final class MiscCommands {
                         + "Failed to import session: " + e.getMessage();
                 }
             }));
-        registry.register(simple("share", "Share session as a secret GitHub gist", "",
+        registry.register(simple("share",
+            "Share session via a Radius artifact or a GitHub gist", "",
             (args, ctx) -> CommandRegistry.UI_SHARE));
         registry.register(new SlashCommand() {
             @Override public String name() { return "copy"; }

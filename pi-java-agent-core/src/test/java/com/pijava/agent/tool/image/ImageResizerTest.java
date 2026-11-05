@@ -138,6 +138,33 @@ class ImageResizerTest {
         assertThat(ImageResizer.resize(bytes, "image/webp", null)).isNull();
     }
 
+    /** L5 W10（B282）：同质量下取 PNG/JPEG 较小者（pi image-resize-core.ts:134-147）。 */
+    @Test
+    void prefersSmallerOfPngAndJpegAtConfiguredQuality() throws Exception {
+        // 高噪大图：PNG 压不动，JPEG q80 显著更小 ⇒ 选 JPEG（旧实现恒先 PNG）。
+        byte[] noisy = png(2400, 4800);
+        var jpegPreferred = ImageResizer.resize(noisy, "image/png", null);
+        assertThat(jpegPreferred).isNotNull();
+        assertThat(jpegPreferred.mimeType()).isEqualTo("image/jpeg");
+
+        // 纯色大图：PNG 远小于 JPEG ⇒ 选 PNG。
+        byte[] solid = solidPng(2400, 1200, Color.BLUE);
+        var pngPreferred = ImageResizer.resize(solid, "image/png", null);
+        assertThat(pngPreferred).isNotNull();
+        assertThat(pngPreferred.mimeType()).isEqualTo("image/png");
+    }
+
+    private static byte[] solidPng(int width, int height, Color color) throws Exception {
+        var img = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = img.createGraphics();
+        g.setColor(color);
+        g.fillRect(0, 0, width, height);
+        g.dispose();
+        var out = new ByteArrayOutputStream();
+        ImageIO.write(img, "png", out);
+        return out.toByteArray();
+    }
+
     @Test
     void modelProfileOverridesDefaultsPerField() throws Exception {
         byte[] bytes = png(240, 240);

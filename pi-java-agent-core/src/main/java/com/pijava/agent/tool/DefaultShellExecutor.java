@@ -53,7 +53,7 @@ public class DefaultShellExecutor implements ShellExecutor {
     private ShellConfig resolveShell() throws IOException {
         if (customShellPath != null && !customShellPath.isBlank()) {
             String expanded = expandHome(customShellPath.trim());
-            if (!Files.exists(Path.of(expanded))) {
+            if (!shellPathExists(expanded)) {
                 throw new IOException("Custom shell path not found: " + expanded);
             }
             return configFor(expanded);
@@ -62,7 +62,7 @@ public class DefaultShellExecutor implements ShellExecutor {
         if (isWindows()) {
             List<String> candidates = gitBashCandidates();
             for (String candidate : candidates) {
-                if (Files.exists(Path.of(candidate))) {
+                if (shellPathExists(candidate)) {
                     return configFor(candidate);
                 }
             }
@@ -102,10 +102,43 @@ public class DefaultShellExecutor implements ShellExecutor {
         return new ShellConfig(List.of(shell, "-c"), ShellTransport.ARGV);
     }
 
-    /** Mirrors pi's isLegacyWslBashPath. */
+    /**
+     * pi {@code isLegacyWslBashPath}（shell.ts:13-25）：优先按 {@code SystemRoot}
+     * 判（任意盘符的 Windows 目录）；根不可知时才用 {@code C:\Windows} 常规路径。
+     */
     private static boolean isLegacyWslBashPath(String path) {
-        var normalized = path.replace('/', '\\').toLowerCase(Locale.ROOT);
+        var normalized = Path.of(path).normalize().toString()
+            .replace('/', '\\').toLowerCase(Locale.ROOT);
+        String systemRoot = System.getenv("SystemRoot");
+        if (systemRoot != null && !systemRoot.isBlank()) {
+            var root = Path.of(systemRoot).normalize().toString()
+                .replace('/', '\\').toLowerCase(Locale.ROOT);
+            if (!root.matches("^[a-z]:[\\\\/].*")) {
+                return false;
+            }
+            for (String directory : List.of("System32", "Sysnative")) {
+                if (normalized.equals((root + "\\" + directory + "\\bash.exe")
+                        .replace('/', '\\').toLowerCase(Locale.ROOT))) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        // Fall back to conventional launcher paths only when the Windows directory is unknown.
         return normalized.matches("^[a-z]:\\\\windows\\\\(?:system32|sysnative)\\\\bash\\.exe$");
+    }
+
+    /**
+     * pi {@code shellPathExists}（shell.ts:33-42）：Unix 等同 {@code access(F_OK)}；
+     * Windows 刻意不用 Node {@code existsSync()} 的额外 stat（Store 执行别名会被它拒掉）。
+     * Java 侧 {@link Files#exists} 是平台可达性判定，不复刻该额外 stat。
+     */
+    static boolean shellPathExists(String path) {
+        try {
+            return Files.exists(Path.of(path));
+        } catch (RuntimeException e) {
+            return false;
+        }
     }
 
     private static List<String> gitBashCandidates() throws IOException {
@@ -141,7 +174,12 @@ public class DefaultShellExecutor implements ShellExecutor {
             }
             var first = new String(process.getInputStream().readAllBytes(),
                 StandardCharsets.UTF_8).lines().findFirst().orElse("").trim();
-            return first.isEmpty() || !Files.exists(Path.of(first)) ? null : first;
+            // pi shell.ts:45-83：Windows 用 where 并校验可达；Unix 信任 which 输出
+            //（Termux/特殊文件系统）。
+            if (first.isEmpty()) {
+                return null;
+            }
+            return isWindows() && !shellPathExists(first) ? null : first;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return null;

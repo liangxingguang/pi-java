@@ -32,14 +32,33 @@ public final class PowerShellShellExecutor implements ShellExecutor {
         if (!DefaultShellExecutor.isWindows()) {
             throw new IOException("The powershell tool is only available on Windows.");
         }
+        // pi shell.ts:150-175：安装目录可能在任何盘、且不必在 PATH 上。
         String shell = DefaultShellExecutor.firstOnPath("pwsh.exe");
         if (shell == null) {
+            shell = installDirCandidate(System.getenv("ProgramFiles"),
+                "PowerShell", "7", "pwsh.exe");
+        }
+        if (shell == null) {
             shell = DefaultShellExecutor.firstOnPath("powershell.exe");
+        }
+        if (shell == null) {
+            shell = installDirCandidate(System.getenv("SystemRoot"),
+                "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
         }
         if (shell == null) {
             throw new IOException("No PowerShell executable found. "
                 + "Install PowerShell or add powershell.exe/pwsh.exe to PATH.");
         }
         return shell;
+    }
+
+    /** 安装目录兜底（pi shell.ts 的 {@code win32.join(base, parts...)} 可达判定）。 */
+    private static String installDirCandidate(String base, String... parts) {
+        if (base == null || base.isBlank()) {
+            return null;
+        }
+        var candidate = java.nio.file.Path.of(base, parts);
+        return DefaultShellExecutor.shellPathExists(candidate.toString())
+            ? candidate.toString() : null;
     }
 }

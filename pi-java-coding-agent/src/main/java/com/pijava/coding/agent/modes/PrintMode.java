@@ -27,15 +27,28 @@ public final class PrintMode {
      * @return process exit code
      */
     public static int run(List<String> messages, Args args) {
+        return run(messages, args, () -> AgentSession.create(args));
+    }
+
+    /** 测试缝：注入已装配的会话；公开 {@link #run} 走真实工厂。 */
+    static int run(List<String> messages, Args args,
+                   java.util.function.Supplier<AgentSession> sessionFactory) {
         if (messages.isEmpty()) {
             System.err.println("error: -p requires a prompt message");
             return 1;
         }
         var prompt = String.join(" ", messages);
-        try (var session = AgentSession.create(args)) {
+        try (var session = sessionFactory.get()) {
             printStartupDiagnostics(session); // 批 16（T1d 裁决⑧）
             var result = session.processPrompt(prompt, PromptConfig.defaults());
             result.stream().forEach(event -> renderEvent(event, args.verbose()));
+            // L5 W10（B281，pi print-mode.ts:151-157）：末条 assistant 因输出上限截断
+            // ⇒ stderr 逐字＋exit 1（truncated 不得读作成功）。
+            if (lastAssistantWasTruncated(result)) {
+                System.err.println(
+                    "Response was truncated: the model reached its output token limit.");
+                return 1;
+            }
             return result.status().exitCode();
         } catch (Exception e) {
             System.err.println("error: " + e.getMessage());
@@ -65,6 +78,23 @@ public final class PrintMode {
             System.err.println("error: " + e.getMessage());
             return 1;
         }
+    }
+
+    /**
+     * L5 W10（B281）：末条消息是 assistant 且 {@code stopReason == "length"}
+     * （pi print-mode.ts:143-156 的 {@code state.messages[-1]} 臂）。
+     */
+    private static boolean lastAssistantWasTruncated(
+            com.pijava.coding.agent.core.SessionResult result) {
+        var entries = result.entries();
+        for (int i = entries.size() - 1; i >= 0; i--) {
+            if (entries.get(i) instanceof com.pijava.agent.entry.Entry.Message entry) {
+                return entry.message()
+                    instanceof com.pijava.ai.message.Message.AssistantMessage assistant
+                    && assistant.stopReason() == com.pijava.ai.message.StopReason.LENGTH;
+            }
+        }
+        return false;
     }
 
     /** 批 16（T1d 裁决⑧）：扩展 flag 绑定诊断落 stderr（pi 启动期诊断同旨）。 */
