@@ -95,6 +95,70 @@ class RecoveryOmissionsResolutionTest {
             .as("身份下标跳过值相等的 e-a1，定位 e-a2").isEqualTo("e-a2");
     }
 
+    /**
+     * B273（docs/24 W3）：auto-retry 路也按 toolCallId 在投影中找工具结果并一起
+     * 省略（pi {@code _omitRecoveryAttempt:1261-1269}，{@code #11227}）。
+     */
+    @Test
+    void retryOmissionOmitsThePairedToolResult() {
+        var lane = new LaneState();
+        Instant now = Instant.now();
+        lane.transcript.add(message("e-user", 0, null, now, user("run it")));
+        lane.transcript.add(message("e-asst", 1, "e-user", now, toolCallAssistant("call-1", now)));
+        lane.transcript.add(message("e-result", 2, "e-asst", now, toolResult("call-1")));
+        HarnessUtils.rebuildLaneMessages(lane);
+        var target = (Message.AssistantMessage) lane.messages.get(1);
+
+        RecoveryOmissions.persistRetryOmission(lane, target);
+
+        var nullEdits = lane.transcript.stream()
+            .filter(Entry.ContextEdit.class::isInstance)
+            .map(Entry.ContextEdit.class::cast)
+            .filter(edit -> edit.replacement() == null)
+            .toList();
+        assertThat(nullEdits).extracting(Entry.ContextEdit::targetId)
+            .as("助手与它的工具结果成对省略")
+            .containsExactly("e-asst", "e-result");
+        assertThat(lane.messages)
+            .as("重建后本轮只剩 user")
+            .hasSize(1);
+        assertThat(lane.messages.get(0)).isInstanceOf(Message.UserMessage.class);
+    }
+
+    @Test
+    void toolResultAfterTheNextAssistantIsNotOmitted() {
+        var lane = new LaneState();
+        Instant now = Instant.now();
+        lane.transcript.add(message("e-user", 0, null, now, user("run it")));
+        lane.transcript.add(message("e-asst", 1, "e-user", now, toolCallAssistant("call-1", now)));
+        lane.transcript.add(message("e-next", 2, "e-asst", now, textAssistant("next", now)));
+        lane.transcript.add(message("e-result", 3, "e-next", now, toolResult("call-1")));
+        HarnessUtils.rebuildLaneMessages(lane);
+        var target = (Message.AssistantMessage) lane.messages.get(1);
+
+        RecoveryOmissions.persistRetryOmission(lane, target);
+
+        var nullEdits = lane.transcript.stream()
+            .filter(Entry.ContextEdit.class::isInstance)
+            .map(Entry.ContextEdit.class::cast)
+            .filter(edit -> edit.replacement() == null)
+            .toList();
+        assertThat(nullEdits).extracting(Entry.ContextEdit::targetId)
+            .as("pi 的扫描在下一个 assistant 处停止")
+            .containsExactly("e-asst");
+    }
+
+    private static Message.AssistantMessage toolCallAssistant(String callId, Instant timestamp) {
+        return new Message.AssistantMessage(
+            List.of(new ContentBlock.ToolUseContent(callId, "read", java.util.Map.of())),
+            null, null, null, null, null, null, timestamp, null, null);
+    }
+
+    private static Message.ToolResultMessage toolResult(String callId) {
+        return new Message.ToolResultMessage(callId, "read",
+            List.of(new ContentBlock.TextContent("result")), false);
+    }
+
     private static Message.UserMessage user(String text) {
         return new Message.UserMessage(List.of(new ContentBlock.TextContent(text)));
     }

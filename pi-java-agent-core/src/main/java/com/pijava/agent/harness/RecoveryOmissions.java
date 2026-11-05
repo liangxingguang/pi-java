@@ -34,47 +34,116 @@ final class RecoveryOmissions {
 
     private RecoveryOmissions() {}
 
-    /** Persist omission edits for the failed assistant and this turn's tool results, then rebuild the copy. */
+    /**
+     * Persist omission edits for the failed assistant and its paired tool results,
+     * then rebuild the copy (pi {@code _omitRecoveryAttempt}，新锚点
+     * {@code agent-session.ts:1256-1284}). Used by the overflow path.
+     */
     static void persist(LaneState lane, Message.AssistantMessage failed) {
         // 批 27（B162）：pi :3045——溢出压缩后重试同样暂存失败响应。
         lane.failedResponse = failed;
-        String assistantId = resolveEntryId(lane, failed);
-        if (assistantId == null && inWorkingCopy(lane, failed)) {
-            // pi :1216-1218：投影中的消息没有源条目 ⇒ 无法安全持久省略。
-            throw new IllegalStateException(
-                "Cannot persist recovery omission because a projected message has no source entry");
-        }
-        if (assistantId != null) {
-            appendOmission(lane, assistantId);
-        }
-        for (String toolResultId : toolResultEntryIds(lane, failed)) {
-            appendOmission(lane, toolResultId);
-        }
-        // pi :1224 _refreshFinalizedContext：压缩前让取数与切点读到剔除后的上下文。
-        HarnessUtils.rebuildLaneMessages(lane);
+        omitAttempt(lane, failed);
     }
 
     /**
-     * Persist the omission of only the failed assistant for the auto-retry path
-     * (B172, {@code docs/19}；pi {@code _prepareRetry → _omitRecoveryAttempt(message)}，
-     * {@code agent-session.ts:3738})：环 A 不传 toolResults，守卫/定位规则同
-     * {@link #persist}，随后刷新工作副本。
+     * Persist the omission of the failed auto-retry attempt (B172, {@code docs/19}；
+     * pi {@code _prepareRetry → _omitRecoveryAttempt(message)}，
+     * {@code agent-session.ts:3868})。
+     *
+     * <p>B273（docs/24 W3）：新锚点不再只省助手——同一方法按 toolCallId 在<b>投影</b>
+     * 中找本轮工具结果并一起省略（否则下一请求出现「工具调用无结果」的非法配对，
+     * pi {@code #11227}）。</p>
      */
     static void persistRetryOmission(LaneState lane, Message.AssistantMessage failed) {
         // 批 27（B162）：pi :1866——重试准备时暂存失败响应（虚拟模型路由的
         // reason:"retry"/failed 载荷源；prepareRequest 缝读取即清）。
         lane.failedResponse = failed;
-        String assistantId = resolveEntryId(lane, failed);
-        if (assistantId == null && inWorkingCopy(lane, failed)) {
-            // pi :1216-1218：投影中的消息没有源条目 ⇒ 无法安全持久省略。
+        omitAttempt(lane, failed);
+    }
+
+    /** Shared pi {@code _omitRecoveryAttempt} body: assistant plus paired results. */
+    private static void omitAttempt(LaneState lane, Message.AssistantMessage failed) {
+        var targets = new ArrayList<Message>();
+        targets.add(failed);
+        targets.addAll(pairedToolResults(lane, failed));
+        var targetIds = new ArrayList<String>();
+        boolean unresolvedProjectedTarget = false;
+        for (var target : targets) {
+            String targetId = resolveEntryId(lane, target);
+            targetIds.add(targetId);
+            if (targetId == null && inWorkingCopy(lane, target)) {
+                unresolvedProjectedTarget = true;
+            }
+        }
+        if (unresolvedProjectedTarget) {
+            // pi :1274-1277：投影中的消息没有源条目 ⇒ 无法安全持久省略。
             throw new IllegalStateException(
                 "Cannot persist recovery omission because a projected message has no source entry");
         }
-        if (assistantId != null) {
-            appendOmission(lane, assistantId);
+        for (String targetId : targetIds) {
+            if (targetId != null) {
+                appendOmission(lane, targetId);
+            }
         }
-        // pi _refreshFinalizedContext（:1224）：退避前让后续读取看到剔除后的投影。
+        // pi :1283 _refreshFinalizedContext：后续读取看到剔除后的上下文。
         HarnessUtils.rebuildLaneMessages(lane);
+    }
+
+    /**
+     * pi {@code _omitRecoveryAttempt}（:1261-1269）：从失败助手在**工作副本**中的位置
+     * 向后扫，遇到下一个 assistant 即停，收集 toolCallId 命中的工具结果。
+     */
+    private static List<Message> pairedToolResults(LaneState lane, Message.AssistantMessage failed) {
+        Set<String> toolUseIds = new HashSet<>();
+        for (ContentBlock block : failed.content()) {
+            if (block instanceof ContentBlock.ToolUseContent toolUse) {
+                toolUseIds.add(toolUse.id());
+            }
+        }
+        int index = indexInWorkingCopy(lane, failed);
+        List<Message> results = new ArrayList<>();
+        if (index < 0) {
+            return results;
+        }
+        for (int i = index + 1; i < lane.messages.size(); i++) {
+            var message = lane.messages.get(i);
+            if (message instanceof Message.AssistantMessage) {
+                break;
+            }
+            if (message instanceof Message.ToolResultMessage tool
+                    && toolUseIds.contains(tool.toolUseId())) {
+                results.add(message);
+            }
+        }
+        return results;
+    }
+
+    /**
+     * pi 的 {@code messages.findIndex(m => m === message || entryIdsByMessage.get(m) === entryId)}：
+     * 先按对象身份；否则用源条目 id 在投影里定位（context_edit 替换后的副本）。
+     */
+    private static int indexInWorkingCopy(LaneState lane, Message target) {
+        for (int i = 0; i < lane.messages.size(); i++) {
+            if (lane.messages.get(i) == target) {
+                return i;
+            }
+        }
+        String entryId = resolveEntryId(lane, target);
+        if (entryId == null) {
+            return -1;
+        }
+        List<ContextEntries.ProjectedEntry> projected =
+            ContextEntries.projectEntries(lane.transcript, HarnessUtils.lastEntryId(lane));
+        int index = 0;
+        for (ContextEntries.ProjectedEntry entry : projected) {
+            for (int i = 0; i < entry.messages().size(); i++) {
+                if (entry.source().id().equals(entryId)) {
+                    return index;
+                }
+                index++;
+            }
+        }
+        return -1;
     }
 
     /**
@@ -141,29 +210,6 @@ final class RecoveryOmissions {
             }
         }
         return null;
-    }
-
-    /**
-     * Tool results of this turn (matched by the assistant's tool_use ids) that
-     * landed in the transcript. pi passes the turn's {@code toolResults} (:2996);
-     * resolving via tool_use ids covers exactly the results that can project.
-     */
-    private static List<String> toolResultEntryIds(LaneState lane, Message.AssistantMessage failed) {
-        Set<String> toolUseIds = new HashSet<>();
-        for (ContentBlock block : failed.content()) {
-            if (block instanceof ContentBlock.ToolUseContent toolUse) {
-                toolUseIds.add(toolUse.id());
-            }
-        }
-        List<String> ids = new ArrayList<>();
-        for (Entry entry : lane.transcript) {
-            if (entry instanceof Entry.Message m
-                    && m.message() instanceof Message.ToolResultMessage tool
-                    && toolUseIds.contains(tool.toolUseId())) {
-                ids.add(m.id());
-            }
-        }
-        return ids;
     }
 
     private static void appendOmission(LaneState lane, String targetId) {
