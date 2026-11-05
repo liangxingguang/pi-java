@@ -90,11 +90,13 @@ public final class AgentSession implements AutoCloseable {
     private final Set<String> deliveredEntryIds = new HashSet<>();
     /** 批 18（评审 M4）：本会话装配期的 resolve 结果（wireSession 现算一份，
      *  技能/模板/主题/扩展四消费面共享；/reload 重算）。存于 {@link ExtensionLoading}。 */
-    // pi agent-session.ts:1083/2434-2436/1823：settled 时读旗；abort() 置位；run 起手清零。
-    // 包内可见：SessionRunner 在驱动起手清零、收尾读值。
+    // pi :1083/2434-2436：settled 读旗；abort() 置位；L5 W1 起在启动窗前清零、收尾读值。
     final AtomicBoolean agentRunAbortRequested = new AtomicBoolean();
     /** pi {@code _agentRunAbortRequested}：settled 事件的 aborted 载荷源（包内可见）。 */
     boolean agentRunAbortRequested() { return agentRunAbortRequested.get(); }
+    /** pi {@code _isAgentRunActive}（:402）：启动窗 busy；W1 与引擎 isRunning 求并为 isStreaming。 */
+    final AtomicBoolean agentRunActive = new AtomicBoolean();
+    boolean agentRunActive() { return agentRunActive.get(); }
     /** pi {@code _isEmittingAgentSettled}（:433）。包内可见：SessionRunner 双发射点共享。
      *  volatile：写在 run 线程（发射窗），读可在扩展调用线程（RPC/TUI 事件）。 */
     volatile boolean emittingAgentSettled;
@@ -216,21 +218,16 @@ public final class AgentSession implements AutoCloseable {
     /** 委托 {@link SessionDataViews}。 */ public String storedSessionName() { return views.storedSessionName(); }
     /** 委托 {@link SessionDataViews}。 */ public long entryCount() { return views.entryCount(); }
     /** 委托 {@link SessionDataViews}。 */ public List<Entry> accumulatedEntries() { return views.accumulatedEntries(); }
-    /** 委托 {@link SessionDataViews}。 */
-    public List<Message> accumulatedMessages() { return views.accumulatedMessages(); }
+    /** 委托 {@link SessionDataViews}。 */ public List<Message> accumulatedMessages() { return views.accumulatedMessages(); }
     /** 委托 {@link SessionDataViews}。 */ public String lastAssistantText() { return views.lastAssistantText(); }
-    /** 委托 {@link SessionDataViews}。 */
-    public List<String> extensionResourcePaths() { return views.extensionResourcePaths(); }
-    /** 委托 {@link SessionDataViews}。 */
-    public List<Args.ArgDiagnostic> startupDiagnostics() { return views.startupDiagnostics(); }
-    /** 委托 {@link SessionDataViews}。 */
-    public ToolRendererRegistry toolRenderers() { return views.toolRenderers(); }
+    /** 委托 {@link SessionDataViews}。 */ public List<String> extensionResourcePaths() { return views.extensionResourcePaths(); }
+    /** 委托 {@link SessionDataViews}。 */ public List<Args.ArgDiagnostic> startupDiagnostics() { return views.startupDiagnostics(); }
+    /** 委托 {@link SessionDataViews}。 */ public ToolRendererRegistry toolRenderers() { return views.toolRenderers(); }
     /** 委托 {@link SessionDataViews}。 */
     public ExtensionShortcuts.Resolution extensionShortcuts(KeybindingsManager keys) {
         return views.extensionShortcuts(keys);
     }
-    /** 委托 {@link SessionDataViews}。 */
-    public ExtensionContext extensionShortcutContext() { return views.extensionShortcutContext(); }
+    /** 委托 {@link SessionDataViews}。 */ public ExtensionContext extensionShortcutContext() { return views.extensionShortcutContext(); }
     /** 委托 {@link SessionDataViews}。 */
     public ExtensionMessageRenderer messageRendererFor(String customType) {
         return views.messageRendererFor(customType);
@@ -246,10 +243,8 @@ public final class AgentSession implements AutoCloseable {
     public ModelThinkingLevel setThinkingLevel(ModelThinkingLevel level) {
         return modelTools.setThinkingLevel(level);
     }
-    /** 委托 {@link ModelToolControl}。 */
-    public ModelCatalog modelCatalog() { return modelTools.modelCatalog(); }
-    /** 委托 {@link ModelToolControl}。 */
-    public List<ScopedModel> scopedModels() { return modelTools.scopedModels(); }
+    /** 委托 {@link ModelToolControl}。 */ public ModelCatalog modelCatalog() { return modelTools.modelCatalog(); }
+    /** 委托 {@link ModelToolControl}。 */ public List<ScopedModel> scopedModels() { return modelTools.scopedModels(); }
     /** 委托 {@link ModelToolControl}。 */ public void cycleModelForward() { modelTools.cycleModelForward(); }
     /** 委托 {@link ModelToolControl}。 */ public void setModel(ModelId<?> model) { modelTools.setModel(model); }
     public List<String> getActiveToolNames() { return modelTools.getActiveToolNames(); }
@@ -297,6 +292,11 @@ public final class AgentSession implements AutoCloseable {
     public SessionResult processPrompt(String prompt, PromptConfig config,
                                        StreamObserver streamObserver, EntryObserver entryObserver) {
         return prompts.processPrompt(prompt, config, streamObserver, entryObserver);
+    }
+    /** L5 W1：onStarted 在 hook＋flush 后、驱动线程起跑前调用（pi _startRun；RPC "started" 回执）。 */
+    public SessionResult processPrompt(String prompt, PromptConfig config, Runnable onStarted,
+                                       StreamObserver streamObserver, EntryObserver entryObserver) {
+        return prompts.processPrompt(prompt, config, onStarted, streamObserver, entryObserver);
     }
     /** 委托 {@link PromptPipeline}。 */
     public SessionResult processPrompt(String prompt) {

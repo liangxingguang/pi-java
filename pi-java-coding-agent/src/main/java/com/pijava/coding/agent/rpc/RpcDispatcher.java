@@ -369,23 +369,30 @@ public final class RpcDispatcher {
         // data.disposition = started | queued | handled（批 20 B237 三态齐）；
         // 路由门拒绝 ⇒ 恰一条失败响应。
         try {
+            // L5 W1：pi 的 onStarted 时点——hook 与 flush 完成后、驱动线程起跑前
+            // 写 "started" 响应，保证响应行先于任何 message_update。
+            var startedWritten = new java.util.concurrent.atomic.AtomicBoolean();
             var result = session.processPrompt(text,
                 // docs/15：input source="rpc"；批 20：images 透传（pi :399 对位）
-                PromptConfig.rpc(prompt.streamingBehavior(), toPromptImages(prompt.images())));
-            if ("started".equals(result.disposition())) {
-                // 异步 run：事件经订阅推送；AgentSettled 复位。
-                streaming = true;
-            }
-            if (result.commandCompletion() != null) {
-                // 批 20 评审回补（I-1，pi rpc-mode.ts:398-412 时序对位）：void
-                // prompt——响应在命令执行完成后才写（preflightResult 时序），
-                // 读线程不阻塞（后续命令照读照护）。
-                result.commandCompletion().thenRun(() -> writeQuietly(
-                    RpcResponse.ok(prompt.id(), "prompt",
-                        new RpcPayloads.DispositionData("handled"))));
-            } else {
-                out.write(RpcResponse.ok(prompt.id(), "prompt",
-                    new RpcPayloads.DispositionData(result.disposition())));
+                PromptConfig.rpc(prompt.streamingBehavior(), toPromptImages(prompt.images())),
+                () -> {
+                    startedWritten.set(true);
+                    streaming = true;
+                    writeQuietly(RpcResponse.ok(prompt.id(), "prompt",
+                        new RpcPayloads.DispositionData("started")));
+                }, null, null);
+            if (!startedWritten.get()) {
+                if (result.commandCompletion() != null) {
+                    // 批 20 评审回补（I-1，pi rpc-mode.ts:398-412 时序对位）：void
+                    // prompt——响应在命令执行完成后才写（preflightResult 时序），
+                    // 读线程不阻塞（后续命令照读照护）。
+                    result.commandCompletion().thenRun(() -> writeQuietly(
+                        RpcResponse.ok(prompt.id(), "prompt",
+                            new RpcPayloads.DispositionData("handled"))));
+                } else {
+                    out.write(RpcResponse.ok(prompt.id(), "prompt",
+                        new RpcPayloads.DispositionData(result.disposition())));
+                }
             }
         } catch (IllegalStateException e) {
             // 压缩中 / 运行中未指定 streamingBehavior（pi 在调用线程同步抛）。

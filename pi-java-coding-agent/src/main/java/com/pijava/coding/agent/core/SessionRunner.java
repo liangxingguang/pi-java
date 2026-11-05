@@ -107,8 +107,8 @@ final class SessionRunner {
             StreamObserver streamObserver,
             EntryObserver entryObserver) {
         var laneName = owner.laneName();
-        // pi _runAgentPrompt:1823：驱动起手清 abort 请求旗（settled 的 aborted 载荷源）。
-        owner.agentRunAbortRequested.set(false);
+        // L5 W1（pi _startRun:1895-1896）：abort 旗由启动窗在 hook 之前清零；
+        // 驱动起手不再清（否则 hook 内 abort() 会被抹掉）。
         var stopReason = new AtomicReference<>("completed");
         // Run summary (§8): wall-clock of the whole drive (incl. the engine's
         // retry backoff) and stream usage accumulated here; tool/step counters
@@ -288,8 +288,14 @@ final class SessionRunner {
             // ⚠️ MessageUpdate 刻意不在此列：会话层的 MessageUpdate 由 :92 的原始帧
             // 广播链喂（含 UsageInfo 等非生命周期帧），漏斗再转一手会双发。
             switch (event) {
-                case PiLoop.Event.AgentStart ignored ->
+                case PiLoop.Event.AgentStart ignored -> {
+                    // L5 W1（pi _handleAgentEvent，agent-session.ts:1117-1122）：
+                    // 启动窗内请求的 abort 在 agent_start 到达时立即中止引擎。
+                    if (owner.agentRunAbortRequested()) {
+                        owner.harness().abort(laneName);
+                    }
                     owner.emitSessionEvent(new AgentSessionEvent.AgentStart());
+                }
                 case PiLoop.Event.TurnStart ignored ->
                     owner.emitSessionEvent(new AgentSessionEvent.TurnStart());
                 case PiLoop.Event.TurnEnd e -> {

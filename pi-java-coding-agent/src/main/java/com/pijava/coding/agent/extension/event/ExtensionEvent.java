@@ -278,9 +278,35 @@ public sealed interface ExtensionEvent {
      * record 的不可变惯例在此让位逐字语义。原 {@code systemPromptOptions} 其余
      * 部分不移植（窄差 D11）。</p>
      */
-    record BeforeAgentStartEvent(String prompt, String systemPrompt,
+    record BeforeAgentStartEvent(MessageType messageType, String prompt,
+                                 List<com.pijava.agent.harness.PromptImage> images,
+                                 CustomMessagePayload message,
+                                 String systemPrompt,
                                  java.util.Map<String, String> sections)
-            implements ExtensionEvent {}
+            implements ExtensionEvent {
+
+        /** pi {@code BeforeAgentStartEvent} 的判别臂（L5 W1；纯常量闭集 ⇒ enum）。 */
+        public enum MessageType {
+            USER, CUSTOM
+        }
+
+        /** pi custom 臂的 {@code message}（{@code CustomMessage} 的可承载投影）。 */
+        public record CustomMessagePayload(String customType,
+                                           com.pijava.agent.entry.CustomMessageContent content,
+                                           boolean display, Map<String, Object> details) {}
+
+        /** 旧三参形状（user 臂、无图片、无 custom 载荷）。 */
+        public BeforeAgentStartEvent(String prompt, String systemPrompt,
+                                     java.util.Map<String, String> sections) {
+            this(MessageType.USER, prompt, List.of(), null, systemPrompt, sections);
+        }
+
+        /** 防御性拷贝。 */
+        public BeforeAgentStartEvent {
+            images = images == null ? List.of() : List.copyOf(images);
+            sections = sections == null ? Map.of() : sections;
+        }
+    }
 
     /**
      * 批 16（T6a）：pi {@code ModelSelectEvent}（types.ts:1103-1111）——

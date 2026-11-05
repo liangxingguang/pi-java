@@ -101,6 +101,19 @@ final class PromptPipeline {
             PromptConfig config,
             StreamObserver streamObserver,
             EntryObserver entryObserver) {
+        return processPrompt(prompt, config, null, streamObserver, entryObserver);
+    }
+
+    /**
+     * L5 W1：带 {@code onStarted} 的入口（pi {@code _startRun(trigger, onStarted)}
+     * 的 RPC 回执时点：hook 与 flush 完成、驱动线程起跑之前）。
+     */
+    SessionResult processPrompt(
+            String prompt,
+            PromptConfig config,
+            Runnable onStarted,
+            StreamObserver streamObserver,
+            EntryObserver entryObserver) {
         // 批 26（docs/37 T3，pi :1968-1972 对位）：settled 发射窗内的 prompt 延迟到
         // settled 收尾后执行（pi 进 _deferredSettledActions）。外层 SessionResult 的
         // stream/futures 经桥接跟随内层。
@@ -109,7 +122,7 @@ final class PromptPipeline {
             var deferredEntries = new CompletableFuture<List<Entry>>();
             var deferredStatus = new CompletableFuture<RunStatus>();
             deferredSettledActions.add(() -> {
-                var inner = processPrompt(prompt, config,
+                var inner = processPrompt(prompt, config, onStarted,
                     streamObserver == null
                         ? event -> deferredQueue.add(Optional.of(event)) : streamObserver,
                     entryObserver);
@@ -160,7 +173,7 @@ final class PromptPipeline {
                 // streamingBehavior 仅流式中传（this.isStreaming ? … : undefined）——
                 // 与 queueUserInput 同一门；空闲时带 behavior 的 prompt（RPC 常见）
                 // 不再把 "steer" 泄给 input 处理器。
-                config.streamingBehavior() == null || !owner.harness().isRunning(owner.laneName())
+                config.streamingBehavior() == null || !owner.views().isRunning()
                     ? null : config.streamingBehavior().wireName());
             if (outcome.handled()) {
                 return SessionResult.handled();
@@ -178,7 +191,7 @@ final class PromptPipeline {
             // docs/18 终审①：走会话级 isCompacting（含分支摘要在飞，pi getter 同形），
             // 不直达 harness——否则摘要窗口期 prompt 起跑新 run 撕转录。
             owner.isCompacting(),
-            owner.harness().isRunning(owner.laneName()),
+            owner.views().isRunning(),
             config.streamingBehavior());
         if (verdict == PromptRouter.Verdict.QUEUE_STEER) {
             // 批 20（B237）：images 随排队走（pi prompt 流式臂 :2016-2023
@@ -199,56 +212,16 @@ final class PromptPipeline {
         if (config.thinkingLevel() != null) {
             owner.setThinkingLevel(config.thinkingLevel());
         }
-        // docs/15：pi :2061-2110 —— before_agent_start（仅非流式驱动路；流式排队路
-        // 在上面路由门已返回）。systemPrompt 覆盖是 harness 全局态（窄差 D11）；
-        // result.message 落盘序为 custom 条目先于用户消息（窄差 D19）。
-        // 批 26（docs/37 T2，pi :2028-2030 对位）：新 prompt 驱动前 flush 延迟
-        // custom 消息（在 before_agent_start 与模型校验之前，pi 同序）。
-        owner.flushPendingCustomMessages();
-        if (owner.extensionFirer() != null) {
-            // 批 16（T3c）：sections 基线＝harness 当前自定义段的拷贝，处理器改写
-            // 的终态写回 harness——下一 run 的 promptLoadout diff 自动产补丁
-            //（pi systemPromptOptions.sections 贯穿处理器、写回装配输入的链对位）。
-            // 批 32（docs/44 T2，裁决③）：事件 {@code systemPrompt} 传**渲染后**整份提示
-            // （pi runner.ts:1420-1472 的 event.systemPrompt 对位）——此前传
-            // {@code harness::getSystemPrompt}（车道 customPrompt，通常空串），扩展
-            // 拿不到模型实际收到的提示。
-            var start = owner.extensionFirer().beforeAgentStart(expandedPrompt,
-                owner.harness()::currentSystemPrompt, owner.harness().getPromptSections());
-            for (var draft : start.messages()) {
-                owner.messaging().appendCustomDraft(draft);
-            }
-            if (start.systemPrompt() != null) {
-                owner.harness().setSystemPrompt(start.systemPrompt());
-            }
-            owner.harness().setPromptSections(start.sections());
-        }
-        // 批 24（docs/35 D4 臂4，pi agent-session.ts:1829 逐字）：run 记装配进转录
-        // ——到此仍未注册的恢复工具放弃等待（永不注册的工具不留 pending）。
-        owner.harness().pendingToolNames().clear();
+        // L5 W1（pi _startRun/_prepareRun，agent-session.ts:1894-2013）：启动窗
+        // （busy 置位 → hook → flush → 起线程）住在 RunStarter。
+        return RunStarter.startUser(owner, expandedPrompt, config.images(),
+            onStarted, streamObserver, entryObserver);
+    }
 
-        var queue = new LinkedBlockingQueue<Optional<StreamEvent>>();
-        var entriesFuture = new CompletableFuture<List<Entry>>();
-        var statusFuture = new CompletableFuture<RunStatus>();
-
-        // 批 26（docs/37 T2，pi :2088-2092 对位）：nextTurn custom 消息随本条
-        // prompt 注入（排在用户消息之后，经 initialMessages 进待发列表）。
-        var nextTurnCustoms = owner.drainPendingNextTurnMessages().stream()
-            .map(QueuedCustomMessage::toQueuedItem).toList();
-
-        Thread.startVirtualThread(() -> SessionRunner.drive(
-            owner, expandedPrompt, config.images(), nextTurnCustoms, queue, entriesFuture,
-            statusFuture, streamObserver, entryObserver));
-
-        Stream<StreamEvent> stream = Stream.generate(() -> {
-            try {
-                return queue.take();
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return Optional.<StreamEvent>empty();
-            }
-        }).takeWhile(Optional::isPresent).map(Optional::get);
-        return new SessionResult(stream, entriesFuture, statusFuture, "started");
+    /** L5 W1：custom 触发起轮（{@link RunStarter#startCustom}）。 */
+    SessionResult startRunCustom(QueuedCustomMessage message, StreamObserver streamObserver,
+                                 EntryObserver entryObserver) {
+        return RunStarter.startCustom(owner, message, streamObserver, entryObserver);
     }
 
     /**
@@ -307,7 +280,7 @@ final class PromptPipeline {
             // pi :2183-2188：streamingBehavior 仅流式中传入（this.isStreaming ?
             // behavior : undefined 逐字）。
             var outcome = owner.extensionFirer().input(text, source,
-                owner.harness().isRunning(owner.laneName()) ? behavior.wireName() : null);
+                owner.views().isRunning() ? behavior.wireName() : null);
             if (outcome.handled()) {
                 return "handled";   // pi :2189
             }

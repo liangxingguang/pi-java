@@ -337,6 +337,44 @@ public final class SessionEventFirer {
     public BeforeAgentStartOutcome beforeAgentStart(String prompt,
                                                     Supplier<String> currentSystemPrompt,
                                                     java.util.Map<String, String> sectionsBaseline) {
+        return beforeAgentStart(prompt, List.of(), currentSystemPrompt, sectionsBaseline);
+    }
+
+    /**
+     * L5 W1：user 臂带 {@code images}（pi {@code BeforeAgentStartUserEvent}，
+     * types.ts:952-978）。
+     */
+    public BeforeAgentStartOutcome beforeAgentStart(String prompt,
+                                                    java.util.List<com.pijava.agent.harness.PromptImage> images,
+                                                    Supplier<String> currentSystemPrompt,
+                                                    java.util.Map<String, String> sectionsBaseline) {
+        return emitBeforeAgentStart(BeforeAgentStartEvent.MessageType.USER, prompt,
+            images, null, currentSystemPrompt, sectionsBaseline);
+    }
+
+    /**
+     * L5 W1：custom 触发臂（pi {@code BeforeAgentStartCustomEvent}）——{@code message}
+     * 是即将起跑的那条 custom 消息。
+     */
+    public BeforeAgentStartOutcome beforeAgentStartCustom(
+            String customType,
+            com.pijava.agent.entry.CustomMessageContent content,
+            boolean display, java.util.Map<String, Object> details,
+            Supplier<String> currentSystemPrompt,
+            java.util.Map<String, String> sectionsBaseline) {
+        return emitBeforeAgentStart(BeforeAgentStartEvent.MessageType.CUSTOM, null,
+            List.of(),
+            new BeforeAgentStartEvent.CustomMessagePayload(
+                customType, content, display, details),
+            currentSystemPrompt, sectionsBaseline);
+    }
+
+    private BeforeAgentStartOutcome emitBeforeAgentStart(
+            BeforeAgentStartEvent.MessageType messageType, String prompt,
+            java.util.List<com.pijava.agent.harness.PromptImage> images,
+            BeforeAgentStartEvent.CustomMessagePayload customMessage,
+            Supplier<String> currentSystemPrompt,
+            java.util.Map<String, String> sectionsBaseline) {
         if (!bus.hasHandlers(BEFORE_AGENT_START)) {
             return new BeforeAgentStartOutcome(List.of(), null, sectionsBaseline);
         }
@@ -346,7 +384,8 @@ public final class SessionEventFirer {
         for (var h : bus.snapshot(BEFORE_AGENT_START)) {
             try {
                 var effective = systemPrompt != null ? systemPrompt : currentSystemPrompt.get();
-                var r = h.handle(new BeforeAgentStartEvent(prompt, effective, sections), ctx);
+                var r = h.handle(new BeforeAgentStartEvent(messageType, prompt, images,
+                    customMessage, effective, sections), ctx);
                 if (r != null) {
                     if (r.message() != null) {
                         messages.add(r.message());

@@ -65,7 +65,9 @@ final class SessionDataViews {
      * {@code agent-session.ts:1430-1432}）。{@code InteractiveMode} 提交门消费者。
      */
     boolean isRunning() {
-        return owner.harness().isRunning(laneName());
+        // L5 W1：运行启动窗（hook 在跑、引擎未起跑）也算 busy（pi isStreaming＝
+        // _isAgentRunActive；引擎态是 Java 的补充源）。
+        return owner.harness().isRunning(laneName()) || owner.agentRunActive.get();
     }
 
     /** 会话持久化 id（pi {@code AgentSession.sessionId}）；in-memory 会话回退显示名。 */

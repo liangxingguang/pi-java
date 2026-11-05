@@ -3,9 +3,6 @@ package com.pijava.coding.agent.core;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.pijava.agent.entry.Entry;
@@ -192,7 +189,8 @@ final class SessionMessagingLifecycle {
             }
             return null;
         }
-        boolean streaming = owner.harness().isRunning(owner.laneName());
+        // L5 W1：启动窗也算 streaming（pi isStreaming＝_isAgentRunActive）。
+        boolean streaming = owner.views().isRunning();
         if (streaming && !Boolean.FALSE.equals(triggerTurn)) {
             if (deliverAs == CustomMessageDelivery.FOLLOW_UP) {
                 owner.harness().followUpCustom(owner.laneName(), customType, payload.content(),
@@ -206,13 +204,17 @@ final class SessionMessagingLifecycle {
         if (Boolean.TRUE.equals(triggerTurn)) {
             if (owner.emittingAgentSettled) {
                 synchronized (owner.prompts().deferredSettledActions()) {
-                    owner.prompts().deferredSettledActions().add(() -> driveCustomTurn(payload));
+                    // L5 W1（pi :2401）：窗后重新走五臂（重新判 streaming），而非直接起旧轮。
+                    owner.prompts().deferredSettledActions().add(() -> sendCustomMessage(
+                        customType, content, display, details, triggerTurn, deliverAs));
                 }
                 return null;
             }
             Thread.startVirtualThread(() -> {
                 try {
-                    driveCustomTurn(payload);
+                    // L5 W1（pi :2398-2405）：custom 触发走共同启动窗与
+                    // before_agent_start（messageType=custom）。
+                    owner.prompts().startRunCustom(payload, event -> { }, null);
                 } catch (Throwable t) {
                     // pi agent-session.ts:3389-3396：runtime 面 catch ⇒ emitError
                     if (owner.extensionFirer() != null) {
@@ -244,7 +246,7 @@ final class SessionMessagingLifecycle {
      *
      * @return 条目 id
      */
-    private String appendCustomMessageNow(QueuedCustomMessage p) {
+    String appendCustomMessageNow(QueuedCustomMessage p) {
         Entry.CustomMessage entry;
         if (owner.harness().isRunning(owner.laneName())) {
             entry = owner.harness().appendDeferredLaneEntry(owner.laneName(),
@@ -294,20 +296,6 @@ final class SessionMessagingLifecycle {
         }
     }
 
-    /**
-     * pi {@code _runAgentPrompt(appMessage)}（:1822-1851）对位：条目先落（idle 臂
-     * 自带重建，尾部即 user 投影）⇒ 续跑（{@code continueRun} 走
-     * {@code runContinuation}——尾部非助手 ⇒ 空 prompt 续跑，pi continue 同门）。
-     * 调用方保证车道空闲（五臂结构保证：triggerTurn 臂只在非流式到达）。
-     */
-    private void driveCustomTurn(QueuedCustomMessage p) {
-        appendCustomMessageNow(p);
-        var queue = new LinkedBlockingQueue<Optional<com.pijava.ai.stream.StreamEvent>>();
-        var entriesFuture = new CompletableFuture<List<Entry>>();
-        var statusFuture = new CompletableFuture<RunStatus>();
-        SessionRunner.driveContinuation(owner, queue, entriesFuture, statusFuture,
-            event -> { }, null);
-    }
 
     /**
      * pi {@code _emitAgentSettled}（:1078-1099）对位：发 {@code AgentSettled}（窗内
@@ -315,6 +303,9 @@ final class SessionMessagingLifecycle {
      * （正常路/catch 路）；cache-warmer 调和在调用点先行（pi :1079 同序）。
      */
     void emitAgentSettled() {
+        // L5 W1（pi _emitAgentSettled:1078-1099 第一步）：settled 前退出运行态，
+        // 窗内 triggerTurn 走延迟表重新判 streaming。
+        owner.agentRunActive.set(false);
         owner.emittingAgentSettled = true;
         try {
             owner.emitSessionEvent(new AgentSessionEvent.AgentSettled(owner.agentRunAbortRequested()));

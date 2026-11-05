@@ -14,7 +14,7 @@ class Batch31CommandContractTest {
         assertThat(registry.get("scoped-models").description())
             .isEqualTo("Enable/disable models for Ctrl+P cycling");
         assertThat(registry.get("share").description())
-            .isEqualTo("Share session as a secret GitHub gist");
+            .isEqualTo("Share session via a Radius artifact or a GitHub gist");
         assertThat(registry.get("login").description())
             .isEqualTo("Configure provider authentication");
     }
