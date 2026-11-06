@@ -18,10 +18,8 @@ import com.pijava.coding.agent.skill.SkillDiscovery;
 /**
  * 批 29（结构债拆分）：{@link AgentSession} 的扩展加载簇 —— loadExtensions
  * （四条搭车钩次序逐字保持：虚拟路由钩／MCP renderer／嵌套挂载／MCP
- * changeListener）＋applySessionStartResources＋loadResolvedExtension，
- * 以及扩展 UI/mode 注入态（pi setUIContext 的落点——loadExtensions 本即写点）
- * 和 reload/主题小段（themePaths/themes/reloadListeners 字段随此簇）。
- * 自 {@code AgentSession} 纯移动（行为零变化）；javadoc/注释逐字随迁。
+ * changeListener）＋applySessionStartResources＋loadResolvedExtension，与扩展
+ * UI/mode 注入态、reload/主题小段（自 {@code AgentSession} 纯移动）。
  */
 final class ExtensionLoading {
 
@@ -215,6 +213,9 @@ final class ExtensionLoading {
             com.pijava.coding.agent.extension.McpToolCallRenderer.resolver());
         // 批 16（T2c）：激活门三件套晚绑定（pi runner.bindCore 先于扩展加载对位）。
         context.bindToolControl(() -> owner);
+        // L5 W4（pi resourceMetadataByPath:566-575）：包元数据先绑，扩展 sourceInfo 取
+        // origin/changelogPath（扩展加载在其后）。
+        context.bindExtensionMetadata(assembly.extensionMetadata());
         owner.extensions().extensionContext(context);
         // docs/17（B248）：provider 请求面桥回填（pi extensionRunnerRef.current = runner
         // 对位）——此后该会话的每一次 provider 请求过四事件线。

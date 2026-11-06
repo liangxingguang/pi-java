@@ -27,18 +27,30 @@ public final class SessionShareService {
     private final GhCli.Runner gh;
     private final Supplier<Path> tempParent;
     private final String viewerBase;
+    /** L5 W4：{@code sessionShareDestination}（auto|gist|radius）现读口。 */
+    private final Supplier<String> destination;
 
     /** Create the production service for one session. */
     public SessionShareService(AgentSession session) {
         this(() -> SessionBranchSerializer.serialize(session),
             () -> session.services().providers().get("radius").isPresent(),
             () -> Credentials.resolveApiKey("radius"), new RadiusArtifactUploader(),
-            GhCli.processRunner(), () -> Path.of(System.getProperty("java.io.tmpdir")), viewerBase());
+            GhCli.processRunner(), () -> Path.of(System.getProperty("java.io.tmpdir")), viewerBase(),
+            () -> session.services().settings().accessors().getSessionShareDestination());
+    }
+
+    /** 七参旧形状（destination 缺省 auto）。 */
+    SessionShareService(Supplier<String> sessionJsonl, BooleanSupplier radiusProviderPresent,
+                        Supplier<Optional<String>> radiusToken, RadiusArtifactUploader uploader,
+                        GhCli.Runner gh, Supplier<Path> tempParent, String viewerBase) {
+        this(sessionJsonl, radiusProviderPresent, radiusToken, uploader, gh, tempParent,
+            viewerBase, () -> "auto");
     }
 
     SessionShareService(Supplier<String> sessionJsonl, BooleanSupplier radiusProviderPresent,
                         Supplier<Optional<String>> radiusToken, RadiusArtifactUploader uploader,
-                        GhCli.Runner gh, Supplier<Path> tempParent, String viewerBase) {
+                        GhCli.Runner gh, Supplier<Path> tempParent, String viewerBase,
+                        Supplier<String> destination) {
         this.sessionJsonl = sessionJsonl;
         this.radiusProviderPresent = radiusProviderPresent;
         this.radiusToken = radiusToken;
@@ -46,6 +58,7 @@ public final class SessionShareService {
         this.gh = gh;
         this.tempParent = tempParent;
         this.viewerBase = viewerBase;
+        this.destination = destination;
     }
 
     /** Share without loader notifications. */
@@ -68,16 +81,25 @@ public final class SessionShareService {
             if (cancellation.isCancelled()) {
                 return cancelled();
             }
-            if (radiusProviderPresent.getAsBoolean()) {
-                Optional<String> token;
-                try {
-                    token = radiusToken.get();
-                } catch (RuntimeException e) {
-                    return error("Failed to upload Radius artifact: " + messageOf(e));
+            // L5 W4（pi session-share.ts:66-82）：destination 门。
+            // gist ⇒ 跳过 Radius；radius 未认证 ⇒ 逐字错误且不回落；auto ⇒ 旧行为。
+            var target = destination.get();
+            if (!"gist".equals(target)) {
+                if (radiusProviderPresent.getAsBoolean()) {
+                    Optional<String> token;
+                    try {
+                        token = radiusToken.get();
+                    } catch (RuntimeException e) {
+                        return error("Failed to upload Radius artifact: " + messageOf(e));
+                    }
+                    if (token.isPresent() && !token.get().isBlank()) {
+                        stages.accept(Stage.RADIUS_UPLOAD);
+                        return uploader.upload(jsonl, token.get(), cancellation);
+                    }
                 }
-                if (token.isPresent() && !token.get().isBlank()) {
-                    stages.accept(Stage.RADIUS_UPLOAD);
-                    return uploader.upload(jsonl, token.get(), cancellation);
+                if ("radius".equals(target)) {
+                    return error("Radius authentication is not configured."
+                        + " Run '/login radius' first.");
                 }
             }
             if (cancellation.isCancelled()) {

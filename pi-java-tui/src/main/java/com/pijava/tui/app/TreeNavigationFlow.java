@@ -209,8 +209,7 @@ public final class TreeNavigationFlow {
                 if (restored != null) {
                     dispatcher.dispatch(() -> chatScreen.restoreToEditor(restored.combinedText()));
                 }
-                session.abort();
-                session.harness().waitForIdle(session.laneName()); // pi 的 await abort()
+                session.abortAndWaitForIdle(); // pi 的 await abort()（含 idle 全义）
             }
             if (session.isCompacting()) { // pi :5624-5629 重查（错文第二句逐字【模型可见】）
                 dispatcher.dispatch(() -> chatScreen.showError(

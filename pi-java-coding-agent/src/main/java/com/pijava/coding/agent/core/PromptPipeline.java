@@ -7,6 +7,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.locks.LockSupport;
 import java.util.stream.Stream;
 
 import com.pijava.agent.entry.Entry;
@@ -247,6 +248,28 @@ final class PromptPipeline {
     }
 
     /**
+     * pi {@code abort()} 的 await 半（{@code agent-session.ts:2519-2529}：{@code await
+     * this.waitForIdle()}，而 pi 的 {@code isIdle}＝{@code !_isAgentRunActive &&
+     * !isCompacting}）。
+     *
+     * <p>L5 W1 起 Java 的 {@code isRunning()} 也含启动窗（{@code agentRunActive}），
+     * 但 {@code agentRunActive} 的复位点在 {@code emitAgentSettled}——晚于引擎
+     * {@code waitForIdle} 返回。只等引擎会让「abort 后立刻 navigateTree」仍撞双门
+     * 错文（TreeNavigationFlowTest ⑥a/⑥c 确定性红）。这里补等 active 旗复位的短窗。</p>
+     */
+    void waitForRunIdle() {
+        owner.harness().waitForIdle(owner.laneName());
+        var deadline = System.nanoTime() + RUN_IDLE_DEADLINE_NANOS;
+        while (owner.agentRunActive() && System.nanoTime() < deadline) {
+            Thread.onSpinWait();
+            LockSupport.parkNanos(200_000L);
+        }
+    }
+
+    /** active 旗复位的等待上限（settled 只在本线程外的驱动线程收尾时清）。 */
+    private static final long RUN_IDLE_DEADLINE_NANOS = 30_000_000_000L;
+
+    /**
      * Queue a follow-up message (processed when the current run finishes).
      *
      * <p>批 20（B237）：返回 pi {@code QueuedInputDisposition}
@@ -353,7 +376,7 @@ final class PromptPipeline {
      */
     void abortAndWaitForIdle() {
         abort();
-        owner.harness().waitForIdle(owner.laneName());
+        waitForRunIdle();
     }
 
     /**

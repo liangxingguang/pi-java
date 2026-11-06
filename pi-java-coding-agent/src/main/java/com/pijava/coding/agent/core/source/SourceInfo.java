@@ -16,8 +16,15 @@ public record SourceInfo(
     String source,
     Scope scope,
     Origin origin,
-    String baseDir
+    String baseDir,
+    String changelogPath
 ) {
+
+    /** 五参旧形状（无 changelogPath；RPC 线格式省略该键）。 */
+    public SourceInfo(String path, String source, Scope scope, Origin origin,
+                      String baseDir) {
+        this(path, source, scope, origin, baseDir, null);
+    }
     /** pi {@code SourceScope}（source-info.ts:2）。 */
     public enum Scope {
         /** 全局（agentDir）域。 */

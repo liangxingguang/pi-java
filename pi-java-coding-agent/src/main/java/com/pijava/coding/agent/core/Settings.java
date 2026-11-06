@@ -34,6 +34,8 @@ public final class Settings {
     /** API key override; blank = environment variable / auth.json resolution. */
     public String defaultApiKey;
     public String transport;
+    /** pi {@code sessionShareDestination}（settings-schema.ts:229-238）：auto|gist|radius。 */
+    public String sessionShareDestination;
     public String steeringMode;
     public String followUpMode;
     public String theme;
@@ -54,6 +56,8 @@ public final class Settings {
      *  argv 形（如 {@code ["mise","exec","node@20","--","npm"]}）。HTTP 实现下不消费
      *  命令本体（窄差 D104）。 */
     public List<String> npmCommand;
+    /** pi {@code selfUpdateCommand}（settings-schema.ts:286-293）：argv 形，仅全局域。 */
+    public List<String> selfUpdateCommand;
     public List<String> extensions;
     public List<String> skills;
     public List<String> prompts;
@@ -105,6 +109,8 @@ public final class Settings {
     // ── 批 11 声明面（pi settings-schema.ts 行号逐键钉注）──────────────
     /** pi :209。changelog 流 java 暂无（声明面）。 */
     public String lastChangelogVersion;
+    /** pi :210-216 {@code extensionChangelogVersions}：每扩展包上次展示的版本。 */
+    public Map<String, String> extensionChangelogVersions;
     /** pi :239-244。 */
     public Boolean showCacheMissNotices;
     /** pi :274-279。 */

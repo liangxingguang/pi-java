@@ -3,7 +3,6 @@ package com.pijava.coding.agent.pkg;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
-import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -320,7 +319,9 @@ public final class PackageManager {
                     installedPath = layout.npmInstallPath(npm, resolvedScope);
                 }
                 var packageMetadata = metadata.withBaseDir(installedPath.toString())
-                    .withPackageRoot(installedPath.toString());
+                    .withPackageRoot(installedPath.toString())
+                    .withChangelogPath(PackagePaths.resolvePackageChangelogPath(installedPath.toString(),
+                        PiManifest.read(installedPath.resolve("package.json"))));
                 collector.collectPackageResources(installedPath, accumulator, filter,
                     packageMetadata);
                 continue;
@@ -337,7 +338,9 @@ public final class PackageManager {
                 gitStore.refreshTemporaryGitSource(git, resolvedSource);
             }
             var gitMetadata = metadata.withBaseDir(gitInstalledPath.toString())
-                .withPackageRoot(gitInstalledPath.toString());
+                .withPackageRoot(gitInstalledPath.toString())
+                .withChangelogPath(PackagePaths.resolvePackageChangelogPath(gitInstalledPath.toString(),
+                    PiManifest.read(gitInstalledPath.resolve("package.json"))));
             collector.collectPackageResources(gitInstalledPath, accumulator, filter, gitMetadata);
         }
     }
@@ -440,13 +443,9 @@ public final class PackageManager {
     /** pi {@code canonicalizePath}（utils/paths.ts:27-33）：realpath 失败回原串。
      *  java 对位 {@code toRealPath(NOFOLLOW_LINKS)}（docs/29 §3 T5 裁决文）。
      *  批 19 转 public：config TUI 的继承态键（{@code type:canonicalizePath}，
-     *  config-selector.ts:850-852）共用。 */
+     *  config-selector.ts:850-852）共用。L5 W4 拆件：实现迁 {@link PackagePaths}。 */
     public static String canonicalizePath(String path) {
-        try {
-            return Path.of(path).toRealPath(LinkOption.NOFOLLOW_LINKS).toString();
-        } catch (IOException | java.nio.file.InvalidPathException | SecurityException e) {
-            return path;
-        }
+        return PackagePaths.canonicalizePath(path);
     }
 
     // ── 小件 ─────────────────────────────────────────────────────

@@ -106,6 +106,12 @@ public final class PiTuiLauncher {
                 com.pijava.coding.agent.cli.Version.VERSION,
                 sessionHasMessages(session)),
             session.services().settings().install().getCollapseChangelog());
+        // L5 W4（pi interactive-mode.ts:980-981）：扩展包 changelog 同点计算。
+        app.setExtensionChangelogUpdates(
+            com.pijava.coding.agent.core.ExtensionChangelogs.compute(
+                session.extensionSourceInfos(),
+                session.services().settings().accessors(),
+                sessionHasMessages(session)));
 
         // 批 15（T2a，pi :1220-1226 对位；changelog/models.json 警告之后）：
         // 上次未通知崩溃 ⇒ 启动提示「Run /bug」。路径每调现解析（批 14 教训）。

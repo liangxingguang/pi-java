@@ -22,12 +22,11 @@ import com.pijava.coding.agent.extension.event.ExtensionEventSpec;
  * <p>docs/14：本实例是**全扩展共享的基础上下文**（桥传给处理器的 {@code ctx} 也是它）。
  * 扩展注册走的是 {@link #forExtension} 派生的委托实例 —— 其 {@code on()} 把扩展名
  * 带给 {@link ExtensionEventBus}，错误归属与 pi 的 {@code extensionPath} 对齐。
- * 委托实例可随时 {@code on()}（pi 的扩展同样能在 register 后经持有的 API 在运行期订阅；
- * pi 的 {@code assertActive} 只对**加载失败**的扩展抛）。基础上下文自己的 {@code on()}
- * 抛 {@link IllegalStateException} —— 不是 pi 的时限语义，而是「无扩展名可归属」。</p>
+ * 委托实例可随时 {@code on()}（pi 同；{@code assertActive} 只对**加载失败**的扩展抛）。
+ * 基础上下文自己的 {@code on()} 抛 {@link IllegalStateException}（无扩展名可归属）。</p>
  *
- * <p>结构债拆分（行为零变化纯移动）：per-extension 委托顶出为 {@link PerExtensionContext}；
- * 注册表五簇＋宿主会话晚读面迁 {@link ExtensionSurfaceRegistries}（{@link #surface()} 触达）。</p>
+ * <p>结构债拆分：per-extension 委托顶出为 {@link PerExtensionContext}；注册表五簇＋
+ * 宿主会话晚读面迁 {@link ExtensionSurfaceRegistries}（{@link #surface()} 触达）。</p>
  */
 public final class DefaultExtensionContext implements ExtensionContext {
 
@@ -48,6 +47,8 @@ public final class DefaultExtensionContext implements ExtensionContext {
     private volatile Supplier<SessionTree> sessionSupplier;
     /** 批 16（T2c）：激活门三件套的会话晚绑定（loadExtensions 回填）。 */
     private volatile Supplier<com.pijava.coding.agent.core.AgentSession> toolControl;
+    /** L5 W4：扩展路径 → 包元数据（pi {@code resourceMetadataByPath} 对位）。 */
+    private volatile java.util.Map<String, com.pijava.coding.agent.pkg.PathMetadata> extensionMetadata;
     /** 按扩展名分桶的注册表集合＋宿主会话晚读面（结构债拆分，本体全在其中）。 */
     private final ExtensionSurfaceRegistries surface = new ExtensionSurfaceRegistries(this);
     /** 批 16（T4b）：工具渲染器责任链（pi extension.toolRenderers 拍平对位）。 */
@@ -98,10 +99,7 @@ public final class DefaultExtensionContext implements ExtensionContext {
         this(services, skills, ExtensionUI.noop());
     }
 
-    /**
-     * 惰性绑定会话树供给器（session 在扩展加载后才 resolve，故用 supplier）。
-     * 重复调用覆盖旧值。
-     */
+    /** 惰性绑定会话树供给器（session 在扩展加载后才 resolve）；重复调用覆盖旧值。 */
     public void bindSession(Supplier<SessionTree> sessionSupplier) {
         this.sessionSupplier = sessionSupplier;
     }
@@ -193,6 +191,18 @@ public final class DefaultExtensionContext implements ExtensionContext {
     public void bindToolControl(
             Supplier<com.pijava.coding.agent.core.AgentSession> sessionSupplier) {
         this.toolControl = sessionSupplier;
+    }
+
+    /** L5 W4（pi {@code resourceMetadataByPath}:566-575）：包元数据晚绑定。 */
+    public void bindExtensionMetadata(
+            java.util.Map<String, com.pijava.coding.agent.pkg.PathMetadata> metadata) {
+        this.extensionMetadata = metadata;
+    }
+
+    /** 本路径的包元数据（无绑定/未命中 ⇒ {@code null}）。 */
+    com.pijava.coding.agent.pkg.PathMetadata extensionMetadata(String path) {
+        var map = extensionMetadata;
+        return map == null ? null : map.get(path);
     }
 
     public java.util.Map<String, Object> flagValues() {
@@ -419,10 +429,7 @@ public final class DefaultExtensionContext implements ExtensionContext {
         return surface.exec(command, args, options);
     }
 
-    /**
-     * 批 26（docs/37 T8，E5-5）：pi {@code unregisterProvider}——删注册
-     * （裁决⑥：内置模型恢复面不做；未注册静默，pi 同）。
-     */
+    /** 批 26（docs/37 T8，E5-5）：pi {@code unregisterProvider}——删注册（未注册静默，pi 同）。 */
     @Override
     public void unregisterProvider(String name) {
         providers().remove(name);
@@ -433,7 +440,7 @@ public final class DefaultExtensionContext implements ExtensionContext {
         return surface.events();
     }
 
-    /** 无归属的共享基础上下文调用 ⇒ 抛（registerMcpServer 同纪律，批 23 先例）。 */
+    /** 无归属的共享基础上下文调用 ⇒ 抛（registerMcpServer 同纪律）。 */
     @Override
     public void registerShortcut(String keyId, String description,
                                  ExtensionShortcut.ShortcutHandler handler) {

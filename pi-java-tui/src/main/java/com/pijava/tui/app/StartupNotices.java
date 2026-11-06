@@ -23,6 +23,9 @@ final class StartupNotices {
     // showWelcomeOnce 读取 ⇒ volatile 跨线程可见性，同 lastTerminalRows 先例）。
     private volatile String startupChangelog;
     private volatile boolean startupChangelogCollapse;
+    // L5 W4：扩展包 changelog（同装配线程写入、渲染线程读取）。
+    private volatile java.util.List<com.pijava.coding.agent.core.ExtensionChangelogs.Update>
+        extensionChangelogUpdates = java.util.List.of();
     // 批 15（T2a，pi :1220-1226）：启动崩溃提示（同 startupChangelog 装配形）。
     private volatile String startupCrashNotice;
 
@@ -95,9 +98,19 @@ final class StartupNotices {
         this.startupChangelogCollapse = collapse;
     }
 
-    /** pi {@code showStartupNoticesIfNeeded}（:843-872）两臂对位。 */
+    /**
+     * L5 W4（B277b）：扩展包 changelog 更新装配（pi {@code extensionChangelogUpdates}
+     * 在 {@code init} 里与主 changelog 同时算，interactive-mode.ts:980-981）。
+     */
+    void setExtensionChangelogUpdates(java.util.List<
+            com.pijava.coding.agent.core.ExtensionChangelogs.Update> updates) {
+        this.extensionChangelogUpdates = updates == null ? java.util.List.of() : updates;
+    }
+
+    /** pi {@code showStartupNoticesIfNeeded}（:843-872）主 changelog 两臂对位。 */
     private void showStartupChangelog() {
         if (startupChangelog == null) {
+            showExtensionChangelog();
             return;
         }
         var markdown = startupChangelog;
@@ -113,6 +126,29 @@ final class StartupNotices {
             // 组件随 R1 批）。
             chatScreen.appendSystemText("What's New\n\n" + markdown.trim());
         }
+        showExtensionChangelog();
+    }
+
+    /**
+     * L5 W4（pi interactive-mode.ts:882-901）两臂：折叠 ⇒ 每包一行
+     * {@code Updated <name> to v<version>.}；否则 "Extension Updates" 头＋拼接
+     * Markdown。主 changelog 缺席时不加前导 Spacer（pi {@code if (this.changelogMarkdown)}）。
+     */
+    private void showExtensionChangelog() {
+        var updates = extensionChangelogUpdates;
+        if (updates.isEmpty()) {
+            return;
+        }
+        extensionChangelogUpdates = java.util.List.of();
+        if (startupChangelogCollapse) {
+            chatScreen.appendSystemText(
+                com.pijava.coding.agent.core.ExtensionChangelogs.condensedText(updates));
+            return;
+        }
+        var markdown = updates.stream()
+            .map(com.pijava.coding.agent.core.ExtensionChangelogs.Update::markdown)
+            .collect(java.util.stream.Collectors.joining("\n\n"));
+        chatScreen.appendSystemText("Extension Updates\n\n" + markdown.trim());
     }
 
     /** Submit initial CLI messages when the TUI starts. */

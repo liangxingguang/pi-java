@@ -41,11 +41,25 @@ final class PerExtensionContext implements ExtensionContext {
             computeSourceInfo(base, extensionPath));
     }
 
+    /** L5 W4：宿主侧的 sourceInfo 现算口（{@link ExtensionManager} 展示面用）。 */
+    static com.pijava.coding.agent.core.source.SourceInfo sourceInfoOf(
+            ExtensionContext context, String extensionPath) {
+        if (context instanceof DefaultExtensionContext base) {
+            return computeSourceInfo(base, extensionPath);
+        }
+        return com.pijava.coding.agent.core.source.ExtensionSourceInfos
+            .forExtensionPath(extensionPath, null, null);
+    }
+
     /**
      * 批 23（T4，E5-34）：扩展的 sourceInfo——pi {@code applyExtensionSourceInfo}
      * （resource-loader.ts:918-922）对位。目录根从 settings 存储面取（仅
      * {@code FileSettingsStorage} 携带）；取不到（内存存储/测试道）⇒
      * 合成路径规则仍生效，文件路径落 temporary 兜底。
+     *
+     * <p>L5 W4：包元数据（{@code origin=package}／{@code changelogPath}）经
+     * {@link DefaultExtensionContext#bindExtensionMetadata} 晚绑定传入，先查
+     * metadata，查不到才落目录规则（pi {@code findSourceInfoForPath} 序）。</p>
      */
     private static com.pijava.coding.agent.core.source.SourceInfo computeSourceInfo(
             DefaultExtensionContext base, String extensionPath) {
@@ -62,7 +76,8 @@ final class PerExtensionContext implements ExtensionContext {
             projectDir = projectConfigDir == null ? null : projectConfigDir.getParent();
         }
         return com.pijava.coding.agent.core.source.ExtensionSourceInfos
-            .forExtensionPath(extensionPath, agentDir, projectDir);
+            .forExtensionPath(extensionPath, agentDir, projectDir,
+                base.extensionMetadata(extensionPath));
     }
 
     @Override

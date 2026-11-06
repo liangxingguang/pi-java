@@ -24,6 +24,42 @@ class SessionShareServiceTest {
     @TempDir
     static Path tempRoot;
 
+    /** L5 W4：destination=gist 跳过 Radius（即使有 token）。 */
+    @Test
+    void gistDestinationSkipsRadiusEvenWithToken() throws Exception {
+        try (var rig = SessionShareServiceTestRig.create().withRadiusToken("token")
+                .withDestination("gist")
+                .withGhAuth(0).withGistResult(0, "https://gist.github.com/u/abc1\n", "")) {
+            var result = rig.service().share(ShareCancellation.never());
+            assertThat(result.kind()).isEqualTo(ShareOutcome.Kind.SUCCESS);
+            assertThat(rig.radiusCalls()).isZero();
+            assertThat(rig.ghCalls()).isPositive();
+        }
+    }
+
+    /** L5 W4：destination=radius 未认证 ⇒ 逐字错误且不回落 gist。 */
+    @Test
+    void radiusDestinationWithoutAuthDoesNotFallBack() throws Exception {
+        try (var rig = SessionShareServiceTestRig.create().withoutRadiusToken()
+                .withDestination("radius")) {
+            var result = rig.service().share(ShareCancellation.never());
+            assertThat(result.kind()).isEqualTo(ShareOutcome.Kind.ERROR);
+            assertThat(result.message())
+                .isEqualTo("Radius authentication is not configured. Run '/login radius' first.");
+            assertThat(rig.ghCalls()).isZero();
+        }
+    }
+
+    /** L5 W4：auto 保持旧行为（有 token ⇒ Radius）。 */
+    @Test
+    void autoDestinationUsesRadiusWhenAuthenticated() throws Exception {
+        try (var rig = SessionShareServiceTestRig.create().withRadiusToken("token")) {
+            var result = rig.service().share(ShareCancellation.never());
+            assertThat(result.kind()).isEqualTo(ShareOutcome.Kind.SUCCESS);
+            assertThat(rig.radiusCalls()).isEqualTo(1);
+        }
+    }
+
     @Test
     void radiusFailureNeverFallsBackToGist() throws Exception {
         try (var rig = SessionShareServiceTestRig.create()
@@ -111,11 +147,17 @@ class SessionShareServiceTest {
         private volatile GhCli.Result gist = new GhCli.Result(0, "", "");
         private volatile IOException ghLaunchError;
         private volatile String htmlAtGist;
+        /** L5 W4：{@code sessionShareDestination}（auto|gist|radius）。 */
+        private volatile String destination = "auto";
+        /** L5 W4：Radius 端点被调次数的观测计数。 */
+        private final java.util.concurrent.atomic.AtomicInteger radiusCalls =
+            new java.util.concurrent.atomic.AtomicInteger();
 
         private SessionShareServiceTestRig(Path tempParent) throws IOException {
             this.tempParent = tempParent;
             server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
             server.createContext("/v1/artifacts", exchange -> {
+                radiusCalls.incrementAndGet();
                 var body = radiusBody.getBytes(StandardCharsets.UTF_8);
                 exchange.sendResponseHeaders(radiusStatus, body.length);
                 exchange.getResponseBody().write(body);
@@ -140,6 +182,11 @@ class SessionShareServiceTest {
 
         SessionShareServiceTestRig withoutRadiusToken() {
             token = Optional.empty();
+            return this;
+        }
+
+        SessionShareServiceTestRig withDestination(String value) {
+            destination = value;
             return this;
         }
 
@@ -171,7 +218,8 @@ class SessionShareServiceTest {
             return new SessionShareService(serialized, provider, credentials,
                 new RadiusArtifactUploader("http://127.0.0.1:" + server.getAddress().getPort(),
                     HttpClient.newHttpClient()),
-                this::runGh, () -> tempParent, "https://pi.dev/session/");
+                this::runGh, () -> tempParent, "https://pi.dev/session/",
+                () -> destination);
         }
 
         private GhCli.Result runGh(List<String> arguments) throws IOException {
@@ -195,6 +243,11 @@ class SessionShareServiceTest {
 
         int ghCalls() {
             return commands.size();
+        }
+
+        /** L5 W4：Radius 上传次数（destination 门的观测点）。 */
+        int radiusCalls() {
+            return radiusCalls.get();
         }
 
         int gistCreateCalls() {

@@ -23,6 +23,8 @@ public final class ExtensionManager {
 
     private final ExtensionContext context;
     private final Map<String, PiExtension> loaded = new LinkedHashMap<>();
+    /** L5 W4：扩展名 → 身份路径（pi {@code extension.path} 对位；changelog 归属用）。 */
+    private final Map<String, String> loadedPaths = new LinkedHashMap<>();
 
     /** @param context 扩展注册目标上下文 */
     public ExtensionManager(ExtensionContext context) {
@@ -201,11 +203,25 @@ public final class ExtensionManager {
     /** 卸载指定扩展（从已加载表移除；扩展无 close 生命周期）。 */
     public void unload(String name) {
         loaded.remove(name);
+        loadedPaths.remove(name);
     }
 
     /** 已加载扩展名。 */
     public Set<String> loadedNames() {
         return Set.copyOf(loaded.keySet());
+    }
+
+    /**
+     * L5 W4（pi {@code resourceLoader.getExtensions().extensions[*].sourceInfo} 的
+     * 宿主面）：已加载扩展的 {@link SourceInfo} 列表（加载序）。供启动期的扩展包
+     * changelog 展示消费。
+     */
+    public List<com.pijava.coding.agent.core.source.SourceInfo> sourceInfos() {
+        var infos = new ArrayList<com.pijava.coding.agent.core.source.SourceInfo>();
+        for (var path : loadedPaths.values()) {
+            infos.add(PerExtensionContext.sourceInfoOf(context, path));
+        }
+        return List.copyOf(infos);
     }
 
     /**
@@ -243,6 +259,7 @@ public final class ExtensionManager {
      */
     private void load(PiExtension ext, String extensionPath) {
         loaded.put(ext.name(), ext);
+        loadedPaths.put(ext.name(), extensionPath);
         // docs/14：per-extension 上下文 —— 扩展的 on() 订阅带扩展名归属
         // （pi 的 extension.handlers 按扩展分桶 + 错误按 extensionPath 归属）。
         ext.register(context.forExtension(ext.name(), extensionPath));

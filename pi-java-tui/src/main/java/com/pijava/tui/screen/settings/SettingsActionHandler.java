@@ -54,6 +54,7 @@ public final class SettingsActionHandler {
                 updateQueueModes();
             }
             case "transport" -> settings.network().setTransport(value);
+            case "share-destination" -> accessors.setSessionShareDestination(value);
             case "http-idle-timeout" -> settings.network().setHttpIdleTimeoutMs(timeoutMs(value));
             case "cache-warming-mode" -> session.setCacheWarmingMode(value);
             case "hide-thinking" -> accessors.setHideThinkingBlock(Boolean.parseBoolean(value));

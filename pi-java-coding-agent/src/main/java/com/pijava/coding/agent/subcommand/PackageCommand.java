@@ -156,7 +156,7 @@ public final class PackageCommand {
                 case "install" -> install(packageManager, options);
                 case "remove" -> remove(packageManager, options);
                 case "list" -> list(packageManager);
-                default -> update(packageManager, options);
+                default -> update(packageManager, options, settings);
             };
         } catch (RuntimeException e) {
             // pi :1135-1139：Error: <message>，UncheckedIOException 解包保文案。
@@ -214,7 +214,7 @@ public final class PackageCommand {
         }
     }
 
-    private static int update(PackageManager pm, Options options) {
+    private static int update(PackageManager pm, Options options, SettingsManager settings) {
         var target = options.updateTarget() != null ? options.updateTarget() : new UpdateTarget.Self();
         if (options.showExtensionsSkippedNote()) {
             System.out.println("Extensions are skipped. Run pi-java update --extensions "
@@ -226,33 +226,11 @@ public final class PackageCommand {
             System.out.println(updateSource != null ? "Updated " + updateSource : "Updated packages");
         }
         if (target instanceof UpdateTarget.All || target instanceof UpdateTarget.Self) {
-            // 裁决②（D115）：java 无 npm/managed 安装形态 ⇒ 恒走 pi unknown 臂。
-            printSelfUpdateUnavailable();
-            return 1;
+            // L5 W4（pi config.ts:341-359 + package-manager-cli.ts:1109-1119）：
+            // 配置的自更新命令优先（env > 全局 setting）；无配置 ⇒ 不可用臂。
+            return SelfUpdate.run(settings);
         }
         return 0;
-    }
-
-    /** pi {@code printSelfUpdateUnavailable}（:633-645）对位；说明按 Maven Central
-     *  安装形态改写（裁决②），{@code SELF_UPDATE_NOTE} 语义保留升级。 */
-    private static void printSelfUpdateUnavailable() {
-        System.err.println("error: pi-java cannot self-update this installation.");
-        System.err.println("pi-java is distributed via Maven Central. Download the new "
-            + "release and run it in place of the current jar.");
-        var location = executableLocation();
-        if (location != null) {
-            System.err.println();
-            System.err.println("Location of pi-java executable: " + location);
-        }
-    }
-
-    private static String executableLocation() {
-        try {
-            var source = PackageCommand.class.getProtectionDomain().getCodeSource();
-            return source == null ? null : Path.of(source.getLocation().toURI()).toString();
-        } catch (Exception e) {
-            return null;
-        }
     }
 
     /** pi {@code refreshModelCatalogs}（:605-631）：逐 provider 强制重拉（绕过 TTL），

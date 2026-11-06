@@ -37,7 +37,7 @@ Chord plugin 已按 R5 决定不做，不再是待拍板项。
 | B278 | 显式 `--session-dir`／`settings.sessionDir` 按 pi 语义：文件平铺、cwd 过滤、`~` 展开；默认根布局不变。已于 2026-11-05 按 docs/24（W4c）实施并闭环。 | L4 session |
 | B275 | run 启动重构归 L5：`_startRun`／`_prepareRun`、启动即 busy、`before_agent_start` 期间 abort 在 `agent_start` 生效、flush 次序、settled 延迟动作；`before_agent_start` 的 user／custom 联合。 | L5 coding-agent |
 | B276 | 扩展工具投影归 L5：`getAllTools()` 透传 `reachesTools`；active tools 重设同名集合时保持原顺序。 | L5 coding-agent |
-| B277 | 其余 L5 新锚面：`sessionShareDestination`／`extensionChangelogVersions`、classifier compat、exec、package-manager、model-resolver、export-html、KeybindingHints／`blocked`。 | L5 coding-agent |
+| B277 | 其余 L5 新锚面：`sessionShareDestination`／`extensionChangelogVersions`、classifier compat、exec、package-manager、model-resolver、export-html、KeybindingHints／`blocked`。其中 **B277a**（`pi.exec` maxBuffer／truncated）已于 2026-11-05 按 docs/25（W3）实施并闭环；**B277b**（三个新 settings 键／`/share` destination／`update self` 配置命令／扩展 changelog 启动展示／manifest `changelogPath`）已于 2026-11-05 按 docs/25（W4）实施，残余仍是 B277c–f（package-manager、model-resolver、export-html、KeybindingHints）。 | L5 coding-agent |
 | B116 | 对外 JSON 的 usage 已改为 pi 扁平形状；Java 内部 `StreamDone` 仍保留嵌套方言，AI 重测时决定是否继续保留。 | L1 AI |
 | B156 | `ModelCompat` 逐组件重建存在漏字段风险；新增组件时必须同时检查构造点和 `withPartial` 类重建点。 | L1 AI |
 | B259 | RPC `cycle_thinking_level` 对不支持 thinking 的模型仍返级别；`get_available_thinking_levels` 也未按模型能力过滤。pi 对应结果为 `null` 或可用子集。 | L5 coding-agent |

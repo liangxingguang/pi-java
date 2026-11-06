@@ -70,6 +70,11 @@ public final class SettingsItems {
         items.add(cycle("transport", "Transport",
             "Preferred transport for providers that support multiple transports",
             network.getTransport(), "sse", "websocket", "websocket-cached", "auto"));
+        // L5 W4（pi settings-selector.ts:512-521 逐字）。
+        items.add(cycle("share-destination", "Session share destination",
+            "Where to upload sessions with /share (auto prefers Radius when authenticated, "
+                + "otherwise GitHub Gist)",
+            accessors.getSessionShareDestination(), "auto", "gist", "radius"));
         items.add(cycle("http-idle-timeout", "HTTP idle timeout",
             "Maximum idle gap while waiting for HTTP headers or body chunks. Disable for local models "
                 + "that pause longer than five minutes.",

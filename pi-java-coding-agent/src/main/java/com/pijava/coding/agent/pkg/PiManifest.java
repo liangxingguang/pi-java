@@ -19,8 +19,15 @@ public record PiManifest(
     List<String> extensions,
     List<String> skills,
     List<String> prompts,
-    List<String> themes
+    List<String> themes,
+    String changelogPath
 ) {
+
+    /** 四参旧形状（无 changelogPath）。 */
+    public PiManifest(List<String> extensions, List<String> skills,
+                      List<String> prompts, List<String> themes) {
+        this(extensions, skills, prompts, themes, null);
+    }
 
     public static PiManifest read(Path packageJsonPath) {
         try {
@@ -33,11 +40,13 @@ public record PiManifest(
             if (pi == null || !pi.isObject()) {
                 return null;
             }
+            var changelog = pi.get("changelogPath");
             return new PiManifest(
                 stringArrayOrNull(pi.get("extensions")),
                 stringArrayOrNull(pi.get("skills")),
                 stringArrayOrNull(pi.get("prompts")),
-                stringArrayOrNull(pi.get("themes")));
+                stringArrayOrNull(pi.get("themes")),
+                changelog != null && changelog.isTextual() ? changelog.asText() : null);
         } catch (IOException | RuntimeException e) {
             return null;
         }

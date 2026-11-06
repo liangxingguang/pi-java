@@ -277,7 +277,27 @@ final class SessionSetup {
      * 源每遍都真 {@code git pull}，重复跑既有副作用也有会话内不一致窗口）。
      * 初装（wireSession）与 {@code /reload} 各自现算一份，三消费面共享。
      */
-    record ResolvedAssembly(PackageManager pm, ResolvedPaths resolved, ResolvedPaths cli) {}
+    record ResolvedAssembly(PackageManager pm, ResolvedPaths resolved, ResolvedPaths cli) {
+
+        /**
+         * L5 W4（pi {@code metadataByPath}，resource-loader.ts:566-575）：扩展路径 →
+         * 包元数据。两臂：主 resolve（含包源，带 origin/changelogPath）与 CLI 临时源
+         * （pi 用合成 {@code {source:"cli", scope:"temporary", origin:"top-level"}} 兜底，
+         * 由 {@code ExtensionSourceInfos} 的目录规则等价产生）。first-wins（pi
+         * {@code if (!metadataByPath.has(r.path))}）。
+         */
+        java.util.Map<String, com.pijava.coding.agent.pkg.PathMetadata> extensionMetadata() {
+            var map = new java.util.LinkedHashMap<String,
+                com.pijava.coding.agent.pkg.PathMetadata>();
+            for (var resource : resolved.extensions()) {
+                map.putIfAbsent(resource.path(), resource.metadata());
+            }
+            for (var resource : cli.extensions()) {
+                map.putIfAbsent(resource.path(), resource.metadata());
+            }
+            return java.util.Collections.unmodifiableMap(map);
+        }
+    }
 
     static ResolvedAssembly resolveAll(Args args, SettingsManager settings) {
         return resolveAll(args, packageManagerFor(settings));

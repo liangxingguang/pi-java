@@ -9,14 +9,22 @@ package com.pijava.coding.agent.pkg;
  *                    自动发现）
  * @param baseDir     相对解析基目录（可空）
  * @param packageRoot 包根（可空）
+ * @param changelogPath 包扩展的 CHANGELOG 绝对路径（L5 W4；可空）
  */
 public record PathMetadata(
     String source,
     SourceScope scope,
     Origin origin,
     String baseDir,
-    String packageRoot
+    String packageRoot,
+    String changelogPath
 ) {
+
+    /** 五参旧形状（无 changelogPath）。 */
+    public PathMetadata(String source, SourceScope scope, Origin origin,
+                        String baseDir, String packageRoot) {
+        this(source, scope, origin, baseDir, packageRoot, null);
+    }
 
     /** pi origin 字面量闭集 ⇒ enum。 */
     public enum Origin {
@@ -28,11 +36,16 @@ public record PathMetadata(
     }
 
     public PathMetadata withBaseDir(String newBaseDir) {
-        return new PathMetadata(source, scope, origin, newBaseDir, packageRoot);
+        return new PathMetadata(source, scope, origin, newBaseDir, packageRoot, changelogPath);
     }
 
     public PathMetadata withPackageRoot(String newPackageRoot) {
-        return new PathMetadata(source, scope, origin, baseDir, newPackageRoot);
+        return new PathMetadata(source, scope, origin, baseDir, newPackageRoot, changelogPath);
+    }
+
+    /** L5 W4：包 CHANGELOG 路径（{@code withX} 重建点补齐，docs/04 B156 教训）。 */
+    public PathMetadata withChangelogPath(String newChangelogPath) {
+        return new PathMetadata(source, scope, origin, baseDir, packageRoot, newChangelogPath);
     }
 
     /**

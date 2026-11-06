@@ -88,8 +88,6 @@ public final class AgentSession implements AutoCloseable {
     // Session-scoped because consecutive runs append to one lane transcript
     // (pi alignment) and each run's delivery replays the full transcript.
     private final Set<String> deliveredEntryIds = new HashSet<>();
-    /** 批 18（评审 M4）：本会话装配期的 resolve 结果（wireSession 现算一份，
-     *  技能/模板/主题/扩展四消费面共享；/reload 重算）。存于 {@link ExtensionLoading}。 */
     // pi :1083/2434-2436：settled 读旗；abort() 置位；L5 W1 起在启动窗前清零、收尾读值。
     final AtomicBoolean agentRunAbortRequested = new AtomicBoolean();
     /** pi {@code _agentRunAbortRequested}：settled 事件的 aborted 载荷源（包内可见）。 */
@@ -249,17 +247,11 @@ public final class AgentSession implements AutoCloseable {
     /** 委托 {@link ModelToolControl}。 */ public void setModel(ModelId<?> model) { modelTools.setModel(model); }
     public List<String> getActiveToolNames() { return modelTools.getActiveToolNames(); }
     /** 委托 {@link ModelToolControl}。 */
-    public void setActiveToolsByName(java.util.List<String> names) {
-        modelTools.setActiveToolsByName(names);
-    }
+    public void setActiveToolsByName(java.util.List<String> names) { modelTools.setActiveToolsByName(names); }
     /** 委托 {@link ModelToolControl}。 */
-    public void activateRuntimeTools(java.util.Collection<String> names) {
-        modelTools.activateRuntimeTools(names);
-    }
+    public void activateRuntimeTools(java.util.Collection<String> n) { modelTools.activateRuntimeTools(n); }
     /** 委托 {@link ModelToolControl}。 */
-    public void deactivateRuntimeTools(java.util.Collection<String> names) {
-        modelTools.deactivateRuntimeTools(names);
-    }
+    public void deactivateRuntimeTools(java.util.Collection<String> n) { modelTools.deactivateRuntimeTools(n); }
     public List<ExtensionToolInfo> getAllTools() { return modelTools.getAllTools(); }
     /** 委托 {@link ModelToolControl}。 */
     public ToolExposure toolExposureOf(String name) { return modelTools.toolExposureOf(name); }
@@ -304,6 +296,8 @@ public final class AgentSession implements AutoCloseable {
     }
     /** 委托 {@link PromptPipeline}。 */ public void abortCompaction() { prompts.abortCompaction(); }
     /** 委托 {@link PromptPipeline}。 */ public void abort() { prompts.abort(); }
+    /** L5 W1（pi {@code await abort()}）：abort 后等引擎 idle＋启动窗旗复位。 */
+    public void abortAndWaitForIdle() { prompts.abortAndWaitForIdle(); }
     /** 委托 {@link PromptPipeline}。 */ public String followUp(String prompt) { return prompts.followUp(prompt); }
     /** 委托 {@link PromptPipeline}。 */
     public String followUp(String prompt, List<PromptImage> images, String source) {
@@ -465,6 +459,12 @@ public final class AgentSession implements AutoCloseable {
     void name(String name) { this.name = name; }
     DefaultExtensionContext extensionContext() { return extensions.extensionContext(); }
     ExtensionManager extensionManager() { return extensions.extensionManager(); }
+
+    /** L5 W4：已加载扩展的 sourceInfo（扩展 changelog 展示用）。 */
+    public List<com.pijava.coding.agent.core.source.SourceInfo> extensionSourceInfos() {
+        return extensions.extensionManager() == null
+            ? List.of() : extensions.extensionManager().sourceInfos();
+    }
     java.util.Set<String> extensionProviderNames() { return extensions.extensionProviderNames(); }
     List<Args.ArgDiagnostic> startupDiagnosticsInternal() { return extensions.startupDiagnosticsInternal(); }
     SessionSetup.ResolvedAssembly resolveAssembly() { return extensions.resolveAssembly(); }

@@ -43,7 +43,9 @@ public final class PackageResourceCollector {
         }
 
         var manifest = PiManifest.read(packageRoot.resolve("package.json"));
-        if (manifest != null) {
+        // L5 W4（pi package-manager.ts:686-688）：{@code pi} 对象只含 changelogPath
+        // 等展示元数据 ⇒ 不算资源清单，照走目录自动发现。
+        if (manifest != null && hasManifestResourceFields(manifest)) {
             for (var resourceType : ResourceType.ALL) {
                 addManifestEntries(manifest.entriesOf(resourceType), packageRoot,
                     resourceType, accumulator, metadata);
@@ -176,6 +178,12 @@ public final class PackageResourceCollector {
         return PackageResourceScanner.collectFilesFromPaths(resolved, resourceType);
     }
 
+    /** pi {@code hasManifestResourceFields}（package-manager.ts:686-688）。 */
+    static boolean hasManifestResourceFields(PiManifest manifest) {
+        return ResourceType.ALL.stream()
+            .anyMatch(type -> manifest.entriesOf(type) != null);
+    }
+
     /** pi {@code resolveLocalEntries}（:2391-2411）：settings 四类数组条目——
      *  plain 直收＋pattern 决 enabled。 */
     public void resolveLocalEntries(List<String> entries, ResourceType resourceType,
@@ -214,7 +222,10 @@ public final class PackageResourceCollector {
             }
             if (Files.isDirectory(resolved)) {
                 var dirMetadata = metadata.withBaseDir(resolved.toString())
-                    .withPackageRoot(resolved.toString());
+                    .withPackageRoot(resolved.toString())
+                    .withChangelogPath(PackagePaths.resolvePackageChangelogPath(
+                        resolved.toString(),
+                        PiManifest.read(resolved.resolve("package.json"))));
                 var resources = collectPackageResources(resolved, accumulator, filter, dirMetadata);
                 if (!resources) {
                     accumulator.addResource(ResourceType.EXTENSIONS, resolved.toString(),

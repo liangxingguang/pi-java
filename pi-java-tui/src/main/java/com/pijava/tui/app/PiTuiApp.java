@@ -39,10 +39,10 @@ import dev.tamboui.tui.event.Event;
  * {@link ScrollInputNormalizer} and keyboard navigation drives the chat
  * viewport directly (the old ListElement key/mouse handlers are gone).</p>
  *
- * <p>批 29（E1 结构债拆分，行为零变化纯移动）：启动通知（{@link StartupNotices}）、
- * 全局键分派（{@link GlobalKeyRouter}）、overlay 开合（{@link OverlayManager}）、
- * 扩展宿主接线（{@link ExtensionHostWiring}）、prompt/slash 流（{@link SlashFlowRouter}）
- * 移出成件；本类只留装配、渲染帧面与对外委托桩——public/包私有 API 签名全保留。</p>
+ * <p>批 29（E1 结构债拆分）：启动通知（{@link StartupNotices}）、全局键分派
+ * （{@link GlobalKeyRouter}）、overlay 开合（{@link OverlayManager}）、扩展宿主接线
+ * （{@link ExtensionHostWiring}）、prompt/slash 流（{@link SlashFlowRouter}）移出成件；
+ * 本类只留装配、渲染帧面与对外委托桩——public/包私有 API 签名全保留。</p>
  */
 public final class PiTuiApp {
 
@@ -207,13 +207,11 @@ public final class PiTuiApp {
         snapshotHandle = session.watchSession();
         snapshotHandle.subscribe(snapshot ->
             dispatcher.dispatch(() -> chatScreen.updateSnapshot(snapshot)));
-        // Regular mode redraws on demand: async dispatches mark the shell
-        // dirty, so the idle loop never repaints and the terminal scrollback
-        // stays exactly where the user scrolled it.
+        // Regular mode redraws on demand: async dispatches mark the shell dirty,
+        // so the idle loop never repaints and the scrollback stays put.
         dispatcher.setWake(shell::markDirty);
-        // ...but an on-demand redraw means the retry countdown would freeze:
-        // one 1 Hz nudge while a ticking indicator is alive (fullscreen
-        // recomputes it per frame instead — see CountdownWake).
+        // ...but on-demand redraw would freeze the retry countdown: one 1 Hz
+        // nudge while a ticking indicator is alive (CountdownWake).
         countdownWake = CountdownWake.start(chatScreen::hasTickingIndicator, shell::markDirty);
         maybeWarnSubscriptionAuth();   // 批 12 T13（pi :1228 init 后时机对位）
     }
@@ -225,14 +223,20 @@ public final class PiTuiApp {
 
     // ── 批 29（E1）：启动通知委托（本体在 {@link StartupNotices}）──
 
-    /** 批 15（T2a，pi :1220-1226 对位）：启动崩溃提示装配（changelog 之后）。 */
+    /** 批 15（T2a，pi :1220-1226）：启动崩溃提示（changelog 之后）。 */
     public void setStartupCrashNotice(String text) {
         startupNotices.setStartupCrashNotice(text);
     }
 
-    /** 批 12 T7（docs/23 §3）：启动 changelog 装配（welcome 之后展示一次）。 */
+    /** 批 12 T7：启动 changelog 装配（welcome 之后展示一次）。 */
     public void setStartupChangelog(java.util.Optional<String> markdown, boolean collapse) {
         startupNotices.setStartupChangelog(markdown, collapse);
+    }
+
+    /** L5 W4：扩展包 changelog 启动展示（主 changelog 之后）。 */
+    public void setExtensionChangelogUpdates(
+            java.util.List<com.pijava.coding.agent.core.ExtensionChangelogs.Update> updates) {
+        startupNotices.setExtensionChangelogUpdates(updates);
     }
 
     /** Submit initial CLI messages when the TUI starts. */
@@ -472,9 +476,8 @@ public final class PiTuiApp {
         if (runner != null) {
             runner.quit();
         }
-        // docs/16（B252）：pi interactive shutdown 交互臂（interactive-mode.ts:4316-4322）
-        // —— 先停 UI 再 dispose（shutdown{quit} 自此在 TUI 发射）。关的是**当前**会话
-        // （this.session 随 switchSession 跟踪替换）。
+        // docs/16（B252）：pi interactive shutdown 交互臂（:4316-4322）——先停 UI 再
+        // dispose（shutdown{quit} 自此在 TUI 发射）。关的是**当前**会话（随 switchSession 替换）。
         try {
             session.close();
         } catch (Exception ignored) {
@@ -487,10 +490,8 @@ public final class PiTuiApp {
         return sessionEvents;
     }
 
-    /**
-     * 批 15（T2c）：fatal 退出一次性读取（launcher 据此把退出码改 1——pi
-     * {@code process.exit(1)} 对位）。
-     */
+    /** 批 15（T2c）：fatal 退出一次性读取（launcher 据此把退出码改 1——pi
+     *  {@code process.exit(1)} 对位）。 */
     boolean consumeFatalExit() {
         var was = fatalExit;
         fatalExit = false;

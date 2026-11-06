@@ -141,6 +141,45 @@ public final class SettingsAccessors {
         return command == null ? null : List.copyOf(command);
     }
 
+    /**
+     * pi {@code getSelfUpdateCommand}（settings-manager.ts:341-359 的消费口径）：
+     * 仅全局域的 argv 形，缺席 ⇒ {@code null}（≙ undefined）。
+     */
+    public List<String> getSelfUpdateCommand() {
+        var command = manager.global().selfUpdateCommand;
+        return command == null ? null : List.copyOf(command);
+    }
+
+    /** pi {@code setExtensionChangelogVersion}（:690-697）：写全局域并 flush。 */
+    public void setExtensionChangelogVersion(String key, String version) {
+        var global = manager.global();
+        if (global.extensionChangelogVersions == null) {
+            global.extensionChangelogVersions = new java.util.LinkedHashMap<>();
+        }
+        global.extensionChangelogVersions.put(key, version);
+        manager.markModified("extensionChangelogVersions");
+        manager.flush();
+    }
+
+    /** pi {@code getExtensionChangelogVersion}（:689）：合并视图查键。 */
+    public String getExtensionChangelogVersion(String key) {
+        var versions = manager.effective().extensionChangelogVersions;
+        return versions == null ? null : versions.get(key);
+    }
+
+    /** pi {@code getSessionShareDestination}（:820-826）：非法/缺席回落 {@code auto}。 */
+    public String getSessionShareDestination() {
+        var destination = manager.effective().sessionShareDestination;
+        return "gist".equals(destination) || "radius".equals(destination)
+            ? destination : "auto";
+    }
+
+    /** pi {@code setSessionShareDestination}（:828-833）：写全局域。 */
+    public void setSessionShareDestination(String destination) {
+        manager.global().sessionShareDestination = destination;
+        manager.markModified("sessionShareDestination");
+    }
+
     /** 旧 boolean 只读口：仅显式 Boolean.TRUE 为 true；header/缺席/非法均为 false。 */
     public boolean getQuietStartup() {
         return Boolean.TRUE.equals(manager.effective().quietStartup);
