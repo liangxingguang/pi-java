@@ -89,9 +89,11 @@ class SessionRpcStateTest {
 
     /** {@code --no-session} 会话（不落盘、无持久仓库）。 */
     private static AgentSession createEphemeral(Path cwd) {
+        // L5 W6（docs/25 §7）：--provider 必须在运行时注册表里（pi resolveCliModel）。
         var args = ArgsParser.parse(new String[] {
-            "--provider", "faux-state", "--model", "hello", "--no-session"});
+            "--provider", "faux", "--model", "hello", "--no-session"});
         var providers = ProviderRegistry.create();
+        providers.register(com.pijava.ai.provider.FauxProvider.text("ok"));
         return AgentSession.create(args, providers,
             new ToolContext(cwd.toString(), Map.of(),
                 new DefaultShellExecutor(), new DefaultFileSystem()));

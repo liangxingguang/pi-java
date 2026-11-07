@@ -151,8 +151,11 @@ class AgentSessionExtensionUiTest {
     void createWithUiAndModeBakesAtConstruction() {
         // 批 17（T7）：create(args, ui, mode) 重载——扩展加载前 UI 已烘入字段。
         // 持久路径仓开进临时目录（--session-dir；真 home settings 只读不脏）。
-        var args = ArgsParser.parse(new String[] {"--provider", "faux", "--model", "hello",
-            "--no-session", "--no-extensions", "--session-dir", tmp.toString()});
+        // L5 W6（docs/25 §7）：该重载走 DefaultProviders 的全新注册表 ⇒ 模型必须
+        // 在静态目录里（pi resolveCliModel 同：--provider 不是运行时已知即报错）。
+        var args = ArgsParser.parse(new String[] {"--provider", "anthropic", "--model",
+            "claude-sonnet-4-5", "--no-session", "--no-extensions",
+            "--session-dir", tmp.toString()});
         var ui = new CountingUI();
         try (var s = AgentSession.create(args, ui, "tui")) {
             assertThat(s.extensionUI()).isSameAs(ui);

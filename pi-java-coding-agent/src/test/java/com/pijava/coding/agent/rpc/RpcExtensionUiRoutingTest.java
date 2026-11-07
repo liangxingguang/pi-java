@@ -36,8 +36,11 @@ class RpcExtensionUiRoutingTest {
 
     private static Rig rig() throws Exception {
         var tmp = Files.createTempDirectory("pi-java-rpc-route");
+        // L5 W6（docs/25 §7；pi resolveCliModel:487-494）：模型必须是 runner 认得的
+        // ——{@code new_session} 重建会话时用 DefaultProviders 的全新注册表（pi 的
+        // createRuntime 同样新建 ModelRuntime），注入的测试 provider 不会被继承。
         var args = ArgsParser.parse(new String[] {
-            "--provider", "faux", "--model", "hello", "--no-session"});
+            "--provider", "anthropic", "--model", "claude-sonnet-4-5", "--no-session"});
         var providers = ProviderRegistry.create();
         providers.register(FauxProvider.text("ok"));
         var home = Files.createTempDirectory("pi-java-rpc-route-home");

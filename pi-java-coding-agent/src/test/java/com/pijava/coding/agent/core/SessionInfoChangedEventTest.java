@@ -26,10 +26,14 @@ class SessionInfoChangedEventTest {
 
     private static AgentSession newSession() throws Exception {
         var tmp = Files.createTempDirectory("pi-java-session-info-test");
+        // L5 W6（docs/25 §7；pi resolveCliModel:487-494）：--provider 必须是运行时
+        // 已知 provider，否则报 Unknown provider ⇒ 夹具把 faux 真注册进注入注册表。
         var args = ArgsParser.parse(new String[] {
-            "--provider", "faux-info", "--model", "hello", "--no-session"});
+            "--provider", "faux", "--model", "hello", "--no-session"});
+        var providers = ProviderRegistry.create();
+        providers.register(com.pijava.ai.provider.FauxProvider.text("ok"));
         return AgentSession.create(
-            args, InMemorySessionRepository.create(), ProviderRegistry.create(),
+            args, InMemorySessionRepository.create(), providers,
             new ToolContext(tmp.toString(), Map.of(),
                 new DefaultShellExecutor(), new DefaultFileSystem()));
     }
