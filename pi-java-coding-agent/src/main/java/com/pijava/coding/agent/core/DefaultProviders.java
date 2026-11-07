@@ -128,6 +128,11 @@ public final class DefaultProviders {
      * Resolve the effective provider name: CLI {@code --provider} &gt; settings
      * {@code defaultProvider} &gt; the built-in default ("google").
      */
+    /** L5 W6b（pi {@code hasConfiguredAuth}）：配置凭据判定委托 {@link ProviderAuth}。 */
+    static boolean hasConfiguredAuth(String provider, Settings settings) {
+        return ProviderAuth.configured(provider);
+    }
+
     public static String resolveProviderName(Args args, String defaultProvider) {
         if (args.provider() != null && !args.provider().isBlank()) {
             return args.provider();

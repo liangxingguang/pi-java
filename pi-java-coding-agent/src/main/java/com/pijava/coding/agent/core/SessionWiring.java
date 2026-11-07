@@ -133,11 +133,8 @@ final class SessionWiring {
         var recordingStreamFn = new PayloadRecordingStreamFn(streamFn, telemetry);
         // docs/16 裁决①：fork 臂携带父会话当前模型（java 的 setModel 无 persist 面，
         // 携带＝pi persist→settings 重解析臂的实际效果）；初始装配臂走既有解析链。
-        var model = carryModel != null
-            ? models.resolve(carryModel, null)
-            : scopedInitial != null
-                ? scopedInitial.model().id()
-                : models.resolve(modelPattern, providerName);
+        var model = CliModelWiring.resolveInitialModel(args, settings, models, modelPattern,
+            providerName, carryModel, scopedInitial, providers);
         // 3c（原 docs/31 §8.21，裁决③）：宿主层的自动压缩事件走轻量 observer，不占
         // HookSystem。harness 先于会话构造 ⇒ 用引用晚绑定：observer 在压缩真正
         // 发生时（必晚于 create() 返回）才读得到会话。pi 的 compaction_start/end
