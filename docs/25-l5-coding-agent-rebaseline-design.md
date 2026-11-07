@@ -2,7 +2,7 @@
 
 > 【背景摘要】按 [`08-pi-rebaseline-master-plan.md`](08-pi-rebaseline-master-plan.md) §5 的 L5 范围，对 CLI 宿主/产品层（`map/04`）按新锚点 `56cae7823` 全量重测。区间内 `packages/coding-agent/src` 共 156 个文件变化（+3,417/−12,363），其中 9,950 行是 `experimental/` 整块删除（R1）。真正落在 L5 的差异集中在：run 启动与 `before_agent_start` 载荷、`reachesTools` 投影、`pi.exec` 输出上限、settings/分享/自更新/扩展 changelog、包管理器容错与临时包刷新、模型引用解析、tool_search 排序、HTML 导出与扩展渲染上下文、RPC 思考档过滤及少量 CLI/平台修复。
 >
-> 文档状态：**设计待审（2026-11-05）；§14 第 2–5 项已由用户裁决**。本稿只授权后续讨论与审核，不授权写实现代码。
+> 文档状态：**实施中（2026-11-05 批准；W1–W5、W9、W10 已落，余 W6/W7/W8）**。§14 第 2–5 项已由用户裁决。
 >
 > 当前 pi 锚点：`56cae782341c339d3bb820081f0f9425d8c5b1ec`；取证只走 `git show 56cae7823:<path>`。pi-java 代码基线：`b9af4f18`（main，2026-11-05；L4 docs/24 关闭后）。旧基线：pi `ea448f454`，pi-java `edc8749d`（map/04 旧读数）。
 
@@ -358,6 +358,8 @@ Java 现状：`PackageCommand` 的 `update self` 恒走不可用臂（`subcomman
 
 ## 6. W5（B277c／B279／B280）：包管理器容错、刷新与模式扩展
 
+> **实施记录（2026-11-05，已落）**：`ResolvedPaths` 增加 `installFailures`（旧四参构造器保留）；`PackageInstaller`（新拆件）承载 `installMissing`／`installParsedSource`／temporary npm 刷新——装不上记 failure 并跳过，`onMissing=error` 仍抛 `Missing source:`；`PackageInstallWarnings`（core）产三档逐字警告，`ExtensionLoading` 汇入 `startupDiagnostics`、`ConfigCommand` 打 `Warning:` 行；`PiManifest`／`PathMetadata` 不动。`GitPackageStore.refreshTemporaryGitSource` 加 commit-ref 预检（7–64 位十六进制且 HEAD 命中才跳过网络），分支 ref 一律刷新。`ResourcePatterns.normalizePath` 补 `~`／`~/`／`~\` 展开（三形态入口同用）。`PathComparisonKeys`（pkg）为包身份、资源去重键与 trust 键提供平台大小写折叠，`ProjectTrustStore` 的最近祖先匹配与 `setMany` 删除改用 `pathsEqual`（pi `findTrustFileKeys`）。`PackageUpdater` 的 `shouldUpdateNpmSource` 返回三态并新增 `reportUnchangedNpmUpdates`（progress 型消息，CLI 消费）。**窄差**：`installFailures` 消息取根因 message（Java 把 `IOException` 包成 `UncheckedIOException`，否则文案多出类名前缀）。
+
 ### 6.1 安装失败不阻塞启动（B279）
 
 pi 证据：`package-manager.ts:98-112,1371-1454`；`resource-loader.ts:115-133,562-566,732-736`。
@@ -411,10 +413,13 @@ Java 现状：
 
 ### 6.5 测试
 
-- `PackageInstallFailureTest`：一个坏包＋一个好包 ⇒ 启动继续、好包资源在、坏包 warning 逐字；temporary 与 settings 两种 hint；显式 `error` 仍中止。
-- `TemporarySourceRefreshTest`：branch ref 每次刷新；commit-ref 已检出跳过；刷新失败保留缓存。
-- `ResourcePatternTildeTest`：`!~/skills/pdf`、`+~/x`、`-~/x` 命中 home 下路径；Windows 大小写不同的 local 源只出现一次。
-- `PackageUpdateMessageTest`：目标版本未变 ⇒ 进度文案逐字。
+**实施形状（2026-11-05）**：
+
+- `PackageInstallFailureTest`（8 项）：坏包＋好包 ⇒ 启动继续、好包资源在、failure 三字段（source/scope/message＝根因文案）；`onMissing=skip` 不记 failure；`onMissing=error` 仍抛逐字 `Missing source:`；`-e` 源失败也进 `installFailures`；三档警告文案逐字（user 无 `--local`／project 带 `--local`／temporary「Check the source and try again.」）；`PackageInstallWarnings.collect` 按 source 后写覆盖。
+- `TemporarySourceRefreshTest`（9 项）：分支 ref 照常 fetch；commit-ref 已检出 ⇒ 零 spawn；commit-ref 不符 ⇒ 刷新；capture 失败静默保缓存；temporary npm 未固定版本 ⇒ `name@latest`；带 range spec ⇒ 用原 spec；刷新安装失败静默保缓存；registry 查询失败跳过；版本已最新不重装。
+- `PathComparisonKeysTest`（9 项）：绝对化＋normalize；Windows 大小写折叠；`isWithin` 自身/后代/前缀兄弟；合成路径直通；`resolve` 后 local 包身份折叠；`canonicalizePath` 失败回原串；`~`／`~/`／`.\~` 展开三形态。
+- `PackageUpdateMessageTest`（3 项）：宣告 2.0.0 但装回 1.0.0 ⇒ progress 文案逐字；版本确实变化 ⇒ 不发；无 targetVersion（查询失败保守臂）⇒ 不发。
+- `SourceResolverTest#localIdentityResolvesAgainstScopeBaseDir` 改用比较键断言（行为变更，非放宽）。
 
 ## 7. W6（B277d）：模型引用解析统一策略
 

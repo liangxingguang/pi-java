@@ -45,19 +45,15 @@ final class ExtensionLoading {
     /** 批 18（评审 M4）：本会话装配期的 resolve 结果（wireSession 现算一份，
      *  技能/模板/主题/扩展四消费面共享；/reload 重算）。 */
     private SessionSetup.ResolvedAssembly resolveAssembly;
-    // resources_discover：扩展贡献的主题候选（启动时选第一个可用）。
-    private List<Path> themePaths = List.of();
-    /** 批 21（T8）：themePaths 的装载结果（pi resourceLoader.getThemes() 对位）。 */
-    private List<com.pijava.coding.agent.theme.Theme> themes = List.of();
-    /** 批 21（T8）：reload 完成监听者（模式层主题收尾口）。 */
-    private final java.util.concurrent.CopyOnWriteArrayList<Runnable> reloadListeners =
-        new java.util.concurrent.CopyOnWriteArrayList<>();
+    /** L5 W5 拆件：主题候选与 reload 收尾簇（自本类纯移动）。 */
+    private final ExtensionThemes extensionThemes;
     /** 批 32（docs/44 T2）：进程内注册的扩展（pi {@code inlineExtensions} 对位）。 */
     private final List<PiExtension> inlineExtensions =
         new java.util.concurrent.CopyOnWriteArrayList<>();
 
     ExtensionLoading(AgentSession owner) {
         this.owner = owner;
+        this.extensionThemes = new ExtensionThemes(owner);
     }
 
     /** 注入扩展 UI 服务（覆盖 loadExtensions 时的 noop）；mode 维持原值。 */
@@ -172,6 +168,13 @@ final class ExtensionLoading {
         // 评审 M4：resolve 结果复用 wireSession 的装配期单遍（owner.resolveAssembly）。
         var assembly = owner.resolveAssembly();
         var cliResolved = assembly.cli();
+        // L5 W5 §6.1（pi resource-loader.ts:562-564/:732-734 → main.ts:816-819）：
+        // 装不上的配置包进启动诊断，扩展加载照常继续。
+        for (var warning : PackageInstallWarnings.collect(
+                assembly.resolved(), cliResolved)) {
+            owner.extensions().startupDiagnosticsInternal()
+                .add(new Args.ArgDiagnostic("warning", warning));
+        }
         // 批 21（T9，A-29）：CLI --theme 车道先行（pi cliEnabledThemes 序对位）。
         var cliThemePaths = SessionSetup.mergePaths(SessionSetup.cliThemePaths(args),
             SessionSetup.enabledPaths(cliResolved.themes()));
@@ -256,6 +259,10 @@ final class ExtensionLoading {
             }
         }
         owner.extensions().extensionManager(manager);
+        // L5 W5 §6.1（pi resource-loader.ts:732-734）：装不上的配置包警告进
+        // 扩展面 warnings（交互层 [Extension issues] 段逐字展示）。pi 在此处
+        // 合并 installWarnings＋host-provided 依赖警告；java 走 startupDiagnostics
+        // 既有通道（D83 同族），故在此无重复落点。
         // 批 16（T1d）：CLI 未知 --flag 绑定进共享值表（pi applyExtensionFlagValues，
         // agent-session-services.ts:82-128）；诊断落 startupDiagnostics（裁决⑧）。
         owner.extensions().startupDiagnosticsInternal().addAll(
@@ -413,12 +420,12 @@ final class ExtensionLoading {
 
     /** 扩展贡献的主题候选（resources_discover themePaths）；无则空列表。 */
     List<Path> themePaths() {
-        return themePaths;
+        return extensionThemes.themePaths();
     }
 
     /** 主题候选写面（loadExtensions 基线／resources_discover 合并臂）。 */
     void themePaths(List<Path> paths) {
-        this.themePaths = paths;
+        extensionThemes.themePaths(paths);
     }
 
     /**
@@ -426,7 +433,7 @@ final class ExtensionLoading {
      * 对位——装配期与 /reload 经 {@link #reloadThemes()} 重算）。
      */
     List<com.pijava.coding.agent.theme.Theme> themes() {
-        return themes;
+        return extensionThemes.themes();
     }
 
     /**
@@ -455,46 +462,21 @@ final class ExtensionLoading {
 
     /** 批 21（T8）：{@link SessionReload} ⑤ 的写面——重设 themePaths 并重装载。 */
     void setThemePathsForReload(List<String> paths) {
-        themePaths = paths.stream().map(Path::of).toList();
-        reloadThemes();
+        extensionThemes.setThemePathsForReload(paths);
     }
 
-    /**
-     * 批 21（T8，裁决⑩）：reload 完成监听——pi 的 setRegisteredThemes＋
-     * {@code themeController.applyFromSettings()} 在 InteractiveMode 收尾
-     * （interactive-mode.ts:6490-6492）；java 的 /reload 封在 slash 命令里，
-     * 模式层经此口接收尾（注册表写入/控制器应用都在监听者侧，会话层保持
-     * toolkit 中立）。
-     */
+    /** 批 21（T8，裁决⑩）：reload 完成监听（见 {@link ExtensionThemes}）。 */
     void addReloadListener(Runnable listener) {
-        reloadListeners.addIfAbsent(listener);
+        extensionThemes.addReloadListener(listener);
     }
 
     /** {@link SessionReload} 收尾回调。 */
     void fireReloaded() {
-        for (var listener : reloadListeners) {
-            listener.run();
-        }
+        extensionThemes.fireReloaded();
     }
 
-    /**
-     * 批 21（T8）：装载 themePaths 指向的主题文件（pi
-     * {@code updateThemesFromPaths} 对位——resolve 的自动发现条目已含
-     * {@code <agentDir>/themes} 与项目 {@code .pi-java/themes}）。装载/碰撞诊断
-     * 进 {@code startupDiagnostics}（pi 的 themeDiagnostics 对位；模式层随
-     * startupDiagnostics 既有通道上报）。
-     */
+    /** 批 21（T8）：装载 themePaths 指向的主题文件（见 {@link ExtensionThemes}）。 */
     void reloadThemes() {
-        var result = com.pijava.coding.agent.theme.ThemeLoader.loadThemes(
-            themePaths.stream().map(Path::toString).toList(),
-            com.pijava.coding.agent.theme.Themes.colorMode());
-        themes = List.copyOf(result.themes());
-        for (var diagnostic : result.diagnostics()) {
-            owner.extensions().startupDiagnosticsInternal().add(new Args.ArgDiagnostic(
-                "collision".equals(diagnostic.level()) ? "collision" : diagnostic.level(),
-                diagnostic.filePath() != null
-                    ? diagnostic.filePath() + ": " + diagnostic.message()
-                    : diagnostic.message()));
-        }
+        extensionThemes.reloadThemes();
     }
 }

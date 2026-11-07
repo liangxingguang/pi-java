@@ -35,6 +35,12 @@ public record ProgressEvent(Type type, Action action, String source, String mess
         return new ProgressEvent(Type.COMPLETE, action, source, null);
     }
 
+    /** 批 19 起首个 {@code progress} 型生产点（pi :1222-1228 的「版本没变」警告；
+     *  L5 W5 §6.2 补）。 */
+    public static ProgressEvent progress(Action action, String source, String message) {
+        return new ProgressEvent(Type.PROGRESS, action, source, message);
+    }
+
     public static ProgressEvent error(Action action, String source, String message) {
         return new ProgressEvent(Type.ERROR, action, source, message);
     }

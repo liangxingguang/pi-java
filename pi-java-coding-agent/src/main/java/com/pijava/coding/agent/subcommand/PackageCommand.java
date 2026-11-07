@@ -145,8 +145,12 @@ public final class PackageCommand {
 
         var packageManager = PackageManagers.create(env.cwd(), env.agentDir(), settings);
         // pi :972-976 逐字：只消费 start 型，plain 输出（D116）。
+        // pi :1030-1036 逐字：start 走 dim 行，progress 走黄字行（plain 输出，D116）。
         packageManager.setProgressCallback(event -> {
             if (event.type() == ProgressEvent.Type.START) {
+                System.out.println(event.message());
+            } else if (event.type() == ProgressEvent.Type.PROGRESS
+                    && event.message() != null) {
                 System.out.println(event.message());
             }
         });

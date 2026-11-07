@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.ServiceLoader;
 
 import com.pijava.coding.agent.core.FileSettingsStorage;
+import com.pijava.coding.agent.core.PackageInstallWarnings;
 import com.pijava.coding.agent.core.PackageManagers;
 import com.pijava.coding.agent.core.Settings;
 import com.pijava.coding.agent.core.SettingsManager;
@@ -141,6 +142,10 @@ public final class ConfigCommand {
             ? PackageManagers.create(env.cwd(), env.agentDir(), manager, env.homeDir())
                 .resolve(null)
             : globalResolved;
+        // pi :928-933：两份 resolve 的安装失败合并去重后打黄字警告。
+        for (var warning : PackageInstallWarnings.collect(globalResolved, projectResolved)) {
+            System.err.println("Warning: " + warning);
+        }
         // pi :887 process.exit(0) 对位（Main 统一 System.exit）；评审 I-1：
         // TUI 失败（无终端等）的退出码由 provider 上报，不恒 0。
         return env.tui().selectConfig(new ScopedResolvedPaths(globalResolved, projectResolved),

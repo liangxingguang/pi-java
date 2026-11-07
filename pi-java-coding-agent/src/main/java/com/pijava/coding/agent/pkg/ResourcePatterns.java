@@ -76,7 +76,8 @@ public final class ResourcePatterns {
         }
 
         for (var pattern : patterns) {
-            var normalizedPattern = toPosixPath(pattern);
+            // L5 W5 §6.3（pi :729）：pattern 侧也要展开 `~`（`!~/skills/pdf`）。
+            var normalizedPattern = toPosixPath(normalizePath(pattern));
             if (MinimatchLite.match(normalizedPattern, rel)
                 || MinimatchLite.match(normalizedPattern, name)
                 || MinimatchLite.match(normalizedPattern, filePathPosix)) {
@@ -94,11 +95,29 @@ public final class ResourcePatterns {
         return false;
     }
 
-    /** pi {@code normalizeExactPattern}（:689-692）：剥 {@code ./} 前缀＋posix。 */
+    /** pi {@code normalizeExactPattern}（:743-746）：剥 {@code ./} 前缀＋{@code ~}
+     *  展开＋posix。 */
     public static String normalizeExactPattern(String pattern) {
         var normalized = pattern.startsWith("./") || pattern.startsWith(".\\")
             ? pattern.substring(2) : pattern;
-        return toPosixPath(normalized);
+        return toPosixPath(normalizePath(normalized));
+    }
+
+    /**
+     * pi {@code normalizePath}（utils/paths.ts:120-145）的 pattern 相关臂：{@code ~}
+     * 与 {@code ~/}／{@code ~\} 展开为 home（{@code expandTilde} 默认开），其余原样。
+     * 批 14 教训：home 每调现取，不静态冻结。
+     */
+    public static String normalizePath(String path) {
+        var home = System.getProperty("user.home");
+        if (path.equals("~")) {
+            return home;
+        }
+        var winTilde = File.separatorChar == '\\' && path.startsWith("~\\");
+        if (path.startsWith("~/") || winTilde) {
+            return home + File.separator + path.substring(2);
+        }
+        return path;
     }
 
     /** pi {@code matchesAnyExactPattern}（:694-712）——字符串等值（相对/绝对/

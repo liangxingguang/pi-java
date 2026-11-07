@@ -42,6 +42,7 @@ public final class PackageManager {
     private final InstallLayout layout;
     private final GitPackageStore gitStore;
     private final PackageResourceCollector collector;
+    private final PackageInstaller installer;
     private final PackageConfigWriter configWriter;
     private final PackageUpdater updater;
     private final Path homeDir;
@@ -70,9 +71,21 @@ public final class PackageManager {
         this.layout = layout;
         this.gitStore = gitStore;
         this.collector = new PackageResourceCollector(resolver);
+        this.installer = new PackageInstaller(layout, npmResolver, gitStore);
         this.configWriter = new PackageConfigWriter(resolver, settings, this::getInstalledPath);
         this.updater = new PackageUpdater(resolver, settings, layout, npmResolver, gitStore,
-            this::withProgress);
+            new PackageUpdater.ProgressRunner() {
+                @Override
+                public void run(Action action, String source, String message,
+                        IoRunnable op) throws IOException {
+                    withProgress(action, source, message, op);
+                }
+
+                @Override
+                public void emit(ProgressEvent event) {
+                    emitProgress(event);
+                }
+            });
         this.homeDir = homeDir;
     }
 
@@ -109,7 +122,8 @@ public final class PackageManager {
 
         // Dedupe: project scope wins over global for same package identity
         var packageSources = resolver.dedupePackages(allPackages);
-        resolvePackageSources(packageSources, accumulator, onMissing);
+        var installFailures = new ArrayList<PackageInstallFailure>();
+        resolvePackageSources(packageSources, accumulator, onMissing, installFailures);
 
         var globalBaseDir = resolver.agentDir();
         var projectBaseDir = resolver.cwd().resolve(SourceResolver.CONFIG_DIR_NAME);
@@ -147,7 +161,7 @@ public final class PackageManager {
                         orEmpty(globalSettings.extensions), globalBaseDir.toString()));
         }
 
-        return toResolvedPaths(accumulator);
+        return toResolvedPaths(accumulator, installFailures);
     }
 
     /** pi {@code resolveExtensionSources}（:991-1007）：CLI 显式源（{@code -e}），
@@ -167,8 +181,9 @@ public final class PackageManager {
             .filter(source -> !source.startsWith(BUILTIN_PATH_PREFIX))
             .map(source -> new ScopedPackage(PackageSource.of(source), scope))
             .toList();
-        resolvePackageSources(packageSources, accumulator, null);
-        return toResolvedPaths(accumulator);
+        var installFailures = new ArrayList<PackageInstallFailure>();
+        resolvePackageSources(packageSources, accumulator, null, installFailures);
+        return toResolvedPaths(accumulator, installFailures);
     }
 
     // ── 批 19 T1：install/remove 公开面＋settings 写回链（:1036-1079/
@@ -292,7 +307,8 @@ public final class PackageManager {
     // ── 包源解析（:1296-1340）─────────────────────────────────────
 
     private void resolvePackageSources(List<ScopedPackage> sources,
-            ResourceAccumulator accumulator, MissingSourceHandler onMissing) {
+            ResourceAccumulator accumulator, MissingSourceHandler onMissing,
+            List<PackageInstallFailure> installFailures) {
         for (var entry : sources) {
             var sourceStr = SourceParser.getPackageSourceString(entry.pkg());
             var filter = entry.pkg().stringForm() ? null : PackageFilter.from(entry.pkg());
@@ -312,8 +328,15 @@ public final class PackageManager {
                 var installedPath = layout.npmInstallPath(npm, resolvedScope);
                 var needsInstall = !Files.exists(installedPath)
                     || !layout.installedNpmMatchesConfiguredVersion(npm, installedPath);
+                // L5 W5 §6.2（pi :1408-1427）：temporary 未固定版本源没有 `pi update`
+                // 通道，装载期发现有更新就刷新（失败静默保留缓存）。
+                if (!needsInstall && resolvedScope == SourceScope.TEMPORARY
+                    && !npm.pinned() && !PackageEnvironment.isOfflineModeEnabled()) {
+                    installer.refreshTemporaryNpmSource(npm, installedPath);
+                }
                 if (needsInstall) {
-                    if (!installMissing(onMissing, parsed, resolvedScope, resolvedSource)) {
+                    if (!installer.installMissing(onMissing, parsed, resolvedScope,
+                            resolvedSource, installFailures)) {
                         continue;
                     }
                     installedPath = layout.npmInstallPath(npm, resolvedScope);
@@ -330,11 +353,14 @@ public final class PackageManager {
             var git = (GitSource) parsed;
             var gitInstalledPath = layout.gitInstallPath(git, resolvedScope);
             if (!Files.exists(gitInstalledPath)) {
-                if (!installMissing(onMissing, parsed, resolvedScope, resolvedSource)) {
+                if (!installer.installMissing(onMissing, parsed, resolvedScope,
+                        resolvedSource, installFailures)) {
                     continue;
                 }
-            } else if (resolvedScope == SourceScope.TEMPORARY && !git.pinned()
+            } else if (resolvedScope == SourceScope.TEMPORARY
                 && !PackageEnvironment.isOfflineModeEnabled()) {
+                // L5 W5 §6.2（pi :1445-1447）：ref 可指移动分支 ⇒ 带 ref 也刷新；
+                // 只有「commit 哈希且已检出」才跳过网络（store 内预检）。
                 gitStore.refreshTemporaryGitSource(git, resolvedSource);
             }
             var gitMetadata = metadata.withBaseDir(gitInstalledPath.toString())
@@ -342,46 +368,6 @@ public final class PackageManager {
                 .withChangelogPath(PackagePaths.resolvePackageChangelogPath(gitInstalledPath.toString(),
                     PiManifest.read(gitInstalledPath.resolve("package.json"))));
             collector.collectPackageResources(gitInstalledPath, accumulator, filter, gitMetadata);
-        }
-    }
-
-    /** pi {@code installMissing} 闭包（:1302-1313）：离线 ⇒ 跳过；无回调 ⇒
-     *  直装；回调 skip ⇒ 跳过、error ⇒ 抛（逐字）、install ⇒ 装。 */
-    private boolean installMissing(MissingSourceHandler onMissing, ParsedSource parsed,
-            SourceScope scope, String resolvedSource) {
-        if (PackageEnvironment.isOfflineModeEnabled()) {
-            return false;
-        }
-        if (onMissing == null) {
-            installParsedSource(parsed, scope);
-            return true;
-        }
-        var action = onMissing.onMissing(resolvedSource);
-        if (action == MissingSourceAction.SKIP) {
-            return false;
-        }
-        if (action == MissingSourceAction.ERROR) {
-            // 模型可见文案，逐字。
-            throw new IllegalStateException("Missing source: " + resolvedSource);
-        }
-        installParsedSource(parsed, scope);
-        return true;
-    }
-
-    /** pi {@code installParsedSource}（:1393-1401）。 */
-    private void installParsedSource(ParsedSource parsed, SourceScope scope) {
-        try {
-            if (parsed instanceof NpmSource npm) {
-                var installRoot = layout.npmInstallRoot(scope, scope == SourceScope.TEMPORARY);
-                layout.ensureNpmProject(installRoot);
-                npmResolver.install(npm, installRoot);
-                return;
-            }
-            if (parsed instanceof GitSource git) {
-                gitStore.installGit(git, scope);
-            }
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
         }
     }
 
@@ -411,13 +397,15 @@ public final class PackageManager {
     // ── 输出整形（:2637-2663）─────────────────────────────────────
 
     /** pi {@code toResolvedPaths}：每类按 rank 升序（稳定排序＝同 rank 插入序），
-     *  再按 canonicalize 去重——同路径先到者胜。 */
-    private static ResolvedPaths toResolvedPaths(ResourceAccumulator accumulator) {
+     *  再按资源路径键去重——同路径先到者胜。 */
+    private static ResolvedPaths toResolvedPaths(ResourceAccumulator accumulator,
+            List<PackageInstallFailure> installFailures) {
         return new ResolvedPaths(
             mapToResolved(accumulator.target(ResourceType.EXTENSIONS)),
             mapToResolved(accumulator.target(ResourceType.SKILLS)),
             mapToResolved(accumulator.target(ResourceType.PROMPTS)),
-            mapToResolved(accumulator.target(ResourceType.THEMES)));
+            mapToResolved(accumulator.target(ResourceType.THEMES)),
+            installFailures);
     }
 
     private static List<ResolvedResource> mapToResolved(
@@ -433,7 +421,9 @@ public final class PackageManager {
         var seen = new HashSet<String>();
         var deduped = new ArrayList<ResolvedResource>();
         for (var entry : resolved) {
-            if (seen.add(canonicalizePath(entry.path()))) {
+            // pi {@code getResourcePathKey}（source-info.ts:46-48）：合成路径原样，
+            // 文件路径 canonicalize 后带平台大小写键（W5 §6.4）。
+            if (seen.add(PathComparisonKeys.resourceKey(entry.path()))) {
                 deduped.add(entry);
             }
         }

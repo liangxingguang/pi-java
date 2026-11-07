@@ -100,9 +100,12 @@ public final class ProjectTrustStore {
                 var data = readTrustFile();
                 for (var update : decisions) {
                     var key = normalizeCwd(Path.of(update.path()));
-                    if (update.decision() == null) {
-                        data.remove(key);
-                    } else {
+                    // pi :240-243：先按 pathsEqual 删掉大小写不同的旧键，再写新键
+                    // （null 决策＝只删不写）。
+                    for (var existing : findTrustFileKeys(data, key)) {
+                        data.remove(existing);
+                    }
+                    if (update.decision() != null) {
                         data.put(key, update.decision());
                     }
                 }
@@ -112,18 +115,25 @@ public final class ProjectTrustStore {
         }
     }
 
-    /** pi {@code normalizeCwd}（:41-43）：绝对化＋规范化（canonicalizePath 对位）。 */
+    /** pi {@code normalizeCwd}（:41-43）：绝对化＋规范化＋canonicalize（realpath 失败回原串）。 */
     static String normalizeCwd(Path cwd) {
-        return cwd.toAbsolutePath().normalize().toString();
+        return com.pijava.coding.agent.pkg.PackagePaths.canonicalizePath(
+            cwd.toAbsolutePath().normalize().toString());
     }
 
-    /** pi {@code findNearestTrustEntry}（:45-59 逐字）：逐级向父，命中 true/false 即返。 */
+    /**
+     * pi {@code findNearestTrustEntry}（:45-59 逐字）：逐级向父，命中 true/false 即返。
+     * L5 W5 §6.4：键匹配走 {@code pathsEqual}（Windows 大小写折叠）——pi 同名
+     * {@code findTrustFileKeys}，解「同一目录大小写不同存了两条」。
+     */
     private static TrustEntry findNearestTrustEntry(Map<String, Boolean> data, Path cwd) {
         var current = normalizeCwd(cwd);
         while (true) {
-            var value = data.get(current);
-            if (value != null) {
-                return new TrustEntry(current, value);
+            for (var key : findTrustFileKeys(data, current)) {
+                var value = data.get(key);
+                if (value != null) {
+                    return new TrustEntry(key, value);
+                }
             }
             var parent = Path.of(current).getParent();
             if (parent == null) {
@@ -131,6 +141,13 @@ public final class ProjectTrustStore {
             }
             current = parent.toString();
         }
+    }
+
+    /** pi {@code findTrustFileKeys}（:45-47）：键中与 {@code path} 指名同一位置的。 */
+    private static List<String> findTrustFileKeys(Map<String, Boolean> data, String path) {
+        return data.keySet().stream()
+            .filter(key -> com.pijava.coding.agent.pkg.PathComparisonKeys.equal(key, path))
+            .toList();
     }
 
     /** pi {@code readTrustFile}（:99-124）：缺席 ⇒ 空；BOM 剥；逐值校验。 */

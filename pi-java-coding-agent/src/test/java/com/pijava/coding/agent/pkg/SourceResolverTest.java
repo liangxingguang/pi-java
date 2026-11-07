@@ -57,8 +57,9 @@ class SourceResolverTest {
         var scoped = resolver.getPackageIdentity("./pkg", SourceScope.USER);
         var unscoped = resolver.getPackageIdentity("./pkg", null);
 
-        assertThat(scoped).isEqualTo("local:" + agentDir.resolve("pkg"));
-        assertThat(unscoped).isEqualTo("local:" + cwd.resolve("pkg"));
+        // L5 W5 §6.4（pi :1842-1846）：身份串用路径比较键（Windows 折叠大小写）。
+        assertThat(scoped).isEqualTo("local:" + PathComparisonKeys.key(agentDir.resolve("pkg").toString()));
+        assertThat(unscoped).isEqualTo("local:" + PathComparisonKeys.key(cwd.resolve("pkg").toString()));
     }
 
     @Test

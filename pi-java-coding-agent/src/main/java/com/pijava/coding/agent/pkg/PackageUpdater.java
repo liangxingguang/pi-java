@@ -47,10 +47,13 @@ final class PackageUpdater {
     private final GitPackageStore gitStore;
     private final ProgressRunner progress;
 
-    /** {@code PackageManager::withProgress} 的注入形（构造序解环）。 */
+    /** {@code PackageManager::withProgress}＋{@code ::emitProgress} 的注入形
+     *  （构造序解环；后者供 {@code progress} 型事件）。 */
     interface ProgressRunner {
         void run(Action action, String source, String message, PackageManager.IoRunnable op)
                 throws IOException;
+
+        void emit(ProgressEvent event);
     }
 
     /** 可抛受检异常的任务（pi async task 对位）。 */
@@ -62,7 +65,10 @@ final class PackageUpdater {
     /** pi {@code ConfiguredUpdateSource}／{@code NpmUpdateTarget} 合并形。 */
     private record UpdateTarget(String source, SourceScope scope, ParsedSource parsed) {}
 
-    record NpmCheck(UpdateTarget entry, boolean shouldUpdate) {}
+    /** pi {@code shouldUpdateNpmSource} 的三态返回（:1178-1195）：未装 ⇒ 无版本；
+     *  查询失败 ⇒ 保守 shouldUpdate＝true 且无 targetVersion。 */
+    record NpmCheck(UpdateTarget entry, boolean shouldUpdate, String installedVersion,
+                    String targetVersion) {}
 
     PackageUpdater(SourceResolver resolver, SettingsManager settings, InstallLayout layout,
             NpmResolver npmResolver, GitPackageStore gitStore, ProgressRunner progress) {
@@ -132,19 +138,18 @@ final class PackageUpdater {
 
         List<ThrowingSupplier<NpmCheck>> checkTasks = npmCandidates.stream()
             .<ThrowingSupplier<NpmCheck>>map(entry -> () ->
-                new NpmCheck(entry,
-                    shouldUpdateNpmSource((NpmSource) entry.parsed(), entry.scope())))
+                shouldUpdateNpmSource(entry))
             .toList();
         var checkResults = runWithConcurrency(checkTasks, UPDATE_CHECK_CONCURRENCY);
 
-        var userUpdates = new ArrayList<UpdateTarget>();
-        var projectUpdates = new ArrayList<UpdateTarget>();
+        var userUpdates = new ArrayList<NpmCheck>();
+        var projectUpdates = new ArrayList<NpmCheck>();
         for (var result : checkResults) {
             if (!result.shouldUpdate()) {
                 continue;
             }
             (result.entry().scope() == SourceScope.USER ? userUpdates : projectUpdates)
-                .add(result.entry());
+                .add(result);
         }
 
         // pi :1164-1178：user-npm 批、project-npm 批、git 任务组三者并行。
@@ -179,43 +184,75 @@ final class PackageUpdater {
     }
 
     /** pi {@code shouldUpdateNpmSource}（:1181-1195）：未安装 ⇒ true；查询失败
-     *  ⇒ <b>true（保守更新）</b>；否则 latest &gt; installed。 */
-    boolean shouldUpdateNpmSource(NpmSource source, SourceScope scope) {
-        var installedPath = layout.managedNpmInstallPath(source, scope);
+     *  ⇒ <b>true（保守更新）</b>；否则 latest &gt; installed。返回三态以支撑
+     *  安装后「版本没变」的进度警告（{@link #reportUnchangedNpmUpdates}）。 */
+    NpmCheck shouldUpdateNpmSource(UpdateTarget entry) {
+        var source = (NpmSource) entry.parsed();
+        var installedPath = layout.managedNpmInstallPath(source, entry.scope());
         var installedVersion = Files.exists(installedPath)
             ? layout.installedNpmVersion(installedPath) : null;
         if (installedVersion == null) {
-            return true;
+            return new NpmCheck(entry, true, null, null);
         }
         try {
-            // pi 传 spec 给 npm view；HTTP 臂 seam 取 name＋range 同效（批 18 seam）。
+            // pi 传 spec 给 npm view；HTTP 臂 seam 取 name+range 同效（批 18 seam）。
             var target = npmResolver.latestSatisfying(source.name(), source.range());
-            return Semvers.gt(target, installedVersion);
+            return new NpmCheck(entry, Semvers.gt(target, installedVersion), installedVersion, target);
         } catch (Exception e) {
             // Preserve existing update behavior when version lookup fails.（pi :1191-1194）
-            return true;
+            return new NpmCheck(entry, true, installedVersion, null);
         }
     }
 
-    /** pi {@code updateNpmBatch}（:1197-1209）：进度消息逐字；java 逐包顺装（D113）。 */
-    private void updateNpmBatch(List<UpdateTarget> sources, SourceScope scope)
+    /** pi {@code updateNpmBatch}（:1197-1209）：进度消息逐字；java 逐包顺装（D113）。
+     *  装完走 {@link #reportUnchangedNpmUpdates}（pi :1211-1233）。 */
+    private void updateNpmBatch(List<NpmCheck> sources, SourceScope scope)
             throws IOException {
         if (sources.isEmpty()) {
             return;
         }
         var single = sources.size() == 1;
-        var sourceLabel = single ? sources.get(0).source() : scope.id() + " npm packages";
+        var sourceLabel = single ? sources.get(0).entry().source() : scope.id() + " npm packages";
         var message = single
-            ? "Updating " + sources.get(0).source() + "..."
+            ? "Updating " + sources.get(0).entry().source() + "..."
             : "Updating " + scope.id() + " npm packages...";
         progress.run(Action.UPDATE, sourceLabel, message, () -> {
             var installRoot = layout.npmInstallRoot(scope, false);
             layout.ensureNpmProject(installRoot);
             for (var entry : sources) {
                 // pi spec＝version ? spec : name@latest；HTTP 臂 range 语义同（null ⇒ 最新）。
-                npmResolver.install((NpmSource) entry.parsed(), installRoot);
+                npmResolver.install((NpmSource) entry.entry().parsed(), installRoot);
             }
         });
+        reportUnchangedNpmUpdates(sources, scope);
+    }
+
+    /**
+     * pi {@code reportUnchangedNpmUpdates}（:1211-1233）：npm 在发布后短时间内可能
+     * 解析到过期 registry 元数据、静默装回旧版本——announced 了更新却没变版本时
+     * 发一条 progress 消息（文案逐字；品牌无插值）。
+     */
+    private void reportUnchangedNpmUpdates(List<NpmCheck> sources, SourceScope scope) {
+        for (var check : sources) {
+            if (check.installedVersion() == null || check.targetVersion() == null) {
+                continue;
+            }
+            var source = check.entry().source();
+            var installedPath = layout.managedNpmInstallPath(
+                (NpmSource) check.entry().parsed(), scope);
+            var versionAfter = layout.installedNpmVersion(installedPath);
+            if (!check.installedVersion().equals(versionAfter)) {
+                continue;
+            }
+            emitProgress(ProgressEvent.progress(Action.UPDATE, source,
+                source + " is still " + versionAfter + " (registry reports "
+                    + check.targetVersion()
+                    + "); npm registry metadata may be stale, try again in a few minutes"));
+        }
+    }
+
+    private void emitProgress(ProgressEvent event) {
+        progress.emit(event);
     }
 
     // ── checkForAvailableUpdates（:1217-1280）────────────────────

@@ -23,6 +23,8 @@ public final class GitPackageStore {
 
     private static final Pattern REMOTE_REF_HEAD = Pattern.compile("^([0-9a-f]{40})\\s+", Pattern.MULTILINE);
     private static final Pattern REMOTE_HEAD = Pattern.compile("^([0-9a-f]{40})\\s+HEAD$", Pattern.MULTILINE);
+    /** pi :2144 逐字：只在 ref 是 7–64 位十六进制时才可能「已检出同一 commit」。 */
+    private static final Pattern COMMIT_REF = Pattern.compile("^[0-9a-fA-F]{7,64}$");
 
     private final GitRunner git;
     private final InstallLayout layout;
@@ -269,13 +271,27 @@ public final class GitPackageStore {
         }
     }
 
-    /** pi {@code refreshTemporaryGitSource}（:2020-2031）：temporary＋离线门＋
-     *  {@code withProgress("pull", …)}；<b>失败静默保留缓存检出</b>（catch 空臂）。 */
+    /**
+     * pi {@code refreshTemporaryGitSource}（:2137-2162）：temporary＋离线门＋
+     * {@code withProgress("pull", …)}；<b>失败静默保留缓存检出</b>（catch 空臂）。
+     *
+     * <p>L5 W5 §6.2：ref 可指<b>移动分支</b>，所以带 ref 也刷新；只有 ref 是
+     * 7–64 位十六进制 commit 哈希且 HEAD 已是它时才跳过网络（pi 逐字预检）。</p>
+     */
     public void refreshTemporaryGitSource(GitSource source, String sourceStr) {
         if (PackageEnvironment.isOfflineModeEnabled()) {
             return;
         }
+        var installedPath = layout.gitInstallPath(source, SourceScope.TEMPORARY);
         try {
+            if (source.ref() != null && COMMIT_REF.matcher(source.ref()).matches()) {
+                var head = git.capture(List.of("git", "rev-parse", "HEAD"), installedPath,
+                    GitRunner.NETWORK_TIMEOUT_MS).trim();
+                if (head.toLowerCase(java.util.Locale.ROOT)
+                        .startsWith(source.ref().toLowerCase(java.util.Locale.ROOT))) {
+                    return;
+                }
+            }
             withProgress(Action.PULL, sourceStr, "Refreshing " + sourceStr + "...", () ->
                 updateGit(source, SourceScope.TEMPORARY));
         } catch (Exception e) {

@@ -37,7 +37,7 @@ Chord plugin 已按 R5 决定不做，不再是待拍板项。
 | B278 | 显式 `--session-dir`／`settings.sessionDir` 按 pi 语义：文件平铺、cwd 过滤、`~` 展开；默认根布局不变。已于 2026-11-05 按 docs/24（W4c）实施并闭环。 | L4 session |
 | B275 | run 启动重构归 L5：`_startRun`／`_prepareRun`、启动即 busy、`before_agent_start` 期间 abort 在 `agent_start` 生效、flush 次序、settled 延迟动作；`before_agent_start` 的 user／custom 联合。 | L5 coding-agent |
 | B276 | 扩展工具投影归 L5：`getAllTools()` 透传 `reachesTools`；active tools 重设同名集合时保持原顺序。 | L5 coding-agent |
-| B277 | 其余 L5 新锚面：`sessionShareDestination`／`extensionChangelogVersions`、classifier compat、exec、package-manager、model-resolver、export-html、KeybindingHints／`blocked`。其中 **B277a**（`pi.exec` maxBuffer／truncated）已于 2026-11-05 按 docs/25（W3）实施并闭环；**B277b**（三个新 settings 键／`/share` destination／`update self` 配置命令／扩展 changelog 启动展示／manifest `changelogPath`）已于 2026-11-05 按 docs/25（W4）实施，残余仍是 B277c–f（package-manager、model-resolver、export-html、KeybindingHints）。 | L5 coding-agent |
+| B277 | 其余 L5 新锚面：`sessionShareDestination`／`extensionChangelogVersions`、classifier compat、exec、package-manager、model-resolver、export-html、KeybindingHints／`blocked`。其中 **B277a**（`pi.exec` maxBuffer／truncated）、**B277b**（三个新 settings 键／`/share` destination／`update self` 配置命令／扩展 changelog 启动展示／manifest `changelogPath`）、**B277c**（package-manager：安装失败不阻塞启动、temporary 源刷新、`~` 模式展开、路径比较键）已于 2026-11-05 按 docs/25（W3／W4／W5）实施并闭环，残余仍是 B277d–f（model-resolver、export-html、KeybindingHints）。 | L5 coding-agent |
 | B116 | 对外 JSON 的 usage 已改为 pi 扁平形状；Java 内部 `StreamDone` 仍保留嵌套方言，AI 重测时决定是否继续保留。 | L1 AI |
 | B156 | `ModelCompat` 逐组件重建存在漏字段风险；新增组件时必须同时检查构造点和 `withPartial` 类重建点。 | L1 AI |
 | B259 | RPC `cycle_thinking_level` 对不支持 thinking 的模型仍返级别；`get_available_thinking_levels` 也未按模型能力过滤。pi 对应结果为 `null` 或可用子集。 | L5 coding-agent |
@@ -161,6 +161,10 @@ SQLite 后端是 pi-java 独立实现，保留模块，不对齐已删除 schema
 | D215 | Faux usage 估算的文本投影与 pi 的 `Tool` 形状对齐：工具 JSON 只含 `name／description／parameters／constrainedSampling`，Java `ToolDefinition` 的 `label／promptSnippet／promptGuidelines／renderShell` 不进估算文本；`UrlImageContent` 用 `[image-url:<url 长度>]` 稳定占位。差异只影响测试断言的 token 数字，不影响任何请求体。 |
 | D216 | Java 的 `StreamApi` 没有 pi 的 `AbortSignal` 通道：faux 的 deferred 提交/取回不移植「起始或块间中止 ⇒ aborted」分支；aborted 终局仍可由预置消息显式声明（`stopReason = ABORTED`）。与全仓既有取消模型一致。 |
 | D218 | 会话分支用 Java 的 lane（`createLane`／`moveLane`）表达 pi 的单 leaf 树（`branch`／`resetLeaf`／`branchWithSummary`）；`lane` 是 Java 内部扩展键，pi 解析条目时忽略（D190），用户可见的树导航/分支行为由 `TreeCompaction` 全链对齐。 |
+| D219 | 扩展工具激活序的来源不同：pi 用 runner 侧的 `activationOrder` 列表，Java 按工具注册表的插入序（同名集合重设时保持原序）；用户可见的 loadout 顺序由注册序＋`reachesTools` 投影共同决定，未在本包改注册表序源。 |
+| D220 | `KeybindingHints` 不进扩展渲染 API：Java 的 `ToolCallRenderer`／`ExtensionMessageRenderer`／`ExtensionEntryRenderer` 返回纯文本（D92 文本级方言），键位提示由宿主 TUI 自行展示；`blocked` 选项随 E5-31 转 L7。 |
+| D221 | `selfUpdateCommand` 的 `{version}` 在 pi 是**目标版本**，在 pi-java 是**当前版本**（无发布通道取目标版本）；使用 `{version}` 的配置命令须自行处理「已是最新」场景。 |
+| D222 | npm 特有的 CLI 行为不适用：`--no-audit`／`--no-fund`／`realpath` 前缀修正、`npm view` 的 `--json` 数组臂都由 HTTP registry 臂（批 18 裁决③）等价实现；`pi update` 的「进度批装」在 Java 逐包顺装（既有 D113），「版本没变」的 progress 消息已逐字对齐。 |
 | B83 | pi 自身三处 sanitize 缺口保持同样行为；pi 修补时同步。 |
 | B100 | compat 探测的 baseUrl 在内置模型上行为等价；出现可观察差异再重裁。 |
 | B126 | Codex 车道及其 transport 等随 R2/R5 出分母。 |

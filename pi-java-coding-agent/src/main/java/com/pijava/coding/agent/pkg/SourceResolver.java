@@ -93,11 +93,13 @@ public final class SourceResolver {
             return "git:" + git.host() + "/" + git.path();
         }
         var local = (ParsedSource.LocalSource) parsed;
+        // L5 W5 §6.4（pi :1842-1846）：local 身份取路径比较键——Windows 上大小写
+        // 不同的同一目录只有一条身份。
         if (scope != null) {
             var baseDir = getBaseDirForScope(scope);
-            return "local:" + resolvePathFromBase(local.path(), baseDir);
+            return "local:" + PathComparisonKeys.key(resolvePathFromBase(local.path(), baseDir));
         }
-        return "local:" + resolvePath(local.path());
+        return "local:" + PathComparisonKeys.key(resolvePath(local.path()));
     }
 
     /**
@@ -159,7 +161,8 @@ public final class SourceResolver {
         if (parsed instanceof ParsedSource.GitSource git) {
             return "git:" + git.host() + "/" + git.path();
         }
-        return "local:" + resolvePath(((ParsedSource.LocalSource) parsed).path());
+        return "local:" + PathComparisonKeys.key(
+            resolvePath(((ParsedSource.LocalSource) parsed).path()));
     }
 
     private String getSourceMatchKeyForSettings(String source, SourceScope scope) {
@@ -171,7 +174,8 @@ public final class SourceResolver {
             return "git:" + git.host() + "/" + git.path();
         }
         var baseDir = getBaseDirForScope(scope);
-        return "local:" + resolvePathFromBase(((ParsedSource.LocalSource) parsed).path(), baseDir);
+        return "local:" + PathComparisonKeys.key(
+            resolvePathFromBase(((ParsedSource.LocalSource) parsed).path(), baseDir));
     }
 
     /**
