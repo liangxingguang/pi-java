@@ -148,6 +148,11 @@ public final class ModelReferenceResolver {
             suffix == null ? null : suffix.level())));
     }
 
+    /** 该串是否 7 档合法思考级别（pi {@code isValidThinkingLevel}）。 */
+    public static boolean isValidThinkingLevel(String level) {
+        return ModelPatterns.isValidThinkingLevel(level);
+    }
+
     /** pi {@code findExactModelReferenceMatch}（:181-190）：{@code none}+非 fuzzy 的薄包装。 */
     public static Optional<ModelInfo> findExactMatch(String reference, List<ModelInfo> models) {
         var result = resolve(Request.exact(reference == null ? "" : reference), models,

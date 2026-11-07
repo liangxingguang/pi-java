@@ -134,12 +134,76 @@ public final class DefaultModelResolver implements ModelResolver {
     /**
      * Resolve a CLI model pattern to a concrete model, with a fallback provider.
      *
+     * <p>L5 W6b（docs/25 §7；pi {@code resolveCliModel}）：解析策略整条收敛到
+     * {@link CliModelResolution}——错误文案逐字、歧义显式、裸未知 id 报错而非
+     * 兜底成默认 provider 的自定义模型（2026-11-05 裁决）。</p>
+     *
+     * <p>保留的 Java 独有便利臂（pi 无，既有 D）：整串是裸 provider 名（
+     * {@code "anthropic"}／{@code "google:high"}）或 {@code "provider/"} 时取该
+     * provider 的默认模型。该支路排在解析核之前，避免裸 {@code anthropic} 以
+     * 子串命中 {@code openrouter/anthropic/*}。</p>
+     *
      * @param pattern model pattern or ID (may be null → default provider)
      * @param defaultProvider fallback provider when the pattern is absent or unqualified
      * @return the resolved model ID
      * @throws IllegalStateException if the pattern cannot be resolved
      */
     public ModelId<?> resolve(String pattern, String defaultProvider) {
+        return resolve(pattern, defaultProvider, provider -> false, false);
+    }
+
+    /**
+     * 带可用性判据的 CLI 解析（pi {@code resolveCliModel} 的 {@code usable} 参）。
+     *
+     * @param pattern         模型引用（null/空白 ⇒ 默认 provider 的能力集解析）
+     * @param defaultProvider provider 缺席时的回落（裸 provider 便利臂与默认能力集解析）
+     * @param usable          provider 是否已有配置凭据（pi {@code hasConfiguredAuth}）
+     * @param inlineApiKey    {@code --api-key} 是否显式给出（可用性恒 false）
+     * @return 解析出的模型 id
+     * @throws IllegalStateException 解析失败（文案即 CLI 错误文案）
+     */
+    public ModelId<?> resolve(String pattern, String defaultProvider,
+                              java.util.function.Predicate<String> usable,
+                              boolean inlineApiKey) {
+        return resolve(pattern, defaultProvider, usable, inlineApiKey, provider -> false);
+    }
+
+    /**
+     * 全参形：额外接受「运行时已知 provider」判据（pi 的 models 列表天然含已注册
+     * provider 的模型；Java 的静态目录不含，故显式 {@code --provider} 指向运行时
+     * 注册的 provider 时仍走自定义 id）。
+     *
+     * @param pattern       模型引用
+     * @param defaultProvider 回落 provider
+     * @param usable        provider 是否已有配置凭据
+     * @param inlineApiKey  {@code --api-key} 是否给出
+     * @param knownProvider provider 是否真实存在（运行时注册表）
+     * @return 解析出的模型 id
+     * @throws IllegalStateException 解析失败（文案即 CLI 错误文案）
+     */
+    public ModelId<?> resolve(String pattern, String defaultProvider,
+                              java.util.function.Predicate<String> usable,
+                              boolean inlineApiKey,
+                              java.util.function.Predicate<String> knownProvider) {
+        return resolve(pattern, defaultProvider, null, usable, inlineApiKey, knownProvider);
+    }
+
+    /**
+     * 全参形（含显式 {@code --provider} 约束）。
+     *
+     * @param pattern        模型引用
+     * @param defaultProvider 回落 provider（无显式约束时用于裸 provider 便利臂）
+     * @param cliProvider    显式 {@code --provider}（null ≙ 未给）
+     * @param usable         provider 是否已有配置凭据
+     * @param inlineApiKey   {@code --api-key} 是否给出
+     * @param knownProvider  provider 是否真实存在（运行时注册表）
+     * @return 解析出的模型 id
+     * @throws IllegalStateException 解析失败（文案即 CLI 错误文案）
+     */
+    public ModelId<?> resolve(String pattern, String defaultProvider, String cliProvider,
+                              java.util.function.Predicate<String> usable,
+                              boolean inlineApiKey,
+                              java.util.function.Predicate<String> knownProvider) {
         if (pattern == null || pattern.isBlank()) {
             var preferred = Optional.ofNullable(defaultProvider)
                 .filter(p -> !p.isBlank())
@@ -149,9 +213,8 @@ public final class DefaultModelResolver implements ModelResolver {
         var trimmed = pattern.trim();
         var available = catalog.listModels();
 
-        // Java 既有支路（pi resolveCliModel 无）：整串是裸 provider 名（可带一个
+        // Java 既有便利臂（pi resolveCliModel 无）：整串是裸 provider 名（可带一个
         // 合法 :level 后缀，如 "google:high"）→ 该 provider 的默认模型/首条。
-        // 必须排在子串核之前：裸 "anthropic" 会子串命中 openrouter/anthropic/* 模型。
         var withoutLevel = stripValidLevelSuffix(trimmed);
         if (withoutLevel.indexOf('/') < 0) {
             var byProvider = available.stream()
@@ -161,9 +224,7 @@ public final class DefaultModelResolver implements ModelResolver {
                 return defaultOrFirst(withoutLevel, byProvider);
             }
         }
-
-        // Java 既有支路（pi 无）："provider/" → provider 默认模型；provider 下无模型
-        // 时抛错（保留既有形状）。同样排在子串核之前。
+        // Java 既有便利臂（pi 无）："provider/" → provider 默认模型。
         var firstSlash = withoutLevel.indexOf('/');
         if (firstSlash >= 0 && withoutLevel.substring(firstSlash + 1).isEmpty()) {
             var providerRef = withoutLevel.substring(0, firstSlash);
@@ -176,36 +237,20 @@ public final class DefaultModelResolver implements ModelResolver {
             return defaultOrFirst(providerRef, byProvider);
         }
 
-        // pi 匹配核（CLI 严格模式：全串先试，保护 openrouter :batch/:exacto 冒号 id；
-        // 非法 :后缀不切，整串留作下面的自定义 id 兜底）。
-        var parsed = ModelPatterns.parse(trimmed, available, true);
-        if (parsed.model().isPresent()) {
-            return parsed.model().get().id();
+        var result = CliModelResolution.resolve(new CliModelResolution.Request(
+            cliProvider, trimmed, false, inlineApiKey, available,
+            usable == null ? provider -> false : usable,
+            knownProvider == null ? provider -> false : knownProvider));
+        if (result.error() != null) {
+            throw new IllegalStateException(result.error());
         }
-
-        // Not in the builtin catalog: accept an arbitrary model ID so users
-        // can use any model their provider's API supports. The catalog only
-        // provides listing/pricing/context metadata for known models.
-        // pi resolveCliModel:567-580 —— 兜底前只剥<b>合法</b> level 后缀，非法后缀
-        // 留在 id 里（"x:random" 自定义 id 即 "x:random"）。
-        var fallbackPattern = stripValidLevelSuffix(trimmed);
-        String effectiveProvider;
-        String fallbackId;
-        var slash = fallbackPattern.indexOf('/');
-        if (slash > 0) {
-            effectiveProvider = fallbackPattern.substring(0, slash);
-            fallbackId = fallbackPattern.substring(slash + 1);
-        } else {
-            effectiveProvider = defaultProvider != null && !defaultProvider.isBlank()
-                ? defaultProvider : "google";
-            fallbackId = fallbackPattern;
+        if (result.customId() != null) {
+            if (result.warning() != null) {
+                System.err.println(result.warning());
+            }
+            return result.customId();
         }
-        // Aligned with pi's resolveCliModel: warn that we're using a
-        // custom (uncatalogued) model id rather than a known entry.
-        System.err.println("Model \"" + fallbackId
-            + "\" not found for provider \"" + effectiveProvider
-            + "\". Using custom model id.");
-        return ModelId.of(effectiveProvider, fallbackId);
+        return result.model().id();
     }
 
     /** 尾缀是 7 档合法思考档（且冒号不在首位）时剥掉；否则原样返回。 */

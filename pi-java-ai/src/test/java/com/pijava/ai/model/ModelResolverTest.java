@@ -128,14 +128,17 @@ class ModelResolverTest {
     }
 
     @Test
-    void resolveBareUnknownModelUsesDefaultProvider() {
+    void resolveBareUnknownModelIsAnError() {
+        // L5 W6b（docs/25 §7；pi resolveCliModel:520-526）：裸未知 id 不再兜底到默认
+        // provider 的自定义模型——2026-11-05 裁决按 pi 语义执行。
         var catalog = catalog(List.of(
                 info("deepseek", "deepseek-chat", Set.of(ModelCapability.TEXT))));
         var resolver = new DefaultModelResolver(catalog);
 
-        var resolved = resolver.resolve("deepseek-v4-flash", "deepseek");
-        assertThat(resolved.provider()).isEqualTo("deepseek");
-        assertThat(resolved.modelName()).isEqualTo("deepseek-v4-flash");
+        assertThatThrownBy(() -> resolver.resolve("deepseek-v4-flash", "deepseek"))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessage("Model \"deepseek-v4-flash\" not found. "
+                + "Use --list-models to see available models.");
     }
 
     /**
