@@ -38,7 +38,8 @@ public final class MessageBubble {
             case ChatMessage.User(var text) -> prefix(
                 TextLayout.split(TextLayout.escapeMarkup(text), false),
                 "› ", MESSAGE_INDENT);
-            case ChatMessage.Assistant(var blocks) -> renderBlocks(blocks);
+            case ChatMessage.Assistant(var blocks, var messageId, var timestamp) ->
+                renderBlocks(blocks, messageId, timestamp);
             case ChatMessage.ToolCall(var name, var arguments) -> toolCallCard(name, arguments);
             case ChatMessage.ToolResult(var content, var isError) -> toolResult(content, isError);
             case ChatMessage.Error(var message) ->
@@ -99,6 +100,15 @@ public final class MessageBubble {
     }
 
     private static List<LogicalLine> renderBlocks(List<ContentBlock> blocks) {
+        return renderBlocks(blocks, null, null);
+    }
+
+    /**
+     * @param messageId 持久化条目 id（实时消息 {@code null}）
+     * @param timestamp 持久化条目 ISO 时间（实时消息 {@code null}）
+     */
+    private static List<LogicalLine> renderBlocks(List<ContentBlock> blocks,
+                                                  String messageId, String timestamp) {
         var lines = new ArrayList<LogicalLine>();
         boolean prefixed = false;
         for (var block : blocks) {
@@ -110,8 +120,8 @@ public final class MessageBubble {
                     // 批 26（docs/37 T11）：渲染前变换缝（pi assistant-message.ts:113-117
                     // 的 createMarkdownTransform("assistant", ...) 对位）。
                     var rendered = MarkdownRenderer.toLogicalLines(
-                        MarkdownTransformers.apply(text.trim(),
-                            MarkdownMessageType.ASSISTANT),
+                        MarkdownTransformers.applyForEntry(text.trim(),
+                            MarkdownMessageType.ASSISTANT, messageId, timestamp),
                         MarkdownTheme.current(), Style.EMPTY);
                     if (!prefixed && !rendered.isEmpty()) {
                         // The bullet belongs to the assistant prose, not to a

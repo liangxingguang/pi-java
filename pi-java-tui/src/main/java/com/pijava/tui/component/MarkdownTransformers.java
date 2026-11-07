@@ -34,12 +34,27 @@ public final class MarkdownTransformers {
      *        {@code availableWidth} 恒 -1（裁决④窄差）
      */
     public static String apply(String markdown, MarkdownMessageType messageType) {
+        return apply(markdown, messageType, null, null);
+    }
+
+    /**
+     * L5 W8（pi {@code types.ts:1562-1568}）：渲染<b>持久化会话条目</b>时携带
+     * 条目 id 与 ISO 时间——{@code messageId}/{@code timestamp} 只在从持久化条目
+     * 渲染时有值，实时消息传 {@code null}。
+     */
+    public static String applyForEntry(String markdown, MarkdownMessageType messageType,
+                                       String messageId, String timestamp) {
+        return apply(markdown, messageType, messageId, timestamp);
+    }
+
+    private static String apply(String markdown, MarkdownMessageType messageType,
+                                String messageId, String timestamp) {
         var chain = source.get();
         if (chain.isEmpty()) {
             return markdown;
         }
         var context = new com.pijava.coding.agent.extension.MarkdownTransformContext(
-            messageType, false, -1);
+            messageType, false, -1, messageId, timestamp);
         String current = markdown;
         for (var transformer : chain) {
             try {

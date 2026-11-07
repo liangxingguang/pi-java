@@ -64,9 +64,26 @@ public final class HtmlExporter {
         .msg img { max-width: 100%; border-radius: 8px; }
         .meta-line { color: var(--muted); font-size: 12px; text-align: center;
                      margin: 6px 0; }
+        .system-entry { margin: 14px 0; }
+        .system-entry .message-timestamp { color: var(--muted); font-size: 11px; }
+        .system-prompt { background: var(--card); border: 1px solid var(--border);
+                         border-radius: 8px; padding: 10px 12px; margin: 6px 0; }
+        .system-prompt-header { color: var(--heading); font-weight: 600; margin-bottom: 6px; }
+        .system-prompt-preview, .system-prompt-full {
+            white-space: pre-wrap; font: 13px/1.5 ui-monospace, Consolas, monospace; }
+        .system-prompt-expand-hint { color: var(--muted); font-size: 12px; }
+        .tools-list { background: var(--card); border: 1px solid var(--border);
+                      border-radius: 8px; padding: 10px 12px; margin: 6px 0; }
+        .tools-header { color: var(--heading); font-weight: 600; margin-bottom: 6px; }
+        .tool-item-name { font-family: ui-monospace, Consolas, monospace; color: var(--accent); }
+        .tool-item-desc, .tool-param-desc { color: var(--muted); font-size: 12px; }
+        .tool-param-name { font-family: ui-monospace, Consolas, monospace; }
+        .tool-param-type { color: var(--code); font-size: 12px; }
         """;
 
     private final ObjectMapper json = new ObjectMapper();
+    /** 本次导出的条目索引（pi {@code byId}；系统消息的祖先回溯用）。 */
+    private java.util.Map<String, JsonNode> entriesById = java.util.Map.of();
 
     /** 导出到当前目录的 {@code pi-java-session-<basename>.html}。 */
     public Path export(Path sessionJsonl) {
@@ -134,6 +151,15 @@ public final class HtmlExporter {
             .append("</head>\n<body>\n  <div class=\"page\">\n");
         renderHeader(out, session.get("header"));
         var entries = session.get("entries");
+        // pi byId（template.js:1300）：系统消息的祖先回溯按 id 查；一次建表，遍历用 for-each（迭代）。
+        var byId = new java.util.HashMap<String, JsonNode>(Math.max(16, entries.size() * 2));
+        for (var entry : entries) {
+            var id = text(entry, "id");
+            if (id != null) {
+                byId.put(id, entry);
+            }
+        }
+        this.entriesById = byId;
         for (var entry : entries) {
             renderEntry(out, entry);
         }
@@ -165,7 +191,14 @@ public final class HtmlExporter {
     private void renderEntry(StringBuilder out, JsonNode entry) {
         var type = text(entry, "type");
         switch (type) {
-            case "message" -> renderMessage(out, entry.get("message"));
+            case "message" -> {
+                var message = entry.get("message");
+                if (message != null && "system".equals(text(message, "role"))) {
+                    renderSystemEntry(out, entry, message);
+                } else {
+                    renderMessage(out, message, entryId(entry));
+                }
+            }
             case "model_change" -> meta(out, "model → " + text(entry, "provider")
                 + "/" + text(entry, "modelId"));
             case "thinking_level_change" -> meta(out,
@@ -179,28 +212,79 @@ public final class HtmlExporter {
         }
     }
 
-    private void renderMessage(StringBuilder out, JsonNode message) {
+    // ── 系统消息（L5 W8；pi template.js:324-386/:1404-1420）──────────
+
+    /** 系统条目：首条渲染完整提示、后续渲染 update（见 {@link HtmlSystemMessages}）。 */
+    private void renderSystemEntry(StringBuilder out, JsonNode entry, JsonNode message) {
+        out.append(HtmlSystemMessages.render(entry, message, isLeadingSystemEntry(entry)));
+    }
+
+    /**
+     * pi {@code isLeadingSystemEntry}（template.js:354-364）：沿父链回溯，遇到任何
+     * 携带系统状态的祖先（system 消息条目或带 {@code systemMessage} 的压缩条目）
+     * ⇒ 不是首条。<b>迭代</b>（祖先链可能上万条）。
+     */
+    private boolean isLeadingSystemEntry(JsonNode entry) {
+        var current = entry;
+        while (true) {
+            var parentId = text(current, "parentId");
+            if (parentId == null || parentId.equals(text(current, "id"))) {
+                return true;
+            }
+            var parent = entriesById.get(parentId);
+            if (parent == null) {
+                return true;
+            }
+            if (carriesSystemState(parent)) {
+                return false;
+            }
+            current = parent;
+        }
+    }
+
+    /** pi {@code carriesSystemState}（template.js:348-351）。 */
+    private static boolean carriesSystemState(JsonNode entry) {
+        var type = text(entry, "type");
+        if ("message".equals(type)) {
+            var message = entry.get("message");
+            return message != null && "system".equals(text(message, "role"));
+        }
+        if ("compaction".equals(type)) {
+            return entry.hasNonNull("systemMessage");
+        }
+        return false;
+    }
+
+    /** pi {@code entryDomId}（template.js:1291）：{@code entry-<id>}，消息锚点用。 */
+    private static String entryId(JsonNode entry) {
+        var id = text(entry, "id");
+        return id == null ? null : "entry-" + id;
+    }
+
+    private void renderMessage(StringBuilder out, JsonNode message, String domId) {
         if (message == null || !message.isObject()) {
             return;
         }
+        var idAttr = domId == null ? "" : " id=\"" + escape(domId) + "\"";
         var role = text(message, "role");
         switch (role) {
             case "user" -> {
-                out.append("    <div class=\"msg user\"><div class=\"bubble\">\n");
+                out.append("    <div class=\"msg user\"").append(idAttr)
+                    .append("><div class=\"bubble\">\n");
                 renderBlocks(out, message.get("content"));
                 out.append("    </div></div>\n");
             }
             case "assistant" -> {
-                out.append("    <div class=\"msg assistant\"><div class=\"bubble\">\n");
+                out.append("    <div class=\"msg assistant\"").append(idAttr)
+                    .append("><div class=\"bubble\">\n");
                 renderBlocks(out, message.get("content"));
                 out.append("    </div></div>\n");
             }
             case "tool" -> renderToolResult(out, message);
-            case "system" -> meta(out, text(message, "content") == null
-                ? "system message" : "system");
             default -> { /* 未知角色不渲染 */ }
         }
     }
+
 
     private void renderBlocks(StringBuilder out, JsonNode content) {
         if (content == null || !content.isArray()) {

@@ -532,6 +532,8 @@ Java 现状：
 
 ## 9. W8（B277f）：HTML 导出与 markdown 渲染上下文
 
+> **实施记录（2026-11-05，已落）**：系统消息渲染拆到新件 `HtmlSystemMessages`（`HtmlExporter` 守 ≤500 行）——首条 system 渲染完整提示＋工具清单、后续渲染 update 文案（`Removed`/`Updated system prompt section "<name>"`）＋工具增删摘要，`isLeadingSystemEntry` 沿父链**迭代**回溯（compaction 携带 `systemMessage` 也算更早的系统态），条目带 `entry-<id>` 锚点与 `.message-timestamp`；条目索引 `entriesById` 一次建表。`ReadLineRange`（core）落地 pi `formatReadLineRange` 语义（数字字符串可解析、非法值空串）。`MarkdownToHtml` 增加 CJK 强调放宽（D225 的 Java 等价臂，非 JS marked）：收尾定界符内侧是 CJK/全角标点或外侧非字母数字即闭合，纯拉丁文本仍守 CommonMark。`MarkdownTransformContext` 加可空 `messageId`/`timestamp`（三参构造保留），`ChatMessage.Assistant` 携带两值，`MarkdownTransformers.applyForEntry` 供给，持久化条目渲染时 TUI 传入、实时消息为 null。`KeybindingHints`/`blocked` 按 D220 与 L7 不动。
+
 ### 9.1 pi 事实
 
 - `export-html/index.ts:146-176`：新增 `vendor/marked-cjk-friendly.min.js`，模板占位 `{{MARKED_CJK_FRIENDLY_JS}}`。
@@ -562,10 +564,13 @@ Java 现状：
 
 ### 9.4 测试
 
-- `HtmlExportSystemMessagesTest`：首条 system 完整提示；后续 update 文案；sections 增删；工具增减摘要；时间戳存在。
-- `HtmlExportDeepChainTest`：10,000 条线性会话导出不崩（栈深度）。
-- `HtmlExportCjkTest`：`**中文**` 强调渲染为 `<strong>`；全角标点不被吞。
-- `MarkdownTransformContextTest`：持久化条目渲染时 transformer 收到 entry id 与 timestamp；实时渲染为 null。
+**实施形状（2026-11-05）**：
+
+- `HtmlExportSystemMessagesTest`（3 项）：首条 system ⇒ 完整提示＋sections＋`Available Tools`＋时间戳；后续 ⇒ `System Prompt Update`＋`Updated …project_context`/`Removed …rules`/`tools +bash -read`/`Tools Added`/`Tools Removed`；compaction 携带 `systemMessage` ⇒ 其后 system 按 update 渲染。
+- `HtmlExportDeepChainTest`（1 项）：20,000 条线性会话导出不爆栈，首末条目都在（pi 用 20,000，非最初设计稿的 10,000）。
+- `HtmlExportCjkTest`（3 项）：CJK 标点旁的 `**…**`/`*…*` 渲染为 `<strong>`/`<em>`；全角标点不被吞；`**end.**Then` 仍不成立（CommonMark flanking 不变）。
+- `ReadLineRangeTest`（6 项）：两参缺席/数字字符串/仅 offset/仅 limit/非法值/小数。
+- `MarkdownTransformContextTest`（3 项，在 **pi-java-tui** 模块——它依赖 coding-agent 的 TUI 缝）：实时渲染两值为 null；持久化条目渲染带 id＋ISO；三参旧构造仍可用。
 
 ### 9.5 风险
 

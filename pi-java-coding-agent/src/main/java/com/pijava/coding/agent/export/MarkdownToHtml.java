@@ -181,14 +181,73 @@ public final class MarkdownToHtml {
         return out.toString();
     }
 
-    /** 在已转义文本上叠加 Markdown 行内结构。 */
+    /**
+     * 在已转义文本上叠加 Markdown 行内结构。
+     *
+     * <p>L5 W8（docs/25 §9；pi {@code marked-cjk-friendly}，D225 的 Java 等价臂）：
+     * 强调定界符紧贴 CJK 全角标点时放宽 flanking——{@code **中文。**} 里收尾
+     * {@code **} 内侧是 {@code 。}（全角标点），即使外侧紧跟字母也照样闭合；
+     * 纯拉丁文本（{@code **end.**Then}）仍按 CommonMark 不成立。</p>
+     */
     private static String markup(String text) {
         String result = LINK.matcher(text).replaceAll(m ->
             "<a href=\"" + m.group(2) + "\">" + m.group(1) + "</a>");
-        result = BOLD.matcher(result).replaceAll("<strong>$1</strong>");
-        result = ITALIC_STAR.matcher(result).replaceAll("<em>$1</em>");
-        result = ITALIC_UNDER.matcher(result).replaceAll("<em>$1</em>");
+        result = emphasize(result, BOLD, "<strong>", "</strong>");
+        result = emphasize(result, ITALIC_STAR, "<em>", "</em>");
+        result = emphasize(result, ITALIC_UNDER, "<em>", "</em>");
         return STRIKE.matcher(result).replaceAll("<del>$1</del>");
+    }
+
+    /**
+     * 逐个替换 {@code pattern} 的命中，闭合侧按 CJK 规则放行：
+     * 闭合定界符紧邻的<b>内侧</b>字符是 CJK 字符/全角标点 ⇒ 允许；
+     * 否则要求闭合定界符外侧不是字母或数字（CommonMark 的 right-flanking）。
+     */
+    private static String emphasize(String text, Pattern pattern, String open, String close) {
+        var matcher = pattern.matcher(text);
+        var out = new StringBuilder();
+        int last = 0;
+        while (matcher.find()) {
+            var inner = matcher.group(1);
+            int closeLength = (matcher.end() - matcher.start() - inner.length()) / 2;
+            int afterIndex = matcher.end();
+            // 收尾定界符的内侧字符（强调内容的最后一字）与外侧字符。
+            var innerLastChar = inner.isEmpty() ? " "
+                : new String(Character.toChars(inner.codePointBefore(inner.length())));
+            var after = afterIndex >= text.length() ? " "
+                : new String(Character.toChars(text.codePointAt(afterIndex)));
+            boolean closes = isCjk(innerLastChar) || isCjk(after)
+                || !isWordChar(after.codePointAt(0));
+            if (!closes || closeLength == 0) {
+                continue;
+            }
+            out.append(text, last, matcher.start()).append(open)
+                .append(inner).append(close);
+            last = matcher.end();
+        }
+        out.append(text.substring(last));
+        return out.toString();
+    }
+
+    private static boolean isWordChar(int codePoint) {
+        return Character.isLetterOrDigit(codePoint);
+    }
+
+    /** CJK 字符与全角标点（pi 的 {@code isCjkFriendly} 判定范围）。 */
+    static boolean isCjk(String value) {
+        if (value.isEmpty()) {
+            return false;
+        }
+        int codePoint = value.codePointAt(0);
+        if (Character.UnicodeScript.of(codePoint) == Character.UnicodeScript.HAN
+                || Character.UnicodeScript.of(codePoint) == Character.UnicodeScript.HIRAGANA
+                || Character.UnicodeScript.of(codePoint) == Character.UnicodeScript.KATAKANA
+                || Character.UnicodeScript.of(codePoint) == Character.UnicodeScript.HANGUL) {
+            return true;
+        }
+        // 全角形式与「CJK 符号和标点」块（：。、！？「」etc.）。
+        return (codePoint >= 0xFF01 && codePoint <= 0xFF60)
+            || (codePoint >= 0x3000 && codePoint <= 0x303F);
     }
 
     /** HTML 转义（&、<、>、"）。 */

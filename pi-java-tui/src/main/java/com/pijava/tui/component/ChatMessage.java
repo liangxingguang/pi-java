@@ -12,7 +12,27 @@ import com.pijava.ai.message.ContentBlock;
 public sealed interface ChatMessage {
 
     record User(String text) implements ChatMessage {}
-    record Assistant(List<ContentBlock> blocks) implements ChatMessage {}
+
+    /**
+     * 助手气泡。
+     *
+     * <p>L5 W8（pi {@code MarkdownTransformContext.messageId}/{@code timestamp}）：
+     * 从<b>持久化条目</b>投影时携带条目 id 与 ISO 时间，实时流式消息两者为
+     * {@code null}（{@link #live} 便捷构造）。</p>
+     */
+    record Assistant(List<ContentBlock> blocks, String messageId, String timestamp)
+            implements ChatMessage {
+
+        /** 实时（非持久化）消息：无条目标识。 */
+        public Assistant(List<ContentBlock> blocks) {
+            this(blocks, null, null);
+        }
+
+        /** Defensive copy of the content blocks. */
+        public Assistant {
+            blocks = List.copyOf(blocks);
+        }
+    }
     record ToolCall(String name, String arguments) implements ChatMessage {}
     /** Tool result content blocks (text and/or diff), for rich rendering (P6-26). */
     record ToolResult(List<ContentBlock> content, boolean isError) implements ChatMessage {
@@ -155,7 +175,9 @@ public sealed interface ChatMessage {
         var content = message.message().content();
         return switch (message.message().role()) {
             case "user" -> new User(joinText(content));
-            case "assistant" -> new Assistant(content);
+            // L5 W8（pi types.ts:1562-1568）：持久化条目 ⇒ 带 id 与 ISO 时间。
+            case "assistant" -> new Assistant(content, message.id(),
+                message.timestamp() == null ? null : message.timestamp().toString());
             case "tool" -> fromToolBlocks(content);
             default -> new System("Unknown message role: " + message.message().role(),
                 MetaKind.GENERIC);

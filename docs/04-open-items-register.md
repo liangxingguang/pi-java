@@ -37,7 +37,7 @@ Chord plugin 已按 R5 决定不做，不再是待拍板项。
 | B278 | 显式 `--session-dir`／`settings.sessionDir` 按 pi 语义：文件平铺、cwd 过滤、`~` 展开；默认根布局不变。已于 2026-11-05 按 docs/24（W4c）实施并闭环。 | L4 session |
 | B275 | run 启动重构归 L5：`_startRun`／`_prepareRun`、启动即 busy、`before_agent_start` 期间 abort 在 `agent_start` 生效、flush 次序、settled 延迟动作；`before_agent_start` 的 user／custom 联合。 | L5 coding-agent |
 | B276 | 扩展工具投影归 L5：`getAllTools()` 透传 `reachesTools`；active tools 重设同名集合时保持原顺序。 | L5 coding-agent |
-| B277 | 其余 L5 新锚面：`sessionShareDestination`／`extensionChangelogVersions`、classifier compat、exec、package-manager、model-resolver、export-html、KeybindingHints／`blocked`。其中 **B277a**（`pi.exec` maxBuffer／truncated）、**B277b**（三个新 settings 键／`/share` destination／`update self` 配置命令／扩展 changelog 启动展示／manifest `changelogPath`）、**B277c**（package-manager：安装失败不阻塞启动、temporary 源刷新、`~` 模式展开、路径比较键）已于 2026-11-05 按 docs/25（W3／W4／W5）实施并闭环，残余仍是 B277d–f（model-resolver、export-html、KeybindingHints）。 | L5 coding-agent |
+| B277 | 其余 L5 新锚面：`sessionShareDestination`／`extensionChangelogVersions`、classifier compat、exec、package-manager、model-resolver、export-html、KeybindingHints／`blocked`。其中 **B277a**（`pi.exec` maxBuffer／truncated）、**B277b**（三个新 settings 键／`/share` destination／`update self` 配置命令／扩展 changelog 启动展示／manifest `changelogPath`）、**B277c**（package-manager：安装失败不阻塞启动、temporary 源刷新、`~` 模式展开、路径比较键）、**B277e**（tool_search Unicode 分词＋分字段 BM25）、**B277f**（export-html 系统消息与 CJK 强调；KeybindingHints 按 D220 不动）已于 2026-11-05 按 docs/25（W3／W4／W5／W7／W8）实施并闭环，残余仍是 **B277d**（model-resolver，W6）与 `blocked`（随 E5-31 归 L7）。 | L5 coding-agent |
 | B116 | 对外 JSON 的 usage 已改为 pi 扁平形状；Java 内部 `StreamDone` 仍保留嵌套方言，AI 重测时决定是否继续保留。 | L1 AI |
 | B156 | `ModelCompat` 逐组件重建存在漏字段风险；新增组件时必须同时检查构造点和 `withPartial` 类重建点。 | L1 AI |
 | B259 | RPC `cycle_thinking_level` 对不支持 thinking 的模型仍返级别；`get_available_thinking_levels` 也未按模型能力过滤。pi 对应结果为 `null` 或可用子集。 | L5 coding-agent |
@@ -166,6 +166,7 @@ SQLite 后端是 pi-java 独立实现，保留模块，不对齐已删除 schema
 | D221 | `selfUpdateCommand` 的 `{version}` 在 pi 是**目标版本**，在 pi-java 是**当前版本**（无发布通道取目标版本）；使用 `{version}` 的配置命令须自行处理「已是最新」场景。 |
 | D222 | npm 特有的 CLI 行为不适用：`--no-audit`／`--no-fund`／`realpath` 前缀修正、`npm view` 的 `--json` 数组臂都由 HTTP registry 臂（批 18 裁决③）等价实现；`pi update` 的「进度批装」在 Java 逐包顺装（既有 D113），「版本没变」的 progress 消息已逐字对齐。 |
 | D224 | tool_search 分词用 JDK {@code BreakIterator}（UAX#29）代替 {@code Intl.Segmenter}：两者只在「无空格连写」的脚本上不同（浏览器词典切「搜索仓库问题」/泰文连写为多词，JDK 给整段）；空格/标点分隔的日文、韩文、西里尔、拉丁逐词一致。不引入 ICU4J。 |
+| D225 | HTML 导出不引入 JS `marked-cjk-friendly`：Java 的 `MarkdownToHtml` 自带 CJK 强调放宽（收尾定界符内侧为 CJK 字符/全角标点或外侧非字母数字即闭合，纯拉丁文本仍守 CommonMark），导出 HTML 的字节形态与 pi 不同源，判定以渲染结果为准。 |
 | B83 | pi 自身三处 sanitize 缺口保持同样行为；pi 修补时同步。 |
 | B100 | compat 探测的 baseUrl 在内置模型上行为等价；出现可观察差异再重裁。 |
 | B126 | Codex 车道及其 transport 等随 R2/R5 出分母。 |
