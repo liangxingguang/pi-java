@@ -69,10 +69,18 @@ class ModelPatternsTest {
     }
 
     @Test
-    void ambiguousExactFallsThroughToSubstringAndKeepsCatalogOrder() {
-        // docs/12 §4①：裸 id 歧义不硬错；子串路同 id 降序相等 ⇒ 稳定序取目录首条（x 在 y 前）。
-        var hit = ModelPatterns.tryMatch("dup-id", MODELS).orElseThrow();
-        assertThat(hit.id()).isEqualTo(ModelId.of("x", "dup-id"));
+    void ambiguousExactIdNoLongerFallsThroughToSubstring() {
+        // L5 W6a（docs/25 §7；pi model-resolver.ts:262-283）：裸 id 跨 provider 歧义
+        // ⇒ 解析核报 ambiguous，**不再**回落到子串/目录序。旧断言（docs/12 §4①
+        // 「稳定序取目录首条」）随 pi 新锚点作废。
+        assertThat(ModelPatterns.tryMatch("dup-id", MODELS)).isEmpty();
+
+        var result = ModelReferenceResolver.resolve(
+            ModelReferenceResolver.Request.lenient("dup-id"), MODELS, provider -> true);
+        assertThat(result).isInstanceOf(ModelReferenceResolver.Result.Ambiguous.class);
+        assertThat(((ModelReferenceResolver.Result.Ambiguous) result).candidates().stream()
+                .map(m -> m.id().provider()).toList())
+            .containsExactly("x", "y");
     }
 
     @Test
@@ -158,8 +166,9 @@ class ModelPatternsTest {
     }
 
     @Test
-    void parseEmptyPatternSubstringMatchesAll() {
-        // pi 边缘案例：空串是所有 id 的子串。
-        assertThat(ModelPatterns.parse("", MODELS, false).model()).isPresent();
+    void parseEmptyPatternIsNotFound() {
+        // L5 W6a（pi model-resolver.ts:150-152）：空串在解析核入口直接 not-found，
+        // 旧壳「空串是所有 id 的子串」行为随新锚点作废。
+        assertThat(ModelPatterns.parse("", MODELS, false).model()).isEmpty();
     }
 }

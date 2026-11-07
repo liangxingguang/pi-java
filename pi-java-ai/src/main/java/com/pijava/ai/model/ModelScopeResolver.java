@@ -7,12 +7,15 @@ import com.pijava.ai.catalog.ModelCatalog;
 import com.pijava.ai.catalog.ModelInfo;
 
 /**
- * pi {@code resolveModelScopeFromModels}（model-resolver.ts:276-357）的 Java 面。
+ * pi {@code resolveModelScopeFromModels}（model-resolver.ts:332-405）的 Java 面。
  *
  * <p>逐模式处理：含 {@code *?[} 的走 glob（先剥合法 {@code :level} 后缀；<b>精确引用
  * 先于 glob</b>，故 id 带方括号的 {@code custom/bracketed-model[1m]} 仍走精确），其余走
- * {@link ModelPatterns#parse} 宽容模式；{@code provider/id} 全限定与裸 id 双车道 glob；
+ * {@link ModelReferenceResolver} 宽容模式；{@code provider/id} 全限定与裸 id 双车道 glob；
  * 输出保目录序、按 provider/id 去重；不抛错，只产 {@link ModelScopeDiagnostic}。</p>
+ *
+ * <p>L5 W6a（docs/25 §7）：歧义 ⇒ <b>加入所有候选</b>＋一条 {@code ambiguous} 警告
+ * （pi :344-353），不再落成 no-match。</p>
  */
 public final class ModelScopeResolver {
 
@@ -59,10 +62,19 @@ public final class ModelScopeResolver {
             }
         }
 
-        // 精确引用先于 glob（pi :299-305）：id 带 '[' 的 bracketed 模型不在此被当字符类。
-        var exact = ModelPatterns.findExactReference(globPattern, models);
-        if (exact.isPresent()) {
-            addIfAbsent(scoped, exact.get(), level);
+        // 精确引用先于 glob（pi :362-370）：id 带 '[' 的 bracketed 模型不在此被当字符类。
+        var exact = ModelReferenceResolver.resolve(
+            ModelReferenceResolver.Request.exact(globPattern), models, provider -> true);
+        if (exact instanceof ModelReferenceResolver.Result.Resolved resolved) {
+            addIfAbsent(scoped, resolved.model(), level);
+            return;
+        }
+        if (exact instanceof ModelReferenceResolver.Result.Ambiguous ambiguous) {
+            diagnostics.add(ModelScopeDiagnostic.ambiguous(pattern,
+                ambiguous.candidates().stream().map(m -> m.id().provider()).toList()));
+            for (var model : ambiguous.candidates()) {
+                addIfAbsent(scoped, model, level);
+            }
             return;
         }
 
@@ -84,15 +96,31 @@ public final class ModelScopeResolver {
 
     private void resolvePlain(String pattern, List<ScopedModel> scoped,
                               List<ModelScopeDiagnostic> diagnostics) {
-        var parsed = ModelPatterns.parse(pattern, models, false);
-        // 文案在 ModelPatterns 已逐字生成；码＝invalid-thinking-level。
-        parsed.warning().ifPresent(message -> diagnostics.add(new ModelScopeDiagnostic(
-            ModelScopeDiagnostic.Code.INVALID_THINKING_LEVEL, message, pattern)));
-        if (parsed.model().isEmpty()) {
+        // pi :378-398：lenient＋fuzzy；warning 逐字进 invalid-thinking-level 码。
+        var result = ModelReferenceResolver.resolve(
+            ModelReferenceResolver.Request.lenient(pattern), models, provider -> true);
+        if (result instanceof ModelReferenceResolver.Result.NotFound) {
             diagnostics.add(ModelScopeDiagnostic.noMatch(pattern));
             return;
         }
-        addIfAbsent(scoped, parsed.model().get(), parsed.level().orElse(null));
+        if (result instanceof ModelReferenceResolver.Result.Resolved resolved) {
+            if (resolved.warning() != null) {
+                diagnostics.add(new ModelScopeDiagnostic(
+                    ModelScopeDiagnostic.Code.INVALID_THINKING_LEVEL, resolved.warning(), pattern));
+            }
+            addIfAbsent(scoped, resolved.model(), resolved.thinkingLevel());
+            return;
+        }
+        var ambiguous = (ModelReferenceResolver.Result.Ambiguous) result;
+        if (ambiguous.warning() != null) {
+            diagnostics.add(new ModelScopeDiagnostic(
+                ModelScopeDiagnostic.Code.INVALID_THINKING_LEVEL, ambiguous.warning(), pattern));
+        }
+        diagnostics.add(ModelScopeDiagnostic.ambiguous(pattern,
+            ambiguous.candidates().stream().map(m -> m.id().provider()).toList()));
+        for (var model : ambiguous.candidates()) {
+            addIfAbsent(scoped, model, ambiguous.thinkingLevel());
+        }
     }
 
     /** 保序去重（pi modelsAreEqual＝provider/id 相等）。 */

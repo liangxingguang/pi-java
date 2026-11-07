@@ -14,10 +14,11 @@ import java.util.Objects;
  */
 public record ModelScopeDiagnostic(Code code, String message, String pattern) {
 
-    /** pi {@code code: "no-match" | "invalid-thinking-level"}（model-resolver.ts:266）。 */
+    /** pi {@code code: "no-match" | "invalid-thinking-level" | "ambiguous"}（model-resolver.ts:266）。 */
     public enum Code {
         NO_MATCH,
-        INVALID_THINKING_LEVEL
+        INVALID_THINKING_LEVEL,
+        AMBIGUOUS
     }
 
     public ModelScopeDiagnostic {
@@ -30,6 +31,18 @@ public record ModelScopeDiagnostic(Code code, String message, String pattern) {
     static ModelScopeDiagnostic noMatch(String pattern) {
         return new ModelScopeDiagnostic(Code.NO_MATCH,
             "No models match pattern \"" + pattern + "\"", pattern);
+    }
+
+    /**
+     * `Pattern "<p>" matches several providers: <排序列>. Use provider/id to choose one.`
+     * （pi model-resolver.ts:345-352 逐字；provider 名按 {@code localeCompare} 序＝码点序）。
+     */
+    static ModelScopeDiagnostic ambiguous(String pattern, java.util.List<String> providers) {
+        var sorted = providers.stream().distinct().sorted().toList();
+        return new ModelScopeDiagnostic(Code.AMBIGUOUS,
+            "Pattern \"" + pattern + "\" matches several providers: "
+                + String.join(", ", sorted) + ". Use provider/id to choose one.",
+            pattern);
     }
 
     /** `Invalid thinking level "<suffix>" in pattern "<pattern>". Using default instead.`（pi :332）。 */

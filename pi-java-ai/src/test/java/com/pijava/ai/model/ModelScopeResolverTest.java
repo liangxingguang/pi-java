@@ -52,6 +52,39 @@ class ModelScopeResolverTest {
             .isEqualTo("No models match pattern \"missing\"");
     }
 
+    /** L5 W6a（pi :344-353/:393-398）：歧义 ⇒ 所有候选入 scope＋一条 ambiguous 警告。 */
+    @Test
+    void ambiguousPatternAddsAllCandidatesWithWarning() {
+        var gwA = info("gw-a", "shared", "Shared A");
+        var gwB = info("gw-b", "shared", "Shared B");
+
+        var result = ModelScopeResolver.resolve(List.of("shared"), List.of(gwA, gwB));
+
+        assertThat(result.scopedModels().stream()
+                .map(sm -> sm.model().id().provider() + "/" + sm.model().id().modelName())
+                .toList())
+            .containsExactly("gw-a/shared", "gw-b/shared");
+        assertThat(result.diagnostics()).singleElement().satisfies(diagnostic -> {
+            assertThat(diagnostic.code()).isEqualTo(ModelScopeDiagnostic.Code.AMBIGUOUS);
+            assertThat(diagnostic.pattern()).isEqualTo("shared");
+            assertThat(diagnostic.message()).isEqualTo("Pattern \"shared\" matches several "
+                + "providers: gw-a, gw-b. Use provider/id to choose one.");
+        });
+    }
+
+    /** 歧义不再是 no-match（旧行为），且 provider/id 可消歧。 */
+    @Test
+    void ambiguousPatternIsResolvableWithProviderPrefix() {
+        var gwA = info("gw-a", "shared", "Shared A");
+        var gwB = info("gw-b", "shared", "Shared B");
+
+        var result = ModelScopeResolver.resolve(List.of("gw-b/shared"), List.of(gwA, gwB));
+
+        assertThat(result.scopedModels()).singleElement()
+            .extracting(sm -> sm.model().id()).isEqualTo(ModelId.of("gw-b", "shared"));
+        assertThat(result.diagnostics()).isEmpty();
+    }
+
     @Test
     void bracketedIdIsExactReferenceBeforeGlob() {
         var models = new ArrayList<>(ALL);
