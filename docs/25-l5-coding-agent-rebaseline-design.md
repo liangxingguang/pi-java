@@ -2,7 +2,7 @@
 
 > 【背景摘要】按 [`08-pi-rebaseline-master-plan.md`](08-pi-rebaseline-master-plan.md) §5 的 L5 范围，对 CLI 宿主/产品层（`map/04`）按新锚点 `56cae7823` 全量重测。区间内 `packages/coding-agent/src` 共 156 个文件变化（+3,417/−12,363），其中 9,950 行是 `experimental/` 整块删除（R1）。真正落在 L5 的差异集中在：run 启动与 `before_agent_start` 载荷、`reachesTools` 投影、`pi.exec` 输出上限、settings/分享/自更新/扩展 changelog、包管理器容错与临时包刷新、模型引用解析、tool_search 排序、HTML 导出与扩展渲染上下文、RPC 思考档过滤及少量 CLI/平台修复。
 >
-> 文档状态：**实施中（2026-11-05 批准；W1–W5、W9、W10 已落，余 W6/W7/W8）**。§14 第 2–5 项已由用户裁决。
+> 文档状态：**已闭环（2026-11-05；W1–W10 全部落地，B275／B276／B277(a–f)／B259 全销号）**。§14 第 2–5 项已由用户裁决。全仓 verify 6,397 测零失败，Checkstyle 零错误、SpotBugs 零告警。
 >
 > 当前 pi 锚点：`56cae782341c339d3bb820081f0f9425d8c5b1ec`；取证只走 `git show 56cae7823:<path>`。pi-java 代码基线：`b9af4f18`（main，2026-11-05；L4 docs/24 关闭后）。旧基线：pi `ea448f454`，pi-java `edc8749d`（map/04 旧读数）。
 
@@ -46,9 +46,9 @@
 | **L7（转出/复核）** | `8c03fef4d` 会话搜索分层排序、`3bae85274`/`9d345b4e9` 翻页键、`606af8662` 模型名显示、`7391dbb0f` 模型 scope 头、`7853186d1`/`38847563f` 扩展对话框堆叠、`6454d07ec` 剪贴板/WSL、`b5fc6dc84` CSI 清理、`f14813e96` Skill warnings、`a6a7bac86` thinking 空标签、`910149912` read 行号、`014873d7d` 工具计时、`dbc7ff87c` 状态颜色 | map/04 对应行转 L7 或仅作证据刷新，本包不实现 |
 | **N/A（平台/依赖）** | `5f960a0e2`/`5fb9a0b11`/`476a303c1`/`0d23d5345` npm CLI 行为、`c8ec752cf` fd/rg 下载架构、`8efd314fa` models.json 文档生成、`96abe9a5a` 主题 `$schema` URL、`e6fb2581d` lockfile EPERM | 登记 D 或复核说明 |
 
-### 1.3 map/04 逐域重判（实施前）
+### 1.3 map/04 逐域重判（闭环实测）
 
-判定变化行用“旧→新”标注；`转`＝转出行（权重 0）。
+判定变化行用“旧→新”标注；`转`＝转出行（权重 0）。“实施前读数”是重测当时的基线，“实施后”是 W1–W10 全部落地后的实测值——**表内“实施后”列即闭环账面**。
 
 | 域 | 行数/Σ权重（新分母） | 实施前读数 | 变化与说明 | 实施后 |
 |---|---|---|---|---|
@@ -258,7 +258,7 @@ export interface ExecResult { stdout: string; stderr: string; code: number; kill
 ## 5. W4（B277b）：settings／share／self-update／扩展 changelog
 
 
-> **实施状态（2026-11-05）：已实施，待闭环回填。** 落地件：`PackagePaths`（`canonicalizePath`／`resolvePackageChangelogPath` 顶出，守 500 行闸门）、`SelfUpdate`（自更新命令面顶出）、`ExtensionChangelogs`（扩展 changelog 计算）。测试：`ExtensionChangelogsTest`(13)、`PackagePathsTest`(8)、`SelfUpdateTest`(4)、`SessionShareServiceTest`(+3)。coding-agent 全量 2,081 测零失败；tui 侧 `SettingsItemsTest` 补 `share-destination` 行。
+> **实施状态（2026-11-05）：已实施并闭环回填。** 落地件：`PackagePaths`（`canonicalizePath`／`resolvePackageChangelogPath` 顶出，守 500 行闸门）、`SelfUpdate`（自更新命令面顶出）、`ExtensionChangelogs`（扩展 changelog 计算）。测试：`ExtensionChangelogsTest`(13)、`PackagePathsTest`(8)、`SelfUpdateTest`(4)、`SessionShareServiceTest`(+3)。coding-agent 全量 2,081 测零失败；tui 侧 `SettingsItemsTest` 补 `share-destination` 行。
 >
 > **与设计的两处偏差（均为实现事实，非裁决变更）：**
 > 1. §5.3 第 2 项原写“若现列表无 sourceInfo，补字段”。实际补的是完整通路：`ResolvedAssembly.extensionMetadata()` → `DefaultExtensionContext.bindExtensionMetadata` → `ExtensionSourceInfos.forExtensionPath(…, PathMetadata)` → `ExtensionManager.sourceInfos()` → `AgentSession.extensionSourceInfos()`。缺这条通路时扩展的 `origin` 恒为 `top-level`，`ExtensionChangelogs` 的 package 门永不成立。
@@ -423,6 +423,14 @@ Java 现状：
 
 ## 7. W6（B277d）：模型引用解析统一策略
 
+> **实施记录（2026-11-05，W6a＋W6b 全落，B277d 销号）**：ai 侧新增 `ModelReferenceResolver`（pi `resolveModelReference`/`selectReference`/`selectFuzzy`/`splitProviderPrefix`/`splitThinkingSuffix` 逐字）；`findExactReference` 成 `none`＋非 fuzzy 薄包装；`ModelScopeResolver` 改走新核，歧义入全部候选＋`ambiguous` 警告（`ModelScopeDiagnostic` 增 `AMBIGUOUS` 码）；`ModelPatterns` 只留兼容薄壳。新增 `CliModelResolution`（pi `resolveCliModel` 逐字：未知 provider／歧义 authHint 三臂／not-found／自定义 id 五类文案）。coding-agent 侧 `DefaultModelResolver.resolve(pattern, provider, usable, inlineApiKey)` 接新核，`SessionSetup.resolveInitialModel` 承载 fork 携带／scope 首条／CLI 解析三级优先并注入 `hasConfiguredAuth`（`ProviderAuth` 拆件），`--api-key` 时可用性恒 false。**行为变化（2026-11-05 裁决按 pi 语义）**：裸未知 `--model` 报错、歧义报错不再目录序兜底、空串 not-found。
+>
+> **实施期补记（结构闸门与夹具）：**
+> 1. `resolveInitialModel` 并入 `SessionSetup` 后使该文件涨到 501 行、撞 `FileLength` error 闸门 ⇒ 按批 29 拆件惯例顶出为新件 `CliModelWiring`（90 行，行为零变化），`SessionWiring` 改调新入口。
+> 2. `ModelExactMatch` 收窄为 `ModelReferenceResolver.findExactMatch` 的纯包装（删自带三段实现）。pi `:179-186` 同形。
+> 3. **§7.3 第 6 项的落地形态**：显式 `--model` 解析失败抛 `SessionResolutionExit.error(...)`（既有的干净结局通道：`Main` 最外层打 `Error: <msg>` 并返回 1），而不是裸 `IllegalStateException` 冒栈——对位 pi `main.ts:894-934` 的 diagnostics→`reportDiagnostics`→`process.exit(1)`。settings 的 `defaultModel` 解析失败仍走「回落可用模型」臂（pi `findInitialModel` 第 3 级）。
+> 4. **夹具随行为变化修正**（W6 的 `--provider` 校验更严）：`SessionInfoChangedEventTest`／`SessionRpcStateTest` 的虚构 provider（`faux-info`／`faux-state`）改为把 `FauxProvider` 真注册进注入注册表并统一用 `faux`；`AgentSessionExtensionUiTest.createWithUiAndModeBakesAtConstruction`／`RpcExtensionUiRoutingTest.rig` 走 `DefaultProviders` 的全新注册表（注入 provider 不被继承，与 pi `createRuntime` 新建 `ModelRuntime` 同形）⇒ 改用目录内模型 `anthropic/claude-sonnet-4-5`；`ThinkingLevelScreenTest` 原先靠真 home settings 的自定义 `defaultModel` 偶然得到「未编目 ⇒ 七档全集」，改为显式钉 `claude-sonnet-4-5-custom` 并按 `settings-json-test-inheritance` 隔离 home。
+
 ### 7.1 pi 事实
 
 `core/model-resolver.ts` 重构为单一策略：
@@ -471,17 +479,13 @@ Java 现状：
 
 ### 7.4 测试
 
-`ModelReferenceResolverTest`（ai）：
+**实施形状（2026-11-05）**：
 
-- `provider/id` 提示：`openai/foo` 不存在，但别家 id 恰为 `openai/foo` ⇒ 无 provider 名候选时按裸 id resolved；命名 provider 可用 ⇒ 命名赢。
-- 同名跨 provider + 单可用 ⇒ 可用者赢；双可用 ⇒ ambiguous；双不可用 ⇒ ambiguous。
-- inline key ⇒ usable 全 false ⇒ 命名候选兜底（custom id 路径）。
-- 思考后缀：`id` 含冒号且全串命中 ⇒ 不切；`none` 不切；strict 非法后缀留 id；lenient 非法后缀警告＋回退。
-- scope：歧义 ⇒ 两个候选都入 scope + 一条 warning；无匹配 text；glob 优先精确。
-
-`CliModelResolutionTest`（coding-agent）：未知 provider/歧义/not-found/custom id 四类文案逐字；`--thinking` 与后缀共存；`--api-key` 的 authHint。
-
-`ModelCommandsTest`：`/model` 旧精确行为不变（含 scoped 先、刷新后）。
+- `ModelReferenceResolverTest`（25 项，ai）：pi `test/model-resolver.test.ts:92-348` 的 `referenceCases` 全表——引用语法（精确/大小写/alias 优先/思考后缀/冒号字面 id/含 `/` 的 provider id/裸 id 胜前缀/前缀 provider 先模糊/strict·lenient·none 三态/空串）、跨 provider 精确（唯一可用者赢、无可用歧义、双可用歧义、后缀不改选择、可用命名压可用裸、不可用命名保留、命名 provider 的字面 id 压模糊）、跨 provider 模糊（可用者优先、同 id 并列歧义/唯一可用者解）、显式 provider 约束、薄包装与 `NotFound.target` 字段。**每例都跑正反两种目录序**（目录序永不决定结果）。
+- `ModelScopeResolverTest`（14 项）：新增歧义入全部候选＋`Pattern "<p>" matches several providers: gw-a, gw-b. Use provider/id to choose one.` 逐字，以及 `provider/id` 消歧。
+- `ModelPatternsTest`（18 项）：两条旧断言随新锚点改写——`ambiguousExactFallsThroughToSubstringAndKeepsCatalogOrder` → `ambiguousExactIdNoLongerFallsThroughToSubstring`（歧义不再目录序兜底），`parseEmptyPatternSubstringMatchesAll` → `parseEmptyPatternIsNotFound`。
+- `CliModelResolutionTest`（13 项，ai）：无模型文案、未知 provider 文案、目录命中无警告、显式 provider 选认证网关（带/不带后缀）、歧义排序列＋`No matching provider is authenticated.`／`More than one matching provider is authenticated.`／`--api-key does not choose a provider.` 三臂、裸未知 id 报错不落自定义、显式 provider 的自定义 id 警告、`--thinking` 显式时后缀留在 id、非法后缀留在自定义 id。
+- `CliModelWiringTest`（6 项，coding-agent）：`DefaultModelResolver` 四参重载的宿主行为（裸未知报错、可用者破平、无可用歧义、inline key 忽略已存凭据、显式 provider 自定义 id、Java 独有的裸 provider／`provider/` 便利臂仍先于解析核）。
 
 ### 7.5 风险
 
@@ -682,7 +686,7 @@ W2（小）→ W3（小）→ W9（小）→ W10（混合）
 
 【决定（建议）】
 
-1. **本稿整体批准**：W1–W10 作为 L5 实施包；W6 拆 W6a/W6b。（待最终批准）
+1. **本稿整体批准**：W1–W10 作为 L5 实施包；W6 拆 W6a/W6b。**已裁决：整体批准（2026-11-05）；W1–W10 全部落地并闭环。**
 2. **转出确认**：E3-3 → L7、E5-31 → L7、E5-33 → L8；map/04 保留证据与指针、权重 0。**已裁决：确认转出（2026-11-05）。**
 3. **模型解析行为**：采用 pi 新锚点语义（裸未知 `--model` 报错；歧义报错/警告；scope 歧义加入所有候选）——即 W6 不保留 Java 旧兜底。**已裁决：按 pi 语义（2026-11-05）。**
 4. **自更新语义**：`selfUpdateCommand` 在 pi-java 里按 §5.4 执行（`{version}`＝当前版本，D221）。**已裁决：执行配置命令（2026-11-05）。**
@@ -694,7 +698,8 @@ W2（小）→ W3（小）→ W9（小）→ W10（混合）
 
 ## 15. 下一步
 
-1. 用户审核本稿并裁决 §14 七项。
-2. 批准后先落 W2/W3/W9 的 RED 测试与实现（小包先验），再按 §12.1 推进。
-3. 每完成一个 W，回填 `map/04` 行证据与判定；全部 W 闭环后更新 `docs/04`（B275/B276/B277/B259 销号，新 B/D 登记）、`docs/06` 的 L5 状态与 `docs/08 §9` 进度表。
-4. `docs/05` 总表与 `map/ANCHOR.md` 仍留到 L6–L8 全部闭环后统一换锚。
+1. ~~用户审核本稿并裁决 §14 七项。~~ 已完成（2026-11-05）。
+2. ~~先落 W2/W3/W9 的 RED 测试与实现，再按 §12.1 推进。~~ W1–W10 已全部落地。
+3. ~~回填 `map/04`、`docs/04`、`docs/06`。~~ 已完成：B275／B276／B277(a–f)／B259 销号，D219–D227 登记，map/04 各域证据补到新锚点口径。
+4. 本层闭环（2026-11-05）。`docs/05` 总表与 `map/ANCHOR.md` 仍留到 L6–L8 全部闭环后统一换锚。
+5. 下一层：**L6 evals**（新行为的评测 oracle 与 harness 复核）。

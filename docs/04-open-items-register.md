@@ -35,12 +35,12 @@ Chord plugin 已按 R5 决定不做，不再是待拍板项。
 | B273 | 恢复省略成对：`_prepareRetry` 按 toolCallId 在投影中找工具结果并一起省略。已于 2026-11-05 按 docs/24（W3）实施并闭环。 | L4 session |
 | B274 | 会话持久化细节：append 失败回滚（Java 先写文件后提交内存，复核等价＋回归锁）、fork 单 fd 写。已于 2026-11-05 按 docs/24（W4a/W4b）实施并闭环。 | L4 session |
 | B278 | 显式 `--session-dir`／`settings.sessionDir` 按 pi 语义：文件平铺、cwd 过滤、`~` 展开；默认根布局不变。已于 2026-11-05 按 docs/24（W4c）实施并闭环。 | L4 session |
-| B275 | run 启动重构归 L5：`_startRun`／`_prepareRun`、启动即 busy、`before_agent_start` 期间 abort 在 `agent_start` 生效、flush 次序、settled 延迟动作；`before_agent_start` 的 user／custom 联合。 | L5 coding-agent |
-| B276 | 扩展工具投影归 L5：`getAllTools()` 透传 `reachesTools`；active tools 重设同名集合时保持原顺序。 | L5 coding-agent |
-| B277 | 其余 L5 新锚面：`sessionShareDestination`／`extensionChangelogVersions`、classifier compat、exec、package-manager、model-resolver、export-html、KeybindingHints／`blocked`。其中 **B277a**（`pi.exec` maxBuffer／truncated）、**B277b**（三个新 settings 键／`/share` destination／`update self` 配置命令／扩展 changelog 启动展示／manifest `changelogPath`）、**B277c**（package-manager：安装失败不阻塞启动、temporary 源刷新、`~` 模式展开、路径比较键）、**B277e**（tool_search Unicode 分词＋分字段 BM25）、**B277f**（export-html 系统消息与 CJK 强调；KeybindingHints 按 D220 不动）已于 2026-11-05 按 docs/25（W3／W4／W5／W7／W8）实施并闭环，残余仍是 **B277d**（model-resolver，W6）与 `blocked`（随 E5-31 归 L7）。 | L5 coding-agent |
+| B275 | run 启动重构归 L5：`_startRun`／`_prepareRun`、启动即 busy、`before_agent_start` 期间 abort 在 `agent_start` 生效、flush 次序、settled 延迟动作；`before_agent_start` 的 user／custom 联合。已于 2026-11-05 按 docs/25（W1）实施并闭环（`RunStartWindowTest`；W1 引入的树导航回归随 W4 修复）。 | L5 coding-agent |
+| B276 | 扩展工具投影归 L5：`getAllTools()` 透传 `reachesTools`；active tools 重设同名集合时保持原顺序。已于 2026-11-05 按 docs/25（W2）实施并闭环；激活序来源差异登 **D219**。 | L5 coding-agent |
+| B277 | 其余 L5 新锚面：`sessionShareDestination`／`extensionChangelogVersions`、classifier compat、exec、package-manager、model-resolver、export-html、KeybindingHints／`blocked`。**全量闭环（2026-11-05）**：B277a（`pi.exec` maxBuffer／truncated）、B277b（三个新 settings 键／`/share` destination／`update self` 配置命令／扩展 changelog 启动展示／manifest `changelogPath`）、B277c（package-manager：安装失败不阻塞启动、temporary 源刷新、`~` 模式展开、路径比较键）、B277d（model-resolver：`ModelReferenceResolver`／`CliModelResolution`／`CliModelWiring`，`ai` 与 `coding-agent` 两侧；Java 独有臂登 **D227**）、B277e（tool_search Unicode 分词＋分字段 BM25）、B277f（export-html 系统消息与 CJK 强调）全部实施；classifier compat 按 R5 出分母；`blocked`／KeybindingHints 按 D220 随 E5-31 归 L7。 | L5 coding-agent |
 | B116 | 对外 JSON 的 usage 已改为 pi 扁平形状；Java 内部 `StreamDone` 仍保留嵌套方言，AI 重测时决定是否继续保留。 | L1 AI |
 | B156 | `ModelCompat` 逐组件重建存在漏字段风险；新增组件时必须同时检查构造点和 `withPartial` 类重建点。 | L1 AI |
-| B259 | RPC `cycle_thinking_level` 对不支持 thinking 的模型仍返级别；`get_available_thinking_levels` 也未按模型能力过滤。pi 对应结果为 `null` 或可用子集。 | L5 coding-agent |
+| B259 | RPC `cycle_thinking_level` 对不支持 thinking 的模型仍返级别；`get_available_thinking_levels` 也未按模型能力过滤。pi 对应结果为 `null` 或可用子集。已于 2026-11-05 按 docs/25（W9）实施并闭环（非 reasoning ⇒ `["off"]`／`null`；`thinkingLevelMap` 缺档过滤且轮转跳过；无模型 ⇒ 七值全集）。 | L5 coding-agent |
 | E5-31 | 扩展 UI 仍有 working 指示器、终端输入、补全、编辑器替换等 TUI 成员未收口；与 D′ 旧行去重重测。 | L7 TUI |
 | examples | 旧 16/102 不是新基线分母。必须在 L8 按 `56cae7823` 重新清点，主流示例继续全部做 Java 移植与验收测试。 | L8 examples |
 
@@ -73,6 +73,8 @@ L2 MCP 视口捕获收尾与跨层口径裁决已于 2026-11-04 按 docs/22 实�
 L4 session/SQLite 新锚点重测与对齐已于 2026-11-05 按 docs/24 实施并闭环：map/06 存储后端 20 行全部对齐（44.0/44＝100%）；W1（B271）恢复 active tools 改为按分支全部 system 消息重放＋修饰符＋晚注册 pending；W2（B272）摘要去掉固定输出上限、序列化不含 thinking、turn-prefix 接指令、branch summary 透传 thinkingLevel（摘要鉴权复核为 Java streamFn 已自解析）；W3（B273）auto-retry 省略按 toolCallId 与工具结果成对；W4a 复核 append 回滚为等价并补故障注入回归，W4b fork 改为单次写；W4c（B278）显式会话目录改为 pi 平铺布局＋cwd 过滤＋`~` 展开。map/06 #6 改判「对齐（形状不同）」并登记 D218（lane 为 pi 忽略的内部扩展键）。评测域仍待 L6 重测。
 
 L3 agent-core 新锚点重测与对齐已于 2026-11-05 按 docs/23 实施并闭环：90 个计分单元逐行重测后仅 3 行改判——W1 模板命令引号空参数＋JS `/\s/`、W3 grep 孤立 CR 行切分（实施），W2 技能路径比较键（复核后无改动，Java `WindowsPath` 语义已等价）；identity／`reachesTools`／AI 新类型适配经 docs/14／docs/21／B264 复核为对齐；#77（会话恢复）与 #24（branch summary）按层归属转出 L4（权重 0，行与证据保留）；#68 `streamProxy` 维持 R5。agent-core 账面 **177/177＝100%**（88 计分＋2 转出；对齐 88／存疑 0／缺失 0；未加权 88/88）。B268／B269／B270 随本包闭环；B271–B277 挂所属层。
+
+L5 coding-agent 新锚点重测与对齐已于 2026-11-05 按 docs/25（W1–W10）全量实施并闭环：W1 run 启动窗＋`before_agent_start` user／custom 联合（B275）、W2 `reachesTools` 投影（B276）、W3 `pi.exec` maxBuffer／truncated／UTF-8 边界、W4 三个新 settings 键＋`/share` destination＋`update self` 配置命令＋扩展 changelog 启动展示＋manifest `changelogPath`、W5 包管理器容错与 temporary 刷新（B279／B280）、W6 模型引用解析统一策略（B277d：`ModelReferenceResolver`＋`CliModelResolution`＋`CliModelWiring`，含两处行为变化）、W7 tool_search Unicode 分词＋分字段 BM25、W8 HTML 导出系统消息＋迭代回溯＋CJK 强调＋markdown 上下文 `messageId`／`timestamp`、W9 思考档 RPC 过滤（B259）、W10 print 截断（B281）／trust 优先级／删除 cwd／帮助与 slash 文案／图片编码（B282）／shell 平台（B283）。**转出**：E3-3 会话选择器与 E5-31 扩展 UI → L7，E5-33 examples → L8（权重 0，行与证据保留）。B275／B276／B277（含 B277a–f）／B259 全销号；新登记 D219–D227（其中 D223 auth EPERM、D226 macOS 进程组 STOP 为平台面不适用）。map/04 计分口径见该图各域汇总；全仓 verify **6,397 测零失败**，Checkstyle 零错误、SpotBugs 零告警。
 
 ## 3. MCP 开放项与复核项
 
@@ -165,8 +167,11 @@ SQLite 后端是 pi-java 独立实现，保留模块，不对齐已删除 schema
 | D220 | `KeybindingHints` 不进扩展渲染 API：Java 的 `ToolCallRenderer`／`ExtensionMessageRenderer`／`ExtensionEntryRenderer` 返回纯文本（D92 文本级方言），键位提示由宿主 TUI 自行展示；`blocked` 选项随 E5-31 转 L7。 |
 | D221 | `selfUpdateCommand` 的 `{version}` 在 pi 是**目标版本**，在 pi-java 是**当前版本**（无发布通道取目标版本）；使用 `{version}` 的配置命令须自行处理「已是最新」场景。 |
 | D222 | npm 特有的 CLI 行为不适用：`--no-audit`／`--no-fund`／`realpath` 前缀修正、`npm view` 的 `--json` 数组臂都由 HTTP registry 臂（批 18 裁决③）等价实现；`pi update` 的「进度批装」在 Java 逐包顺装（既有 D113），「版本没变」的 progress 消息已逐字对齐。 |
+| D223 | `auth.json` 的 lockfile 目录 EPERM 重试面不适用：pi `auth-storage.ts:19-31` 为 `FS 锁文件`（目录不可写时按 EPEM 重试），Java 用 `FileChannel.lock()` 直接对目标文件加锁，无 lockfile 目录层，故无该重试分支。 |
 | D224 | tool_search 分词用 JDK {@code BreakIterator}（UAX#29）代替 {@code Intl.Segmenter}：两者只在「无空格连写」的脚本上不同（浏览器词典切「搜索仓库问题」/泰文连写为多词，JDK 给整段）；空格/标点分隔的日文、韩文、西里尔、拉丁逐词一致。不引入 ICU4J。 |
 | D225 | HTML 导出不引入 JS `marked-cjk-friendly`：Java 的 `MarkdownToHtml` 自带 CJK 强调放宽（收尾定界符内侧为 CJK 字符/全角标点或外侧非字母数字即闭合，纯拉丁文本仍守 CommonMark），导出 HTML 的字节形态与 pi 不同源，判定以渲染结果为准。 |
+| D226 | macOS 进程组的 `SIGSTOP` 先手不移植：pi `utils/shell.ts` 先对进程组发 `SIGSTOP` 再杀（防子进程在被杀前 fork 新孙进程）；Java 的 `ShellProcessEngine` 走 `Process.destroyForcibly()`＋`descendants()` 后序遍历，无进程组 STOP 面。Windows/Linux 的可观察行为一致，macOS 极端竞态下可能残留孙进程。 |
+| D227 | 模型引用解析的 Java 独有两条臂（pi 的 `models` 列表天然含运行时注册 provider 的模型，Java 的静态目录不含）：①`--provider` 指向**运行时已注册**的 provider（Faux／扩展 provider）而模型未编目 ⇒ 按自定义 id 接受；②模型串是 `provider/id` 形状、精确匹配不中且前缀 provider 既不在目录也未注册 ⇒ 落到该前缀 provider（虚拟模型 `jev/auto` 与用户自建 provider 靠这条走）。裸未知 `--model`（无 `/`）仍按 pi 报错；fork 携带的父会话模型直接采用不再解析。 |
 | B83 | pi 自身三处 sanitize 缺口保持同样行为；pi 修补时同步。 |
 | B100 | compat 探测的 baseUrl 在内置模型上行为等价；出现可观察差异再重裁。 |
 | B126 | Codex 车道及其 transport 等随 R2/R5 出分母。 |

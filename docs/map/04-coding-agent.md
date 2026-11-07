@@ -5,7 +5,7 @@
 ## 基准与口径
 
 - 范围：`D:\workplaceForai\pi-java\pi-java-coding-agent` ↔ `D:\workplaceForai\pi\packages\coding-agent`。
-- 基准：pi @ `ea448f454`（2026-10-11，v1.1.0-22）；pi-java @ `edc8749d`（2026-10-11，main）。
+- 基准：pi @ `ea448f454`（2026-10-11，v1.1.0-22，旧锚点）；**当前 PI_PIN = `56cae7823`**（L5 重测基线）；pi-java @ `edc8749d`（2026-10-11，main，旧读数）→ L5 关闭时 `e00fc5e7`（2026-11-05，main）。
 - 判定三档：**对齐**（两侧都有且行为相同）/ **缺失**（pi 有、pi-java 无）/ **存疑**（形状存在但语义/可达性有差，或台账未结）。
 - 所有证据为 `file:line`；pi 侧路径省略 `D:\workplaceForai\pi\packages\coding-agent\` 前缀，java 侧省略 `D:\workplaceForai\pi-java\pi-java-coding-agent\src\main\java\com\pijava\coding\agent\` 前缀（跨模块证据会写明模块）。
 - **权重口径**：权重 = 用户可观察影响 × 频率，不含排期优先级。`3`＝每轮主路；`2`＝每次会话或常用；`1`＝低频/内部；`0`＝非目标。完成系数：对齐 1、存疑 0.5、缺失 0。旧基线最终量化快照见 docs/05，新分母待全层重测。
@@ -53,7 +53,7 @@ java `cli/ArgsParser.java` 共 **43 个 `@Option`**，其中 **4 个 java 独有
 | 4 | `--continue`/`-c` | `args.ts:111` | ✅ `ArgsParser.java:48` | 2 | 对齐 | `SessionPersistence.java:169` |
 | 5 | `--resume`/`-r` | `args.ts:113` | ✅ `ArgsParser.java:51` | 2 | **对齐** | **批 14（2026-10-23，docs/25）**：选择器全链——`SessionSelectorProvider` SPI（裁决①）＋tui `SessionSelectorComponent`（pi 1,045 行域）＋`SessionSelectorRunner` 启动壳；取消 ⇒ `No session selected` exit 0；SPI 缺席报 D70 干净错误 |
 | 6 | `--provider` | `args.ts:115` | ✅ `ArgsParser.java:27` | 2 | 对齐 | |
-| 7 | `--model` | `args.ts:117` | ✅ `ArgsParser.java:30` | **3** | 对齐 | 均支持 `provider/id` 与 `:thinking` |
+| 7 | `--model` | `args.ts:117` | ✅ `ArgsParser.java:30`；L5 起解析走 `ai/model/CliModelResolution`＋`core/CliModelWiring` | **3** | **对齐** | 均支持 `provider/id` 与 `:thinking`。**L5 W6（2026-11-05，docs/25 §7，B277d）**：`resolveCliModel` 逐字（未知 provider／歧义 authHint 三臂／not-found／自定义 id 五类文案）；初始模型三级优先（fork 携带＞scope 首条＞CLI）；显式 `--model` 失败抛 `SessionResolutionExit`（`Error: <msg>` exit 1），settings `defaultModel` 失败仍回落可用模型；**行为变化**：裸未知 id 报错（不再兜底默认 provider 的自定义模型）、歧义不再目录序兜底；Java 独有便利臂与运行时注册 provider 的两条形态登 **D227** |
 | 8 | `--api-key` | `args.ts:119` | ✅ `ArgsParser.java:33` | 2 | 对齐 | |
 | 9 | `--system-prompt` | `args.ts:121` | ✅ `ArgsParser.java:39` | 1 | 对齐 | |
 | 10 | `--append-system-prompt` | `args.ts:123` | ✅ `ArgsParser.java:42` | 1 | 对齐 | 均 repeatable |
@@ -63,13 +63,13 @@ java `cli/ArgsParser.java` 共 **43 个 `@Option`**，其中 **4 个 java 独有
 | 14 | `--session-id` | `args.ts:136` | ✅ `ArgsParser.java:75` | 2 | **对齐** | **批 14（docs/25 T6/T8）**：pi `main.ts:436-448` 逐字——只项目内精确（`findLocalById` header-only）；缺 ⇒ `Warning: No project session found with id ...`＋`createWithId` 带 id 新建（修丢 id 现状） |
 | 15 | `--fork` | `args.ts:138` | ✅ `ArgsParser.java:78` | 1 | **对齐** | **批 14（docs/25 T6/T9）**：pi `main.ts:368-390` 逐字——`--session-id` 目标查重（`Session already exists with id` exit 1）＋`forkFrom {id}`；`validateForkFlags` 互斥诊断 |
 | 16 | `--session-dir` | `args.ts:140` | ✅ `ArgsParser.java:81` | 1 | 对齐 | `AgentSession.java:131/164/180` |
-| 17 | `--models` | `args.ts:142` | ✅ `ArgsParser.java:84` | 2 | **对齐** | **批 14（docs/25 T17）核销**：消费链早已通（账面滞后）——`AgentSession.java:374` `ModelScoping.resolve` 吃 `args.models()` → `:677 setScopedModels` → `PiTuiApp.java:665` Ctrl+P 轮转＋`:423-428` 初始模型（pi `main.ts:499-535` 对位） |
+| 17 | `--models` | `args.ts:142` | ✅ `ArgsParser.java:84`；L5 起歧义诊断走 `ModelScopeDiagnostic.AMBIGUOUS` | 2 | **对齐** | **批 14（docs/25 T17）核销**：消费链早已通（账面滞后）——`AgentSession.java:374` `ModelScoping.resolve` 吃 `args.models()` → `:677 setScopedModels` → `PiTuiApp.java:665` Ctrl+P 轮转＋`:423-428` 初始模型（pi `main.ts:499-535` 对位）。**L5 W6（2026-11-05，docs/25 §7）**：scope 歧义不再落 `no-match`——按 pi `resolveModelScopeFromModels` 把**全部候选**入 scope 并产一条逐字 warning `Pattern "<p>" matches several providers: <排序列>. Use provider/id to choose one.`；空 pattern 改 not-found |
 | 18 | `--no-tools`/`-nt` | `args.ts:147` | ✅ `ArgsParser.java:93` | 1 | 对齐 | `-nt` 由 `:258` 展开；**批 1 补注**（B236/docs/11）：注册面语义对齐——空 allowlist ⇒ 注册面空（pi `noTools:"all"` ⇒ `getAllTools()==[]`，`DefaultToolsSelectionTest.noToolsEmptiesTheRegistry`） |
 | 19 | `--no-builtin-tools`/`-nbt` | `args.ts:149` | ✅ `ArgsParser.java:96` | 1 | 对齐 | **批 1 补注**（B236/docs/11）：注册面保留八件、激活面空（pi `noTools:"builtin"` 语义；扩展工具默认激活臂 java 无扩展面，免登） |
 | 20 | `--tools`/`-t` | `args.ts:151` | ✅ `ArgsParser.java:87` | 2 | **对齐** | **批 1（2026-10-18，B236/docs/11）**：`*` 通配（`ToolNameMatcher`，mcp-servers.ts:11-42 对位）、`+name`/`-name` 修饰符（`ToolSelection`，settings-manager.ts:83-137＋sdk.ts:280-294 对位）、`mcp__` 保留策略（裁决③）、解析期 `getToolListError` 逐字校验；窄差 D1：诊断前缀恒 `--tools`（picocli 不暴露实敲别名） |
 | 21 | `--exclude-tools`/`-xt` | `args.ts:162` | ✅ `ArgsParser.java:90` | 1 | **对齐** | **批 1（2026-10-18，B236/docs/11）**：`*` 通配 denylist（同一 `ToolNameMatcher`），注册面剔除（`_isAllowedTool` 对位 `Resolved.isAllowed`），excluded 优先于 allowlisted |
 | 22 | `--thinking` | `args.ts:167` | ✅ `ArgsParser.java:45` | 2 | 对齐 | 两侧都是 7 档 `off..max`（`ThinkingLevels.java:33`） |
-| 23 | `--print`/`-p` | `args.ts:177` | ✅ `ArgsParser.java:126` | **3** | 对齐 | pi 吞下紧随的非 `@`/`-` 参数（`:179-181`） |
+| 23 | `--print`/`-p` | `args.ts:177` | ✅ `ArgsParser.java:126`；L5 起含长度截断收尾 | **3** | **对齐** | pi 吞下紧随的非 `@`/`-` 参数（`:179-181`）。**L5 W10（2026-11-05，docs/25 §11，B281）**：末条 assistant `stopReason=LENGTH` ⇒ stderr 逐字 `Response was truncated: the model reached its output token limit.` ＋退出码 1（aborted/error 不误报）；`PrintModeTruncationTest` |
 | 24 | `--export` | `args.ts:184` | ✅ `ArgsParser.java:129` | 1 | **对齐** | **批 14（docs/25 T13）**：第二位置参数＝输出路径（`Main.java` `parsed.messages().getFirst()`）；文案逐字 `Exported to: <path>`／`Error: <msg>` exit 1；窄差 D77（默认名 `pi-java-session-*` 品牌族） |
 | 25 | `--extension`/`-e` | `args.ts:186` | ✅ `ArgsParser.java:99` | 2 | **对齐** | **批 14（docs/25 T15）**：`AgentSession.loadExtensions` 显式 JAR 恒加载（`-ne` 旁路，pi `resource-loader.ts:578/690` 对位）；`-ne` 裸早退不变；窄差 D78（不收 `builtin:<name>`） |
 | 26 | `--no-extensions` | `args.ts:189` | ✅ `ArgsParser.java:102` | 1 | 对齐 | `AgentSession.java:1142` |
@@ -91,7 +91,8 @@ java `cli/ArgsParser.java` 共 **43 个 `@Option`**，其中 **4 个 java 独有
 | 42 | `@files` 位置参数 | `args.ts:248`（另 `:85-86`） | ✅ `ArgsParser.java:204-205` | 2 | 对齐 | 两侧都剥离 `@` 前缀进 `fileArgs` |
 | 43 | 扩展注册的 CLI flag | `args.ts:250-259` + `registerFlag`/`getFlag`（`extensions/types.ts:1664/1680`） | ✅ `extension/ExtensionFlag*.java`＋`Main.java:71` | 1 | **对齐** | **批 16（docs/27 T1）**：registerFlag/getFlag（所有权门＋default set-if-absent）＋`ExtensionFlagBinder`（三态配对＋boolean 恒 true/string 无值诊断/未注册汇总逐字）＋`startupDiagnostics` 落点＋`--help` Extension CLI Flags 段（轻量装载、无 flag 整段消失） |
 
-**汇总（批 21 后）：对齐 43 / 缺失 0 / 存疑 0 / 合计 43 = 100%**；**Σ权重 62 / Σ(w×c) 62.0 / 加权 100%（第十个满分域）**
+**汇总（L5 重测后）：对齐 43 / 缺失 0 / 存疑 0 / 合计 43 = 100%**；**Σ权重 62 / Σ(w×c) 62.0 / 加权 100%（第十个满分域）**
+> **L5（2026-11-05，docs/25 W6）**：A-7 `--model`／A-17 `--models` 曾因模型引用新策略判存疑，W6 落地后**维持对齐**（证据补到新锚点口径，含两处行为变化与 D227）。Σ 权重与判定不变：62.0/62。
 > 批 14（2026-10-23，docs/25）：**11 行翻动**——A-5/A-12/A-13/A-14/A-15/A-24/A-30/A-40/A-41 存疑⇒对齐、A-17/A-25 缺失⇒对齐（A-17 核销）；A-29 重排批 20、A-43 重排批 15（判定不动，证据改注）。Σ 50.0→**60.5/62 ≈ 97.6%**。
 > 批 16（2026-10-23，docs/27）：A-43 缺失→**对齐**（T1 扩展 flag 面全链＋--help 段）。Σ 60.5→**61.5/62 ≈ 99.2%**（余 A-29〔批 20〕）。
 > 批 21（2026-10-25，docs/32）：A-29 存疑→**对齐**（T9：`--theme` 重裁纯路径来源＋CLI 车道进主题发现；.tcss 选型删除）。Σ 61.5→**62.0/62 = 100%**。
@@ -111,10 +112,11 @@ pi `main.ts:617`（`mcp`）＋ `handlePackageCommand`/`handleConfigCommand`/`run
 | 4 | `update [source\|self\|pi]` | ✅ `package-manager-cli.ts:449/458` | ✅ `PackageCommand.java` | 2 | **对齐** | **批 19**：`--extensions`（update 机制）＋`--models`（15s 短路臂）落地；self 恒不可用臂＋exit 1。**批 22（docs/33 T2，裁决①）终裁**：java 无 npm/managed 分发形态 ⇒ 恒不可用臂＝pi 未知形态臂终局（D115 保留） |
 | 5 | `list` | ✅ `package-manager-cli.ts:996` | ✅ `PackageCommand.java` | 2 | **对齐** | **批 19**：user/project 分组＋`(filtered)` 对象形标记＋installedPath 两行式逐字 |
 | 6 | `config [-l]` | ✅ `package-manager-cli.ts:813`（**TUI**） | ✅ `ConfigCommand.java`＋tui `ConfigSelectorComponent` | 2 | **对齐** | **批 19（T5+T6，裁决①全做）**：TUI 本体（双份 resolve／Tab 切域／三态覆写／搜索）＋`enable\|disable` 便利臂改 pi pattern 代数 |
-| 7 | `auth <cmd>` | ✅ check / print-api-key / print-bearer-token（`auth-command.ts:52-60`） | ✅ `AuthCommand.java:42-47` | 2 | 对齐 | java 是**超集**：多 `oauth-login`、`profile set/unset/list/set-key` |
+| 7 | `auth <cmd>` | ✅ check / print-api-key / print-bearer-token（`auth-command.ts:52-60`） | ✅ `AuthCommand.java:42-47` | 2 | 对齐 | java 是**超集**：多 `oauth-login`、`profile set/unset/list/set-key`。**L5 W6（2026-11-05，docs/25 §7.3 第 7 项）复核**：pi `credential-print.ts` 用 `resolveModelReference` 按模型限定 provider；java 的 auth 是 `<provider>` 位置参数、credential 面不经过模型解析 ⇒ 无对位形态，不构成缺口，判定维持对齐 |
 | 8 | `mcp` | ✅ `main.ts:617`（`extensions/mcp/cli.ts` 599 行） | ✅ `SubcommandHandler.java:44-47` | 2 | 对齐 | java 有 `pi mcp`（`subcommand/Mcp*`，1,193 行）；**子命令逐项判定与明细整体见 `map/07-mcp.md`，本图不展开** |
 
-**汇总（批 22 后）：对齐 8 / 缺失 0 / 存疑 0 / 合计 8 = 100%**；**Σ权重 15 / Σ(w×c) 15.0 / 加权 100%（第十二个满分域）**
+**汇总（L5 重测后）：对齐 8 / 缺失 0 / 存疑 0 / 合计 8 = 100%**；**Σ权重 15 / Σ(w×c) 15.0 / 加权 100%（第十二个满分域）**
+> **L5（2026-11-05，docs/25 W4/W6）**：#4 `update` 复核维持对齐（W4 `selfUpdateCommand` 落地后真执行配置命令）；#7 `auth` 因模型引用新策略曾判存疑，W6 复核确认 java 无对位形态 ⇒ 维持对齐（证据补注）。Σ 权重 15.0/15 不变。
 > 批 22（2026-10-25，docs/33）：#4 `update` 存疑⇒对齐（+1.0，自更新终裁裁决①，同 E6-10 一件两表投射）。Σ 14.0→**15.0/15 = 100%**。
 
 ---
@@ -132,9 +134,9 @@ pi 另有 **`/skill:name` 命令族**（`enableSkillCommands` 默认 true，`int
 | 3 | `/tree` | `:22` | ⚠️ `SessionCommands.java:61` | 1 | **对齐** | 批 8（docs/18）：marker 拆分＋原地导航＋摘要三选流；**批 9（docs/19）**：选择器本体＝entry 树落地（`TreeSelectorOverlay`＋`TreeListModel`＋`TreeListRenderer`，map/05 S12/S13 对齐，D37/D40 销号，窄差 D43–D46/D48） |
 | 4 | `/thinking` | `:23` | ✅ `ThinkingCommands.java`＋tui `ThinkingLevelScreen.java` | 2 | **对齐** | **批 15（2026-10-23，docs/26 T8）**：空参⇒选择器 marker（裁决⑥ SelectList 简版——当前级预选/Enter 即设/Esc，persist 第二键与 DEFAULT 标记属 S8 域登 D84）；有参⇒大小写不敏感精确匹配 `getAvailableThinkingLevels`（七值全集/目录映射过滤逐字），未中逐字错文、中⇒直设＋`Thinking level: <level>` |
 | 5 | `/scoped-models` | `:24` | ✅ `ScopedModelController.java`＋tui `ScopedModelsScreen.java` | 1 | **对齐** | **批 31（docs/43 T4/T5）**：搜索、单项/全选/清空/provider 切换、排序、不可用项；`All` 与显式空表分流，修改只动会话 scope，Ctrl+S 才持久化；15 秒刷新与代次取消，登记 D181 |
-| 6 | `/export` | `:25` | ✅ `MiscCommands.java`（`pathCommandArgument`） | 2 | **对齐** | **批 15（2026-10-23，docs/26 T10）**：引号解析逐字（配对取内/无配对⇒缺省/空白截断）；`.jsonl` 尾⇒JSONL、其余（含无参）⇒HTML——无参 `session-<ISO :.→->.html` 落 cwd；状态/失败文案逐字 |
+| 6 | `/export` | `:25` | ✅ `MiscCommands.java`（`pathCommandArgument`）＋`export/HtmlSystemMessages`（L5 W8） | 2 | **对齐** | **批 15（2026-10-23，docs/26 T10）**：引号解析逐字（配对取内/无配对⇒缺省/空白截断）；`.jsonl` 尾⇒JSONL、其余（含无参）⇒HTML——无参 `session-<ISO :.→->.html` 落 cwd；状态/失败文案逐字。**L5 W8（2026-11-05，docs/25 §9，B277f）**：导出 HTML 的系统消息两条臂（首条 system 条目渲染＋后续更新合并）、迭代式祖先回溯（20,000 条线性会话不再栈溢出，pi #11225）、read 工具行区间、CJK 强调放宽（**D225**）；`HtmlExportSystemMessagesTest`／`HtmlExportDeepChainTest`／`HtmlExportCjkTest` |
 | 7 | `/import` | `:26` | ✅ `MiscCommands.java:61` | 1 | 对齐 | |
-| 8 | `/share` | `:27` | ✅ `SessionShareService.java`＋`RadiusArtifactUploader.java`＋`GhCli.java`＋tui `ShareFlow.java` | 1 | **对齐** | **批 31（docs/43 T10）**：当前分支含 `pi.share` 序列化；有 Radius token 走 `/v1/artifacts`，一旦尝试所有结局均不 fallback；无 token 才经 `gh auth status`→HTML→私有 gist，返回 viewer＋gist URL；loader/Esc 取消/临时目录清理，状态码回落登 D180 |
+| 8 | `/share` | `:27` | ✅ `SessionShareService.java`＋`RadiusArtifactUploader.java`＋`GhCli.java`＋tui `ShareFlow.java`；L5 起接 `sessionShareDestination` | 1 | **对齐** | **批 31（docs/43 T10）**：当前分支含 `pi.share` 序列化；有 Radius token 走 `/v1/artifacts`，一旦尝试所有结局均不 fallback；无 token 才经 `gh auth status`→HTML→私有 gist，返回 viewer＋gist URL；loader/Esc 取消/临时目录清理，状态码回落登 D180。**L5 W4（2026-11-05，docs/25 §5.2，B277b）**：`/share` 目的地三臂门——`gist` 跳 Radius／`radius` 未认证逐字报错**不回落**（`Radius authentication is not configured. Run '/login radius' first.`）／`auto` 保持旧行为；`SessionShareServiceTest` +3 项 |
 | 9 | `/bug` | `:28` | ✅ `core/bugreport/`＋`core/crash/`＋tui `BugReportFlow.java` | 1 | **对齐** | **批 15（2026-10-23，docs/26 T1–T7，B79 销号）**：全链——三屏流＋脱敏＋metadata/diagnostics＋摘要缝＋multipart 上传＋ZIP＋会话尾记录＋crash-log；**批 31 D85 销号**：有 Radius token 带 Bearer、无 token 匿名、刷新失败不匿名降级；其余窄差 D79–D84/D87/D88 |
 | 10 | `/copy` | `:29` | ✅ `MiscCommands.java:96` | 2 | 对齐 | |
 | 11 | `/name` | `:30` | ✅ `SessionCommands.java:22` | 1 | 对齐 | `AgentSession.java:529` |
@@ -153,7 +155,8 @@ pi 另有 **`/skill:name` 命令族**（`enableSkillCommands` 默认 true，`int
 | 24 | `/quit` | `:43` | ✅ `MiscCommands.java:173` | 2 | 对齐 | |
 | 25 | `/skill:<name>` 命令族 | `interactive-mode.ts:805-815` | ✅ `CommandRegistry.java` dispatch 透传＋`SkillCommandItems.java` | 2 | **对齐** | **批 2（2026-10-19，B244/docs/12）**：注册面＝补全目录（`PiTuiApp.loadSlashItems` skill 臂，受开关门）＋提交透传（`/skill:` 前缀 dispatch 返回 null 落 prompt，批 4 展开器接手）＋RPC `get_commands` skill 臂（`RpcDispatcher.buildCommands`）；裁决②展开不受开关门；窄差 D3 仅放行 `/skill:` 前缀（pi 任何未识别 slash 都落 prompt） |
 
-**汇总：对齐 25 / 缺失 0 / 存疑 0 / 合计 25 = 100%**；**Σ权重 38 / Σ(w×c) 38.0 / 加权 100%（批 31，满分域第十四）**
+**汇总（L5 重测后）：对齐 25 / 缺失 0 / 存疑 0 / 合计 25 = 100%**；**Σ权重 38 / Σ(w×c) 38.0 / 加权 100%（批 31，满分域第十四）**
+> **L5（2026-11-05，docs/25 W4/W8/W10）**：C-6 `/export`（W8 系统消息/深链/CJK）、C-8 `/share`（W4 destination 门）证据补到新锚点口径；`/import` `/share` `/resume` 三行描述文案按 W10 逐字更新。判定与 Σ 38.0/38 不变。
 > 批 2（2026-10-19，B244/docs/12）：#25 缺失 → **对齐**。同批更正本行旧账（旧行「对齐 11/Σwc 25.0」与逐行判定不符；逐行实算为对齐 10/Σwc 24.0，与下方汇总表 C 域 24.0 一致）。
 > 批 10（2026-10-22，B254/docs/21）：#15 `/fork` 存疑 → **对齐**（user-message 选择器，窄差 D50 登记）。
 > 批 15（2026-10-23，docs/26）：**7 行翻动**——#2 `/model` 存疑→对齐（T9 直设臂）、#4 `/thinking` 缺失→对齐（T8）、#6 `/export` 存疑→对齐（T10 默认臂＋引号解析）、#9 `/bug` 缺失→对齐（T1–T7 全链，B79 销号）、#12 `/session` 存疑→对齐（T11 全段，D68 销号）、#13 `/changelog` 存疑→对齐（T12 核销）、#21 `/compact` 存疑→对齐（T12 核销 abort-first）。余 6 存疑：#1 设置选择器/#5 scoped-models 选择器/#8 Radius 分享/#18 Radius 登录/#23 reload（批 16）。
@@ -293,12 +296,13 @@ D′ 与 E5-31 描述同一能力集合，**不再独立赋予权重或计入模
 | E1-2 | `settings.json`（项目级） | 配置 | `.pi/settings.json`（`settings-manager.ts:192`，另 `:318`） | `FileSettingsStorage.java:42` | 2 | 对齐 | — |
 | E1-3 | `auth.json` | 配置 | `auth-storage.ts:497-498`（revision + 文件锁 + stale 检测） | `ai/auth/FileCredentialStore.java`、`OAuthCredentialStore.java`（＋ AuthKind 分派） | 2 | **对齐** | **批 21（docs/32 T2）**：读-改-写收进同一把 `FileChannel` 锁（pi `withLock(fn)` 对位；修真前 RMW 非原子＋撕裂读）；`FileModelsStore` 同修真；revision 缓存/stale 检测/共享读态不移植（java 无进程内读缓存——窄差 D131） |
 | E1-4 | `models.json` | 配置 | `core/models-store.ts` 147 + `model-config.ts:84`（`ModelsConfigSchema`）/`:115`（`ModelConfig`）+ `core/remote-catalog-provider.ts` 158 | `ai/provider/ModelsJsonProvider.java` + **`core/RemoteCatalogProvider.java`（326 行）** + `ModelCatalogRefresh.java` | 2 | **对齐** | **批 21（docs/32 T1d）核销**：F6 注记症状已过期——`Args.baseUrl` 经 `DefaultProviders:429`（CLI＞settings）＋:225（per-model 投影）消费；`FileModelsStore` 批 21 补跨进程锁（pi FileAuthStorageBackend 对位） |
-| E1-5 | pi manifest（`package.json` 的 `pi` 字段） | 配置 | `core/pi-manifest.ts`（35 行） | `pkg/PiManifest.java`（批 18 已落，逐字对位） | 2 | **对齐** | **批 21（docs/32 T1a）核销**（账面滞后）：`PiManifestTest` 六用例（四键/非字符串键跳过/非对象⇒null/BOM）批 18 已在 |
+| E1-5 | pi manifest（`package.json` 的 `pi` 字段） | 配置 | `core/pi-manifest.ts`（35 行；新锚点增 `changelogPath`） | `pkg/PiManifest.java`（批 18 已落，逐字对位）；L5 起读 `pi.changelogPath` | 2 | **对齐** | **批 21（docs/32 T1a）核销**（账面滞后）：`PiManifestTest` 六用例（四键/非字符串键跳过/非对象⇒null/BOM）批 18 已在。**L5 W4（2026-11-05，docs/25 §5.1，B277b）**：`changelogPath`（仅 string）经 `PackagePaths.resolvePackageChangelogPath` 解析（缺省 `CHANGELOG.md`，须真实存在＋普通文件＋`isPathInside` 包根内）写进 `PathMetadata`/`SourceInfo`；`hasManifestResourceFields` 使「只含 changelogPath 的 `pi` 对象」不阻断开目录自动发现 |
 
-**E1 汇总（批 21 后）：对齐 5 / 缺失 0 / 存疑 0 / 合计 5 = 100%**；**Σ权重 10 / Σ(w×c) 10.0 / 加权 100%（第七个满分域）**
+**E1 汇总（L5 重测后）：对齐 5 / 缺失 0 / 存疑 0 / 合计 5 = 100%**；**Σ权重 10 / Σ(w×c) 10.0 / 加权 100%（第七个满分域）**
+> **L5（2026-11-05，docs/25 W4/W10）**：E1-5 因新锚点 `changelogPath` 曾判存疑，W4 落地后**维持对齐**；E1-3 的 auth lock EPERM 重试面不适用（Java 用 `FileChannel` 锁，无 lockfile 目录重试）登 **D223**。Σ 10.0/10 不变。
 > 批 21（2026-10-25，docs/32）：**3 行翻动**——E1-3 存疑⇒对齐（+1.0，T2 读改同锁修真＋D131）、E1-4 存疑⇒对齐（+1.0，T1d 核销：F6 症状过期＋FileModelsStore 补锁）、E1-5 缺失⇒对齐（+2.0，T1a 核销：批 18 PiManifest 已逐字落地）。Σ 6.0→**10.0/10 = 100%**。
 
-### E2 settings.json 键（54）
+### E2 settings.json 键（57 计分 + 1 出分母 = 58 行；L5 W4 新增 3 键）
 
 pi 键全部来自 `core/settings-schema.ts:206-430`（`SettingsSchema`；`interface Settings` 在 `:471`，Omit 掉 schema-only 的 `queueMode`/`websockets`）；java 来自 `core/Settings.java:26-119`。
 **判定为「对齐」需字段存在且有非零消费者**（getter/setter 不算消费者；**批 12（docs/23 裁决①）起 TUI 模块的消费点计入本图**——map/04 行（settings 键）与 map/05 行（屏/组件单元）是不同单元，不构成重复计分；先例 E2-11 证据引 `TreeNavigationFlow:169`）。
@@ -360,8 +364,12 @@ pi 键全部来自 `core/settings-schema.ts:206-430`（`SettingsSchema`；`inter
 | E2-53 | `fullscreenScrollbar` | `:418` | `:115` | 1 | **对齐** | **批 12（2026-10-22，docs/23 T11，裁决⑧）**：`ChatViewportElement` 三态——HIDDEN 不渲染/命中恒 false/内容区不让列；AUTO/ALWAYS 同形常驻（窄差 D61：pi auto＝滚动后短暂显示 transient，java 无计时面）；渲染期现读热更＋设置页行 "Fullscreen scrollbar" |
 | E2-54 | `fullscreenCopyOnSelect` | `:424` | `:117` | 1 | **存疑** | 批 11（docs/22 T7）：字段＋UiPrefs 访问器（`?? true`）；**批 12（docs/23 §4）**：消费依赖 alt-screen 选区/复制子系统（map/05 S2a-d 未排期）⇒ **窄差 D59** |
 | E2-55 | `fullscreenWheelScrollLines` | `:430` | `:119` | 1 | **对齐** | **批 12（2026-10-22，docs/23 T12，裁决⑥）**：数字臂接 `ScrollConfig.from` 第三参（固定行数 `withWheelLines`，accessor 已 clamp 1–100）；auto 臂维持既有 Codex 有界加速模型（窄差 D60＝K38：pi auto 是 mac/SSH 判定＋速率加速 ≤6＋Alt×5 的速度模型，不新造） |
+| E2-56 | `extensionChangelogVersions` | `:210-216` | `Settings.java` 字段＋`SettingsAccessors.get/setExtensionChangelogVersion`（仅全局域） | 1 | **对齐** | **L5 W4（2026-11-05，docs/25 §5.1）**：`Map<String,String>` 按 `{source,scope}` 键记每包 lastVersion；消费点 `ExtensionChangelogs.compute`（`ExtensionChangelogsTest` 13 项）；序列化键序紧跟 `lastChangelogVersion`（pi 键序） |
+| E2-57 | `sessionShareDestination` | `:229-238` | `Settings.java` 字段＋`SettingsAccessors.getSessionShareDestination`（三值校验，非法回落 `auto`） | 1 | **对齐** | **L5 W4（2026-11-05，docs/25 §5.1/§5.2）**：`auto｜gist｜radius`，pi 缺省 `auto`（`settings-defaults.ts:5`）；消费点 `SessionShareService` 三臂门（gist 跳 Radius／radius 未认证逐字报错不回落／auto 保持旧行为）；`SessionShareServiceTest` +3 项；设置页行 `SettingsItems` "Session share destination" |
+| E2-58 | `selfUpdateCommand` | `:286-293` | `Settings.java` 字段＋`SettingsAccessors.getSelfUpdateCommand`（防御性拷贝，仅全局域） | 1 | **对齐** | **L5 W4（2026-11-05，docs/25 §5.4）**：`List<String>` argv；`SelfUpdate.getConfiguredSelfUpdateArgv` 环境变量 `PI_SELF_UPDATE_COMMAND` 优先；消费点 `PackageCommand` 的 `update self`／`update pi` 臂（真执行＋退出码透传＋三占位符）；`{version}` 只作当前版本（**D221**）；`SelfUpdateTest` 4 项 |
 
-**E2 汇总（批 21 后）：对齐 49 / 缺失 0 / 存疑 5 / 出分母 1 / 合计 54**；**Σ权重 84 / Σ(w×c) 81.5 / 加权 97.0%**
+**E2 汇总（L5 重测后）：对齐 52 / 缺失 0 / 存疑 5 / 出分母 1 / 合计 58**；**Σ权重 87 / Σ(w×c) 84.5 / 加权 97.1%**
+> **L5（2026-11-05，docs/25 W4）新增 3 行**：E2-56 `extensionChangelogVersions`(1)、E2-57 `sessionShareDestination`(1)、E2-58 `selfUpdateCommand`(1)——均缺失→对齐，Σ 84→87、Σ(w×c) 81.5→84.5。分母 54→57（另含出分母的 E2-45 codemode 共 58 行）。批 21 后旧读数：对齐 49 / 存疑 5 / 出分母 1 / Σ84 / 81.5。
 > `queueMode`（`:436`）/`websockets`（`:442`）只存在于 `SettingsSchema` 输入侧，`interface Settings`（`:471`）显式 Omit，非 settings.json 键，不列单元。
 > 本锚点改判：`compaction`（E2-10）存疑 → **对齐**（modelOverrides 字段＋per-model resolver 接线，A9 闭环）。
 > 批 1（2026-10-18，B236/docs/11）：`defaultTools`（E2-35）缺失 → **对齐**（键＋分层 merge＋解析＋消费点全落，窄差 D3 登记）。
@@ -378,7 +386,7 @@ pi 键全部来自 `core/settings-schema.ts:206-430`（`SettingsSchema`；`inter
 |---|---|---|---|---|---|---|
 | E3-1 | 新建会话（无参） | `session-manager.ts:1057` `newSession` | `SessionPersistence.java:201` `handle.create` | **3** | 对齐 | — |
 | E3-2 | 续最近会话（`-c`） | `main.ts:432-433` → `SessionManager.continueRecent`（`session-manager.ts:1793` → `findMostRecentSession:749`） | `SessionPersistence.java:170` `handle.latest(cwd)` | 2 | 对齐 | A12 已结案 |
-| E3-3 | `-r` 交互式会话选择器 | `main.ts:417` `selectSession`（`cli/session-picker.ts` 55 行 + `session-selector.ts` 1,045 + `session-selector-search.ts` 194） | ✅ tui `component/session/`（`SessionSelectorComponent`/`SessionListModel`/`SessionListRenderer`/`SessionSelectorHeader`/`SessionTreeBuilder`/`SessionSelectorSearch`）＋`SessionSelectorRunner`＋coding-agent SPI（批 14，docs/25） | 2 | **对齐** | **批 14**：搜索（re:/引号/未闭合回落/fuzzy 子序列）/三档排序/命名过滤/路径开关/双 scope 懒载/删除流/进度全落；窄差 D69–D76（trash 臂无/SPI 缺席/键位 helper 等）；rename 面板留白随交互选择器批（裁决⑦） |
+| E3-3 | `-r` 交互式会话选择器 | `main.ts:417` `selectSession`（`cli/session-picker.ts` 55 行 + `session-selector.ts` 1,045 + `session-selector-search.ts` 194） | ✅ tui `component/session/`（`SessionSelectorComponent`/`SessionListModel`/`SessionListRenderer`/`SessionSelectorHeader`/`SessionTreeBuilder`/`SessionSelectorSearch`）＋`SessionSelectorRunner`＋coding-agent SPI（批 14，docs/25） | **0（转出 L7）** | **转出** | **L5（2026-11-05，docs/25 §1.5）**：新锚点 `session-selector-search.ts` 的分层评分（名称/正文/模糊三档）是 TUI 屏域重写，选择器本体与搜索排序都在 `pi-java-tui` ⇒ 按 docs/04 归属**转 L7**，L5 保留证据与指针、权重 0、不进本层分母。批 14 后旧读数：对齐 / 权重 2 |
 | E3-4 | `--session` 精确/前缀查找 | **路径形快道＋三级阶梯**（`main.ts:252-283`）：路径形（`:253-256`）→ ① `findLocalSessionByExactId`（`:243`/`:260`）→ ② 项目内前缀 `SessionManager.list`（`:263-268`）→ ③ `SessionManager.listAll`（`:273`，跨项目） | `PersistentSessionRepositories.java:59-93` 阶梯（B53）＋`findWithScope` scope 标＋`SessionPersistence.resolveSessionArg`（批 14） | 2 | **对齐** | **批 14（docs/25 T6/T7）**：pi 全序重排＋③ global 臂（提示＋`promptConfirm` fork／`Aborted.` exit 0）＋`SessionResolutionExit` 干净错误面 |
 | E3-5 | `--session-id` 精确 ID（缺则建） | `main.ts:437-447` | `SessionPersistence.resolveSessionId`（批 14）＋`RepositoryHandle.findLocalById/createWithId`（T4） | 2 | **对齐** | **批 14（docs/25 T8）**：只项目内精确（pi `:437`）；缺 ⇒ warning 逐字＋带 id 新建（修丢 id）；`assertValidSessionId` 正则逐字入 ArgsParser |
 | E3-6 | `--fork` 分叉 | `main.ts:369-381` | `SessionPersistence.resolveFork`（批 14） | 2 | **对齐** | **批 14（docs/25 T9）**：`--session-id` 目标查重（`Session already exists with id '<id>'` exit 1）＋not_found 文案逐字；`validateForkFlags` 互斥 |
@@ -386,7 +394,7 @@ pi 键全部来自 `core/settings-schema.ts:206-430`（`SettingsSchema`；`inter
 | E3-8 | `/fork` 从历史用户消息分叉 | `user-message-selector.ts`（155 行） | `PiTuiApp.java`（forkFromMessage）＋`UserMessageSelectorScreen.java` | 2 | **对齐** | **批 10（2026-10-22，B254/docs/21）**：选择器本体＋fork-before＋编辑器回填全落；窄差 D50/D51 登记（同 C 域 #15——设计对账表漏列本行，闭环逐行实算同翻） |
 | E3-9 | 会话列表（加强） | `listSessionsFromDir`（`:941`）、`SessionListProgress`（3 参）、`AbortSignal`、`publishPartial`、`listAll` | `RepositoryHandle.listRich/listAllRich`（批 14 T4）→ `JsonlSessionRepository.listRich/listAllRich`（B55 已落：进度＋取消＋并发） | 2 | **对齐** | **批 14（docs/25 T4）**：repo 层能力暴露到句柄面（选择器消费）；sqlite 臂退化（窄差 D74） |
 | E3-10 | 导出 JSONL | `core/session-export.ts` | `PersistentSessionRepositories.java:95` | 2 | 对齐 | — |
-| E3-11 | 导出 HTML | `core/export-html/`（748 行） | `export/HtmlExporter.java` | 2 | 对齐 | — |
+| E3-11 | 导出 HTML | `core/export-html/`（748 行；新锚点增系统消息/迭代回溯/CJK 强调） | `export/HtmlExporter.java`＋`HtmlSystemMessages.java`＋`MarkdownToHtml.java` | 2 | **对齐** | **L5 W8（2026-11-05，docs/25 §9，B277f）复核到新锚点口径**：系统消息两臂（首条 system 条目＋后续更新合并）、祖先回溯改迭代（20,000 条线性会话不再栈溢出，pi #11225）、read 工具行区间渲染、CJK 强调放宽（**D225**：不引入 JS `marked-cjk-friendly`，以渲染结果判定）；`HtmlExportSystemMessagesTest` 11 项／`HtmlExportDeepChainTest`／`HtmlExportCjkTest` |
 | E3-12 | 导入 JSONL | `session-manager.ts` | `PersistentSessionRepositories.java:109` | 1 | 对齐 | — |
 | E3-13 | 会话命名 | `session-manager.ts:1304` `appendSessionInfo` | `SessionCommands.java:22` + `AgentSession.java:529` | 1 | 对齐 | **B32** |
 | E3-14 | 会话树导航 | `session-manager.ts:1529` `getTree` / `:1579` `branch` | `SessionCommands.java:56` + `RpcDispatcher.java:295` | 1 | 对齐 | — |
@@ -401,7 +409,8 @@ pi 键全部来自 `core/settings-schema.ts:206-430`（`SettingsSchema`；`inter
 | E3-23 | 会话元数据变更事件 | `session_info_changed`（`types.ts:1575`） | `AgentSession.java:1237`（emit 生产者）＋`SessionEventBridge:123` 扩展桥 | 1 | **对齐** | **批 21（docs/32 T1c）核销**（账面滞后）：B30 已在批 4 台账纠错区销号（生产者早已在），本行未翻 |
 | E3-24 | 提示缓存预热 | `core/cache-warmer.ts`（453 行）+ `settings-schema.ts:395` | `CacheWarmer`＋`CacheWarmingEconomics`＋`CacheStats`＋`CacheWarmingBridge`＋装配四面（批 13，docs/24） | 2 | **对齐** | **批 14 核销**：批 13 对账表漏列本行（cache-warmer 子系统即本行内容），闭环逐行实算补翻 |
 
-**E3 汇总（批 21 后）：对齐 24 / 缺失 0 / 存疑 0 / 合计 24 = 100%**；**Σ权重 40 / Σ(w×c) 40.0 / 加权 100%（第八个满分域）**
+**E3 汇总（L5 重测后）：对齐 23 / 缺失 0 / 存疑 0 / 转出 1 / 合计 24**；**Σ权重 38 / Σ(w×c) 38.0 / 加权 100%（第八个满分域）**
+> **L5（2026-11-05，docs/25 §1.5）**：E3-3 `-r` 交互式会话选择器**转出 L7**（权重 2→0，行与证据保留作指针）——新锚点选择器搜索分层重写属 TUI 屏域。Σ 40→38，分母仍 24 行（计分 23＋转出 1）。批 21 后旧读数：对齐 24 / Σ40 / 100%。
 > 批 10（2026-10-22，B254/docs/21）：E3-8 `/fork` 存疑 → **对齐**。
 > 批 14（2026-10-23，docs/25）：**7 行翻动**——E3-3 缺失⇒对齐（+2.0，选择器本体）、E3-4/E3-5/E3-6/E3-9 存疑⇒对齐（+4.0）、**E3-19 同翻**（+0.5，B54 销号——设计对账表漏列，批 10 E3-8 先例）、**E3-24 核销**（+2.0，批 13 对账表漏列，cache-warmer 本体已落）。Σ 28.5→**37.0/40 ≈ 92.5%**（余 3.0：E3-15 挂 B1、E3-23 挂 B30）。
 > 批 21（2026-10-25，docs/32）：**2 行翻动**——E3-15（+2.0）/E3-23（+0.5）双核销（B1/B30 早已销号，账面滞后）。Σ 37.0→**40.0/40 = 100%（第八个满分域）**。
@@ -435,16 +444,16 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 | E5-6 | `registerShortcut` | `:1655` | ✅ `ExtensionContext.registerShortcut`＋`ExtensionShortcuts` 三规则＋TUI 派发缝 | 2 | **对齐** | **批 26（docs/37 T9）** |
 | E5-7 | `registerFlag` / `getFlag` | `:1664` / `:1680` | ✅ `ExtensionContext.registerFlag/getFlag` | 1 | **对齐** | 批 16 T1b（loader.ts:331-349/:373-378 对位：default 类型校验抛/所有权门/set-if-absent） |
 | E5-8 | `registerMessageRenderer` | `:1687` | ✅ `ExtensionMessageRenderer`＋first-wins＋TUI 消费缝 | 2 | **对齐** | **批 26（docs/37 T10）**；文本级裁决③，窄差 D152 |
-| E5-9 | `registerMarkdownTransformer` | `:1690` | ✅ `MarkdownTransformer`＋渲染缝两臂 | 2 | **对齐** | **批 26（docs/37 T11）**；窄差 D150/D151 |
+| E5-9 | `registerMarkdownTransformer` | `:1690` | ✅ `MarkdownTransformer`＋渲染缝两臂；L5 起上下文带 `messageId`/`timestamp` | 2 | **对齐** | **批 26（docs/37 T11）**；窄差 D150/D151。**L5 W8（2026-11-05，docs/25 §9，B277f）**：`MarkdownTransformContext` 增加可空 `messageId`/`timestamp`——三参 `MarkdownTransformers.applyForEntry` 从持久化条目喂入，实时流式传 `null`（pi `:5350-5370` 同）；`MarkdownTransformContextTest` 5 项 |
 | E5-10 | `registerEntryRenderer` | `:1693` | ✅ `ExtensionEntryRenderer`＋first-wins＋TUI 消费缝 | 2 | **对齐** | **批 26（docs/37 T10）**；窄差 D152 |
 | E5-11 | `registerToolRenderer` | `:1696` | ✅ `ToolRendererRegistry`＋`McpToolCallRenderer`＋tui `ToolRenderers` | 1 | **对齐** | 批 16 T4（runner.ts:789-795 责任链逐字——null 直返、`next()` 显式委托；文本级接口裁决⑦，窄差 D92；B204 销号） |
-| E5-12 | `sendMessage`（含 `triggerTurn`/`deliverAs`） | `:1703` | ✅ `AgentSession.sendCustomMessage` 五臂＋三缓冲 | 2 | **对齐** | **批 26（docs/37 T2，存疑→对齐）**：pi :2293-2329 逐字序；窄差 D157/D159 |
+| E5-12 | `sendMessage`（含 `triggerTurn`/`deliverAs`） | `:1703` | ✅ `AgentSession.sendCustomMessage` 五臂＋三缓冲；L5 起 `triggerTurn` 空闲臂走 `PromptPipeline.startRunCustom` | 2 | **对齐** | 批 26（docs/37 T2，存疑→对齐）：pi :2293-2329 逐字序；窄差 D157/D159。**L5 W1（2026-11-05，docs/25 §2，B275）复核**：custom 触发改走启动窗（空发 `before_agent_start` 的旧形已修），settled 延迟表改重入 `sendCustomMessage`（pi :2401） |
 | E5-13 | `sendUserMessage` | `:1713` | ✅ `ExtensionContext.sendUserMessage`（归一逐字＋source "extension"） | 2 | **对齐** | **批 26（docs/37 T3）**；D12 注记更新（source 生产者落地） |
 | E5-14 | `appendEntry` | `:1719` | ✅ ctx → `AgentSession.appendCustomEntry`（批 15 既有全链） | 1 | **对齐** | **批 26（docs/37 T4）** |
 | E5-15 | `setSessionName` / `getSessionName` | `:1726` / `:1729` | ✅ ctx → `AgentSession.setSessionName`/`storedSessionName` | 1 | **对齐** | **批 26（docs/37 T4）**；裁决⑪ |
 | E5-16 | `setLabel` | `:1732` | ✅ ctx → `AgentSession.setLabel`＋未寻抛错文案修真 | 1 | **对齐** | **批 26（docs/37 T4）**；裁决⑦ |
-| E5-17 | `exec` | `:1735` | ✅ `ExtensionExec`（pi exec.ts 逐字语义） | 2 | **对齐** | **批 26（docs/37 T6）**；窄差 D154 |
-| E5-18 | `getActiveTools`/`getAllTools`/`setActiveTools` | `:1738`/`:1741`/`:1750` | ✅ `AgentSession` 三件套＋`ExtensionContext` 面 | 2 | **对齐** | 批 16 T2（agent-session.ts:1483-1531 对位；未知名静默忽略/注册即激活臂/执行查找面接活跃集修真）；**批 27**：defaultActive 闸落地（D89 收窄）＋投影三字段（D91 收窄）；窄差 D164 |
+| E5-17 | `exec` | `:1735` | ✅ `ExtensionExec`（pi exec.ts 逐字语义；L5 起含 `maxBuffer`/`truncated`/UTF-8 分块） | 2 | **对齐** | 批 26（docs/37 T6）；窄差 D154。**L5 W3（2026-11-05，docs/25 §4，B277a）**：`ExecOptions.maxBuffer`（缺省 256 MiB、越界抛 `IllegalArgumentException` 逐字）＋`ExecResult.truncated`＋stdout/stderr 合并计字节＋截断丢弃不完整 UTF-8 尾＋`truncated && code==0 ⇒ 1`；`ExecMaxBufferTest`／`ExecUtf8BoundaryTest` |
+| E5-18 | `getActiveTools`/`getAllTools`/`setActiveTools` | `:1738`/`:1741`/`:1750` | ✅ `AgentSession` 三件套＋`ExtensionContext` 面；L5 起 `getAllTools` 投影 `reachesTools` | 2 | **对齐** | 批 16 T2（agent-session.ts:1483-1531 对位；未知名静默忽略/注册即激活臂/执行查找面接活跃集修真）；批 27：defaultActive 闸落地（D89 收窄）＋投影三字段（D91 收窄）；窄差 D164。**L5 W2（2026-11-05，docs/25 §3，B276）**：`ExtensionToolInfo` 增加可空 `reachesTools` 组件（保留旧构造器）并透传工具本体同一引用（pi `agent-session.ts:1530-1545`）；同名集合重设保持注册表序（Java 已等价，激活序来源差异登 **D219**） |
 | E5-19 | `getSettings` | `:1744` | `ExtensionContext.java:32` `settings()` | 2 | 对齐 | — |
 | E5-20 | `getCommands` | `:1753` | ✅ `ExtensionContext.getCommands()` 三源 listing | 1 | **对齐** | **批 23（docs/34 T4）**：扩展编号名＋模板＋`skill:` 前缀（agent-session.ts:3361-3381 序） |
 | E5-21 | `setModel` | `:1763` | ✅ ctx → `AgentSession.setModel`＋auth 门（false 不抛） | 2 | **对齐** | **批 26（docs/37 T5）**：pi :3429-3432 逐字；auth 判据读活凭证链（裁决注记） |
@@ -457,19 +466,20 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 | E5-28 | `events`（扩展间 EventBus） | `:1890` | ✅ `ExtensionChannelBus`＋失效退订三路径 | 1 | **对齐** | **批 26（docs/37 T7）**；窄差 D155 |
 | E5-29 | 热重载（`/reload` 重载 extensions/skills/prompts/themes + 激活新 defaultTools） | `agent-session.ts:3660`（modifier 合并 `:3662-3680`） | ✅ `SessionReload` 七步序 | 2 | **对齐** | 批 16 T5（:3660-3701 对位；窄差 D90 不重建扩展运行时/D93 可见面收窄/D94 provider 重置烘焙臂；themes 重扫随批 20） |
 | E5-30 | 扩展注册 CLI flag | `:1664` + `args.ts:186` | ✅ `ExtensionFlagBinder`＋`--help` 段 | 1 | **对齐** | 批 16 T1c–T1e（args.ts:247-271 三态＋agent-session-services.ts:82-128 绑定＋args.ts:273-283 help 面对位） |
-| E5-31 | 扩展 UI 注入（TUI） | `types.ts:149-323` | ⚠️ `TuiExtensionUI`（13 方法：对话四件套＋custom＋notify/setStatus/setWidget/setFooter/setHeader/setEditorText/getEditorText）＋widget/footer/header/状态段注入层；余 15 成员 default＝pi noOp 语义、TUI 臂挂账（docs/28 §4） | 2 | **存疑** | 批 17（docs/28 T1/T4–T6；窄差 D95–D101；余面：working 指示器/主题四面/补全/编辑器替换等随后续批） |
+| E5-31 | 扩展 UI 注入（TUI） | `types.ts:149-323` | ⚠️ `TuiExtensionUI`（13 方法：对话四件套＋custom＋notify/setStatus/setWidget/setFooter/setHeader/setEditorText/getEditorText）＋widget/footer/header/状态段注入层；余 15 成员 default＝pi noOp 语义、TUI 臂挂账（docs/28 §4） | **0（转出 L7）** | **转出** | **L5（2026-11-05，docs/25 §1.5）**：新锚点新增 `blocked`、对话框堆叠、`KeybindingHints`，全部是 TUI 渲染/交互面 ⇒ 按 docs/04 归属**转 L7**；API 侧的 `KeybindingHints` 另见 **D220**。批 17 后旧读数：存疑 / 权重 2 |
 | E5-32 | 扩展 UI 通道（RPC，9 method） | `rpc-types.ts:253-297` | ✅ `RpcExtensionUI` 九方法 typed 实现＋`RpcDispatcher` 注入（晚绑定修真——context 现读会话字段） | 1 | **对齐** | 批 17（docs/28 T3）：参数键平铺顶层（pi spread 逐字）＋signal/timeout 本地解除（裁决⑦）＋setWidget 工厂臂静默忽略（pi 同缺） |
-| E5-33 | 扩展示例库（可执行验收规格） | 旧锚点 `examples/`（105 个 `.ts`；新锚点待 L8 重清点） | `pi-java-examples` 已有 16 类主流示例与验收测试，见 docs/07 | **3** | **缺失（旧基线整包未闭环）** | 主流 examples 继续全做 Java 移植；Chord plugin 按 R5 排除；旧 16/102 不作为新基线分母 |
+| E5-33 | 扩展示例库（可执行验收规格） | 旧锚点 `examples/`（105 个 `.ts`；新锚点待 L8 重清点） | `pi-java-examples` 已有 16 类主流示例与验收测试，见 docs/07 | **0（转出 L8）** | **转出** | **L5（2026-11-05，docs/25 §1.5）**：examples 验收规格归 **L8**，L5 不保留第二计分入口（避免同一工作计两次）；主流 examples 继续全做 Java 移植，Chord plugin 按 R5 排除。旧读数：缺失 / 权重 3 |
 | E5-34 | 扩展来源追踪（`SourceInfo`） | `types.ts:1543/2055/2098` | ✅ `ExtensionSourceInfos` 四规则＋注册即盖 sourceInfo 章 | 1 | **对齐** | **批 23（docs/34 T4）**：getDefaultSourceInfoForPath 逐字（builtin:/`<inline:`⇒temporary、`<agentDir>/extensions`⇒user、`<cwd>/.pi-java/extensions`⇒project、包源经元数据携带 origin=package）；`CommandRegistry` 登记目注册即盖章（loader.ts:317 对位） |
 | E5-35 | `on()` 返回退订函数 | `types.ts:1569-1636`（41 条 `() => void`） | ✅ `ExtensionContext.on(spec, handler)`（批 4，docs/14 §3.2）→ `AutoCloseable` 退订：按实例移除、空表删键（loader.ts:272-288 逐字语义） | 2 | **对齐** | — |
 
-**E5 汇总（批 27 后）：对齐 33 / 缺失 1 / 存疑 1 / 合计 35 = 94.3%**；**Σ权重 58 / Σ(w×c) 54.0 / 加权 93.1%**
+**E5 汇总（L5 重测后）：对齐 33 / 缺失 0 / 存疑 0 / 转出 2 / 合计 35**；**Σ权重 53 / Σ(w×c) 53.0 / 加权 100%（第十五个满分域）**
+> **L5（2026-11-05，docs/25 §1.5/§2–§9）**：E5-31 扩展 UI **转出 L7**（权重 2→0）、E5-33 examples **转出 L8**（权重 3→0）；E5-12 `sendMessage`（W1 custom 触发）、E5-17 `exec`（W3 maxBuffer/truncated）、E5-18 `getAllTools`（W2 reachesTools 投影）、E5-9 markdown transformer（W8 messageId/timestamp）四行证据补到新锚点口径。Σ 58→53（计分 53，转出 5 权重 0），Σ(w×c) 54.0→**53.0** ⇒ 加分母内缺口清零，**满分域第十五个**。批 27 后旧读数：对齐 33 / 缺失 1 / 存疑 1 / Σ58 / 54.0 / 93.1%。
 > 批 16（2026-10-23，docs/27）：**5 行翻动**——E5-7/E5-30 缺失→对齐（T1 flag 面）、E5-18 缺失→对齐（T2 激活门三件套）、E5-11 缺失→对齐（T4 registerToolRenderer，B204 销号）、E5-29 存疑→对齐（T5 /reload 七步序，B246 销号）；E8-7 注记行随翻（不计入分母）。
 > 批 23（2026-10-25，docs/34）：**5 行翻动 +5.5**——E5-23（+2.0）/E5-24/E5-25（+1.0×2）缺失→对齐（T1 扩展 MCP 三件，B218 销号）、E5-20 缺失→对齐（+1.0，T4 getCommands 三源序）、E5-34 存疑→对齐（+0.5，T4 `ExtensionSourceInfos` 四规则）。未加权计数逐行实算收平：批 17 两翻（E5-31 缺失→存疑、E5-32 存疑→对齐）当时未入汇总行（基数 11/21/3 滞后，实为 12/20/3），本批按行实算 17/16/2。
 > **批 26（2026-10-28，docs/37）：14 行翻动 +22.0**——E5-5/6/8/9/10/13/14/15/16/17/21/22/28 十三行缺失→对齐、E5-12 存疑→对齐（T1–T11 全落）；E5-26/27 裁决①挂账（收编 B162）；新窄差 D150–D159（docs/04 §4 批 26 段）；E5-31 维持存疑挂账、E5-33 维持 F 类。
 > **批 27（2026-10-28，docs/38）：2 行翻动 +3.0**——E5-26（+2.0）/E5-27（+1.0）缺失→对齐（B162 整域：tool-search＋virtual-models＋nested-tool-calls，B162 销号、D7 销号、D89/D91 收窄）；新窄差 D160–D171（docs/04 §4 批 27 段）；E5-31 维持存疑挂账、E5-33 维持 F 类。
 
-### E6 包管理器（16）
+### E6 包管理器（18）
 
 | # | 能力单元 | pi 侧证据 | pi-java 侧证据 | 权重 | 判定 | 台账 |
 |---|---|---|---|---|---|---|
@@ -489,11 +499,14 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 | E6-14 | 持久化到 `settings.packages` | `package-manager.ts:112` | `SettingsManager.setPackages/setProjectPackages`（字段级 merge 落盘，未知键保留）＋`pkg/PackageConfigWriter`（身份去重/原位替换/追加） | **3** | **对齐** | **批 19（docs/30 T1+T2，裁决③）** |
 | E6-15 | pi manifest 读取 | `core/pi-manifest.ts` | `pkg/PiManifest.java`（pi-manifest.ts 35 行逐字）＋`PackageResourceCollector` manifest 臂消费 | 2 | **对齐** | **批 19 终判（docs/30 §1.5）**：机制＋收集消费批 18 已落；pi `list` 无独立 manifest 标记（唯一标记＝`(filtered)` 对象形判定）⇒ 展示面无残件 |
 | E6-16 | `remove` / `uninstall` | `package-manager.ts:118` | `pkg/PackageManager.remove` 三臂＋`HttpNpmResolver.uninstall`（目录删除，D113）＋CLI 面 | 2 | **对齐** | **批 19（docs/30 T1/T4）** |
+| E6-17 | 安装失败不阻塞启动＋启动警告 | `package-manager.ts:98-112,1371-1454`；`resource-loader.ts:115-133,562-566,732-736` | `pkg/ResolvedPaths.installFailures`＋`pkg/PackageInstaller`（新拆件）＋`core/PackageInstallWarnings`＋`ExtensionLoading` 汇入 `startupDiagnostics`＋`ConfigCommand` 打 `Warning:` 行 | 2 | **对齐** | **L5 W5（2026-11-05，docs/25 §6.1，B279 销号）**：单包安装失败记 failure 并跳过其资源、其余照常解析；`onMissing=error` 仍抛 `Missing source:`；三档警告文案逐字（user 无 `--local`／project 带 `--local`／temporary「Check the source and try again.」）；`PackageInstallFailureTest` 8 项 |
+| E6-18 | temporary 源自动刷新 | `package-manager.ts:1437-1449,2137-2163` | `pkg/GitPackageStore.refreshTemporaryGitSource`（commit-ref 预检）＋`HttpNpmResolver.hasAvailableUpdate`＋`PackageUpdater.reportUnchangedNpmUpdates` | 1 | **对齐** | **L5 W5（2026-11-05，docs/25 §6.2，B280 销号）**：temporary git 臂即使 `pinned` 也刷新 moving branch，只有 ref 是 7–64 位十六进制且 HEAD 已命中才跳过网络；temporary npm 未固定版本⇒按 `name@latest` 重装，失败静默保留缓存；`update --extensions` 的「宣告但没变」progress 消息逐字；`TemporarySourceRefreshTest` 9 项＋`PackageUpdateMessageTest` 3 项；npm CLI 特有行为不适用登 **D222** |
 
-**E6 汇总（批 22 后）：对齐 16 / 存疑 0 / 缺失 0 / 合计 16 = 100%**；**Σ权重 31 / Σ(w×c) 31.0 / 加权 100%（第十一个满分域）**
+**E6 汇总（L5 重测后）：对齐 18 / 存疑 0 / 缺失 0 / 合计 18 = 100%**；**Σ权重 34 / Σ(w×c) 34.0 / 加权 100%（第十一个满分域）**
+> **L5（2026-11-05，docs/25 W5）新增 2 行**：E6-17 安装失败不阻塞启动＋启动警告(2)、E6-18 temporary 源自动刷新(1)——均缺失→对齐，Σ 31→34。批 22 后旧读数：对齐 16 / Σ31 / 100%。
 > 批 22（2026-10-25，docs/33）：E6-10 存疑⇒对齐（+1.0，自更新终裁裁决①——恒不可用臂＝pi 未知形态臂终局）。Σ 30.0→**31.0/31 = 100%**。
 
-### E7 RPC 面（6）
+### E7 RPC 面（7）
 
 | # | 能力单元 | pi 侧证据 | pi-java 侧证据 | 权重 | 判定 | 台账 |
 |---|---|---|---|---|---|---|
@@ -503,8 +516,10 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 | E7-4 | RPC 事件线格式 | `modes/json-event.ts` | `mode/JsonEventMapper.java` | **3** | **对齐** | **批 20（docs/31 T4 核销）**：行注的 **B27/B28/B29 早在包④（RPC 重试面，2026-09-19）闭环**、台账重建（258b29b5）时已清出——行注滞后修正；`JsonEventParityTest` 钉 message_update 拍平/toolcall_start 补 id+toolName＋错位错文逐字/透传 |
 | E7-5 | RPC 命令线的 `Instant` 序列化 | pi 无此问题 | `rpc/JsonlWriter.java` | 1 | 对齐 | **B52 已修** |
 | E7-6 | RPC `prompt` 回执 `disposition` | `rpc-types.ts:118` `PromptDisposition`（＝`"handled"\|"queued"\|"started"`，agent-session `:310-311`） | `RpcDispatcher`（prompt/steer/follow_up 全透传 `QueuedInputDisposition`）＋`AgentSession` 扩展命令臂＋queueUserInput 全序 | 1 | **对齐** | **批 20（docs/31 T1，B237 销号）**：`handled` 两臂落地——扩展命令即执行（CommandRegistry EXTENSION 标签）＋input 事件吞没（steer/followUp 同过）；扩展命令入队错文逐字 fail |
+| E7-7 | 思考档 RPC 按模型能力过滤 | `agent-session.ts:2726-2753`（`cycleThinkingLevel` 先 `supportsThinking()` 否则 `undefined`；`getAvailableThinkingLevels` 走 `getSupportedThinkingLevels(model)`）；`rpc-mode.ts:502-512`（无级别⇒`null`、过滤集） | `RpcSessionPayloads.cycleThinking`／`availableThinkingLevels` 改走 `ThinkingCommands.availableLevels(session)` | 1 | **对齐** | **L5 W9（2026-11-05，docs/25 §10，B259 销号）**：非 reasoning 模型⇒`get_available_thinking_levels` 返 `["off"]`、`cycle_thinking_level` 返 `null`；reasoning 且 thinkingLevelMap 缺 xhigh/max ⇒ 过滤集不含两档且轮转跳过；无模型⇒七值全集（pi 同）；`ThinkingRpcLevelsTest` 钉四臂 |
 
-**E7 汇总（批 20 后）：对齐 6 / 缺失 0 / 存疑 0 / 合计 6 = 100%**；**Σ权重 12 / Σ(w×c) 12.0 / 加权 100%（第六个满分域）**
+**E7 汇总（L5 重测后）：对齐 7 / 缺失 0 / 存疑 0 / 合计 7 = 100%**；**Σ权重 13 / Σ(w×c) 13.0 / 加权 100%（第六个满分域）**
+> **L5（2026-11-05，docs/25 W9，B259 销号）新增 1 行**：E7-7 思考档 RPC 按模型能力过滤(1)——缺失→对齐，Σ 12→13。批 20 后旧读数：对齐 6 / Σ12 / 100%。
 
 ---
 
@@ -522,11 +537,12 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 | G-5 | MCP 工具暴露（`codemode`/`deferred`/`direct`/`hidden`）+ 工具/资源接入模型 | `core/mcp-servers.ts`（346）、`extensions/mcp/tools.ts`、`resources.ts` | 2 | **对齐** | **明细见 map/07**：exposure ADT 与 `AgentTool` 适配全落；激活路径依赖 B161/B162（B203） |
 | G-6 | codemode 沙箱运行时（quickjs-wasi host/worker/protocol/prelude） | `packages/codemode`＋`extensions/codemode/execute.ts` | **0（R5）** | **面外** | 不对齐、不进新分母 |
 | G-7 | codemode 工具（执行 JS、描述/inlineBudget、`mode: on\|only`、renderer） | `extensions/codemode/tool.ts`、`renderer.ts`；`settings-schema.ts` | **0（R5）** | **面外** | 不对齐、不进新分母 |
-| G-8 | `tool_search` 工具（BM25 排序 + 按需加载 deferred 工具） | `extensions/tool-search/`（265 行） | 2 | **对齐** | **批 27（docs/38，B162 销号）**：`toolsearch` 包逐字（tokenizer/BM25/文档构建/工具定义）＋`builtin:tool-search` 装配＋MCP ensureDiscoveryActive deferred 臂 |
+| G-8 | `tool_search` 工具（BM25 排序 + 按需加载 deferred 工具） | `extensions/tool-search/`（265 行） | 2 | **对齐** | **批 27（docs/38，B162 销号）**：`toolsearch` 包逐字（tokenizer/BM25/文档构建/工具定义）＋`builtin:tool-search` 装配＋MCP ensureDiscoveryActive deferred 臂。**L5 W7（2026-11-05，docs/25 §8，B277e）复核到新锚点口径**：`tokenize` NFC⇒边界正则⇒小写⇒非词字符替换⇒ASCII 快路径/`BreakIterator`；`ToolSearchDocument` 独立 `namespaceText`（名称不再进 `text`）；`Bm25Ranker` 分字段（名称权重 3／命名空间 0.5／长度只归一描述，排序键 exact→covered→score，本地名全命中加奖励）；删 `ToolSearchTool.isToolSearchTool`（pi 已删该导出）；**D224** 登记 UAX#29 与浏览器词典分词的无空格连写差异 |
 | G-9 | 虚拟模型（registry + route + 状态条目） | `core/virtual-models.ts`（238 行）＋ `ExtensionAPI.registerVirtualModel:1883` | 2 | **对齐** | **批 27（docs/38）**：`core/virtual/` 包（注册表/路由/分支态条目）＋扩展面两件；窄差 D160/D163/D169–D171 |
 | G-10 | 嵌套工具调用（`ctx.executeTool()`、`nestedCalls`、大小上限） | `core/nested-tool-calls.ts`（263 行） | 1 | **对齐** | **批 27（docs/38）**：`NestedCallRecorder`＋`NestedToolCallRunner`＋宿主缝＋扩展面；窄差 D161/D162/D166–D168 |
 
 **G 当前口径**：G-1..G-5 只作 map/07 指针，不重复计分；G-6/G-7 按 R5 权重 0；G-8/G-9/G-10 在旧基线为对齐。新权重汇总待全层重测后计算。
+> **L5（2026-11-05，docs/25 W7）**：计分三行（G-8/G-9/G-10）Σ权重 5、Σ(w×c) 5.0 ⇒ **加权 100%**；G-8 证据补到新锚点口径（W7 Unicode 分词＋分字段 BM25），G-9/G-10 复核无改动。
 
 > **模块归属**：MCP 面的 Java 代码主在**新模块 `pi-java-mcp`**（主源 10,853 行）；工具与资源的 `AgentTool` 适配在本模块 `extension/mcp`（1,762 行）—— `AgentTool` 在 agent-core，而 `pi-java-mcp` 看不见它（`ai ← mcp`）。映射裁决与 B205 见 map/07。
 > 部分落地的行记「存疑」（形状/一半存在），**不拆行**（拆行会改权重层归属）。
@@ -549,6 +565,11 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 ---
 
 ## 整块视图（非独立计分）
+
+**模块合计（L5 重测后，2026-11-05）：Σ权重 452 / Σ(w×c) 449.5 = 99.45%**
+> 逐域实算：A 62.0/62、B 15.0/15、C 38.0/38、D 83.0/83、E1 10.0/10、E2 84.5/87、E3 38.0/38、E4 14.0/14、E5 53.0/53、E6 34.0/34、E7 13.0/13、G 5.0/5。E8 按既有口径不计入模块。
+> 唯一缺口是 **E2 的 5 行存疑**（E2-22 `enableInstallTelemetry`／E2-32 `terminal`／E2-43 `markdown`／E2-50 `websocketConnectTimeoutMs`／E2-54 `fullscreenCopyOnSelect`，合计 −2.5），均为已登记的平台/终端能力窄差，属预期状态。分母变化：转出 E3-3(2)＋E5-31(2)＋E5-33(3)＝−7；新增 E2×3＋E6×2＋E7×1＝＋7，净持平 452。
+> 旧读数（批 27 后）：424.0/452＝93.81%。
 
 整块视图不再重复计分。examples 只在 E5-33 保留一个计分入口；扩展 UI 只在 E5-31 计分。JSON 主题、包管理、会话选择器等已有对应细单元，不再保留“整块全缺”的旧结论。
 
