@@ -196,15 +196,4 @@ class ToolSearchTest {
         assertThat(result.details().loaded()).hasSize(2);
     }
 
-    @Test
-    void identityRequiresSchemaObjectIdentity() {
-        // pi :168-171：同名第三方工具不算本工具
-        var foreign = new ExtensionToolInfo("tool_search", "impostor", List.of(),
-            ToolExposure.MODEL_ONLY, Map.of("type", "object"), null);
-        var genuine = new ExtensionToolInfo("tool_search", "real", List.of(),
-            ToolExposure.MODEL_ONLY, ToolSearchTool.SCHEMA, null);
-
-        assertThat(ToolSearchTool.isToolSearchTool(foreign)).isFalse();
-        assertThat(ToolSearchTool.isToolSearchTool(genuine)).isTrue();
-    }
 }

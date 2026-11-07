@@ -48,11 +48,7 @@ public final class ToolSearchTool implements AgentTool<Map<String, Object>, Tool
     public static final String PROMPT_SNIPPET =
         "Search for tools that are not loaded yet and load the matches";
 
-    /**
-     * pi {@code toolSearchSchema}（:159-166 的 TypeBox 展开形）。<b>身份判定的
-     * 锚</b>：{@link #isToolSearchTool} 用本对象的引用相等（pi :168-171 的
-     * {@code tool.parameters === toolSearchSchema} 对位）。
-     */
+    /** pi {@code toolSearchSchema}（:159-166 的 TypeBox 展开形）。 */
     public static final Map<String, Object> SCHEMA = Map.of(
         "type", "object",
         "properties", Map.of(
@@ -85,14 +81,6 @@ public final class ToolSearchTool implements AgentTool<Map<String, Object>, Tool
 
         /** Replace the active tool set (loads land in the transcript). */
         void setActiveTools(List<String> toolNames);
-    }
-
-    /**
-     * pi {@code isToolSearchTool}（:168-171 逐字）：同名不算——schema 对象引用
-     * 相等才算本工具（同名第三方工具不得被 MCP 自动激活臂误认）。
-     */
-    public static boolean isToolSearchTool(ExtensionToolInfo tool) {
-        return NAME.equals(tool.name()) && tool.parameters() == SCHEMA;
     }
 
     /** pi {@code isSearchable}（:191-194 逐字）。 */

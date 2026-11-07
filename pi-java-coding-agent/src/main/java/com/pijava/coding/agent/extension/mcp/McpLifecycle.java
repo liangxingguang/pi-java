@@ -263,8 +263,9 @@ final class McpLifecycle {
      * {@code deferred} ⇒ 自动激活 tool_search（不受 autoEnableCodemode 约束——该开关
      * 只管 codemode 臂；java 无 codemode 工具〔B161 R5 面外〕，pi 的
      * {@code hasCodemode} 恒 false 对位）。从<b>配置</b>判断而非等连接（:501-502
-     * 注释逐字）；同名第三方工具不顶替（{@code isToolSearchTool} 的 schema 引用
-     * 判等，经注册表 {@code inputSchema()} 同锚）。仍不可达才一次性警告
+     * 注释逐字）；同名第三方工具不顶替——判据是<b>声明了 {@code reachesTools}</b>
+     * （pi :507-515 {@code tool.reachesTools} 属性在场，不是调用；L5 W7 前用
+     * schema 引用判等且傀名已随 pi 删除）。仍不可达才一次性警告
      * （pi :521-528；文案逐字，[模型可见]）。
      */
     void ensureDiscoveryActive(ExtensionContext ctx) {

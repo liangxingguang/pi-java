@@ -19,8 +19,8 @@ import com.pijava.coding.agent.extension.PiExtension;
  * {@code setActiveTools()} / MCP 的 ensureDiscoveryActive（裁决⑥）。</p>
  *
  * <p>replaceable 对位：同名 {@code tool_search} 的第三方注册经 ToolRegistry
- * 同名替换顶替（撞名旁表见批 20/B237）；isToolSearchTool 的 schema 引用判等
- * 保证 MCP 臂不误认顶替者（pi :168-171 注释同语义）。</p>
+ * 同名替换顶替（撞名旁表见批 20/B237）；MCP 臂的判据是「该名工具声明了
+ * {@code reachesTools}」（pi :507-515），不误认无该声明的顶替者。</p>
  */
 public final class ToolSearchExtension implements PiExtension {
 

@@ -491,6 +491,8 @@ Java 现状：
 
 ## 8. W7（B277e）：tool_search Unicode 分词与字段加权
 
+> **实施记录（2026-11-05，已落）**：`ToolSearchTokenizer` 改 NFC ⇒ 边界正则 ⇒ 小写 ⇒ 非词字符换空格 ⇒ ASCII 快路径 `split`／`BreakIterator` 取词；停用词与单数化只对纯 ASCII 词。`ToolSearchDocument` 加 `namespaceText`（三参旧构造保留），名称不再进 `text`。`Bm25Ranker` 重写为分字段版（名称集／本地名集／text 计数／命名空间集，`NAME_WEIGHT=3`、`NAMESPACE_WEIGHT=0.5`，长度只归一描述，排序键 exact→covered→score，本地名全命中加 `fullNameBonus`）。删除 `ToolSearchTool.isToolSearchTool`（pi 已删该导出）；MCP 的 `ensureDiscoveryActive` 判据本已是「声明了 `reachesTools`」，只更新注释。**D224 实测收窄**：JDK 的 UAX#29 与浏览器词典分词只在「无空格连写的泰文/汉字」上不同（日文、韩文、西里尔、拉丁逐词一致），测试按 JDK 口径钉住并保留空格分隔词组断言。
+
 ### 8.1 pi 事实
 
 `extensions/tool-search/tool.ts`：
@@ -517,9 +519,11 @@ Java 现状：
 
 ### 8.4 测试
 
-- 分词：`mcp__app__thread_read` ⇒ `mcp app thread read`；`dev-radius` 与 `dev_radius` 同词；中文/日文无空格词条可被命中；ASCII 快路径与 Segmenter 路径同结果。
-- 排序：仅描述命中 vs 名称命中 ⇒ 名称优先；命中 2 个查询词 vs 1 个 ⇒ 2 个优先；整名查询 ⇒ 第一；`app` 命中 `mcp__peekaboo__app` 获得本地名奖励；同 id 跨 namespace/Tie 保序。
-- 回归：docs/38 既有 toolsearch 测试按新排序更新，禁止旧断言伪装通过。
+**实施形状（2026-11-05）**：
+
+- `ToolSearchTokenizeTest`（9 项）：pi `tool-search.test.ts:18-52` 的分词断言（camel/snake/复数/停用词、六种脚本、混合标识符、NFC 归一、空白标点 emoji 空集、`mcp__app__thread_read`、连字符＝下划线）；文档构造三断言（namespace 不进 text、无 namespace 为空串、schema 描述与属性名留在 text）。
+- `Bm25FieldRankingTest`（9 项）：pi `:55-180` 的排序断言（相关性＋limit、未知/空/无同义词查询、issue #11331 的整名查询五种写法、名称命中压过描述提及、本地名奖励、covered 优先于分数、命名空间弱字段、Unicode 查询、同分保序）。
+- `ToolSearchTest` 删除 `identityRequiresSchemaObjectIdentity`（pi 已删 `isToolSearchTool`）；其余 11 项不变。
 
 ### 8.5 风险
 

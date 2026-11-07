@@ -165,6 +165,7 @@ SQLite 后端是 pi-java 独立实现，保留模块，不对齐已删除 schema
 | D220 | `KeybindingHints` 不进扩展渲染 API：Java 的 `ToolCallRenderer`／`ExtensionMessageRenderer`／`ExtensionEntryRenderer` 返回纯文本（D92 文本级方言），键位提示由宿主 TUI 自行展示；`blocked` 选项随 E5-31 转 L7。 |
 | D221 | `selfUpdateCommand` 的 `{version}` 在 pi 是**目标版本**，在 pi-java 是**当前版本**（无发布通道取目标版本）；使用 `{version}` 的配置命令须自行处理「已是最新」场景。 |
 | D222 | npm 特有的 CLI 行为不适用：`--no-audit`／`--no-fund`／`realpath` 前缀修正、`npm view` 的 `--json` 数组臂都由 HTTP registry 臂（批 18 裁决③）等价实现；`pi update` 的「进度批装」在 Java 逐包顺装（既有 D113），「版本没变」的 progress 消息已逐字对齐。 |
+| D224 | tool_search 分词用 JDK {@code BreakIterator}（UAX#29）代替 {@code Intl.Segmenter}：两者只在「无空格连写」的脚本上不同（浏览器词典切「搜索仓库问题」/泰文连写为多词，JDK 给整段）；空格/标点分隔的日文、韩文、西里尔、拉丁逐词一致。不引入 ICU4J。 |
 | B83 | pi 自身三处 sanitize 缺口保持同样行为；pi 修补时同步。 |
 | B100 | compat 探测的 baseUrl 在内置模型上行为等价；出现可观察差异再重裁。 |
 | B126 | Codex 车道及其 transport 等随 R2/R5 出分母。 |
