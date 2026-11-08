@@ -60,50 +60,66 @@ class PromptTemplatesDocsEvalTest {
 
     @Test
     void judgeScoresTheExpectedObservationFullMarks() {
-        var observation = new PromptTemplatesDocsEval.Observation("project", true, false,
-            true, 1);
-        var result = judge().evaluate(run(observation), PromptTemplatesDocsEval.Scope.PROJECT);
+        var expected = PromptTemplatesDocsEval.expected(PromptTemplatesDocsEval.Scope.PROJECT);
+        var result = judge().evaluate(run(expected), expected);
         assertThat(result.score()).isEqualTo(1.0);
     }
 
     @Test
+    void expectedObservationsDifferPerScope() {
+        var project = PromptTemplatesDocsEval.expected(PromptTemplatesDocsEval.Scope.PROJECT);
+        var user = PromptTemplatesDocsEval.expected(PromptTemplatesDocsEval.Scope.USER);
+        assertThat(project.projectPathExists()).isTrue();
+        assertThat(project.userPathExists()).isFalse();
+        assertThat(user.projectPathExists()).isFalse();
+        assertThat(user.userPathExists()).isTrue();
+        assertThat(project.templateScope()).isEqualTo("project");
+        assertThat(user.templateScope()).isEqualTo("user");
+    }
+
+    @Test
     void judgeRejectsWrongScope() {
-        var result = judge().evaluate(
-            run(new PromptTemplatesDocsEval.Observation("user", true, false, true, 1)),
-            PromptTemplatesDocsEval.Scope.PROJECT);
+        var expected = PromptTemplatesDocsEval.expected(PromptTemplatesDocsEval.Scope.PROJECT);
+        var actual = new PromptTemplatesDocsEval.Observation("user", true, false, true, 1);
+        var result = judge().evaluate(run(actual), expected);
         assertThat(result.score()).isZero();
         assertThat(result.rationale()).contains("scope was user instead of project");
     }
 
     @Test
-    void judgeRejectsWrongPathAndOtherScopeAndUnexpandedCommand() {
-        assertThat(judge().evaluate(
-            run(new PromptTemplatesDocsEval.Observation("project", false, false, true, 1)),
-            PromptTemplatesDocsEval.Scope.PROJECT).rationale())
-            .contains("not at the expected path");
-        assertThat(judge().evaluate(
-            run(new PromptTemplatesDocsEval.Observation("project", true, true, true, 1)),
-            PromptTemplatesDocsEval.Scope.PROJECT).rationale())
-            .contains("other scope also holds");
-        assertThat(judge().evaluate(
-            run(new PromptTemplatesDocsEval.Observation("project", true, false, false, 1)),
-            PromptTemplatesDocsEval.Scope.PROJECT).rationale())
+    void judgeRejectsWrongScopeFileExistence() {
+        var expected = PromptTemplatesDocsEval.expected(PromptTemplatesDocsEval.Scope.PROJECT);
+        // 模板写进了 user 目录 ⇒ project 文件缺失、user 文件多出，两臂都要报
+        var actual = new PromptTemplatesDocsEval.Observation("project", false, true, true, 1);
+        var result = judge().evaluate(run(actual), expected);
+        assertThat(result.score()).isZero();
+        assertThat(result.rationale())
+            .contains("project-scope file existence was false")
+            .contains("user-scope file existence was true");
+    }
+
+    @Test
+    void judgeRejectsUnexpandedCommand() {
+        var expected = PromptTemplatesDocsEval.expected(PromptTemplatesDocsEval.Scope.PROJECT);
+        var actual = new PromptTemplatesDocsEval.Observation("project", true, false, false, 1);
+        assertThat(judge().evaluate(run(actual), expected).rationale())
             .contains("did not expand");
     }
 
     @Test
     void judgeRejectsDuplicateTemplateNames() {
-        var result = judge().evaluate(
-            run(new PromptTemplatesDocsEval.Observation("project", true, false, true, 2)),
-            PromptTemplatesDocsEval.Scope.PROJECT);
+        var expected = PromptTemplatesDocsEval.expected(PromptTemplatesDocsEval.Scope.PROJECT);
+        var actual = new PromptTemplatesDocsEval.Observation("project", true, false, true, 2);
+        var result = judge().evaluate(run(actual), expected);
         assertThat(result.score()).isZero();
-        assertThat(result.rationale()).contains("exactly one current-time template");
+        assertThat(result.rationale()).contains("exactly 1 current-time template");
     }
 
     @Test
     void judgeRejectsARunWithoutObservation() {
         var run = EvalTestRuns.response("I created the template.");
-        var result = judge().evaluate(run, PromptTemplatesDocsEval.Scope.PROJECT);
+        var result = judge().evaluate(run,
+            PromptTemplatesDocsEval.expected(PromptTemplatesDocsEval.Scope.PROJECT));
         assertThat(result.score()).isZero();
         assertThat(result.metadata()).containsEntry("reason", "output-shape");
     }

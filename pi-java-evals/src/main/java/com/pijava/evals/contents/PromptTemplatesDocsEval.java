@@ -2,7 +2,6 @@ package com.pijava.evals.contents;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -124,9 +123,9 @@ public final class PromptTemplatesDocsEval implements EvalSuite {
     public List<HarnessCase> harnessCases() {
         return List.of(
             new HarnessCase(new EvalCaseDescriptor(SUITE_NAME, PROJECT_CASE),
-                Scope.PROJECT.request(), Scope.PROJECT.name()),
+                Scope.PROJECT.request(), expected(Scope.PROJECT)),
             new HarnessCase(new EvalCaseDescriptor(SUITE_NAME, USER_CASE),
-                Scope.USER.request(), Scope.USER.name()));
+                Scope.USER.request(), expected(Scope.USER)));
     }
 
     @Override
@@ -137,20 +136,10 @@ public final class PromptTemplatesDocsEval implements EvalSuite {
             .tools(TOOL_NAMES)
             .noExtensions(true)
             .sessionArtifactDir(sessionArtifactDir)
-            .output(context -> observe(scopeOf(context), context.session().services()
-                    .promptTemplates(), Path.of(System.getProperty("user.dir", ".")),
-                context.agentDir(), lastUserText(context)))
+            .output(context -> observe(context.session().services().promptTemplates(),
+                Path.of(System.getProperty("user.dir", ".")), context.agentDir(),
+                lastUserText(context)))
             .build();
-    }
-
-    /** 从 harness 上下文的提示反推场景（两个 case 各跑一次）。 */
-    private static Scope scopeOf(HarnessOptions.OutputContext context) {
-        var prompt = context.session().accumulatedMessages().stream()
-            .filter(message -> message instanceof Message.UserMessage)
-            .map(message -> TranscriptEvents.text(((Message.UserMessage) message).content()))
-            .filter(text -> text.contains(COMMAND))
-            .findFirst().orElse("");
-        return prompt.contains("for this project") ? Scope.PROJECT : Scope.USER;
     }
 
     /** 末条用户消息（{@code /current-time} 展开后的正文）。 */
@@ -179,32 +168,34 @@ public final class PromptTemplatesDocsEval implements EvalSuite {
     /**
      * Observable state after the run, as judged.
      *
-     * @param templateScope     resolved template scope, {@code null} when absent
-     * @param atExpectedPath    whether the template file sits at the expected path
-     * @param otherScopeExists  whether the other scope also holds the template
-     * @param expandedToRequest whether the last user message equals the template body
-     * @param templateCount     how many templates carry this name
+     * <p>与 scope 无关：判分器拿 {@code expected}（场景）去比这些事实，
+     * 不需要在观测期反推场景。</p>
+     *
+     * @param templateScope       resolved template scope, {@code null} when absent
+     * @param projectPathExists   whether the project-scope file exists
+     * @param userPathExists      whether the user-scope file exists
+     * @param expandedToRequest   whether the last user message equals the template body
+     * @param templateCount       how many templates carry this name
      */
     public record Observation(
         String templateScope,
-        boolean atExpectedPath,
-        boolean otherScopeExists,
+        boolean projectPathExists,
+        boolean userPathExists,
         boolean expandedToRequest,
         int templateCount
     ) {
     }
 
     /**
-     * Collect the observable state for one scope.
+     * Collect the observable state, independent of the scenario.
      *
-     * @param scope        scenario
      * @param registry     session prompt-template registry
      * @param workspace    workspace root ({@code user.dir})
      * @param agentDir     isolated agent dir
      * @param lastUserText last user message text (already expanded)
      * @return observation
      */
-    public static Observation observe(Scope scope, PromptTemplateRegistry registry,
+    public static Observation observe(PromptTemplateRegistry registry,
                                       Path workspace, Path agentDir, String lastUserText) {
         var matches = new ArrayList<PromptTemplates.PromptTemplate>();
         for (var template : registry.all()) {
@@ -212,17 +203,12 @@ public final class PromptTemplatesDocsEval implements EvalSuite {
                 matches.add(template);
             }
         }
-        var expectedPath = expectedPath(scope, workspace, agentDir);
-        var otherPath = expectedPath(scope == Scope.PROJECT ? Scope.USER : Scope.PROJECT,
-            workspace, agentDir);
         var template = matches.size() == 1 ? matches.get(0) : null;
         return new Observation(
             template == null || template.sourceInfo() == null
                 ? null : template.sourceInfo().scope().wire(),
-            template != null && template.filePath() != null
-                && Path.of(template.filePath()).toAbsolutePath().normalize()
-                    .equals(expectedPath.toAbsolutePath().normalize()),
-            java.nio.file.Files.exists(otherPath),
+            java.nio.file.Files.exists(expectedPath(Scope.PROJECT, workspace, agentDir)),
+            java.nio.file.Files.exists(expectedPath(Scope.USER, workspace, agentDir)),
             TEMPLATE_PROMPT.equals(lastUserText == null ? "" : lastUserText.trim()),
             matches.size());
     }
@@ -242,22 +228,19 @@ public final class PromptTemplatesDocsEval implements EvalSuite {
     }
 
     /**
-     * Expected structured output for the judge.
+     * Expected observation for one scenario.
      *
      * @param scope scenario
-     * @return expected observation map
+     * @return expected observation
      */
-    public static Map<String, Object> expected(Scope scope) {
-        var expected = new LinkedHashMap<String, Object>();
-        expected.put("templateScope", scope.name().toLowerCase(java.util.Locale.ROOT));
-        expected.put("atExpectedPath", true);
-        expected.put("otherScopeExists", false);
-        expected.put("expandedToRequest", true);
-        expected.put("templateCount", 1);
-        return Map.copyOf(expected);
+    public static Observation expected(Scope scope) {
+        // project 场景：项目目录有、用户目录无；user 场景反之。
+        return scope == Scope.PROJECT
+            ? new Observation(SourceInfo.Scope.PROJECT.wire(), true, false, true, 1)
+            : new Observation(SourceInfo.Scope.USER.wire(), false, true, true, 1);
     }
 
-    /** Strict comparison against {@link #expected(Scope)}. */
+    /** Compares the observed facts against {@link #expected(Scope)}. */
     private static final class TemplateJudge implements Judge {
 
         @Override
@@ -267,30 +250,32 @@ public final class PromptTemplatesDocsEval implements EvalSuite {
             }
             // 观测结果由 harness 的 output 提供；字符串响应不足以判模板落点。
             var output = run.output();
-            if (!(output instanceof Observation observation)) {
+            if (!(output instanceof Observation actual)) {
                 return new JudgeResult(0.0,
                     "template eval requires an Observation output but got "
                         + (output == null ? "null" : output.getClass().getSimpleName()),
                     Map.of("reason", "output-shape"));
             }
-            var scope = String.valueOf(expected == null ? "" : expected)
-                .toLowerCase(java.util.Locale.ROOT);
+            var wanted = expected instanceof Observation observation
+                ? observation : expected(Scope.PROJECT);
             var problems = new ArrayList<String>();
-            if (!scope.equals(observation.templateScope())) {
-                problems.add("template scope was " + observation.templateScope()
-                    + " instead of " + scope);
+            if (!Objects.equals(wanted.templateScope(), actual.templateScope())) {
+                problems.add("template scope was " + actual.templateScope()
+                    + " instead of " + wanted.templateScope());
             }
-            if (observation.templateCount() != 1) {
-                problems.add("expected exactly one " + TEMPLATE_NAME + " template but found "
-                    + observation.templateCount());
+            if (actual.templateCount() != wanted.templateCount()) {
+                problems.add("expected exactly " + wanted.templateCount() + " " + TEMPLATE_NAME
+                    + " template but found " + actual.templateCount());
             }
-            if (!observation.atExpectedPath()) {
-                problems.add("template is not at the expected path");
+            if (actual.projectPathExists() != wanted.projectPathExists()) {
+                problems.add("project-scope file existence was " + actual.projectPathExists()
+                    + " instead of " + wanted.projectPathExists());
             }
-            if (observation.otherScopeExists()) {
-                problems.add("the other scope also holds " + TEMPLATE_NAME);
+            if (actual.userPathExists() != wanted.userPathExists()) {
+                problems.add("user-scope file existence was " + actual.userPathExists()
+                    + " instead of " + wanted.userPathExists());
             }
-            if (!observation.expandedToRequest()) {
+            if (actual.expandedToRequest() != wanted.expandedToRequest()) {
                 problems.add(COMMAND + " did not expand to the template body");
             }
             return problems.isEmpty()
