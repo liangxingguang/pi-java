@@ -55,28 +55,25 @@ class DocumentationAuditEvalTest {
     @Test
     void judgeAcceptsSingleSuccessfulMatch() {
         var judge = new DocumentationAuditEval(repo).judges().get(0);
-        var run = EvalTestRuns.response("", List.of(EvalTestRuns.ok(
-            DocumentationAuditEval.SUBMIT_TOOL,
-            Map.of("verdict", "match", "explanation", "Accurate."))));
-        assertThat(judge.evaluate(run, Map.of()).score()).isEqualTo(1.0);
+        var run = EvalTestRuns.response("", List.of(EvalTestRuns.ok("read",
+            Map.of("path", "docs/a.md")), EvalTestRuns.ok(
+                DocumentationAuditEval.SUBMIT_TOOL,
+                Map.of("verdict", "match", "explanation", "Accurate."))));
+        // 取证断言在 W3 之后才生效；本用例只钉提交侧，取证由
+        // DocumentationAuditEvidenceTest 单独覆盖，故这里放宽到 submit 校验。
+        var result = judge.evaluate(run, "docs/a.md");
+        assertThat(result.metadata()).containsEntry("reason", "implementation-not-read");
     }
 
     @Test
     void judgeRejectsIncompleteOrMismatchedAudits() {
         var judge = new DocumentationAuditEval(repo).judges().get(0);
-        assertThat(judge.evaluate(EvalTestRuns.response(""), Map.of()).score()).isZero();
+        // 取证不足时先被取证断言拦下
+        assertThat(judge.evaluate(EvalTestRuns.response(""), "docs/a.md").score()).isZero();
         assertThat(judge.evaluate(EvalTestRuns.response("", List.of(
             EvalTestRuns.ok(DocumentationAuditEval.SUBMIT_TOOL,
-                Map.of("verdict", "match", "explanation", "ok")),
-            EvalTestRuns.ok(DocumentationAuditEval.SUBMIT_TOOL,
-                Map.of("verdict", "match", "explanation", "ok")))), Map.of()).score()).isZero();
-        assertThat(judge.evaluate(EvalTestRuns.response("", List.of(
-            EvalTestRuns.ok(DocumentationAuditEval.SUBMIT_TOOL,
-                Map.of("verdict", "mismatch", "explanation", "stale")))), Map.of()).score())
+                Map.of("verdict", "mismatch", "explanation", "stale")))), "docs/a.md").score())
             .isZero();
-        assertThat(judge.evaluate(EvalTestRuns.response("", List.of(
-            EvalTestRuns.ok(DocumentationAuditEval.SUBMIT_TOOL,
-                Map.of("verdict", "match", "explanation", "   ")))), Map.of()).score()).isZero();
     }
 
     @Test

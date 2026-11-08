@@ -6,8 +6,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Stream;
 
 import com.pijava.agent.tool.AgentTool;
@@ -51,6 +53,7 @@ public final class DocumentationAuditEval implements EvalSuite {
 
     private final Path repoRoot;
     private final Map<String, String> pages;
+    private final AuditSourceIndex sourceIndex;
 
     /** Audit the repository at the current working directory (or its parent). */
     public DocumentationAuditEval() {
@@ -65,6 +68,7 @@ public final class DocumentationAuditEval implements EvalSuite {
     public DocumentationAuditEval(Path repoRoot) {
         this.repoRoot = repoRoot;
         this.pages = loadPages(repoRoot);
+        this.sourceIndex = AuditSourceIndex.scan(repoRoot);
     }
 
     @Override
@@ -79,7 +83,7 @@ public final class DocumentationAuditEval implements EvalSuite {
 
     @Override
     public List<Judge> judges() {
-        return List.of(new AuditJudge());
+        return List.of(new AuditJudge(implementationPaths()));
     }
 
     @Override
@@ -91,8 +95,21 @@ public final class DocumentationAuditEval implements EvalSuite {
     public List<HarnessCase> harnessCases() {
         return pages.keySet().stream()
             .map(page -> new HarnessCase(
-                new EvalCaseDescriptor(SUITE_NAME, page), promptFor(page), Map.of()))
+                new EvalCaseDescriptor(SUITE_NAME, page), promptFor(page), page))
             .toList();
+    }
+
+    /**
+     * 所有会被种入的实现源路径（判分器的取证白名单）。
+     *
+     * @return repo-relative source paths
+     */
+    public Set<String> implementationPaths() {
+        var paths = new LinkedHashSet<String>();
+        for (var entry : pages.entrySet()) {
+            paths.addAll(sourceIndex.sourcesFor(entry.getKey(), entry.getValue()));
+        }
+        return Collections.unmodifiableSet(paths);
     }
 
     @Override
@@ -102,10 +119,33 @@ public final class DocumentationAuditEval implements EvalSuite {
             .name(SUITE_NAME)
             .tools(TOOL_NAMES)
             .customTools(List.of(submitTool()))
-            .workspaceFiles(pages)
+            .workspaceFiles(workspaceFiles())
             .noExtensions(true)
             .sessionArtifactDir(sessionArtifactDir)
             .build();
+    }
+
+    /**
+     * L6 W3（docs/26 §4.4）：页面 ＋ 按页挑选的实现源，全部种进隔离 workspace。
+     *
+     * <p>pi 把整个仓库只读挂载给模型（{@code documentation-audit.eval.ts:32-34}）；
+     * Java 的 read/grep/find/ls 受 {@code PathUtils} 约束只能在 workspace 内读，
+     * 故此处按页面挑相关源一并种入（形状差 D230）。</p>
+     *
+     * @return workspace-relative path → content
+     */
+    public Map<String, String> workspaceFiles() {
+        var files = new LinkedHashMap<>(pages);
+        for (var entry : pages.entrySet()) {
+            var sources = sourceIndex.sourcesFor(entry.getKey(), entry.getValue());
+            files.putAll(AuditSourceIndex.read(repoRoot, sources));
+        }
+        return Collections.unmodifiableMap(files);
+    }
+
+    /** @return the source index backing {@link #workspaceFiles()} */
+    public AuditSourceIndex sourceIndex() {
+        return sourceIndex;
     }
 
     /** @return repository root used for discovery */
@@ -231,34 +271,82 @@ public final class DocumentationAuditEval implements EvalSuite {
         return Collections.unmodifiableMap(pages);
     }
 
-    /** Exactly one successful submit call with {@code verdict=match} and a non-empty explanation. */
+    /**
+     * 取证 ＋ 提交两侧的判定（L6 W3，docs/26 §4）。
+     *
+     * <p>pi {@code documentation-audit.eval.ts:60-78} 的顺序是：先断言「读过被审页面」
+     * 与「读过至少一个实现源」，再校验提交调用。本类同序，理由编码进
+     * {@code metadata.reason} 便于定位。</p>
+     */
     private static final class AuditJudge implements Judge {
+
+        private final Set<String> implementations;
+
+        AuditJudge(Set<String> implementations) {
+            this.implementations = Set.copyOf(implementations);
+        }
 
         @Override
         public JudgeResult evaluate(HarnessRun run, Object expected) {
-            var calls = run == null ? List.<ToolCallRecord>of() : run.toolCalls().stream()
+            if (run == null) {
+                return new JudgeResult(0.0, "no harness run", Map.of("reason", "no-run"));
+            }
+            var page = String.valueOf(expected == null ? "" : expected);
+            var readPaths = readPaths(run);
+            if (!readPaths.contains(page)) {
+                return new JudgeResult(0.0,
+                    "the model never read the audited page " + page,
+                    Map.of("reason", "page-not-read", "readPaths", readPaths.size()));
+            }
+            var readImplementation = readPaths.stream().anyMatch(implementations::contains);
+            if (!readImplementation) {
+                return new JudgeResult(0.0,
+                    "the model read no implementation source for " + page,
+                    Map.of("reason", "implementation-not-read", "readPaths", readPaths.size()));
+            }
+            return submit(run);
+        }
+
+        /** 成功读过的路径集合（{@code status=ok} 才算取证，pi 同）。 */
+        private static Set<String> readPaths(HarnessRun run) {
+            var paths = new LinkedHashSet<String>();
+            for (var call : run.toolCalls()) {
+                if (!"read".equals(call.name()) || !call.succeeded()) {
+                    continue;
+                }
+                var arguments = call.arguments();
+                var path = arguments == null ? null : arguments.get("path");
+                if (path instanceof String text && !text.isBlank()) {
+                    paths.add(text);
+                }
+            }
+            return paths;
+        }
+
+        private static JudgeResult submit(HarnessRun run) {
+            var calls = run.toolCalls().stream()
                 .filter(call -> SUBMIT_TOOL.equals(call.name())).toList();
             if (calls.size() != 1) {
                 return new JudgeResult(0.0,
                     "expected exactly one " + SUBMIT_TOOL + " call but observed " + calls.size(),
-                    Map.of("calls", calls.size()));
+                    Map.of("reason", "submit-count", "calls", calls.size()));
             }
             var call = calls.get(0);
             if (!call.succeeded()) {
                 return new JudgeResult(0.0, SUBMIT_TOOL + " call did not succeed",
-                    Map.of("status", call.status()));
+                    Map.of("reason", "submit-status", "status", call.status()));
             }
             var arguments = call.arguments() == null ? Map.<String, Object>of() : call.arguments();
             var verdict = arguments.get("verdict");
             if (!"match".equals(verdict)) {
                 return new JudgeResult(0.0, "verdict was " + verdict + " instead of match",
-                    Map.of("verdict", String.valueOf(verdict)));
+                    Map.of("reason", "verdict", "verdict", String.valueOf(verdict)));
             }
             var explanation = arguments.get("explanation");
             if (!(explanation instanceof String text) || text.isBlank()
                     || text.length() > EXPLANATION_LIMIT) {
                 return new JudgeResult(0.0, "explanation must be 1.." + EXPLANATION_LIMIT
-                    + " characters", Map.of());
+                    + " characters", Map.of("reason", "explanation"));
             }
             return new JudgeResult(1.0, "documentation audit matches", Map.of());
         }
