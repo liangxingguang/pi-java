@@ -70,4 +70,15 @@ public interface EvalSuite {
                                           Path sessionArtifactDir) {
         return HarnessOptions.defaults();
     }
+
+    /**
+     * Whether this suite is expensive and must be selected explicitly (L6 W5,
+     * docs/26 §6) — the Java counterpart of pi splitting the documentation audit
+     * out of the {@code host} project into its own {@code audit} project.
+     *
+     * @return {@code true} when {@code --host} must not run this suite implicitly
+     */
+    default boolean expensive() {
+        return false;
+    }
 }

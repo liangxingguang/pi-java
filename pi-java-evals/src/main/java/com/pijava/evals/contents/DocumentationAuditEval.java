@@ -76,6 +76,12 @@ public final class DocumentationAuditEval implements EvalSuite {
         return SUITE_NAME;
     }
 
+    /** L6 W5：审计要扫每一页文档，pi 把它从 {@code host} 拆成独立 {@code audit} 档。 */
+    @Override
+    public boolean expensive() {
+        return true;
+    }
+
     @Override
     public List<EvalCase> cases() {
         return List.of();

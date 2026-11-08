@@ -16,7 +16,23 @@ class EvalCliOptionsTest {
         assertThat(options.runsPerVariant()).isEqualTo(1);
         assertThat(options.selectors()).isEmpty();
         assertThat(options.host()).isFalse();
+        assertThat(options.audit()).isFalse();
         assertThat(options.hasModelSelection()).isFalse();
+    }
+
+    @Test
+    void parsesAuditFlag() {
+        var options = EvalCliOptions.parse(new String[] {"--audit"}, Map.of());
+        assertThat(options.audit()).isTrue();
+        assertThat(options.host()).isFalse();
+    }
+
+    @Test
+    void rejectsHostAndAuditTogether() {
+        assertThatThrownBy(() -> EvalCliOptions.parse(
+            new String[] {"--host", "--audit"}, Map.of()))
+            .isInstanceOf(IllegalArgumentException.class)
+            .hasMessageContaining("different suites");
     }
 
     @Test

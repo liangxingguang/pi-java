@@ -14,6 +14,7 @@ import java.util.Objects;
  * @param model          model id（显式或 {@code PI_MODEL}）
  * @param runsPerVariant 每个变体的 run 数
  * @param host           host eval 模式（不配对）
+ * @param audit          只跑开销大的审计套件（L6 W5，pi {@code eval:audit} 对位）
  */
 public record EvalCliOptions(
     List<String> selectors,
@@ -21,8 +22,15 @@ public record EvalCliOptions(
     String provider,
     String model,
     int runsPerVariant,
-    boolean host
+    boolean host,
+    boolean audit
 ) {
+
+    /** 兼容构造：不带 {@code --audit}。 */
+    public EvalCliOptions(List<String> selectors, String testNamePattern, String provider,
+                          String model, int runsPerVariant, boolean host) {
+        this(selectors, testNamePattern, provider, model, runsPerVariant, host, false);
+    }
 
     /** Environment variable for the default run count. */
     public static final String RUNS_ENV = "PI_EVAL_RUNS_PER_VARIANT";
@@ -64,6 +72,7 @@ public record EvalCliOptions(
         String model = null;
         Integer runs = null;
         boolean host = false;
+        boolean audit = false;
         for (int i = 0; i < args.length; i++) {
             var arg = args[i];
             switch (arg) {
@@ -74,6 +83,7 @@ public record EvalCliOptions(
                 case "--model" -> model = requireValue(args, ++i, arg);
                 case "--runs-per-variant" -> runs = parseRuns(requireValue(args, ++i, arg));
                 case "--host" -> host = true;
+                case "--audit" -> audit = true;
                 default -> {
                     if (arg.startsWith("-")) {
                         throw new IllegalArgumentException("Unknown eval option: " + arg);
@@ -81,6 +91,10 @@ public record EvalCliOptions(
                     selectors.add(arg);
                 }
             }
+        }
+        if (host && audit) {
+            throw new IllegalArgumentException(
+                "--host and --audit select different suites; pass one of them.");
         }
         var selectedProvider = blankToNull(provider, env.get("PI_PROVIDER"));
         var selectedModel = blankToNull(model, env.get("PI_MODEL"));
@@ -91,7 +105,7 @@ public record EvalCliOptions(
         }
         var runsPerVariant = runs == null ? envRuns(env) : runs;
         return new EvalCliOptions(selectors, testNamePattern, selectedProvider, selectedModel,
-            runsPerVariant, host);
+            runsPerVariant, host, audit);
     }
 
     /**

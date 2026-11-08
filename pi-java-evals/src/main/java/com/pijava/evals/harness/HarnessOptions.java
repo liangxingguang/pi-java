@@ -4,6 +4,7 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.UnaryOperator;
 
 import com.pijava.agent.tool.AgentTool;
@@ -30,6 +31,8 @@ import com.pijava.coding.agent.core.AgentSession;
  * @param providers                  provider registry; {@code null} ⇒ 内置默认表
  * @param sessionCustomizer          runs once on the assembled session (批 32 T12：
  *                                   扩展作者 eval 用它把装载工具的句柄接到会话)
+ * @param output                     judged output producer (pi {@code options.output});
+ *                                   {@code null} ⇒ 判分器看模型回复文本
  */
 public record HarnessOptions(
     String name,
@@ -46,7 +49,8 @@ public record HarnessOptions(
     boolean noExtensions,
     Path sessionArtifactDir,
     ProviderRegistry providers,
-    Consumer<AgentSession> sessionCustomizer
+    Consumer<AgentSession> sessionCustomizer,
+    Function<OutputContext, Object> output
 ) {
 
     /** Defensive copies and defaults. */
@@ -79,7 +83,20 @@ public record HarnessOptions(
             .workspaceFiles(workspaceFiles).transformSystemPrompt(transformSystemPrompt)
             .expectedPiDocumentation(expectedPiDocumentation).noSession(noSession)
             .noExtensions(noExtensions).sessionArtifactDir(sessionArtifactDir)
-            .providers(providers).sessionCustomizer(sessionCustomizer);
+            .providers(providers).sessionCustomizer(sessionCustomizer).output(output);
+    }
+
+    /**
+     * Inputs handed to {@link #output()}: pi
+     * {@code options.output({response, session, systemPrompt, agentDir})}.
+     *
+     * @param response     last assistant text
+     * @param session      assembled session
+     * @param systemPrompt model-visible system prompt
+     * @param agentDir     isolated agent dir
+     */
+    public record OutputContext(String response, AgentSession session, String systemPrompt,
+                                Path agentDir) {
     }
 
     /** Fluent builder. */
@@ -99,6 +116,7 @@ public record HarnessOptions(
         private Path sessionArtifactDir;
         private ProviderRegistry providers;
         private Consumer<AgentSession> sessionCustomizer;
+        private Function<OutputContext, Object> output;
 
         private Builder() {
         }
@@ -193,12 +211,18 @@ public record HarnessOptions(
             return this;
         }
 
+        /** @param value judged output producer @return this */
+        public Builder output(Function<OutputContext, Object> value) {
+            this.output = value;
+            return this;
+        }
+
         /** @return immutable options */
         public HarnessOptions build() {
             return new HarnessOptions(name, provider, model, thinking, tools, noTools,
                 customTools, workspaceFiles, transformSystemPrompt,
                 expectedPiDocumentation, noSession, noExtensions, sessionArtifactDir,
-                providers, sessionCustomizer);
+                providers, sessionCustomizer, output);
         }
     }
 }

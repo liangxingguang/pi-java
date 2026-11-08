@@ -144,7 +144,8 @@ public final class EvalCli {
      * @throws IOException if artifacts cannot be written
      */
     public int execute(EvalCliOptions options) throws IOException {
-        var selectedSuites = EvalCatalog.select(suites, options.selectors());
+        var selectedSuites = byAuditGate(EvalCatalog.select(suites, options.selectors()),
+            options);
         validateCohort(selectedSuites, options);
         var selected = new ArrayList<SelectedCase>();
         for (var suite : selectedSuites) {
@@ -216,6 +217,26 @@ public final class EvalCli {
                 null, 0L, null, Map.of("error", e.getClass().getSimpleName()));
             return EvalReporter.write(observation, null, layout.root());
         }
+    }
+
+    /**
+     * L6 W5（docs/26 §6）：{@code --host} 默认不跑 expensive 套件，{@code --audit} 只跑它们。
+     *
+     * <p>{@code --audit} 与显式选择器并存时，显式点名优先——pi 同样允许
+     * 直接给审计文件名绕过项目默认。</p>
+     */
+    private static List<EvalSuite> byAuditGate(List<EvalSuite> selected,
+                                               EvalCliOptions options) {
+        if (options.audit()) {
+            if (!options.selectors().isEmpty()) {
+                return selected;
+            }
+            return selected.stream().filter(EvalSuite::expensive).toList();
+        }
+        if (!options.host() || !options.selectors().isEmpty()) {
+            return selected;
+        }
+        return selected.stream().filter(suite -> !suite.expensive()).toList();
     }
 
     private static Map<EvalCaseDescriptor, SelectedCase> indexCases(

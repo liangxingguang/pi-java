@@ -29,7 +29,18 @@ class ContentsCatalogTest {
                 OpenAiProviderDocsEval.SUITE_NAME,
                 ModelsDocsEval.SUITE_NAME,
                 ExtensionsDocsEval.SUITE_NAME,
+                PromptTemplatesDocsEval.SUITE_NAME,
                 TuiDocsEval.SUITE_NAME,
                 SmokeEval.SUITE_NAME);
+    }
+
+    @Test
+    void onlyTheDocumentationAuditIsExpensive() {
+        EvalCatalog.reset();
+        ContentsCatalog.install();
+        assertThat(EvalCatalog.suites())
+            .filteredOn(suite -> suite.expensive())
+            .extracting(suite -> suite.name())
+            .containsExactly(DocumentationAuditEval.SUITE_NAME);
     }
 }

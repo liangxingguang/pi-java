@@ -86,7 +86,13 @@ public final class TranscriptEvents {
         return calls;
     }
 
-    private static String text(List<ContentBlock> content) {
+    /**
+     * Join the text blocks of a message body (pi {@code contentText}).
+     *
+     * @param content message content blocks
+     * @return joined text, empty when there is none
+     */
+    public static String text(List<ContentBlock> content) {
         var parts = new ArrayList<String>();
         for (var block : content) {
             if (block instanceof ContentBlock.TextContent text) {

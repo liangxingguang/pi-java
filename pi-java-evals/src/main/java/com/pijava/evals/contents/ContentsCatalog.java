@@ -32,6 +32,7 @@ public final class ContentsCatalog {
             EvalCatalog.register(new OpenAiProviderDocsEval());
             EvalCatalog.register(new ModelsDocsEval());
             EvalCatalog.register(new ExtensionsDocsEval());
+            EvalCatalog.register(new PromptTemplatesDocsEval());
             EvalCatalog.register(new TuiDocsEval());
             EvalCatalog.register(new SmokeEval());
             installed = true;

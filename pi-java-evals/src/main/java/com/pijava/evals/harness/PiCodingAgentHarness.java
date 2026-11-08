@@ -221,12 +221,16 @@ public final class PiCodingAgentHarness {
         var lastPrompt = steps.stream()
             .filter(step -> !step.isReload()).map(HarnessStep::content)
             .reduce((first, second) -> second).orElse(null);
+        // pi harness.ts:414-415：有 output 回调就用它产出的结构化事实判分。
+        var judgedOutput = options.output() == null ? null
+            : options.output().apply(new HarnessOptions.OutputContext(response, session,
+                systemPrompt, environment.agentDir()));
         return new HarnessRun(steps, lastPrompt, response,
             TranscriptEvents.from(messages), TranscriptEvents.toolCalls(messages),
             HarnessUsage.from(stats, providerName, modelName, cost),
             Duration.ofNanos(System.nanoTime() - started).toMillis(),
             systemPrompt, sha256(systemPrompt), sessionFile, sessionJsonl,
-            session.sessionId(), artifacts);
+            session.sessionId(), artifacts, judgedOutput);
     }
 
     private Args buildArgs(ModelSelection selection, IsolatedEnvironment environment) {
