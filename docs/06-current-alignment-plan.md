@@ -24,6 +24,7 @@
 - `docs/22` 是 L2 mcp 视口捕获收尾与跨层口径裁决（#85 完整对齐；其余 9 条转出 MCP 分母），已实施并闭环（2026-11-04）；MCP 终态 122.0/122＝100%。
 - `docs/23` 是 L3 agent-core 新锚点重测与对齐设计（W1–W3），已实施并闭环（2026-11-05）：W1 模板命令引号空参数＋JS 空白、W3 grep 孤立 CR（实施），W2 技能路径比较键（复核无改动）；#77／#24 转出 L4；agent-core 终态 **177/177＝100%**（88 计分＋2 转出）。
 - `docs/24` 是 L4 session/SQLite 新锚点重测与对齐设计（W1–W4＋B278），已实施并闭环（2026-11-05）：W1 恢复 active tools、W2 摘要语义、W3 省略成对、W4 持久化细节＋显式会话目录布局；map/06 存储后端 **44.0/44＝100%**，D218 登记；全仓 verify **6,227 测零失败**，Checkstyle/SpotBugs 零问题。
+- `docs/26` 是 L6 evals 新锚点重测与对齐设计（W1–W7），已实施并闭环（2026-11-05）：W1 报告补四组配对标量＋per-set headline＋pass-rate lift（`schemaVersion=3`，D228）、W2 按变体运行总量与覆盖度、W3 审计取证断言（`AuditSourceIndex`，D230）、W4 prompt template 文档 eval＋`pi.java.agentDir` 隔离缝（D231）、W5 `--audit` 独立执行档；补回 D182–D189。评测 **48.0/49＝97.96%**（对齐 23／存疑 1／缺失 0；唯一存疑 #20 TUI oracle）。全仓 verify 见 §7 记录。
 - `docs/25` 是 L5 coding-agent 新锚点重测与对齐设计（W1–W10；§14 第 2–5 项已裁决），已实施并闭环（2026-11-05）：W1（run 启动窗＋`before_agent_start` user/custom 联合，B275）、W2（`reachesTools` 投影，B276）、W3（`pi.exec` maxBuffer/truncated/UTF-8 边界）、W4（三个新 settings 键、`/share` destination、`update self` 配置命令、扩展 changelog 启动展示、manifest `changelogPath`）、W5（`installFailures` 不阻塞启动＋三档启动警告、temporary git/npm 刷新、资源模式 `~` 展开、`PathComparisonKeys`、`update` 的「版本没变」progress 消息）、W6（模型引用解析统一策略：ai `ModelReferenceResolver`＋`CliModelResolution`、coding-agent `CliModelWiring`＋`ProviderAuth`；B277d，D227）、W7（tool_search Unicode 分词＋`namespaceText` 独立字段＋分字段 BM25＋删除 `isToolSearchTool`，B277e）、W8（HTML 导出系统消息两臂＋迭代式祖先回溯＋read 行区间＋CJK 强调，`MarkdownTransformContext` 的 `messageId`/`timestamp`，B277f）、W9（思考档 RPC 过滤，B259）、W10（print 截断 B281、trust 优先级、删除 cwd、帮助/slash 文案、图片编码 B282、shell 平台 B283）。W1 引入的树导航回归（`agentRunActive` 复位晚于引擎 idle）随 W4 修复。转出：E3-3／E5-31 → L7，E5-33 → L8。全仓 verify **6,397 测零失败**。
 
 ## 2. 层级顺序与状态
@@ -36,7 +37,7 @@
 | L3 | agent-core | 已闭环 | docs/23 W1–W3：模板引号空参数＋JS 空白、grep 孤立 CR（实施），技能路径比较键（复核无改动）；identity／`reachesTools`／AI 新类型复核对齐；#77／#24 转出 L4；账面 **177/177＝100%**（88 计分＋2 转出） |
 | L4 | session / SQLite | 已闭环 | docs/24 W1–W4＋B278：恢复 active tools、摘要语义、省略成对、持久化细节、显式会话目录平铺；账面 **44.0/44＝100%**；下一步 L5 coding-agent |
 | L5 | coding-agent | 已闭环 | docs/25 W1–W10 全部实施（run 启动窗＋`before_agent_start` 联合、`reachesTools` 投影、`pi.exec` 上限、settings/分享/自更新/扩展 changelog、包管理器安装失败不阻塞＋temporary 刷新＋`~` 模式＋路径比较键、模型引用解析统一策略、tool_search Unicode 分词＋分字段 BM25、HTML 导出系统消息/深链迭代/CJK 强调＋markdown 上下文 messageId·timestamp、思考档 RPC 过滤、print 截断/trust/cwd/help/图片/shell）；B275／B276／B277(a–f)／B259 全销号，D219–D227 登记；转出 E3-3／E5-31 → L7、E5-33 → L8；下一步 L6 evals |
-| L6 | evals | 未开始 | 新行为的评测 oracle 与 harness 复核 |
+| L6 | evals | 已闭环 | docs/26 W1–W7：报告补四组配对标量＋按变体运行总量＋pass-rate lift（`schemaVersion=3`，D228）、审计取证断言（D230）、prompt template 文档 eval＋agent 目录隔离缝（D231）、`--audit` 独立档；评测 24 行 **48.0/49＝97.96%**（对齐 23／存疑 1／缺失 0）；补回 D182–D189、新登 D228–D231；下一步 L7 TUI/web |
 | L7 | TUI / web 兼容面 | 未开始 | 新锚点 TUI 全量重测与剩余屏域设计 |
 | L8 | examples | 未开始 | 新锚点清单、Java 移植与验收计划 |
 

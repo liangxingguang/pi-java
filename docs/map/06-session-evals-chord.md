@@ -4,11 +4,11 @@
 
 ## 基准与范围
 
-- **PI_PIN=56cae7823**（2026-10-31，`v1.4.0-265-g56cae7823`）；pi-java @ `6845786a`（main，2026-11-05，L4 实施收口）。
-- 本图**存储后端** 20 行已按新锚点重测并随 docs/24 实施闭环；**评测域**仍为旧锚点 `ea448f454` 读数，L6 重测时换锚（不沿用本图判定）。
+- **PI_PIN=56cae7823**（2026-10-31，`v1.4.0-265-g56cae7823`）；pi-java @ `51dc0f7c`（main，2026-11-05，L6 实施收口）。
+- 本图**存储后端** 20 行已按新锚点重测并随 docs/24 实施闭环；**评测域** 24 行已按新锚点重测并随 docs/26 实施闭环（2026-11-05，L6）。
 - 范围：`pi-java-session-backend-sqlite` ＋ `pi-java-agent-core` 的会话持久化面（主流对照 pi `coding-agent/src/core/session-manager.ts`）；`pi-java-evals` ↔ pi `packages/evals`；pi `packages/chord`（R5 不可达）；pi 仓库根 `scripts/` 与本仓 `docs/map/check-drift.sh`（口径外）。
 - 判定三档：**对齐** / **缺失** / **存疑**。每条给两侧 `file:line`。
-- 旧锚点评测参照版本：`1.1.0`（`packages/evals/package.json` version 字段）。
+- 新锚点评测参照版本：`1.4.0`（`packages/evals/package.json` version 字段；旧锚点 `1.1.0`）。
 
 ---
 
@@ -119,45 +119,58 @@ usage 提为一等 entry）都是**为 pi v3 互读服务**的，其判定效应
 
 ## 评测对齐
 
-pi 侧（`ea448f454`）：`packages/evals/src` **1,446 行，两锚点间逐字节未变**；`evals/*.eval.ts` 同样未变。
-本窗口仅有的非 src 改动：
+pi 侧（`ea448f454..56cae7823`）：`packages/evals/src` **1,446 → 1,447 行（净 +1）**，只有 `report.ts` 改动 9 行；`evals/` **856 → 950 行**（+94，新增一套 prompt-template eval 与审计取证断言）；`test/` **815 → 830 行**。
+`src/{harness,cli,docker,plan}.ts` 与 `docker/{entrypoint.ts,Dockerfile}` **逐字节未变**。
 
 | 文件 | 改动 | 影响 |
 |---|---|---|
-| `package.json` | version `1.0.2 → 1.1.0`；内部依赖 `^1.1.0`；`shx` devDep `0.4.0 → 0.3.4` | 版本号，**框架集合不变**（仍 `vitest-evals`＋`@vitest-evals/core`＋`autoevals`） |
-| `docker/install-runtime.mjs` | 制品打包换用 `scripts/local-package-install.mjs`＋`scripts/package-artifacts.mjs`（原 `coding-agent-consumer`/`release-packages` 已删） | Docker 装配脚本重构，能力面不变 |
+| `src/report.ts` | `readTaskObservation` 改为先按 `fullName` 过滤再计数；`classifyCaseStatus` 不再导出 | 兄弟用例 skipped 不再误伤；四组配对摘要与 pass-rate lift **本来就已存在**（旧读数漏判） |
+| `evals/prompt-templates.docs.eval.ts` | +79（新增） | 评测 #22 |
+| `evals/documentation-audit.eval.ts` | +18/−4 | 评测 #21（取证断言） |
+| `evals/tui.docs.eval.ts` | +41/−25 | `autoevals` 的 `Levenshtein` 换内联实现；判定不变 |
+| `evals/extensions.docs.eval.ts` | −2 | 删 `toolLoaded` oracle；判定不变 |
+| `vitest.evals.config.ts` | +12/−3 | `host` 排除审计、新增 `audit` 项目（评测 #24） |
+| `package.json` | +5/−5 | `autoevals` devDep 删除（外部框架 npm **×3 → ×2**）；`vitest 4.1.11 → 4.1.12`；新增 `eval:audit` |
+| `README.md` | +6/−6 | 三档运行说明 |
 
 pi-java 侧：自研框架 `EvalSuite`/`EvalCase`/`EvalRunner`/`EvalReporter` ＋ 协议一致性套件。
-本窗口 2 个主文件改动，均**不翻判定**：
-`ChatApiConformanceSuite.java:156` 跟 B107 删 `StreamRequest` 多余参数；
-`ProviderCatalogConformance.java:18/31-35` 内置 provider 计数 18 → **19**。
+L6 落地的对应面见 §上表 #5/#21–#24。
 
-| # | 权重 | 能力 | pi 证据（`ea448f454`） | java 证据（`edc8749d`） | 判定 |
-|---|---|---|---|---|---|
-| 1 | 1 | 声明式 eval 定义（`describeEval`） | `evals/documentation-audit.eval.ts:6/43`、`tui.docs.eval.ts:13` | `api/EvalSuite.java:8` | 对齐（形状不同） |
-| 2 | 3 | **真 coding-agent harness**（临时目录真会话 + transcript/usage 回读） | `src/harness.ts:471-475`（`createPiCodingAgentHarness`）、`:517-523`（`createPiDocumentationEvalHarness`） | `harness/PiCodingAgentHarness.java`（临时 home/workspace/sessionDir 真会话）、`IsolatedEnvironment.java`（属性隔离）、`HarnessRun.java`（transcript/usage/artifacts 回读） | **对齐** |
-| 3 | 2 | **LLM-as-judge 评分** | `tui.docs.eval.ts:12-13`（`Levenshtein`+`createJudge`）、`extensions.docs.eval.ts:2`（`StructuredOutputJudge`/`ToolCallJudge`） | `judge/{StructuredOutputJudge,ToolCallJudge,LevenshteinJudge}.java`＋`api/EvalResult.java`（score/reason） | **对齐** |
-| 4 | 2 | baseline vs candidate A/B 对照表 + 变体计划 | `src/report.ts:36-75`；`src/plan.ts:1/39` | `plan/TaskPlan.java`（交替变体顺序）＋`plan/DocumentationVariant.java`＋`plan/EvalCaseDescriptor.java` | **对齐** |
-| 5 | 2 | 对照报告汇总（paired metric / correctness lift） | `src/report.ts:359/436` | `report/ComparisonReport.java`（配对/blocked/lift/flags）＋`ComparisonReportText.java` | **对齐** |
-| 6 | 2 | reporter 落产物（`session.jsonl`） | `src/report.ts:123`（`persistSession`）、`:101`（`classifyCaseStatus`） | `report/EvalObservation.java`／`CaseStatus.java`＋`cli/ArtifactLayout.java`＋`HarnessRun.sessionFile` | **对齐** |
-| 7 | 2 | 会话 JSONL 快照作为 test attachment | `src/report.ts:9`（`PI_SESSION_SNAPSHOT_ARTIFACT`） | `PiCodingAgentHarness.PI_SESSION_SNAPSHOT_ARTIFACT`＋`HarnessRun.sessionFile` | **对齐** |
-| 8 | 2 | 从 run 里查工具调用（`toolCalls`） | `evals/documentation-audit.eval.ts:6/59` | `harness/TranscriptEvents.toolCalls`＋`HarnessRun.toolCalls/successfulToolCalls` | **对齐** |
-| 9 | 3 | eval 运行器 CLI | `src/cli.ts`（`parseEvalCli`/`compareDiscovery`）；`package.json` 双轨入口 | `cli/EvalCli.java`＋`EvalCatalog.java`＋`ArtifactLayout.java`（`.eval/<ISO>_<uuid>/`） | **对齐** |
-| 10 | 2 | docs 审计 eval | `evals/documentation-audit.eval.ts:10-59`（verdict 含 `inconclusive`） | `contents/DocumentationAuditEval.java`（页面级 case＋内联 `submit_documentation_audit`） | **对齐** |
-| 11 | 2 | 扩展作者 eval | `evals/extensions.docs.eval.ts:1-40`（走 judge） | `contents/ExtensionsDocsEval.java`（`bash` 臂＋内联 `install_extension`＋reload＋judge） | **对齐** |
-| 12 | 2 | 模型作者 eval | `evals/models.docs.eval.ts` + `configured-runtime.ts` | `contents/ModelsDocsEval.java`＋`fixtures/ConfiguredRuntimeInspector.inspectAddedModel` | **对齐** |
-| 13 | 2 | provider 集成 eval（本地 HTTP mock server） | `evals/acme-server.ts:1-154` + `custom-provider.docs.eval.ts` + `openai-provider.docs.eval.ts` | `fixtures/AcmeServer.java`＋`contents/{CustomProviderDocsEval,OpenAiProviderDocsEval}.java`＋`ConfiguredRuntimeInspector.inspectProvider` | **对齐** |
-| 14 | 3 | **ChatApi 协议一致性套件（C1–C10）** | **无对应物** | `conformance/ChatApiConformanceSuite.java:24/:33-45` | 对齐（java 反超） |
-| 15 | 2 | 简单 smoke eval | `evals/smoke.eval.ts:10-16` | `contents/SmokeEval.java`（单 case「capital of France」、空工具） | **对齐** |
-| 16 | 3 | eval 框架本体 | **外部 npm ×3**（`vitest-evals`/`@vitest-evals/core`/`autoevals`） | 自研（`evals/api/*.java`） | 对齐（自研替代） |
-| 17 | 1 | 框架单测 | `test/*.test.ts`（815 行） | `src/test/...`（harness/judge/plan/report/docker/contents/fixtures 七组） | 对齐 |
-| 18 | 3 | **Docker eval 执行** | `src/docker.ts:38`＋`docker/Dockerfile`＋`docker/entrypoint.ts` | `docker/{DockerContext,DockerImageSpec,DockerCommandBuilder,DockerProcess,DockerEvalRunner,JUnitXmlReader}.java`＋`docker/Dockerfile`（D182 边界：真实构建不进 CI） | **对齐** |
-| 19 | 2 | **文档变体任务计划** | `src/plan.ts:1`（`DOCUMENTATION_VARIANTS`）、`:39`（`createTaskPlan`） | `plan/TaskPlan.java`＋`plan/DocumentationVariant.java`＋`harness/DocumentationVariants.java`（提示变换两变体） | **对齐** |
-| 20 | 2 | **TUI 文档审计 eval** | `evals/tui.docs.eval.ts:12-13/192/229` | `contents/TuiDocsEval.java`（Java 文档问答＋Levenshtein 0.75）＋`fixtures/RecordingFooterOracle.java`（D183 边界：非 pi context-footer oracle） | **存疑** |
+| # | 权重 | 能力 | pi 证据（`56cae7823`） | java 证据（`51dc0f7c`＋docs/26） | 判定 | 台账 |
+|---|---|---|---|---|---|---|
+| 1 | 1 | 声明式 eval 定义（`describeEval`） | `evals/documentation-audit.eval.ts:44`、`tui.docs.eval.ts:262` | `api/EvalSuite.java`（`harnessCases`/`judges`/`judgeThreshold`） | 对齐（形状不同） | D185 |
+| 2 | 3 | **真 coding-agent harness**（临时目录真会话 + transcript/usage 回读） | `src/harness.ts:471-475`（`createPiCodingAgentHarness`）、`:517-523`（`createPiDocumentationEvalHarness`） | `harness/PiCodingAgentHarness.java`（临时 home/workspace/sessionDir 真会话）、`IsolatedEnvironment.java`（属性隔离）、`HarnessRun.java`（transcript/usage/artifacts 回读） | **对齐** | — |
+| 3 | 2 | **LLM-as-judge 评分** | `tui.docs.eval.ts:23-37`（内联 `levenshteinSimilarity`）、`extensions.docs.eval.ts:2`（`StructuredOutputJudge`/`ToolCallJudge`） | `judge/{StructuredOutputJudge,ToolCallJudge,LevenshteinJudge}.java`＋`api/EvalResult.java` | **对齐** | — |
+| 4 | 2 | baseline vs candidate A/B 对照表 + 变体计划 | `src/report.ts:36-83`；`src/plan.ts:39`（`createTaskPlan`） | `plan/TaskPlan.java`（交替变体顺序）＋`plan/DocumentationVariant.java`＋`plan/EvalCaseDescriptor.java` | **对齐** | — |
+| 5 | 2 | **对照报告汇总（paired metric / pass-rate lift）** | `src/report.ts:43-56`（`EvalSetComparison` 四组配对摘要）、`:380-402`（per-set headline ＋ pass-rate lift） | `report/ComparisonReport.java`（per-set `comparisons`）、`report/{PairedMetricSummary,EvalSetComparison}.java`＋`ComparisonReportText.java`（pi 段序） | **对齐**（L6 W1） | D228 |
+| 6 | 2 | reporter 落产物（`session.jsonl`） | `src/report.ts:122-134`（`persistSession`）、`:101`（`classifyCaseStatus`）、`:147-157`（兄弟用例过滤） | `report/EvalObservation.java`／`CaseStatus.java`＋`cli/ArtifactLayout.java`＋`HarnessRun.sessionFile`；单臂模型下无需 fullName 选择 | **对齐**（形状不同） | D229 |
+| 7 | 2 | 会话 JSONL 快照作为 test attachment | `src/report.ts:9`（`PI_SESSION_SNAPSHOT_ARTIFACT`） | `PiCodingAgentHarness.PI_SESSION_SNAPSHOT_ARTIFACT`＋`HarnessRun.sessionFile` | **对齐** | — |
+| 8 | 2 | 从 run 里查工具调用（`toolCalls`） | `evals/documentation-audit.eval.ts:6/60` | `harness/TranscriptEvents.toolCalls`＋`HarnessRun.toolCalls/successfulToolCalls` | **对齐** | — |
+| 9 | 3 | eval 运行器 CLI | `src/cli.ts:27-86`（`parseEvalCli`）、`:106-112`（`compareDiscovery`）；`package.json:8-12` 三档脚本 | `cli/EvalCli.java`＋`EvalCatalog.java`＋`ArtifactLayout.java`（`.eval/<ISO>_<uuid>/`）＋`--host`/`--audit` 档位 | **对齐** | D185 |
+| 10 | 2 | docs 审计 eval（本体） | `evals/documentation-audit.eval.ts:10-30/44-58`（verdict 含 `inconclusive`） | `contents/DocumentationAuditEval.java`（页面级 case＋内联 `submit_documentation_audit`） | **对齐** | — |
+| 11 | 2 | 扩展作者 eval | `evals/extensions.docs.eval.ts:1-57`（走 judge） | `contents/ExtensionsDocsEval.java`（`bash` 臂＋内联 `install_extension`＋reload＋judge） | **对齐** | D184/D187 |
+| 12 | 2 | 模型作者 eval | `evals/models.docs.eval.ts` + `configured-runtime.ts` | `contents/ModelsDocsEval.java`＋`fixtures/ConfiguredRuntimeInspector.inspectAddedModel` | **对齐** | D186 |
+| 13 | 2 | provider 集成 eval（本地 HTTP mock server） | `evals/acme-server.ts:1-154` + `custom-provider.docs.eval.ts` + `openai-provider.docs.eval.ts` | `fixtures/AcmeServer.java`＋`contents/{CustomProviderDocsEval,OpenAiProviderDocsEval}.java`＋`ConfiguredRuntimeInspector.inspectProvider` | **对齐** | D186 |
+| 14 | 3 | **ChatApi 协议一致性套件（C1–C10）** | **无对应物** | `conformance/ChatApiConformanceSuite.java` | 对齐（java 反超） | — |
+| 15 | 2 | 简单 smoke eval | `evals/smoke.eval.ts:5-18` | `contents/SmokeEval.java`（单 case「capital of France」、空工具） | **对齐** | D188 |
+| 16 | 3 | eval 框架本体 | **外部 npm ×2**（`vitest-evals`/`@vitest-evals/core`；`autoevals` 本锚点已删） | 自研（`evals/api/*.java`） | 对齐（自研替代） | D185 |
+| 17 | 1 | 框架单测 | `test/*.test.ts`（830 行，本锚点 +15） | `src/test/...`（harness/judge/plan/report/docker/contents/fixtures 七组） | 对齐 | — |
+| 18 | 3 | **Docker eval 执行** | `src/docker.ts:38`＋`docker/Dockerfile`＋`docker/entrypoint.ts`（三件两锚点逐字节相同） | `docker/{DockerContext,DockerImageSpec,DockerCommandBuilder,DockerProcess,DockerEvalRunner,JUnitXmlReader}.java`＋`docker/Dockerfile` | **对齐** | D182 |
+| 19 | 2 | **文档变体任务计划** | `src/plan.ts:1`（`DOCUMENTATION_VARIANTS`）、`:39`（`createTaskPlan`） | `plan/TaskPlan.java`＋`plan/DocumentationVariant.java`＋`harness/DocumentationVariants.java` | **对齐** | — |
+| 20 | 2 | **TUI 文档审计 eval** | `evals/tui.docs.eval.ts:23-37/207-260`（context-footer oracle） | `contents/TuiDocsEval.java`（Java 文档问答＋Levenshtein 0.75）＋`fixtures/RecordingFooterOracle.java` | **存疑** | D183/D189 |
+| 21 | 2 | **审计取证断言（读过页面＋读过实现源）** | `evals/documentation-audit.eval.ts:34/60-71` | `contents/{DocumentationAuditEval,AuditSourceIndex}.java`（`AuditJudge` 前置断言＋按页源选集） | **对齐**（L6 W3） | D230 |
+| 22 | 2 | **prompt template 文档 eval** | `evals/prompt-templates.docs.eval.ts:1-79`（project/user 双 scope、reload、展开逐字比对） | `contents/PromptTemplatesDocsEval.java`（两 case＋`HarnessOptions.output` 观测面） | **对齐**（L6 W4） | D231 |
+| 23 | 1 | **按变体的运行总量与覆盖度** | `src/report.ts:62-73`（`VariantTotals`）、`:431-435`（覆盖度渲染） | `report/VariantTotals.java`＋`report/OperationalMetricTotal.java`（`availableRuns`，不折零） | **对齐**（L6 W2） | — |
+| 24 | 1 | **audit 独立执行档** | `vitest.evals.config.ts:22-43`（`host` 排除审计、新增 `audit` 项目）；`package.json:11` `eval:audit` | `EvalSuite.expensive()`＋`EvalCliOptions --audit`＋`EvalCli.byAuditGate` | **对齐**（L6 W5） | D188 |
 
-**行数**：20 行 —— 对齐 19 / 缺失 0 / 存疑 1。
-**权重**：**Σ = 43** ⇒ **Σ(w×c) = 41.0（对齐）＋ 1.0（存疑 #20）＝ 42.0** ⇒ **加权完成度 = 42.0/43 ≈ 97.7%**（批 32，docs/44：15 行缺失/存疑→对齐，`#20` 缺失→存疑＝D183）。
-评测缺口的汇总见 `docs/05-module-alignment-map.md` §2.6（台账 `docs/04` 的 B258 已随批 32 销号）。
+**行数**：24 行 —— 对齐 **23** / 缺失 **0** / 存疑 **1**。
+**权重**：**Σ = 49** ⇒ **Σ(w×c) = 47.0（对齐）＋ 1.0（存疑 #20）＝ 48.0** ⇒ **加权完成度 = 48.0/49 ≈ 97.96%**。
+
+> **重判说明**：旧读数（20 行 / Σ43 / 42.0 = 97.7%）把 #5 记成「对齐」过宽——pi 的四组
+> 配对标量、按变体运行总量与 **pass-rate 定义的 lift** 在 Java 侧当时都不存在，按新锚点
+> 证据应为缺失。L6 W1/W2 补齐后 #5 恢复对齐，并新增 #21–#24 四行（Σ+6）。
+> 唯一存疑 #20（TUI 审计 oracle 形态差）在 docs/26 §1.4 复核后维持，理由未变。
+> 5 × 0.5 = 2.5 之外的缺口不存在——**唯一 −1.0 来自 #20 的存疑系数**。
 
 ---
 
@@ -224,17 +237,17 @@ pi `scripts/` 是仓库自身构建/发布/校验工具，按 R5 **不进产品�
 
 ## 汇总（未加权）
 
-参与对齐判定的只有存储后端（20 行）＋ 评测（20 行）＝ **40 行**：
+参与对齐判定的只有存储后端（20 行）＋ 评测（24 行）＝ **44 行**：
 
-| 档 | 存储后端（新锚点） | 评测（旧锚点，L6 待重测） | 合计 |
+| 档 | 存储后端（新锚点） | 评测（新锚点） | 合计 |
 |---|---|---|---|
-| **对齐** | 20 | 19 | **39** |
+| **对齐** | 20 | 23 | **43** |
 | **缺失** | 0 | 0 | **0** |
 | **存疑** | 0 | 1 | **1** |
-| 合计 | 20 | 20 | **40** |
+| 合计 | 20 | 24 | **44** |
 
-**未加权完成度（按行数）= 39 / 40 = 97.5%**；**按系数（对齐 1 / 存疑 0.5 / 缺失 0）
-= (39 + 0.5) / 40 = 98.75%**（存储后端单独 100%，见下节；评测仍待 L6 重测后方可发布新读数）。
+**未加权完成度（按行数）= 43 / 44 = 97.73%**；**按系数（对齐 1 / 存疑 0.5 / 缺失 0）
+= (43 + 0.5) / 44 = 98.86%**（存储后端单独 100%，见下节；评测单独 97.96%，见上表）。
 
 ### 移出分母的整块（R1 / R5 / 口径外）
 
@@ -258,8 +271,8 @@ pi `scripts/` 是仓库自身构建/发布/校验工具，按 R5 **不进产品�
 |---|---:|---:|---:|---:|
 | 存储后端（新锚点，docs/24） | **44（20 行）** | **44.0** | **100%** | 100%（20/20） |
 | ~~SQLite schema~~ | **0（作废）** | 0 | — | — |
-| 评测（旧锚点，L6 待重测） | **43（20 行）** | **42.0** | **97.7%** | 95.0%（19/20） |
-| 合并快照（新旧锚点混算，仅内部观察） | **87（40 行）** | **86.0** | **98.9%** | **97.5%（39/40）** |
+| 评测（新锚点，docs/26） | **49（24 行）** | **48.0** | **97.96%** | 95.83%（23/24） |
+| 合并快照（两域均新锚点） | **93（44 行）** | **92.0** | **98.92%** | **97.73%（43/44）** |
 
 
 ### 权重 0（排除出分母）的行
@@ -277,6 +290,7 @@ pi `scripts/` 是仓库自身构建/发布/校验工具，按 R5 **不进产品�
 
 | # | 能力 | 存疑点 |
 |---|---|---|
-| S7 | TUI 文档审计（评测 #20） | pi 用 context-footer oracle（`42.2%/272k` 状态行）；java TUI 无该行，以 Java 文档问答＋Levenshtein 0.75 替代（D183；评测域待 L6 重测） |
+| S7 | TUI 文档审计（评测 #20） | pi 用 context-footer oracle（`42.2%/272k` 状态行）；java TUI 无该行，以 Java 文档问答＋Levenshtein 0.75 替代（D183／D189；L6 §1.4 已按新锚点复核，判分核心未变，维持存疑） |
 
 > #6 已按 docs/24 §1.5 改判「对齐（形状不同）」并登记 D218；S1 销号。
+> 评测域唯一存疑是 #20；其余 23 行全部对齐，**没有第二个缺口**。
