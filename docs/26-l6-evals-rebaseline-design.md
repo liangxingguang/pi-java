@@ -408,7 +408,7 @@ pi 的审计 eval 让模型读**仓库里的真实页面与真实源码**（容�
 
 ### 7.2 W7（实测）
 
-全仓 `mvn clean verify` 通过：**6,414 测零失败**（L5 基线 6,397，本层 +17），Checkstyle 零错误、SpotBugs 零告警。
+全仓 `mvn clean verify` 通过：**6,424 测 0 失败 0 错误 / 33 跳过**（L5 基线 6,397／33 跳过，本层 +27），Checkstyle 零错误、SpotBugs 零告警。
 
 新增主源 6 文件：`report/{PairedMetricSummary,EvalSetComparison,VariantTotals,OperationalMetricTotal}.java`、`contents/{PromptTemplatesDocsEval,AuditSourceIndex}.java`（`EvalAuditGate` 未单列，落在 `EvalCli.byAuditGate`＋`EvalSuite.expensive()`）。
 新增测试 3 文件：`report/ComparisonReportMetricsTest`、`contents/{DocumentationAuditEvidenceTest,PromptTemplatesDocsEvalTest}`。
