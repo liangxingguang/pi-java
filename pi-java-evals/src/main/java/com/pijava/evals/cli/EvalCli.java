@@ -29,6 +29,10 @@ import com.pijava.evals.report.CaseStatus;
 import com.pijava.evals.report.ComparisonReport;
 import com.pijava.evals.report.ComparisonReportText;
 import com.pijava.evals.report.EvalObservation;
+import com.pijava.evals.report.EvalSetComparison;
+import com.pijava.evals.report.OperationalMetricTotal;
+import com.pijava.evals.report.PairedMetricSummary;
+import com.pijava.evals.report.VariantTotals;
 
 /**
  * 批 32（docs/44 §6）：eval 运行器 CLI —— pi {@code cli.ts} 对位。
@@ -38,6 +42,12 @@ import com.pijava.evals.report.EvalObservation;
  * {@code --host} 模式不配对，任一 {@code failed/errored} 即退出码 1。</p>
  */
 public final class EvalCli {
+
+    /**
+     * report.json schema 版本（L6 W1，D228）：3 起结构为 per-eval-set
+     * {@code comparisons} ＋ 按变体 {@code operationalTotals}，与此前的全局单份汇总不互读。
+     */
+    public static final int REPORT_SCHEMA_VERSION = 3;
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
@@ -301,20 +311,27 @@ public final class EvalCli {
 
     private static ObjectNode reportNode(ComparisonReport report) {
         var node = MAPPER.createObjectNode();
+        node.put("schemaVersion", REPORT_SCHEMA_VERSION);
         node.put("blocked", report.blocked());
         node.put("withheld", report.withheld());
-        if (report.lift() == null) {
-            node.putNull("lift");
-        } else {
-            node.put("lift", report.lift());
+        var comparisons = node.putArray("comparisons");
+        for (var comparison : report.comparisons()) {
+            comparisons.add(comparisonNode(comparison));
         }
-        var flags = node.putArray("flags");
-        report.flags().forEach(flags::add);
-        node.set("control", scopeNode(report.control()));
-        node.set("treatment", scopeNode(report.treatment()));
-        var totals = node.putObject("operationalTotals");
-        report.operationalTotals().forEach((status, count) ->
-            totals.put(status.wireName(), count));
+        var blocked = node.putArray("blockedPairs");
+        for (var pair : report.blockedPairs()) {
+            var item = blocked.addObject();
+            item.put("id", pair.id());
+            var reasons = item.putArray("reasons");
+            pair.reasons().forEach(reasons::add);
+        }
+        var totals = node.putArray("operationalTotals");
+        for (var variant : report.variantTotals()) {
+            totals.add(variantTotalsNode(variant));
+        }
+        var counts = node.putObject("statusCounts");
+        report.statusCounts().forEach((status, count) ->
+            counts.put(status.wireName(), count));
         node.put("totalDurationMs", report.totalDurationMs());
         node.put("usageUnavailable", report.usageUnavailable());
         var cases = node.putArray("cases");
@@ -332,12 +349,52 @@ public final class EvalCli {
         return node;
     }
 
-    private static ObjectNode scopeNode(ComparisonReport.ScopeSummary summary) {
+    private static ObjectNode comparisonNode(EvalSetComparison comparison) {
         var node = MAPPER.createObjectNode();
-        node.put("arms", summary.arms());
-        node.put("passed", summary.passed());
-        node.put("failed", summary.failed());
-        putNullable(node, "passRate", summary.passRate());
+        node.put("evalSet", comparison.evalSet());
+        node.put("totalPairs", comparison.totalPairs());
+        node.put("eligiblePairs", comparison.eligiblePairs());
+        node.put("blockedPairs", comparison.blockedPairs());
+        putNullable(node, "controlPassRate", comparison.controlPassRate());
+        putNullable(node, "treatmentPassRate", comparison.treatmentPassRate());
+        putNullable(node, "lift", comparison.lift());
+        var flags = node.putArray("flags");
+        comparison.flags().forEach(flags::add);
+        node.set("totalTokens", pairedNode(comparison.totalTokens()));
+        node.set("toolCalls", pairedNode(comparison.toolCalls()));
+        node.set("totalMs", pairedNode(comparison.totalMs()));
+        node.set("estimatedCostUsd", pairedNode(comparison.estimatedCostUsd()));
+        return node;
+    }
+
+    private static ObjectNode pairedNode(PairedMetricSummary metric) {
+        var node = MAPPER.createObjectNode();
+        node.put("eligiblePairs", metric.eligiblePairs());
+        putNullable(node, "controlMean", metric.controlMean());
+        putNullable(node, "treatmentMean", metric.treatmentMean());
+        putNullable(node, "meanDelta", metric.meanDelta());
+        return node;
+    }
+
+    private static ObjectNode variantTotalsNode(VariantTotals totals) {
+        var node = MAPPER.createObjectNode();
+        node.put("variant", totals.variant().wireName());
+        node.put("runs", totals.runs());
+        node.set("inputTokens", operationalNode(totals.inputTokens()));
+        node.set("outputTokens", operationalNode(totals.outputTokens()));
+        node.set("cacheReadTokens", operationalNode(totals.cacheReadTokens()));
+        node.set("cacheWriteTokens", operationalNode(totals.cacheWriteTokens()));
+        node.set("totalTokens", operationalNode(totals.totalTokens()));
+        node.set("toolCalls", operationalNode(totals.toolCalls()));
+        node.set("totalMs", operationalNode(totals.totalMs()));
+        node.set("estimatedCostUsd", operationalNode(totals.estimatedCostUsd()));
+        return node;
+    }
+
+    private static ObjectNode operationalNode(OperationalMetricTotal metric) {
+        var node = MAPPER.createObjectNode();
+        node.put("availableRuns", metric.availableRuns());
+        putNullable(node, "total", metric.total());
         return node;
     }
 

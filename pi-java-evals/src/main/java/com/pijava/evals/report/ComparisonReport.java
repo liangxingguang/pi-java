@@ -12,63 +12,72 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
 
+import com.pijava.evals.harness.HarnessUsage;
 import com.pijava.evals.plan.DocumentationVariant;
 import com.pijava.evals.plan.TaskPlan;
 
 /**
- * 批 32（docs/44 §5.2）：docs-lift 配对报告 —— pi
- * {@code summarizeReport}/{@code report.ts} 对位。
+ * L6 W1（docs/26 §2）：docs-lift 配对报告 —— pi {@code summarizeEvalObservations}
+ * （{@code report.ts:360-414}）对位。
  *
  * <p>按 {@code (evalSet, case, run)} 配对两变体。任一臂
- * {@code skipped/pending/unscored/errored/missing/duplicate} ⇒ 该对 blocked；
- * 存在 blocked 时头部通过率与 headline lift 一并 withhold，但逐对原因仍输出。</p>
+ * {@code skipped/pending/unscored/errored/missing/duplicate} ⇒ 该对 blocked，并整对
+ * 退出统计。</p>
  *
- * @param cases             per-pair comparisons, sorted by pair key
- * @param blocked           whether any pair is blocked
- * @param withheld          same as {@code blocked}: headline numbers withheld
- * @param control           without_docs summary
- * @param treatment         with_docs summary
- * @param lift              mean {@code treatment - control}, {@code null} when blocked
- * @param flags             flag names (see {@code FLAG_*} constants)
- * @param operationalTotals arm counts by status
- * @param totalDurationMs   summed observation durations
- * @param usageUnavailable  observations without usage (not folded to zero)
+ * <p>三处与旧实现不同、按 pi 对齐的语义：</p>
+ * <ol>
+ *   <li><b>汇总按 eval set 分行</b>（{@link #comparisons()}），headline 逐 set 发布：
+ *       某 set 有 blocked 只冻结该 set，不牵连全局。</li>
+ *   <li><b>lift 是通过率之差</b>，不是逐对分数差均值（{@code report.ts:394-397}）。</li>
+ *   <li><b>flags 也看通过率</b>（{@code report.ts:337-344}）：{@code no-lift}＝两侧
+ *       通过率相等，{@code negative-delta}＝treatment 更低，饱和＝该侧全 1.0。</li>
+ * </ol>
+ *
+ * <p>{@link #cases()} 是本实现的诊断扩展（pi 只把逐 case 结果留在 workspace 里），
+ * 不进任何计分口径。</p>
+ *
+ * @param cases            per-pair comparisons, sorted by pair key
+ * @param blockedPairs     pairs that could not be scored
+ * @param comparisons      per-eval-set summaries, sorted by set name
+ * @param statusCounts     arm counts by status
+ * @param variantTotals    per-variant operational totals
+ * @param totalDurationMs  summed observation durations
+ * @param usageUnavailable observations without usage (not folded to zero)
  */
 public record ComparisonReport(
     List<CaseComparison> cases,
-    boolean blocked,
-    boolean withheld,
-    ScopeSummary control,
-    ScopeSummary treatment,
-    Double lift,
-    List<String> flags,
-    Map<CaseStatus, Long> operationalTotals,
+    List<BlockedPair> blockedPairs,
+    List<EvalSetComparison> comparisons,
+    Map<CaseStatus, Long> statusCounts,
+    List<VariantTotals> variantTotals,
     long totalDurationMs,
     long usageUnavailable
 ) {
 
-    /** 所有配对差值均为 0。 */
+    /** 两侧通过率相等（{@code report.ts:340}）。 */
     public static final String FLAG_NO_LIFT = "no-lift";
 
-    /** 出现负差值。 */
+    /** treatment 通过率低于 control（{@code report.ts:341}）。 */
     public static final String FLAG_NEGATIVE_DELTA = "negative-delta";
 
-    /** without_docs 全部满分。 */
+    /** without_docs 全部通过。 */
     public static final String FLAG_CONTROL_SATURATED = "control-saturated";
 
-    /** with_docs 全部满分。 */
+    /** with_docs 全部通过。 */
     public static final String FLAG_TREATMENT_SATURATED = "treatment-saturated";
 
-    /** 同一变体多 run 分数不一致。 */
+    /** 同一变体多 run 的「是否通过」不一致（{@code report.ts:345-356}）。 */
     public static final String FLAG_FLAKY = "flaky";
 
     /** Normalizes collections. */
     public ComparisonReport {
         cases = List.copyOf(cases);
-        flags = List.copyOf(flags);
+        blockedPairs = List.copyOf(blockedPairs);
+        comparisons = List.copyOf(comparisons);
+        variantTotals = List.copyOf(variantTotals);
         var totals = new EnumMap<CaseStatus, Long>(CaseStatus.class);
-        totals.putAll(operationalTotals);
-        operationalTotals = Collections.unmodifiableMap(totals);
+        totals.putAll(statusCounts);
+        statusCounts = Collections.unmodifiableMap(totals);
     }
 
     /**
@@ -140,14 +149,44 @@ public record ComparisonReport(
     }
 
     /**
-     * Per-variant aggregate.
+     * A pair that could not be scored.
      *
-     * @param arms     expected arm count for this variant
-     * @param passed   passed arm count
-     * @param failed   failed arm count
-     * @param passRate passed / arms, {@code null} when withheld
+     * @param evalSet  eval set name
+     * @param caseName case name
+     * @param run      1-based run number
+     * @param reasons  blocker descriptions
      */
-    public record ScopeSummary(long arms, long passed, long failed, Double passRate) {
+    public record BlockedPair(String evalSet, String caseName, int run, List<String> reasons) {
+
+        /** Normalizes reasons. */
+        public BlockedPair {
+            reasons = List.copyOf(reasons);
+        }
+
+        /** @return pair identifier */
+        public String id() {
+            return evalSet + "/" + caseName + "#" + run;
+        }
+    }
+
+    /** @return {@code true} when any pair is blocked (pi: {@code blockedPairs.length > 0}) */
+    public boolean blocked() {
+        return !blockedPairs.isEmpty();
+    }
+
+    /** @return {@code true} when any eval set withheld its headline */
+    public boolean withheld() {
+        return comparisons.stream().anyMatch(comparison -> !comparison.headlinePublished());
+    }
+
+    /**
+     * {@code true} when the flag is present in any eval set.
+     *
+     * @param flag flag name
+     * @return whether the flag is present
+     */
+    public boolean hasFlag(String flag) {
+        return comparisons.stream().anyMatch(comparison -> comparison.flags().contains(flag));
     }
 
     /**
@@ -183,11 +222,8 @@ public record ComparisonReport(
         keys.addAll(grouped.keySet());
 
         var cases = new ArrayList<CaseComparison>();
-        var passCounts = new EnumMap<DocumentationVariant, long[]>(
-            DocumentationVariant.class);
-        passCounts.put(DocumentationVariant.WITHOUT_DOCS, new long[2]);
-        passCounts.put(DocumentationVariant.WITH_DOCS, new long[2]);
-        var totals = new EnumMap<CaseStatus, Long>(CaseStatus.class);
+        var statusCounts = new EnumMap<CaseStatus, Long>(CaseStatus.class);
+        var blockedPairs = new ArrayList<BlockedPair>();
         for (var key : keys) {
             var byVariant = grouped.getOrDefault(key,
                 new EnumMap<DocumentationVariant, List<EvalObservation>>(
@@ -196,36 +232,131 @@ public record ComparisonReport(
                 byVariant.getOrDefault(DocumentationVariant.WITHOUT_DOCS, List.of()),
                 byVariant.getOrDefault(DocumentationVariant.WITH_DOCS, List.of()));
             cases.add(comparison);
-            count(comparison.controlStatus(), passCounts.get(DocumentationVariant.WITHOUT_DOCS));
-            count(comparison.treatmentStatus(), passCounts.get(DocumentationVariant.WITH_DOCS));
-            totals.merge(comparison.controlStatus(), 1L, Long::sum);
-            totals.merge(comparison.treatmentStatus(), 1L, Long::sum);
+            statusCounts.merge(comparison.controlStatus(), 1L, Long::sum);
+            statusCounts.merge(comparison.treatmentStatus(), 1L, Long::sum);
+            if (comparison.blocked()) {
+                blockedPairs.add(new BlockedPair(key.evalSet(), key.caseName(), key.run(),
+                    List.of(comparison.reason())));
+            }
         }
 
-        var blocked = cases.stream().anyMatch(CaseComparison::blocked);
-        var control = summary(cases.size(), passCounts.get(DocumentationVariant.WITHOUT_DOCS),
-            blocked);
-        var treatment = summary(cases.size(), passCounts.get(DocumentationVariant.WITH_DOCS),
-            blocked);
-        var deltas = cases.stream().map(CaseComparison::delta).filter(Objects::nonNull).toList();
-        var lift = blocked || deltas.isEmpty()
-            ? null : (Double) deltas.stream().mapToDouble(Double::doubleValue).average()
-                .orElse(0.0);
-        var flags = flags(cases, controls(cases), treatments(cases), deltas, observations);
+        var comparisons = summarizeSets(cases, grouped);
         var duration = observations.stream().mapToLong(EvalObservation::durationMs).sum();
-        var usageUnavailable = observations.stream().filter(o -> o.usage() == null).count();
-        return new ComparisonReport(List.copyOf(cases), blocked, blocked, control, treatment,
-            lift, flags, totals, duration, usageUnavailable);
+        var unavailable = observations.stream().filter(o -> o.usage() == null).count();
+        return new ComparisonReport(cases, blockedPairs, comparisons, statusCounts,
+            List.of(VariantTotals.of(DocumentationVariant.WITHOUT_DOCS, observations),
+                VariantTotals.of(DocumentationVariant.WITH_DOCS, observations)),
+            duration, unavailable);
+    }
+
+    /** pi {@code summarizeEvalObservations} 的 per-set 主体（{@code report.ts:365-404}）。 */
+    private static List<EvalSetComparison> summarizeSets(
+            List<CaseComparison> cases,
+            Map<PairKey, EnumMap<DocumentationVariant, List<EvalObservation>>> grouped) {
+        var bySet = new LinkedHashMap<String, List<CaseComparison>>();
+        for (var comparison : cases) {
+            bySet.computeIfAbsent(comparison.key().evalSet(), ignored -> new ArrayList<>())
+                .add(comparison);
+        }
+        var summaries = new ArrayList<EvalSetComparison>(bySet.size());
+        for (var entry : bySet.entrySet()) {
+            summaries.add(summarizeSet(entry.getKey(), entry.getValue(), grouped));
+        }
+        summaries.sort((left, right) -> left.evalSet().compareTo(right.evalSet()));
+        return summaries;
+    }
+
+    private static EvalSetComparison summarizeSet(
+            String evalSet,
+            List<CaseComparison> cases,
+            Map<PairKey, EnumMap<DocumentationVariant, List<EvalObservation>>> grouped) {
+        var pairs = cases.stream().filter(comparison -> !comparison.blocked()).toList();
+        long blockedPairs = cases.size() - pairs.size();
+        var publishHeadline = blockedPairs == 0 && !pairs.isEmpty();
+        var controlPassRate = publishHeadline ? passRate(pairs, true) : null;
+        var treatmentPassRate = publishHeadline ? passRate(pairs, false) : null;
+        var lift = controlPassRate == null || treatmentPassRate == null
+            ? null : PairedMetricSummary.difference(treatmentPassRate, controlPassRate);
+        return new EvalSetComparison(evalSet, cases.size(), pairs.size(), blockedPairs,
+            controlPassRate, treatmentPassRate, lift,
+            flags(evalSet, grouped, controlPassRate, treatmentPassRate),
+            paired(pairs, grouped, observation -> usageMetric(observation, HarnessUsage::totalTokens)),
+            paired(pairs, grouped, observation -> usageMetric(observation, HarnessUsage::toolCalls)),
+            paired(pairs, grouped, observation -> (double) observation.durationMs()),
+            paired(pairs, grouped, ComparisonReport::estimatedCost));
+    }
+
+    /** 通过率＝{@code score >= 1} 的配对数 / 配对数（{@code report.ts:381-386}）。 */
+    private static Double passRate(List<CaseComparison> pairs, boolean control) {
+        if (pairs.isEmpty()) {
+            return null;
+        }
+        var passed = pairs.stream()
+            .filter(pair -> {
+                var score = control ? pair.controlScore() : pair.treatmentScore();
+                return score != null && score >= 1.0;
+            })
+            .count();
+        return (double) passed / pairs.size();
     }
 
     /**
-     * {@code true} when the flag is present.
+     * 四组配对标量：任一臂该指标缺席 ⇒ 整对退出该指标（{@code report.ts:284-305}）。
      *
-     * @param flag flag name
-     * @return whether the flag is present
+     * <p>配对未 blocked，故每组每变体恰有一条观测。</p>
      */
-    public boolean hasFlag(String flag) {
-        return flags.contains(flag);
+    private static PairedMetricSummary paired(
+            List<CaseComparison> pairs,
+            Map<PairKey, EnumMap<DocumentationVariant, List<EvalObservation>>> grouped,
+            MetricSelector selector) {
+        var control = new ArrayList<Double>();
+        var treatment = new ArrayList<Double>();
+        for (var pair : pairs) {
+            var byVariant = grouped.get(pair.key());
+            var controlValue = select(byVariant, DocumentationVariant.WITHOUT_DOCS, selector);
+            var treatmentValue = select(byVariant, DocumentationVariant.WITH_DOCS, selector);
+            if (controlValue == null || treatmentValue == null) {
+                continue;
+            }
+            control.add(controlValue);
+            treatment.add(treatmentValue);
+        }
+        return PairedMetricSummary.of(control, treatment);
+    }
+
+    /** usage 缺席 ⇒ 指标不可用（{@code null}），不得折成 0。 */
+    private static Double usageMetric(EvalObservation observation,
+                                      java.util.function.ToDoubleFunction<HarnessUsage> metric) {
+        var usage = observation.usage();
+        return usage == null ? null : metric.applyAsDouble(usage);
+    }
+
+    /** 成本可缺席（无定价的模型），缺席不折零。 */
+    private static Double estimatedCost(EvalObservation observation) {
+        var usage = observation.usage();
+        return usage == null ? null : usage.estimatedCostUsd();
+    }
+
+    private static Double select(
+            EnumMap<DocumentationVariant, List<EvalObservation>> byVariant,
+            DocumentationVariant variant,
+            MetricSelector selector) {
+        if (byVariant == null) {
+            return null;
+        }
+        var matches = byVariant.getOrDefault(variant, List.of());
+        return matches.isEmpty() ? null : selector.select(matches.get(0));
+    }
+
+    /** Metric projection over one scored observation. */
+    @FunctionalInterface
+    private interface MetricSelector {
+
+        /**
+         * @param observation scored observation
+         * @return metric value, {@code null} when unavailable
+         */
+        Double select(EvalObservation observation);
     }
 
     private static Map<PairKey, EnumMap<DocumentationVariant, List<EvalObservation>>> group(
@@ -260,7 +391,7 @@ public record ComparisonReport(
                 + treatmentStatus.wireName());
         }
         var delta = !blocked && controlScore != null && treatmentScore != null
-            ? treatmentScore - controlScore : null;
+            ? PairedMetricSummary.difference(treatmentScore, controlScore) : null;
         return new CaseComparison(key, controlStatus, treatmentStatus, controlScore,
             treatmentScore, delta, blocked, String.join(", ", reasons));
     }
@@ -286,60 +417,55 @@ public record ComparisonReport(
             ? matches.get(0).score() : null;
     }
 
-    private static ScopeSummary summary(long arms, long[] counts, boolean blocked) {
-        var passRate = blocked || arms == 0 ? null : counts[0] / (double) arms;
-        return new ScopeSummary(arms, counts[0], counts[1], passRate);
-    }
-
-    private static void count(CaseStatus status, long[] counts) {
-        if (status == CaseStatus.PASSED) {
-            counts[0]++;
-        } else if (status == CaseStatus.FAILED) {
-            counts[1]++;
-        }
-    }
-
-    private static List<Double> controls(List<CaseComparison> cases) {
-        return cases.stream().map(CaseComparison::controlScore).filter(Objects::nonNull).toList();
-    }
-
-    private static List<Double> treatments(List<CaseComparison> cases) {
-        return cases.stream().map(CaseComparison::treatmentScore).filter(Objects::nonNull)
-            .toList();
-    }
-
-    private static List<String> flags(List<CaseComparison> cases, List<Double> controls,
-                                      List<Double> treatments, List<Double> deltas,
-                                      List<EvalObservation> observations) {
+    /**
+     * pi {@code comparisonFlags}（{@code report.ts:337-358}）：四臂看通过率，
+     * flaky 看「是否通过」在多 run 间是否一致。
+     */
+    private static List<String> flags(
+            String evalSet,
+            Map<PairKey, EnumMap<DocumentationVariant, List<EvalObservation>>> grouped,
+            Double controlPassRate, Double treatmentPassRate) {
         var flags = new ArrayList<String>();
-        if (!deltas.isEmpty() && deltas.stream().allMatch(delta -> delta == 0.0)) {
-            flags.add(FLAG_NO_LIFT);
+        if (controlPassRate != null && treatmentPassRate != null) {
+            if (controlPassRate.doubleValue() == treatmentPassRate.doubleValue()) {
+                flags.add(FLAG_NO_LIFT);
+            }
+            if (treatmentPassRate < controlPassRate) {
+                flags.add(FLAG_NEGATIVE_DELTA);
+            }
+            if (controlPassRate == 1.0) {
+                flags.add(FLAG_CONTROL_SATURATED);
+            }
+            if (treatmentPassRate == 1.0) {
+                flags.add(FLAG_TREATMENT_SATURATED);
+            }
         }
-        if (deltas.stream().anyMatch(delta -> delta < 0.0)) {
-            flags.add(FLAG_NEGATIVE_DELTA);
-        }
-        if (!controls.isEmpty() && controls.stream().allMatch(score -> score == 1.0)) {
-            flags.add(FLAG_CONTROL_SATURATED);
-        }
-        if (!treatments.isEmpty() && treatments.stream().allMatch(score -> score == 1.0)) {
-            flags.add(FLAG_TREATMENT_SATURATED);
-        }
-        if (isFlaky(observations)) {
+        if (isFlaky(evalSet, grouped)) {
             flags.add(FLAG_FLAKY);
         }
         return List.copyOf(flags);
     }
 
-    private static boolean isFlaky(List<EvalObservation> observations) {
-        var byVariantCase = new LinkedHashMap<String, Map<Integer, Double>>();
-        for (var observation : observations) {
-            if (observation.score() == null) {
+    private static boolean isFlaky(
+            String evalSet,
+            Map<PairKey, EnumMap<DocumentationVariant, List<EvalObservation>>> grouped) {
+        var byVariantCase = new LinkedHashMap<String, Map<Integer, String>>();
+        for (var entry : grouped.entrySet()) {
+            if (!entry.getKey().evalSet().equals(evalSet)) {
                 continue;
             }
-            var key = observation.variant().wireName() + "|" + observation.evalSet()
-                + "|" + observation.caseName();
-            byVariantCase.computeIfAbsent(key, ignored -> new LinkedHashMap<>())
-                .putIfAbsent(observation.run(), observation.score());
+            for (var variantEntry : entry.getValue().entrySet()) {
+                for (var observation : variantEntry.getValue()) {
+                    if (observation.score() == null) {
+                        continue;
+                    }
+                    var key = variantEntry.getKey().wireName() + "|" + observation.evalSet()
+                        + "|" + observation.caseName();
+                    byVariantCase.computeIfAbsent(key, ignored -> new LinkedHashMap<>())
+                        .putIfAbsent(observation.run(),
+                            String.valueOf(observation.score() >= 1.0));
+                }
+            }
         }
         for (var runs : byVariantCase.values()) {
             if (runs.size() > 1 && Set.copyOf(runs.values()).size() > 1) {

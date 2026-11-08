@@ -10,7 +10,7 @@ import com.pijava.evals.plan.TaskPlan;
 import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** 批 32（docs/44 §5.2）：配对、blocked、lift 与 flags 语义。 */
+/** L6 W1（docs/26 §2）：配对、per-set headline、blocked 与 flags 语义。 */
 class ComparisonReportTest {
 
     @Test
@@ -22,13 +22,17 @@ class ComparisonReportTest {
             obs("case", DocumentationVariant.WITH_DOCS, 2, CaseStatus.PASSED, 1.0)));
         assertThat(report.blocked()).isFalse();
         assertThat(report.withheld()).isFalse();
-        assertThat(report.lift()).isEqualTo(0.25);
         assertThat(report.cases()).hasSize(2);
         assertThat(report.cases().get(0).delta()).isEqualTo(0.5);
         assertThat(report.cases().get(1).delta()).isZero();
-        assertThat(report.treatment()).extracting(ComparisonReport.ScopeSummary::passed)
-            .isEqualTo(2L);
-        assertThat(report.hasFlag(ComparisonReport.FLAG_TREATMENT_SATURATED)).isTrue();
+
+        var comparison = report.comparisons().get(0);
+        // control 两对里只有一对 score>=1，treatment 两对全过
+        assertThat(comparison.controlPassRate()).isEqualTo(0.5);
+        assertThat(comparison.treatmentPassRate()).isEqualTo(1.0);
+        assertThat(comparison.lift()).isEqualTo(0.5);
+        assertThat(comparison.flags())
+            .contains(ComparisonReport.FLAG_TREATMENT_SATURATED);
     }
 
     @Test
@@ -37,11 +41,16 @@ class ComparisonReportTest {
             obs("case", DocumentationVariant.WITHOUT_DOCS, 1, CaseStatus.PASSED, 1.0)));
         assertThat(report.blocked()).isTrue();
         assertThat(report.withheld()).isTrue();
-        assertThat(report.lift()).isNull();
-        assertThat(report.control().passRate()).isNull();
-        assertThat(report.operationalTotals()).containsEntry(CaseStatus.MISSING, 1L)
+        assertThat(report.blockedPairs()).hasSize(1);
+        assertThat(report.statusCounts()).containsEntry(CaseStatus.MISSING, 1L)
             .containsEntry(CaseStatus.PASSED, 1L);
-        assertThat(report.cases().get(0).reason()).contains("with_docs missing");
+
+        var comparison = report.comparisons().get(0);
+        assertThat(comparison.headlinePublished()).isFalse();
+        assertThat(comparison.lift()).isNull();
+        assertThat(comparison.controlPassRate()).isNull();
+        assertThat(comparison.treatmentPassRate()).isNull();
+        assertThat(comparison.blockedPairs()).isEqualTo(1);
     }
 
     @Test
@@ -52,7 +61,8 @@ class ComparisonReportTest {
             obs("case", DocumentationVariant.WITH_DOCS, 1, CaseStatus.PASSED, 1.0)));
         assertThat(report.blocked()).isTrue();
         assertThat(report.cases().get(0).controlStatus()).isEqualTo(CaseStatus.DUPLICATE);
-        assertThat(report.cases().get(0).reason()).contains("without_docs duplicate");
+        assertThat(report.blockedPairs().get(0).reasons()).anySatisfy(reason ->
+            assertThat(reason).contains("without_docs duplicate"));
     }
 
     @Test
@@ -61,13 +71,15 @@ class ComparisonReportTest {
             obs("case", DocumentationVariant.WITHOUT_DOCS, 1, CaseStatus.SKIPPED, null),
             obs("case", DocumentationVariant.WITH_DOCS, 1, CaseStatus.PASSED, 1.0)));
         assertThat(skipped.blocked()).isTrue();
-        assertThat(skipped.cases().get(0).reason()).contains("skipped");
+        assertThat(skipped.blockedPairs().get(0).reasons()).anySatisfy(reason ->
+            assertThat(reason).contains("skipped"));
 
         var errored = ComparisonReport.summarize(List.of(
             obs("case", DocumentationVariant.WITHOUT_DOCS, 1, CaseStatus.ERRORED, null),
             obs("case", DocumentationVariant.WITH_DOCS, 1, CaseStatus.ERRORED, null)));
         assertThat(errored.blocked()).isTrue();
-        assertThat(errored.cases().get(0).reason()).contains("errored");
+        assertThat(errored.blockedPairs().get(0).reasons()).anySatisfy(reason ->
+            assertThat(reason).contains("errored"));
     }
 
     @Test
@@ -119,7 +131,9 @@ class ComparisonReportTest {
         assertThat(report.cases().get(0).controlStatus()).isEqualTo(CaseStatus.MISSING);
         assertThat(report.cases().get(0).treatmentStatus()).isEqualTo(CaseStatus.MISSING);
         assertThat(report.blocked()).isTrue();
-        assertThat(report.operationalTotals()).containsEntry(CaseStatus.MISSING, 2L);
+        assertThat(report.statusCounts()).containsEntry(CaseStatus.MISSING, 2L);
+        assertThat(report.comparisons().get(0).eligiblePairs()).isZero();
+        assertThat(report.comparisons().get(0).totalPairs()).isEqualTo(1);
     }
 
     @Test
@@ -136,8 +150,9 @@ class ComparisonReportTest {
         var report = ComparisonReport.summarize(List.of(
             obs("case", DocumentationVariant.WITHOUT_DOCS, 1, CaseStatus.PASSED, 1.0)));
         var text = ComparisonReportText.render(report);
-        assertThat(text).contains("eval comparison: blocked")
-            .contains("headline pass rate and lift withheld")
+        assertThat(text)
+            .contains("withheld because pairs are blocked")
+            .contains("Blocked pairs")
             .contains("with_docs missing");
     }
 

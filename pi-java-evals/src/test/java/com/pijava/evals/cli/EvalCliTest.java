@@ -39,7 +39,10 @@ class EvalCliTest {
         assertThat(layout.reportJson()).exists();
         assertThat(layout.reportText()).exists();
         assertThat(Files.readString(layout.reportText(), StandardCharsets.UTF_8))
-            .contains("eval comparison: ok");
+            .contains("Documentation Eval Comparisons")
+            .contains("Pairs  1/1 eligible")
+            .contains("Pass rate  +0.0 pp")
+            .contains("Operational totals");
         assertThat(Files.readString(layout.expectedRuns(), StandardCharsets.UTF_8))
             .contains("with_docs").contains("without_docs");
     }
@@ -59,7 +62,9 @@ class EvalCliTest {
         assertThat(code).isEqualTo(1);
         assertThat(ObservationJson.read(layout.observations())).hasSize(2);
         assertThat(Files.readString(layout.reportText(), StandardCharsets.UTF_8))
-            .contains("eval comparison: blocked");
+            .contains("Pass rate  withheld because pairs are blocked")
+            .contains("Blocked pairs")
+            .contains("with_docs errored");
     }
 
     @Test
