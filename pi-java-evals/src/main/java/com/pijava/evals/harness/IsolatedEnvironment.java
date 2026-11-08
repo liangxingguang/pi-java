@@ -17,6 +17,13 @@ import java.util.stream.Stream;
  */
 public final class IsolatedEnvironment implements AutoCloseable {
 
+    /**
+     * agent 目录覆盖属性（{@code FileSettingsStorage#AGENT_DIR_PROPERTY}）。
+     * 复述常量值以免 harness 直接依赖 coding-agent 的内部类路径。
+     */
+    static final String AGENT_DIR_PROPERTY =
+        com.pijava.coding.agent.core.FileSettingsStorage.AGENT_DIR_PROPERTY;
+
     /** 单许可信号量贯穿环境生命周期；{@link #close()} 释放。 */
     private static final Semaphore LOCK = new Semaphore(1);
 
@@ -26,16 +33,19 @@ public final class IsolatedEnvironment implements AutoCloseable {
     private final Path sessionDir;
     private final String previousUserHome;
     private final String previousUserDir;
+    private final String previousAgentDir;
     private boolean closed;
 
     private IsolatedEnvironment(Path root, Path home, Path workspace, Path sessionDir,
-                                String previousUserHome, String previousUserDir) {
+                                String previousUserHome, String previousUserDir,
+                                String previousAgentDir) {
         this.root = root;
         this.home = home;
         this.workspace = workspace;
         this.sessionDir = sessionDir;
         this.previousUserHome = previousUserHome;
         this.previousUserDir = previousUserDir;
+        this.previousAgentDir = previousAgentDir;
     }
 
     /**
@@ -48,19 +58,22 @@ public final class IsolatedEnvironment implements AutoCloseable {
         LOCK.acquireUninterruptibly();
         var previousHome = System.getProperty("user.home");
         var previousDir = System.getProperty("user.dir");
+        var previousAgentDir = System.getProperty(AGENT_DIR_PROPERTY);
         Path root = null;
         try {
             root = Files.createTempDirectory("pi-java-eval-");
             var home = Files.createDirectories(root.resolve("home"));
             var workspace = Files.createDirectories(root.resolve("workspace"));
             var sessions = Files.createDirectories(root.resolve("sessions"));
-            Files.createDirectories(home.resolve(".pi").resolve("agent"));
+            var agentDir = Files.createDirectories(home.resolve(".pi-java").resolve("agent"));
             System.setProperty("user.home", home.toString());
             System.setProperty("user.dir", workspace.toString());
+            // L6 W4（docs/26 §5.2）：本仓实际读 ~/.pi-java/agent，靠属性注入指到隔离根。
+            System.setProperty(AGENT_DIR_PROPERTY, agentDir.toString());
             return new IsolatedEnvironment(root, home, workspace, sessions,
-                previousHome, previousDir);
+                previousHome, previousDir, previousAgentDir);
         } catch (IOException | RuntimeException e) {
-            restore(previousHome, previousDir);
+            restore(previousHome, previousDir, previousAgentDir);
             if (root != null) {
                 deleteTree(root);
             }
@@ -79,9 +92,9 @@ public final class IsolatedEnvironment implements AutoCloseable {
         return home;
     }
 
-    /** @return {@code home/.pi/agent}（pi {@code getAgentDir} 对位） */
+    /** @return {@code home/.pi-java/agent}（本仓 agent 目录；pi 侧是 {@code home/.pi/agent}） */
     public Path agentDir() {
-        return home.resolve(".pi").resolve("agent");
+        return home.resolve(".pi-java").resolve("agent");
     }
 
     /** @return 隔离 workspace（也是 {@code user.dir}） */
@@ -101,7 +114,7 @@ public final class IsolatedEnvironment implements AutoCloseable {
         }
         closed = true;
         try {
-            restore(previousUserHome, previousUserDir);
+            restore(previousUserHome, previousUserDir, previousAgentDir);
         } finally {
             try {
                 deleteTree(root);
@@ -111,7 +124,7 @@ public final class IsolatedEnvironment implements AutoCloseable {
         }
     }
 
-    private static void restore(String home, String dir) {
+    private static void restore(String home, String dir, String agentDir) {
         if (home == null) {
             System.clearProperty("user.home");
         } else {
@@ -121,6 +134,11 @@ public final class IsolatedEnvironment implements AutoCloseable {
             System.clearProperty("user.dir");
         } else {
             System.setProperty("user.dir", dir);
+        }
+        if (agentDir == null) {
+            System.clearProperty(AGENT_DIR_PROPERTY);
+        } else {
+            System.setProperty(AGENT_DIR_PROPERTY, agentDir);
         }
     }
 

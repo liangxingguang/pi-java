@@ -27,7 +27,10 @@ class IsolatedEnvironmentTest {
             assertThat(environment.workspace()).isDirectory();
             assertThat(environment.sessionDir()).isDirectory();
             assertThat(environment.agentDir()).isDirectory()
-                .isEqualTo(environment.home().resolve(".pi").resolve("agent"));
+                .isEqualTo(environment.home().resolve(".pi-java").resolve("agent"));
+            // L6 W4：agent 目录经属性覆盖指向隔离根，本仓读取面与种入面同源
+            assertThat(System.getProperty(IsolatedEnvironment.AGENT_DIR_PROPERTY))
+                .isEqualTo(environment.agentDir().toString());
         }
         assertThat(System.getProperty("user.home")).isEqualTo(previousHome);
         assertThat(System.getProperty("user.dir")).isEqualTo(previousDir);
@@ -38,9 +41,11 @@ class IsolatedEnvironmentTest {
     void restoresClearedPropertiesAsAbsent() throws Exception {
         var previousHome = System.getProperty("user.home");
         var previousDir = System.getProperty("user.dir");
+        var previousAgentDir = System.getProperty(IsolatedEnvironment.AGENT_DIR_PROPERTY);
         try {
             System.clearProperty("user.home");
             System.clearProperty("user.dir");
+            System.clearProperty(IsolatedEnvironment.AGENT_DIR_PROPERTY);
             try (var environment = IsolatedEnvironment.open()) {
                 assertThat(environment.home()).isDirectory();
                 assertThat(System.getProperty("user.home"))
@@ -48,9 +53,11 @@ class IsolatedEnvironmentTest {
             }
             assertThat(System.getProperty("user.home")).isNull();
             assertThat(System.getProperty("user.dir")).isNull();
+            assertThat(System.getProperty(IsolatedEnvironment.AGENT_DIR_PROPERTY)).isNull();
         } finally {
             restoreProperty("user.home", previousHome);
             restoreProperty("user.dir", previousDir);
+            restoreProperty(IsolatedEnvironment.AGENT_DIR_PROPERTY, previousAgentDir);
         }
     }
 

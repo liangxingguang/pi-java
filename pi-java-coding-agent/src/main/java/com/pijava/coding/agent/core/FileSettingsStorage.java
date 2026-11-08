@@ -44,8 +44,23 @@ public final class FileSettingsStorage implements SettingsStorage {
         this.projectPath = projectDir.resolve(".pi-java").resolve("settings.json");
     }
 
+    /**
+     * agent 目录的可注入属性（L6 W4，docs/26 §5.2 裁决 (b)）。
+     *
+     * <p>评测 harness 需要把 agent 目录指到隔离临时根，但 {@code System.getenv} 不可写，
+     * 而改环境变量会把整机进程拖进串行。故在环境变量之后加一层属性覆盖：属性存在
+     * 即优先，缺省行为不变。pi 用 {@code PI_CODING_AGENT_DIR} 环境变量，
+     * 这是 Java 独有的第三条来源（登记 D231）。</p>
+     */
+    public static final String AGENT_DIR_PROPERTY = "pi.java.agentDir";
+
     /** 全局 agent 配置根（skills/extensions/sessions 均按此定位）。 */
     public static Path defaultAgentDir() {
+        // 属性覆盖优先（仅评测/in-proc 夹具设置；生产不设）。
+        var propertyDir = System.getProperty(AGENT_DIR_PROPERTY);
+        if (propertyDir != null && !propertyDir.isBlank()) {
+            return Path.of(propertyDir);
+        }
         // 对齐 pi 的构造规则 ${APP_NAME.toUpperCase()}_CODING_AGENT_DIR（config.ts:495）。
         var envDir = System.getenv("PI_JAVA_CODING_AGENT_DIR");
         if (envDir != null && !envDir.isBlank()) {
