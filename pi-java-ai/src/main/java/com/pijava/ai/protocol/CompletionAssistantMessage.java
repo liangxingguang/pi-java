@@ -60,7 +60,9 @@ final class CompletionAssistantMessage {
             if (block instanceof ContentBlock.TextContent tc) {
                 // pi :1295 —— assistant 文本**逐块**净化后再 join("")（不是拼完再净化：
                 // 跨块边界的孤高+孤低在 pi 会被各自删除，拼完再净化则会成对复活）。
-                text.append(SanitizeUnicode.surrogates(tc.text()));
+                // DsmlToolCallStrip：DeepSeek 系端点偶发模板回显，回传前裁掉防级联
+                //（B152 先例窄差；DsmlToolCallStrip javadoc 有实测背景）。
+                text.append(DsmlToolCallStrip.strip(SanitizeUnicode.surrogates(tc.text())));
             } else if (block instanceof ContentBlock.ThinkingContent thinking) {
                 // pi :1289 —— 纯空白块不算推理：既不进连接，也不参与签名的选取。
                 if (thinking.text().trim().isEmpty()) {
@@ -105,7 +107,8 @@ final class CompletionAssistantMessage {
             parts.add(textPart(String.join("\n\n", reasoning)));
             for (var block : assistant.content()) {
                 if (block instanceof ContentBlock.TextContent tc) {
-                    parts.add(textPart(SanitizeUnicode.surrogates(tc.text())));
+                    parts.add(textPart(DsmlToolCallStrip.strip(
+                        SanitizeUnicode.surrogates(tc.text()))));
                 }
             }
             ab.contentOfArrayOfContentParts(parts);
