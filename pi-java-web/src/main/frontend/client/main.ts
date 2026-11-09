@@ -343,6 +343,13 @@ function handleAgentEvent(event: any) {
         console.log("[message_end] user echo ->", event.message.content);
         messages = [...messages, event.message];
       }
+      // assistant 的 message_end 即入稳定列表：多 turn run 在 turn 间隙
+      //（工具执行、下一轮 thinking）容器已清、agent_end 尚未到，不追加则
+      // 已生成文本整段消失（真空期）。agent_end 随后整表替换为权威转录，
+      // 不会重复；toolResult 仍归 turn_end（按 toolCallId 判重）追加。
+      if (event.message && event.message.role === "assistant") {
+        messages = [...messages, event.message];
+      }
       streamingMessage = null;
       updateStreamingContainer(null, true);
       renderApp();
