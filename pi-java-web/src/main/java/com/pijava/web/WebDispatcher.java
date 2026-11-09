@@ -28,8 +28,10 @@ import com.pijava.web.WebProtocol.WebClientMessage;
 import com.pijava.web.WebProtocol.WebServerMessage;
 
 /**
- * WebSocket 连接 → {@link AgentSession} 分发（Phase 7 设计 §3）。每连接单活跃会话；
- * {@code newSession} / {@code loadSession} 切换当前会话并重建事件订阅。
+ * WebSocket 连接 → {@link AgentSession} 分发（Phase 7 设计 §3）。会话由
+ * {@link WebSessionState} 服务端级共享（批 31：单一会话实例，多客户端视图；
+ * 每连接各建一份会在并发追加时分叉链）；本类持当前视图，{@code newSession} /
+ * {@code loadSession} 经 state 换会话并广播给全部在线 dispatcher。
  */
 final class WebDispatcher {
 
@@ -39,19 +41,21 @@ final class WebDispatcher {
     private final AgentEventTranslator translator;
     private static final ObjectMapper JSON = new ObjectMapper();
 
+    private final WebSessionState state;
     private final FileBrowserService files;
     private final GitService git = new GitService();
-    private AgentSession session;
+    private volatile AgentSession session;
     private AutoCloseable eventSubscription;
     private final WebSessionCommands commands;
 
-    WebDispatcher(AgentSession session, Args args, Consumer<WebServerMessage> send) {
+    WebDispatcher(WebSessionState state, AgentSession session, Args args,
+                  Consumer<WebServerMessage> send) {
+        this.state = state;
         this.session = session;
         this.send = send;
         // 批 2：agent_end 帧的 messages 由全量转录源供（会话面载荷自 #52 起是本 pass
-        // 新增）。lambda 迟读字段 —— newSession/loadSession 会换 session 实例，
-        // 方法引用会把旧实例钉死。
-        this.translator = new AgentEventTranslator(() -> this.session.accumulatedMessages());
+        // 新增）。lambda 读共享权威源 —— 换会话（swap）后自动跟随新实例。
+        this.translator = new AgentEventTranslator(() -> state.session().accumulatedMessages());
         this.files = new FileBrowserService(Path.of(System.getProperty("user.dir")));
         this.commands = new WebSessionCommands(this, args, send, translator);
     }
@@ -59,11 +63,19 @@ final class WebDispatcher {
     // ── WebSessionCommands 钩子（包私有）─────────────────────────────────
 
     AgentSession session() {
-        return session;
+        return state.session();
     }
 
-    void session(AgentSession newSession) {
-        this.session = newSession;
+    WebSessionState state() {
+        return state;
+    }
+
+    /** swap/rebroadcast 广播臂：换视图、重订阅、向本客户端回推当前状态。 */
+    void onSessionSwapped(AgentSession next) {
+        this.session = next;
+        commands.resubscribe();
+        send.accept(new WebServerMessage.SessionChanged(next.sessionId()));
+        send.accept(stateSync());
     }
 
     AutoCloseable eventSubscription() {
@@ -139,14 +151,9 @@ final class WebDispatcher {
         }
     }
 
-    /** 关闭当前事件订阅与会话。 */
+    /** 关闭本连接的事件订阅（共享会话归服务端所有，不随客户端断开关闭）。 */
     void close() {
         commands.closeSubscription();
-        try {
-            session.close();
-        } catch (Exception ignored) {
-            // 忽略关闭失败
-        }
     }
 
     // ── 命令实现 ─────────────────────────────────────────────────────────

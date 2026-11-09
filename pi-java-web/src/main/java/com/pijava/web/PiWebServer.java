@@ -128,6 +128,11 @@ public final class PiWebServer {
         var wsReady = new CountDownLatch(1);
         var startupFailure = new AtomicReference<Throwable>();
 
+        // 批 31（会话单写者收口）：服务端持有单一共享会话，多客户端都是它的视图。
+        // 此前每连接各建一个 AgentSession、各自 resume 同一份会话文件，并发客户端
+        // （第二个标签页 / 重载 / 探针）会写出分叉链，resume 直接拒读。
+        var state = new WebSessionState(args);
+
         var ws = new WebSocketServer(new InetSocketAddress(wsPort)) {
             @Override
             public void onOpen(WebSocket conn, ClientHandshake handshake) {
@@ -141,7 +146,7 @@ public final class PiWebServer {
                 LOG.info("web client connected: {}", conn.getRemoteSocketAddress());
                 AgentSession session;
                 try {
-                    session = AgentSession.createWeb(args);
+                    session = state.ensure();
                 } catch (Exception e) {
                     LOG.error("Failed to create agent session for web client", e);
                     sendJson(conn, new WebServerMessage.Error(
@@ -152,7 +157,8 @@ public final class PiWebServer {
                 for (var diagnostic : session.startupDiagnostics()) {
                     System.err.println(diagnostic.type() + ": " + diagnostic.message());
                 }
-                var dispatcher = new WebDispatcher(session, args, msg -> sendJson(conn, msg));
+                var dispatcher = new WebDispatcher(state, session, args, msg -> sendJson(conn, msg));
+                state.attach(dispatcher);
                 dispatcher.start();
                 conn.setAttachment(dispatcher);
             }
@@ -176,6 +182,7 @@ public final class PiWebServer {
             public void onClose(WebSocket conn, int code, String reason, boolean remote) {
                 var dispatcher = (WebDispatcher) conn.getAttachment();
                 if (dispatcher != null) {
+                    state.detach(dispatcher);
                     dispatcher.close();
                 }
                 LOG.info("web client disconnected: {}", conn.getRemoteSocketAddress());

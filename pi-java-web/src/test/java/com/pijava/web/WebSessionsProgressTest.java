@@ -50,7 +50,8 @@ class WebSessionsProgressTest {
         session.session().appendMessage(new Message.UserMessage(List.of(
             new ContentBlock.TextContent("web session"))));
         sent = new LinkedBlockingQueue<>();
-        dispatcher = new WebDispatcher(session, session.sessionArgs(), sent::add);
+        dispatcher = new WebDispatcher(new WebSessionState(session.sessionArgs(), session),
+            session, session.sessionArgs(), sent::add);
     }
 
     @AfterEach

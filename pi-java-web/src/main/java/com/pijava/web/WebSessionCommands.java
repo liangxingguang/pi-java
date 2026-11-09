@@ -33,19 +33,17 @@ final class WebSessionCommands {
     // ── 会话生命周期 ─────────────────────────────────────────────────────
 
     void newSession() {
-        closeSubscription();
         var previous = base.session();
         var previousId = previous.sessionId();
         // docs/15（B250）：替换式新建＋替换式关闭（shutdown{new, 新 id}）。
-        base.session(AgentSession.createReplacing(args, previousId));
+        var next = AgentSession.createReplacing(args, previousId);
         try {
-            previous.closeForReplacement("new", base.session().sessionId());
+            previous.closeForReplacement("new", next.sessionId());
         } catch (Exception ignored) {
             // 忽略旧会话关闭失败
         }
-        resubscribe();
-        send.accept(new WebServerMessage.SessionChanged(base.session().sessionId()));
-        send.accept(base.stateSync());
+        // 批 31：经共享 state 换会话——所有在线 dispatcher 同步换订阅并回推。
+        base.state().swap(next);
     }
 
     void loadSession(String sessionPath) {
@@ -63,10 +61,8 @@ final class WebSessionCommands {
             send.accept(new WebServerMessage.Error("Session switch cancelled by extension"));
             return;
         }
-        closeSubscription();
-        resubscribe();
-        send.accept(new WebServerMessage.SessionChanged(base.session().sessionId()));
-        send.accept(base.stateSync());
+        // 批 31：switchTo 是原地切换（会话对象不变）——全员重订阅＋回推。
+        base.state().rebroadcast();
     }
 
     void resubscribe() {
@@ -124,11 +120,8 @@ final class WebSessionCommands {
             send.accept(new WebServerMessage.Error("Fork cancelled by extension"));
             return;
         }
-        closeSubscription();
-        base.session(forked.get());
-        resubscribe();
-        send.accept(new WebServerMessage.SessionChanged(base.session().sessionId()));
-        send.accept(base.stateSync());
+        // 批 31：fork 内部关闭旧会话；新会话经共享 state 广播给全部 dispatcher。
+        base.state().swap(forked.get());
     }
 
     /** clone：整会话拷贝（无 leaf 时用当前会话名 clone）。 */
@@ -142,11 +135,8 @@ final class WebSessionCommands {
             send.accept(new WebServerMessage.Error("Clone cancelled by extension"));
             return;
         }
-        closeSubscription();
-        base.session(forked.get());
-        resubscribe();
-        send.accept(new WebServerMessage.SessionChanged(base.session().sessionId()));
-        send.accept(base.stateSync());
+        // 批 31：同 fork——新会话经共享 state 广播。
+        base.state().swap(forked.get());
     }
 
     void exportHtml() {
