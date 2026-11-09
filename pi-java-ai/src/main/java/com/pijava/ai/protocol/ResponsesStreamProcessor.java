@@ -94,7 +94,10 @@ final class ResponsesStreamProcessor {
             publisher.submit(builder.emitStart());
             // 获取在车道 try 内：获取期 HTTP 错误也要落本车道 catch（见方法 javadoc）。
             try (var stream = streamSupplier.get()) {
-                for (var event : stream.stream().toList()) {
+                // ⚠️ 必须惰性拉取（增强 for 包 iterator 的形状）：`.toList()` 会先排空
+                // 整条 SSE 流再迭代，所有 submit 堆到流末一次性爆发 ⇒ web/TUI 全程无
+                // 增量（ResponsesStreamProcessorTimingTest 钉住此语义）。
+                for (var event : (Iterable<ResponseStreamEvent>) stream.stream()::iterator) {
                     // docs/17（pi openai-responses-shared.ts:600）：原始事件、归一化前。
                     if (streamEventHook != null) {
                         streamEventHook.onEvent(event, model);

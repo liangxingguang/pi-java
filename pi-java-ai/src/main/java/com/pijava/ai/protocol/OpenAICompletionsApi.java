@@ -233,8 +233,8 @@ public class OpenAICompletionsApi extends AbstractChatApi {
             }
             var streamResponse = rawResponse.parse();
             try (streamResponse) {
-
-                for (var chunk : streamResponse.stream().toList()) {
+                // ⚠️ 惰性拉取：.toList() 会先排空 SSE 流 ⇒ submit 全堆到流末（时序测试钉住）。
+                for (var chunk : (Iterable<ChatCompletionChunk>) streamResponse.stream()::iterator) {
                     // docs/17（pi :559）：原始 chunk、归一化前。
                     if (streamEventHook != null) {
                         streamEventHook.onEvent(chunk, request.model());
