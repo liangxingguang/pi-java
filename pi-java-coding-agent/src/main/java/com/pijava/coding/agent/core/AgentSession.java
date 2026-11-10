@@ -459,12 +459,13 @@ public final class AgentSession implements AutoCloseable {
     void name(String name) { this.name = name; }
     DefaultExtensionContext extensionContext() { return extensions.extensionContext(); }
     ExtensionManager extensionManager() { return extensions.extensionManager(); }
-
+    // docs/50 B284c/B284d：补全缝与新会话（实现在 ExtensionHostCompletion）
+    private final ExtensionHostCompletion extensionHost = new ExtensionHostCompletion(this);
+    void modelCompletion(ModelCompletion c) { extensionHost.modelCompletion(c); }
+    public Message.AssistantMessage completeModel(ModelId<?> m, com.pijava.agent.harness.Context c, com.pijava.agent.harness.StreamOptions o, java.util.function.BooleanSupplier a) { return extensionHost.completeModel(m, c, o, a); }
+    public com.pijava.coding.agent.extension.ExtensionNewSessionResult newSession(com.pijava.coding.agent.extension.ExtensionNewSessionOptions o) { return extensionHost.newSession(o); }
     /** L5 W4：已加载扩展的 sourceInfo（扩展 changelog 展示用）。 */
-    public List<com.pijava.coding.agent.core.source.SourceInfo> extensionSourceInfos() {
-        return extensions.extensionManager() == null
-            ? List.of() : extensions.extensionManager().sourceInfos();
-    }
+    public List<com.pijava.coding.agent.core.source.SourceInfo> extensionSourceInfos() { return extensions.extensionManager() == null ? List.of() : extensions.extensionManager().sourceInfos(); }
     java.util.Set<String> extensionProviderNames() { return extensions.extensionProviderNames(); }
     List<Args.ArgDiagnostic> startupDiagnosticsInternal() { return extensions.startupDiagnosticsInternal(); }
     SessionSetup.ResolvedAssembly resolveAssembly() { return extensions.resolveAssembly(); }
@@ -479,9 +480,7 @@ public final class AgentSession implements AutoCloseable {
     SessionDataViews views() { return views; }
     void setScopedModels(List<ScopedModel> models) { modelTools.setScopedModels(models); }
     ImagePolicy currentImagePolicy() { return modelTools.currentImagePolicy(); }
-    String thinkingLevelForModelSwitch(ModelId<?> target, String explicitLevel) {
-        return extensions.thinkingLevelForModelSwitch(target, explicitLevel);
-    }
+    String thinkingLevelForModelSwitch(ModelId<?> target, String explicitLevel) { return extensions.thinkingLevelForModelSwitch(target, explicitLevel); }
     void setThemePathsForReload(List<String> paths) { extensions.setThemePathsForReload(paths); }
     void fireReloaded() { extensions.fireReloaded(); }
     void reloadThemes() { extensions.reloadThemes(); }
@@ -495,5 +494,6 @@ public final class AgentSession implements AutoCloseable {
     void beginRetrySleep() { messaging.beginRetrySleep(); }
     void endRetrySleep() { messaging.endRetrySleep(); }
     void clearNestedToolCalls() { routing.clearNestedToolCalls(); }
-    String currentLeafId() { return views.currentLeafId(); }
+    /** 委托 {@link SessionDataViews}（B285：只读视图无持久面时的叶兜底）。 */
+    public String currentLeafId() { return views.currentLeafId(); }
 }

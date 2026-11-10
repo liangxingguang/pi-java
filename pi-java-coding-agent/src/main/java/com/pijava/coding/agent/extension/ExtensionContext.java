@@ -396,10 +396,7 @@ public interface ExtensionContext {
      * {@link IllegalStateException}（同 {@link #cwd()} 纪律）。
      */
     default ExtensionSessionView sessionManager() {
-        return () -> {
-            throw new IllegalStateException(
-                "tool control requires a bound session; none is available yet");
-        };
+        return ExtensionSessionView.unbound();
     }
 
     /**
@@ -429,5 +426,61 @@ public interface ExtensionContext {
             new com.pijava.ai.message.Message.ToolResultMessage(
                 callerToolCallId + "/0", name, result.content(), true),
             result, true);
+    }
+
+    // ── docs/50 B284：ExtensionContext 10 成员（pi types.ts 扩展面）──
+
+    /** pi {@code ExtensionContext.model}（types.ts:1723）——当前模型只读投影。 */
+    default java.util.Optional<ExtensionModelInfo> getModel() {
+        throw unbound("getModel");
+    }
+
+    /** pi {@code ExtensionContext.modelRegistry}——模型查找/补全门面（虚表优先）。 */
+    default ExtensionModelRegistry modelRegistry() {
+        throw unbound("modelRegistry");
+    }
+
+    /** pi {@code ContextUsage}——不可得 ⇒ empty；压缩后无新用量 ⇒ 字段 null。 */
+    default java.util.Optional<ExtensionContextUsage> getContextUsage() {
+        throw unbound("getContextUsage");
+    }
+
+    /** pi {@code compact() }——同步方言，回调在返回前触发。 */
+    default void compact(ExtensionCompactOptions options) {
+        throw unbound("compact");
+    }
+
+    /** pi {@code reload()}——重载设置/上下文文件并重建系统提示。 */
+    default void reload() {
+        throw unbound("reload");
+    }
+
+    /** pi {@code shutdown()}——关闭宿主会话（reason="quit"）。 */
+    default void shutdown() {
+        throw unbound("shutdown");
+    }
+
+    /** pi {@code isIdle()}——当前没有进行中的 agent run。 */
+    default boolean isIdle() {
+        throw unbound("isIdle");
+    }
+
+    /** pi {@code getSystemPrompt()}——当前系统提示；缺失时 pi 视作空串。 */
+    default String getSystemPrompt() {
+        throw unbound("getSystemPrompt");
+    }
+
+    /** pi {@code isProjectTrusted()}——项目信任门。 */
+    default boolean isProjectTrusted() {
+        throw unbound("isProjectTrusted");
+    }
+
+    /** pi {@code newSession() }——替换到新会话；可在 before-switch 中被取消。 */
+    default ExtensionNewSessionResult newSession(ExtensionNewSessionOptions options) {
+        throw unbound("newSession");
+    }
+
+    private static IllegalStateException unbound(String member) {
+        return new IllegalStateException("extension context not bound: " + member);
     }
 }

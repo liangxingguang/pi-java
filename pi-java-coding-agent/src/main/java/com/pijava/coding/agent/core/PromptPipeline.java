@@ -96,6 +96,11 @@ final class PromptPipeline {
         }
     }
 
+    /** 当前 {@code SlashContext}（{@code newSession} 的接管回调源）。 */
+    com.pijava.coding.agent.core.slash.SlashContext currentSlashContext() {
+        return slashContextSupplier.get();
+    }
+
     /** Run a prompt, forwarding events/entries to observers (one virtual thread). */
     SessionResult processPrompt(
             String prompt,

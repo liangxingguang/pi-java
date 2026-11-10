@@ -373,90 +373,12 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
         var options = new StreamOptions(
             maxTokens, OptionalDouble.empty(), reasoning,
             Optional.of(CacheRetention.NONE));
-        var toolCalls = new ArrayList<ContentBlock>();
-        StringBuilder text = new StringBuilder();
-        Usage[] usage = {null};
-        var iter = streamFn.stream(model.get(),
-            new Context(systemPrompt, List.of(user), List.of()), options);
-        Message.AssistantMessage result;
-        try {
-            result = null;
-            while (iter.hasNext()) {
-                var event = iter.next();
-                if (event instanceof StreamEvent.TextDelta td) {
-                    text.append(td.delta());
-                } else if (event instanceof StreamEvent.ToolCallEnd tc) {
-                    // 批 30（ai#8）：namespace 随块携带（pi frame 终局写回对位）。
-                    toolCalls.add(new ContentBlock.ToolUseContent(tc.id(), tc.name(),
-                        tc.arguments(), null, tc.namespace(), tc.argumentsError()));
-                } else if (event instanceof StreamEvent.UsageInfo ui) {
-                    usage[0] = ui.usage() != null ? ui.usage() : synthesizeUsage(ui);
-                } else if (event instanceof StreamEvent.StreamDone done) {
-                    result = terminal(done.partial(), done.reason(), text, toolCalls, usage[0], null);
-                    break;
-                } else if (event instanceof StreamEvent.StreamError err) {
-                    result = terminal(err.partial(), err.reason(), text, toolCalls, usage[0],
-                        StreamEvent.StreamError.textOf(err));
-                    break;
-                }
-            }
-            if (result == null) {
-                // 流被截断、终局事件缺席 —— provider 方言的 aborted（见上注释）。
-                result = terminal(null, StopReason.ABORTED, text, toolCalls, usage[0], null);
-            }
-        } finally {
-            iter.close();
-        }
-        return result;
-    }
-
-    /**
-     * 终局合成：partial 优先（全字段投影，pi 的 partial ≙ 终局同形状），但 partial
-     * 上缺位的 usage/errorMessage 用收集值补上；无 partial（或 partial 连
-     * stopReason 都没有 —— 那是「流未成」的空快照，采信它会把 error 轮伪装成
-     * 无终局的成功）⇒ 用收集到的 text + toolCall 块按 reason 合成（空文本合法，
-     * 不塞占位块）。
-     *
-     * <p>C 批次（{@code 原 docs/55}）：{@code errorMessage} 参数现为**兜底** —— 文本
-     * 的正源是消息上的 {@code partial.errorMessage()}（生产者落定，见
-     * {@code StreamError.settle}），只在消息上没有时才用这里传进来的值。</p>
-     */
-    private static Message.AssistantMessage terminal(
-            com.pijava.ai.message.AssistantMessage partial, StopReason reason,
-            StringBuilder text, List<ContentBlock> toolCalls, Usage usage, String errorMessage) {
-        if (partial != null && partial.stopReason() != null) {
-            var projected = Message.AssistantMessage.fromPartial(partial);
-            // ⚠️ 包⑨（原 docs/36 B41）：判据从 `projected.usage() == null` 挪到
-            // **`partial.usage() == null`**。原来那个 null 是「流里没报用量」的信号，
-            // 而 B41 让 `usageOf` 恒兜零（pi 的 AssistantMessage.usage 必填）⇒ 投影上
-            // 的 null 消失了、信号被消灭 ⇒ 摘要跨度的 token 计数会静默归零
-            // （夹具 HarnessCompactionSummarySpanTest 抓到的正是这条）。
-            // partial 才是「这一次流有没有报用量」的原件，从这里读同一语义。
-            boolean backfillUsage = usage != null && partial.usage() == null;
-            boolean backfillError = errorMessage != null && projected.errorMessage() == null;
-            if (backfillUsage || backfillError) {
-                projected = new Message.AssistantMessage(projected.content(),
-                    projected.stopReason(), projected.deferred(), projected.api(),
-                    projected.provider(), projected.model(), projected.responseModel(),
-                    projected.providerThinkingLevel(), projected.thinkingLevel(), projected.diagnostics(),
-                    backfillUsage ? usage : projected.usage(), projected.timestamp(),
-                    backfillError ? errorMessage : projected.errorMessage(), projected.rawStopReason(),
-                    projected.durationMs(), projected.responseId());
-            }
-            return projected;
-        }
-        var blocks = new ArrayList<ContentBlock>();
-        if (text.length() > 0) {
-            blocks.add(new ContentBlock.TextContent(text.toString()));
-        }
-        blocks.addAll(toolCalls);
-        return new Message.AssistantMessage(blocks, reason, null, null, null, null,
-            usage, null, errorMessage, null);
-    }
-
-    private static Usage synthesizeUsage(StreamEvent.UsageInfo ui) {
-        return new Usage(ui.inputTokens(), ui.outputTokens(), 0, 0, null, null,
-            ui.inputTokens() + ui.outputTokens(), Usage.Cost.zero());
+        // docs/50 §2.6：事件循环与终局合成统一委托 AssistantResponseCollector
+        // （扩展 modelRegistry.complete 走同一收集器；摘要路永不中止）。
+        return AssistantResponseCollector.collect(
+            streamFn.stream(model.get(), new Context(systemPrompt, List.of(user), List.of()),
+                options),
+            () -> false);
     }
 
     /**

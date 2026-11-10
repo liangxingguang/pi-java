@@ -8,6 +8,7 @@ import com.pijava.agent.session.SessionTree;
 import com.pijava.agent.skill.SkillManager;
 import com.pijava.agent.tool.ToolRegistry;
 import com.pijava.ai.provider.ProviderRegistry;
+import com.pijava.coding.agent.core.AgentSession;
 import com.pijava.coding.agent.core.SessionServices;
 import com.pijava.coding.agent.core.SettingsManager;
 import com.pijava.coding.agent.core.slash.CommandRegistry;
@@ -58,8 +59,9 @@ public final class DefaultExtensionContext implements ExtensionContext {
      * 惰性委托宿主会话（无宿主 ⇒ requireToolControl 同文抛错；--no-session 走
      * harness 转录兜底，F1 取证）。
      */
-    private final ExtensionSessionView sessionView =
-        () -> java.util.List.copyOf(requireToolControl().accumulatedEntries());
+    private final ExtensionSessionView sessionView = new DefaultExtensionSessionView(this);
+    /** docs/50 §2.2：模型门面（晚绑定到当前会话）。 */
+    private final ExtensionModelRegistry modelRegistry = new DefaultExtensionModelRegistry(this);
 
     /** @param services 会话服务（工具/命令/Provider/settings）
      *  @param skills   技能注册表（harness 的 skillManager）
@@ -235,31 +237,21 @@ public final class DefaultExtensionContext implements ExtensionContext {
     }
 
     @Override
-    public java.util.List<String> getActiveTools() {
-        return requireToolControl().getActiveToolNames();
-    }
+    public java.util.List<String> getActiveTools() { return requireToolControl().getActiveToolNames(); }
 
     @Override
-    public java.util.List<ExtensionToolInfo> getAllTools() {
-        return requireToolControl().getAllTools();
-    }
+    public java.util.List<ExtensionToolInfo> getAllTools() { return requireToolControl().getAllTools(); }
 
     @Override
-    public void setActiveTools(java.util.List<String> toolNames) {
-        requireToolControl().setActiveToolsByName(toolNames);
-    }
+    public void setActiveTools(java.util.List<String> toolNames) { requireToolControl().setActiveToolsByName(toolNames); }
 
-    /** 批 28（docs/40 T2）：pi {@code ExtensionContext.cwd}——宿主会话 cwd。 */
+    /** 批 28：pi {@code ExtensionContext.cwd}——宿主会话 cwd。 */
     @Override
-    public String cwd() {
-        return requireToolControl().cwd();
-    }
+    public String cwd() { return requireToolControl().cwd(); }
 
-    /** 批 28（docs/40 T2）：pi {@code ExtensionContext.sessionManager}——惰性只读视图。 */
+    /** 批 28：pi {@code ExtensionContext.sessionManager}——惰性只读视图。 */
     @Override
-    public ExtensionSessionView sessionManager() {
-        return sessionView;
-    }
+    public ExtensionSessionView sessionManager() { return sessionView; }
 
     /**
      * 批 27（B162/T4）：嵌套调用——路由到宿主会话（pi 的 executeToolFn 对位）；
@@ -269,21 +261,17 @@ public final class DefaultExtensionContext implements ExtensionContext {
     public com.pijava.agent.harness.PiLoop.ToolOutcome executeTool(
             String callerToolCallId, com.pijava.ai.AbortSignal signal, String name,
             Map<String, Object> args, java.util.function.Consumer<Object> onUpdate) {
-        var supplier = toolControl;
-        var session = supplier == null ? null : supplier.get();
+        var session = hostSessionOrNull();
         if (session == null) {
-            return ExtensionContext.super.executeTool(callerToolCallId, signal, name, args,
-                onUpdate);
+            return ExtensionContext.super.executeTool(callerToolCallId, signal, name, args, onUpdate);
         }
         return session.executeNestedToolCall(callerToolCallId, name, args,
             new com.pijava.coding.agent.core.NestedToolCallRunner.Options(
                 signal, onUpdate));
     }
-
     @Override
     public java.util.List<com.pijava.agent.tool.AgentTool<?, ?>> callableTools() {
-        var supplier = toolControl;
-        var session = supplier == null ? null : supplier.get();
+        var session = hostSessionOrNull();
         return session == null ? java.util.List.of() : session.callableTools();
     }
 
@@ -316,8 +304,7 @@ public final class DefaultExtensionContext implements ExtensionContext {
     }
 
     com.pijava.coding.agent.core.AgentSession requireToolControl() {
-        var supplier = toolControl;
-        var session = supplier == null ? null : supplier.get();
+        var session = hostSessionOrNull();
         if (session == null) {
             throw new IllegalStateException(
                 "tool control requires a bound session; none is available yet");
@@ -495,4 +482,19 @@ public final class DefaultExtensionContext implements ExtensionContext {
     public void invalidateChannels() {
         surface.invalidateChannels();
     }
+
+    // ── docs/50 B284：10 成员（实现簇在 ExtensionHostOperations）──
+    private final ExtensionHostOperations host = new ExtensionHostOperations(this);
+
+    AgentSession requireHost(String member) { return host.requireHost(member); }
+    @Override public java.util.Optional<ExtensionModelInfo> getModel() { return host.getModel(); }
+    @Override public ExtensionModelRegistry modelRegistry() { return modelRegistry; }
+    @Override public java.util.Optional<ExtensionContextUsage> getContextUsage() { return host.getContextUsage(); }
+    @Override public void compact(ExtensionCompactOptions o) { host.compact(o); }
+    @Override public void reload() { host.reload(); }
+    @Override public void shutdown() { host.shutdown(); }
+    @Override public boolean isIdle() { return host.isIdle(); }
+    @Override public String getSystemPrompt() { return host.getSystemPrompt(); }
+    @Override public boolean isProjectTrusted() { return host.isProjectTrusted(); }
+    @Override public ExtensionNewSessionResult newSession(ExtensionNewSessionOptions o) { return host.newSession(o); }
 }

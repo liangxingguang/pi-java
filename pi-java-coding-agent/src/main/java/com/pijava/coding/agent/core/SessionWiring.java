@@ -362,6 +362,9 @@ final class SessionWiring {
             .build());
         harnessRef.set(harness);
         var agentSession = new AgentSession(harness, services, args, name);
+        // docs/50 §2.5：扩展 modelRegistry.complete 的宿主补全缝（复用 recordingStreamFn）。
+        agentSession.modelCompletion((m, c, o, aborted) ->
+            com.pijava.agent.compaction.AssistantResponseCollector.collect(recordingStreamFn.stream(m, c, o), aborted));
         agentSession.extensions().providerBridge(providerBridge);
         // 批 13（T6/T8）：warmer 与 decide 桥随会话走（fork 经 wireSession 公共路径
         // 自动重装——pi 每会话新建 CacheWarmer 同），旧 warmer 随 closeWith cancel。

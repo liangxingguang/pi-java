@@ -171,6 +171,58 @@ final class PerExtensionContext implements ExtensionContext {
         return base.sessionManager();
     }
 
+    // ── docs/50 B284：10 成员透传 ──
+
+    @Override
+    public java.util.Optional<ExtensionModelInfo> getModel() {
+        return base.getModel();
+    }
+
+    @Override
+    public ExtensionModelRegistry modelRegistry() {
+        return base.modelRegistry();
+    }
+
+    @Override
+    public java.util.Optional<ExtensionContextUsage> getContextUsage() {
+        return base.getContextUsage();
+    }
+
+    @Override
+    public void compact(ExtensionCompactOptions options) {
+        base.compact(options);
+    }
+
+    @Override
+    public void reload() {
+        base.reload();
+    }
+
+    @Override
+    public void shutdown() {
+        base.shutdown();
+    }
+
+    @Override
+    public boolean isIdle() {
+        return base.isIdle();
+    }
+
+    @Override
+    public String getSystemPrompt() {
+        return base.getSystemPrompt();
+    }
+
+    @Override
+    public boolean isProjectTrusted() {
+        return base.isProjectTrusted();
+    }
+
+    @Override
+    public ExtensionNewSessionResult newSession(ExtensionNewSessionOptions options) {
+        return base.newSession(options);
+    }
+
     @Override
     public com.pijava.agent.harness.PiLoop.ToolOutcome executeTool(
             String callerToolCallId, com.pijava.ai.AbortSignal signal, String name,
