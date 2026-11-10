@@ -28,7 +28,7 @@
 | ├ CLI/TUI 交互 | `modes/interactive/*` 21,895 + `cli/*` 1,959 + `utils/*` 3,770 | 27,624 | ~2,800（`mode/` 450 + `modes/` 285 + `cli/` 607 + `subcommand/` 非 MCP 587 + `core/slash/` 747 + 顶层 126） | ~10.1% |
 | ├ **MCP 面（→ map/07）** | `extensions/mcp` 4,240 + `core/mcp-servers.ts` 346 + 新包 `packages/mcp` 3,244 | 7,830 | 13,808（**pi-java-mcp** 主源 10,853 ＋ 本模块 `extension/mcp` 1,762 ＋ `subcommand/Mcp*`·`BrowserLauncher` 1,193） | 见 map/07 |
 | ├ **codemode / tool-search / virtual-models / nested-tool-calls（R5 面外增量不进图，存量单元保留）** | `extensions/codemode` 1,360 + 新包 `packages/codemode` 2,597 + `extensions/tool-search` 265 + `core/virtual-models.ts` 238 + `core/nested-tool-calls.ts` 263 | 4,723 | **0** | **0%** |
-| └ **可执行验收规格 examples/** | `examples/`（105 个 `.ts`） | 16,033 | **0** | **0%** |
+| └ **可执行验收规格 examples/**（→ L8） | 新锚点 `examples/`（102 个 `.ts`，16,033 行；L8 分母 **88**＝102−8 外部运行时−1 R5−5 范围面主动） | 16,033 | **0** | **0%** |
 | 测试 | `test/` | 71,535 | 12,413 | 17.4% |
 | **（作废，R1）** `experimental/{micro,mini}/` | 已删除 | **0** | — | — |
 
@@ -468,7 +468,7 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 | E5-30 | 扩展注册 CLI flag | `:1664` + `args.ts:186` | ✅ `ExtensionFlagBinder`＋`--help` 段 | 1 | **对齐** | 批 16 T1c–T1e（args.ts:247-271 三态＋agent-session-services.ts:82-128 绑定＋args.ts:273-283 help 面对位） |
 | E5-31 | 扩展 UI 注入（TUI） | `types.ts:149-323` | ⚠️ `TuiExtensionUI`（13 方法：对话四件套＋custom＋notify/setStatus/setWidget/setFooter/setHeader/setEditorText/getEditorText）＋widget/footer/header/状态段注入层；余 15 成员 default＝pi noOp 语义、TUI 臂挂账（docs/28 §4） | **0（转出 L7）** | **转出** | **L5（2026-11-05，docs/25 §1.5）**：新锚点新增 `blocked`、对话框堆叠、`KeybindingHints`，全部是 TUI 渲染/交互面 ⇒ 按 docs/04 归属**转 L7**；API 侧的 `KeybindingHints` 另见 **D220**。批 17 后旧读数：存疑 / 权重 2 |
 | E5-32 | 扩展 UI 通道（RPC，9 method） | `rpc-types.ts:253-297` | ✅ `RpcExtensionUI` 九方法 typed 实现＋`RpcDispatcher` 注入（晚绑定修真——context 现读会话字段） | 1 | **对齐** | 批 17（docs/28 T3）：参数键平铺顶层（pi spread 逐字）＋signal/timeout 本地解除（裁决⑦）＋setWidget 工厂臂静默忽略（pi 同缺） |
-| E5-33 | 扩展示例库（可执行验收规格） | 旧锚点 `examples/`（105 个 `.ts`；新锚点待 L8 重清点） | `pi-java-examples` 已有 16 类主流示例与验收测试，见 docs/07 | **0（转出 L8）** | **转出** | **L5（2026-11-05，docs/25 §1.5）**：examples 验收规格归 **L8**，L5 不保留第二计分入口（避免同一工作计两次）；主流 examples 继续全做 Java 移植，Chord plugin 按 R5 排除。旧读数：缺失 / 权重 3 |
+| E5-33 | 扩展示例库（可执行验收规格） | 新锚点 `examples/`（102 个 `.ts`；L8 分母 88） | `pi-java-examples` 已移植 29 件（16 保留＋W1 5＋W2 8），见 docs/07 与 docs/27 | **0（转出 L8）** | **转出** | **L5（2026-11-05，docs/25 §1.5）**：examples 验收规格归 **L8**，L5 不保留第二计分入口（避免同一工作计两次）；主流 examples 继续全做 Java 移植，Chord plugin 按 R5 排除。**L8（docs/27）**：新分母 88＝102−8 外部运行时（D232）−1 R5−5 范围面主动（D237）；W0＋W1＋W2 已实施（29/88＝32.95%）。旧读数：缺失 / 权重 3 |
 | E5-34 | 扩展来源追踪（`SourceInfo`） | `types.ts:1543/2055/2098` | ✅ `ExtensionSourceInfos` 四规则＋注册即盖 sourceInfo 章 | 1 | **对齐** | **批 23（docs/34 T4）**：getDefaultSourceInfoForPath 逐字（builtin:/`<inline:`⇒temporary、`<agentDir>/extensions`⇒user、`<cwd>/.pi-java/extensions`⇒project、包源经元数据携带 origin=package）；`CommandRegistry` 登记目注册即盖章（loader.ts:317 对位） |
 | E5-35 | `on()` 返回退订函数 | `types.ts:1569-1636`（41 条 `() => void`） | ✅ `ExtensionContext.on(spec, handler)`（批 4，docs/14 §3.2）→ `AutoCloseable` 退订：按实例移除、空表删键（loader.ts:272-288 逐字语义） | 2 | **对齐** | — |
 
@@ -478,6 +478,9 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 > 批 23（2026-10-25，docs/34）：**5 行翻动 +5.5**——E5-23（+2.0）/E5-24/E5-25（+1.0×2）缺失→对齐（T1 扩展 MCP 三件，B218 销号）、E5-20 缺失→对齐（+1.0，T4 getCommands 三源序）、E5-34 存疑→对齐（+0.5，T4 `ExtensionSourceInfos` 四规则）。未加权计数逐行实算收平：批 17 两翻（E5-31 缺失→存疑、E5-32 存疑→对齐）当时未入汇总行（基数 11/21/3 滞后，实为 12/20/3），本批按行实算 17/16/2。
 > **批 26（2026-10-28，docs/37）：14 行翻动 +22.0**——E5-5/6/8/9/10/13/14/15/16/17/21/22/28 十三行缺失→对齐、E5-12 存疑→对齐（T1–T11 全落）；E5-26/27 裁决①挂账（收编 B162）；新窄差 D150–D159（docs/04 §4 批 26 段）；E5-31 维持存疑挂账、E5-33 维持 F 类。
 > **批 27（2026-10-28，docs/38）：2 行翻动 +3.0**——E5-26（+2.0）/E5-27（+1.0）缺失→对齐（B162 整域：tool-search＋virtual-models＋nested-tool-calls，B162 销号、D7 销号、D89/D91 收窄）；新窄差 D160–D171（docs/04 §4 批 27 段）；E5-31 维持存疑挂账、E5-33 维持 F 类。
+> **L8 前置包（2026-11-09，docs/50 B284/B285）**：本表 35 行不增不减（下表按 pi `ExtensionAPI` 的能力单元计分，宿主上下文/只读会话面不在其中）。补落 19 个宿主成员，均为对齐：`ExtensionContext` 10 项（`getModel`/`modelRegistry`/`getContextUsage`/`compact`/`reload`/`shutdown`/`isIdle`/`getSystemPrompt`/`isProjectTrusted`/`newSession`，实现簇 `ExtensionHostOperations`＋`ExtensionHostCompletion`）、`ExtensionSessionView` 9 项（`getBranch`/`getEntry`/`getLabel`/`getLeafEntry`/`getSessionFile`/`getCwd`/`getSessionId`/`getLeafId`/`getTree`，`DefaultExtensionSessionView`）。`modelRegistry.complete` 走 `ModelCompletion`＋`AssistantResponseCollector`（`LlmSummaryGenerator` 同步改委托）；`newSession` 复用 `SlashContext.onSwitchSession`。窄差 D233（无 `findOfType`/`classify`）、D234（无 `newSession.setup`）。
+> **L8 分母修正（2026-11-09，用户裁决 D237）**：`overlay-test`／`overlay-qa-tests`（W5）、`snake`／`space-invaders`（W6）、`mac-system-theme`（W7）五件出分母——无可证明的宿主行为或平台无对位，且 overlay 全参受 D99 约束。examples 分母 93→**88**；本表 E5 段行数不变（examples 是转出行）。W5 余 13 件、W6 余 4 件、W7 余 5 件仍按文本级/序列级断言实施。详情见 docs/07 §3、docs/27 §2.4b/§2.5。
+> **L8 W2（2026-11-09，docs/51）**：生命周期/压缩 8 件落 `pi-java-examples`（plan-mode utils/index、reload-runtime、trigger-compact、custom-compaction、send-user-message、system-prompt-header、handoff）——`PlanModeUtils` 33 条破坏性＋50 条白名单正则逐字、`planModeTools/normalModeTools` 保序去重、持久化 `toolsBeforePlanMode` 空时略键、恢复只扫 `plan-mode-execute` 之后的助手消息；reload 走 `terminate`＋`agent_settled` 的 `expandPromptTemplates` 命令派发；压缩接管走 `SuppliedCompaction`（`fromHook=true`）；handoff 分支投影按压缩条目＋`firstKeptEntryId` 切片。窄差 D235（主题/删除线降级纯文本）、D236（加载器同步方言）。注册表 27 项，模块 **125 测 0 失败**。
 
 ### E6 包管理器（18）
 

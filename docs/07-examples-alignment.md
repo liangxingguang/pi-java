@@ -32,17 +32,15 @@
 
 ## 3. 已具备的主流示例能力
 
-当前模块已经覆盖以下 16 类行为：
+新锚点 `56cae7823` 分母 **88**（102 − 8 外部运行时 − 1 R5 − 5 范围面主动出分母，见 D232／D237）；当前已移植 **29 件**（29/88＝32.95%）：
 
-- hello、structured-output、dynamic-tools；
-- permission-gate、protected-paths、confirm-destructive、dirty-repo-guard、project-trust；
-- input-transform、input-transform-streaming、inline-bash；
-- pirate、claude-rules、prompt-customizer；
-- event-bus、provider-payload。
+- 保留（16，pi 侧未变）：hello、structured-output、dynamic-tools；permission-gate、protected-paths、confirm-destructive、dirty-repo-guard、project-trust；input-transform、input-transform-streaming、inline-bash；pirate、claude-rules、prompt-customizer；event-bus、provider-payload。
+- W1 新增／重移植（5）：custom-provider-anthropic（`CustomAnthropicStream` 按 block index 装配文本／思考／工具流、畸形最终参数走 `argumentsError`）、debug-provider（`provider-debug` 条目取证，`keyHint` 维持 D220）、custom-provider-gitlab-duo（9 模型＋Anthropic/OpenAI 双协议）、custom-provider-gitlab-duo/test、jev-router（虚拟模型 `jev/auto` 四分支路由）。
 
-宿主已提供 `ExtensionContext.cwd()` 和 `ExtensionSessionView.getEntries()`。其余只读会话成员按新示例的真实消费点补齐，不为凑接口清单一次性空实现。
+剩 59 件（5 已修改＋54 未移植）按 `docs/27` 的 W3–W8 推进；宿主只读成员按示例真实消费点补齐（B284/B285），不做一次性空实现。**已补齐（2026-11-09，docs/50）**：`ExtensionContext` 新增 10 项、`ExtensionSessionView` 新增 9 项（详见 docs/04 与 docs/map/04 E5 段），W2/W3 的上下文与会话只读前置就位。
+- W2 新增／重移植（8，docs/51）：plan-mode/utils（`PlanModeUtils` 纯函数）、plan-mode/index（`/plan`＋`ctrl+alt+p`、工具集收窄、bash 白名单拦截、`[DONE:n]` 追进度、会话恢复重建，窄差 D235）、reload-runtime（`terminate`＋`agent_settled` 派发 `/reload-runtime`）、trigger-compact（10 万 token 跨线＋`/trigger-compact`）、custom-compaction（Gemini Flash 全量摘要接管，`fromHook=true`）、send-user-message（ask/steer/followup/askwith）、system-prompt-header（`System: n chars` 状态段）、handoff（分支投影＋`ui.custom` 生成＋`newSession` 切换，窄差 D236）。注册表 27 项、模块 **125 测 0 失败**。
 
-这些是现有能力清单，不是新锚点的 16/102 完成度。
+- 主动出分母（5，用户裁决 2026-11-09，D237）：overlay-test、overlay-qa-tests（D99 已裁决 overlay 全参不移植，验收只剩文本行且需等 L7）、snake、space-invaders（除游戏帧外不验证宿主语义）、mac-system-theme（macOS 专属，无对位）。不写降级假移植；W5 余 13 件／W6 余 4 件／W7 余 5 件照常实施。
 
 ## 4. 新基线验收口径
 
@@ -51,6 +49,6 @@
 3. 已修改示例重新提取行为断言，不能只复制旧 Java 实现。
 4. 优先覆盖流式工具参数、`before_agent_start`、工具加载、MCP 和会话恢复等新行为。
 5. 每个示例都有独立验收测试；外部系统使用假模型、假进程或隔离服务。
-6. 新分母由本次清点产生，旧 105/102 件不再作为翻“对齐”的条件。
+6. 新分母由本次清点产生（**88**＝102 − 8 外部运行时 − 1 R5 − 5 范围面主动出分母，D232／D237），旧 105/102 件不再作为翻“对齐”的条件。
 
 详细层级顺序见 [`08-pi-rebaseline-master-plan.md`](08-pi-rebaseline-master-plan.md)。

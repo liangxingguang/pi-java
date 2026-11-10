@@ -42,7 +42,9 @@ Chord plugin 已按 R5 决定不做，不再是待拍板项。
 | B156 | `ModelCompat` 逐组件重建存在漏字段风险；新增组件时必须同时检查构造点和 `withPartial` 类重建点。 | L1 AI |
 | B259 | RPC `cycle_thinking_level` 对不支持 thinking 的模型仍返级别；`get_available_thinking_levels` 也未按模型能力过滤。pi 对应结果为 `null` 或可用子集。已于 2026-11-05 按 docs/25（W9）实施并闭环（非 reasoning ⇒ `["off"]`／`null`；`thinkingLevelMap` 缺档过滤且轮转跳过；无模型 ⇒ 七值全集）。 | L5 coding-agent |
 | E5-31 | 扩展 UI 仍有 working 指示器、终端输入、补全、编辑器替换等 TUI 成员未收口；与 D′ 旧行去重重测。 | L7 TUI |
-| examples | 旧 16/102 不是新基线分母。必须在 L8 按 `56cae7823` 重新清点，主流示例继续全部做 Java 移植与验收测试。 | L8 examples |
+| examples | L8 已按 `56cae7823` 重清点，并经用户两次裁决缩分母——先 8 件外部运行时（D232）、再 5 件范围面主动（D237）：新分母 **88**（102 − 8 − 1 R5 − 5）；W0＋W1＋W2 已实施，账面 **29/88＝32.95%**，剩 59 件（5 已修改＋54 未移植），设计见 docs/27（W2 详见 docs/51）。旧 16/102 只作历史。 | L8 examples |
+| B284 | `ExtensionContext` 余成员：**已实施并闭环（2026-11-09，docs/50 B284）**——新增 10 项（`getModel`/`modelRegistry`/`getContextUsage`/`compact`/`reload`/`shutdown`/`isIdle`/`getSystemPrompt`/`isProjectTrusted`/`newSession`；`thinkingLevel` 原已存在）。`getContextUsage` 按 `agent-session.ts:4318-4361` 逐字（无模型/窗口≤0 ⇒ empty；压缩后无可信用量 ⇒ 字段 null）；`modelRegistry.complete` 走 `ModelCompletion` 缝＋`AssistantResponseCollector`（`LlmSummaryGenerator` 同步改委托）；`newSession` 走 `session_before_switch("new")`→`createReplacing`→`closeForReplacement`→`SlashContext.onSwitchSession`。窄差 D233/D234。测试 `ExtensionContextGapTest` 4 项。 | L8 examples |
+| B285 | `ExtensionSessionView` 余成员：**已实施并闭环（2026-11-09，docs/50 B285）**——新增 9 项（`getBranch`/`getEntry`/`getLabel`/`getLeafEntry`/`getSessionFile`/`getCwd`/`getSessionId`/`getLeafId`/`getTree`）；`getSessionName` 归根上下文，`getSessionDir`/`getHeader`/`buildContextEntries`/`buildSessionProjection` 按 docs/50 §3.1 裁决 A 不做（零消费/内部 API）。无持久面沿转录兜底。测试 `ExtensionSessionViewGapTest` 2 项。 | L8 examples |
 
 B264 已于 2026-11-02 按 docs/10 实施并闭环：流式工具参数、malformed final、grammar、responseId、消息形状、`argumentsError` 传播与执行前拒绝均有 RED→GREEN 和全仓验证证据；L1 账面见 `docs/map/02-ai.md`。
 
@@ -186,6 +188,12 @@ SQLite 后端是 pi-java 独立实现，保留模块，不对齐已删除 schema
 | D229 | `readTaskObservation` 的「先按 `fullName` 过滤再计数」（pi `report.ts:147-157`）在 Java 无对应场景：`cli/EvalArmMain` 每个臂只跑一个 case 并写只含一个 `<testcase>` 的 `junit.xml`，`docker/DockerEvalRunner` 直接按计数分类，不存在同报告含兄弟用例的情况。落产物行为等价。 |
 | D230 | 审计取证范围是**种入 workspace 的实现源子集**，不是 pi 的全仓只读挂载：Java 的 read/grep/find/ls 受 `PathUtils` 约束只能在 workspace 内读，全仓约 900 文件／11 万行不适合逐用例种入。`contents/AuditSourceIndex` 按页面内容挑选相关源（类名词命中＋包路径命中＋锚点兜底）。子集只影响可读范围，不改变「必须读过页面＋必须读过实现源」的判分口径。 |
 | D231 | agent 目录多一条 Java 独有的来源 `pi.java.agentDir` 系统属性（`FileSettingsStorage.AGENT_DIR_PROPERTY`），优先级：属性 > `PI_JAVA_CODING_AGENT_DIR` 环境变量 > `~/.pi-java/agent`。生产不设属性，行为不变；评测 harness 用它把 agent 目录指到隔离根（`System.getenv` 不可写，pi 侧只需设 `PI_CODING_AGENT_DIR`）。同族：评测 workspace 的项目配置目录是 `.pi-java`（pi 为 `.pi`）。 |
+| D232 | examples 的 8 个外部运行时文件出分母（sandbox 1、gondolin 1、doom-overlay 5、with-deps 1）：纯 Java 无对位原生沙箱／micro-VM／WASM／JS 模块解析，按 docs/27 §2.4 不写降级假移植；R5 的 `sdk/14-codemode-mcp.ts` 维持既有口径。 |
+| D233 | pi `ModelRegistry` 的 `findOfType`/`classify`（classifier 模型类型）不提供：Java AI 层无 classifier 面，仅 jev-router 消费且该扩展已在 W1 按显式模型 id 落地（docs/50 §3.2）。 |
+| D234 | pi `NewSessionOptions.setup` 不提供：本锚点 examples 零消费，且其可写 SessionManager 语义与只读门面纪律冲突；`newSession` 只落 `parentSession`/`withSession`（docs/50 §3.2）。 |
+| D237 | examples 的 5 件**范围面主动出分母**（用户裁决 2026-11-09）：`overlay-test.ts`／`overlay-qa-tests.ts`（D99 已裁决 overlay 定位/尺寸/堆叠不移植，验收只剩文本行，无法证明对齐；L7 未闭环时写下的断言必然返工）、`snake.ts`／`space-invaders.ts`（只消费 `appendEntry`＋`registerCommand`＋`ui.custom`，除游戏帧外不验证任何宿主语义）、`mac-system-theme.ts`（macOS `osascript` 应用外观专属，Windows/Linux 无对位产品行为）。不写降级假移植；分母 93→**88**（102 − 8 外部运行时 D232 − 1 R5 − 5 本项）。W5 余 13 件、W6 余 4 件、W7 余 5 件仍按文本级/序列级断言实施，`ExtensionUI` 槽位接通仍由这些件覆盖。 |
+| D235 | plan-mode 示例的 TUI 呈现降级为纯文本：pi 的 `theme.fg("accent"|"warning"|"success"|"muted")` 与 `strikethrough` 在 Java 只有主题名窄投影（无结构化 Theme），状态段写 `⏸ plan`／`📋 n/m`、widget 写 `☑`／`☐` 行；另 {@code context} 事件载荷是 LLM 投影（无 `customType`），pi 的 `customType === "plan-mode-context"` 剔除分支不实现，只保留「含 `[PLAN MODE ACTIVE]` 的用户消息剔除」文本等价判据（docs/51 §2.2.1）。 |
+| D236 | handoff 示例的加载器以同步方言实现：pi 的 `BorderedLoader` 是异步组件（转圈动画＋Esc 取消＋`loader.signal`），Java 的 `ui.custom` 为阻塞方言、`modelRegistry.complete` 同步 ⇒ 工厂内生成完立即 `done(text)`，不再驱动动画；生成文本／取消／`null` 三结局与中止语义一致（docs/51 §2.8.1）。 |
 | B83 | pi 自身三处 sanitize 缺口保持同样行为；pi 修补时同步。 |
 | B100 | compat 探测的 baseUrl 在内置模型上行为等价；出现可观察差异再重裁。 |
 | B126 | Codex 车道及其 transport 等随 R2/R5 出分母。 |
@@ -205,4 +213,4 @@ SQLite 后端是 pi-java 独立实现，保留模块，不对齐已删除 schema
 3. 条目关闭后从开放表移除，历史由 git 保存，编号不复用。
 4. 每层重测后同步更新对应地图；全部层完成前不发布新全仓百分比。
 5. 每个实施工作包仍需独立设计稿和用户审核。
-6. 下一新文档号为 **docs/23**（L3 agent-core 首个设计）；`docs/22` 已闭环（2026-11-04，L2 mcp 视口捕获与跨层口径）；`docs/21` 已闭环（2026-11-04，L2 mcp 主体）；`docs/20` 已闭环（2026-11-04，L1 完成）；`docs/19` 已闭环（2026-11-03）；`docs/18`、`docs/17`、`docs/16` 已闭环（2026-11-03）。
+6. 新文档号取「历史已用最大号 +1」，不得复用已闭环批次编号（历史已用到 `docs/51`）；下一新文档号为 **docs/52**。`docs/50` 为 L8 W2/W3 前置包（B284/B285，2026-11-09 已闭环）；`docs/51` 为 L8 W2 生命周期/压缩移植设计（2026-11-09 审核通过并实施闭环）；`docs/27` 为 L8 examples 重测与移植设计（2026-11-08 审核通过、2026-11-09 按 D237 把分母修正为 88，实施中）；`docs/21`–`docs/26` 已闭环（L2 mcp 2026-11-04；L3 agent-core、L4 session、L5 coding-agent、L6 evals 2026-11-05）；`docs/20` 及更早已闭环。
