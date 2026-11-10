@@ -14,3 +14,14 @@ com.pijava.examples.ClaudeRulesExtension
 com.pijava.examples.PromptCustomizerExtension
 com.pijava.examples.EventBusExtension
 com.pijava.examples.ProviderPayloadExtension
+com.pijava.examples.CustomAnthropicProviderExtension
+com.pijava.examples.CustomProviderGitlabDuoExtension
+com.pijava.examples.DebugProviderExtension
+com.pijava.examples.JevRouterExtension
+com.pijava.examples.PlanModeExtension
+com.pijava.examples.ReloadRuntimeExtension
+com.pijava.examples.TriggerCompactExtension
+com.pijava.examples.CustomCompactionExtension
+com.pijava.examples.SendUserMessageExtension
+com.pijava.examples.SystemPromptHeaderExtension
+com.pijava.examples.HandoffExtension

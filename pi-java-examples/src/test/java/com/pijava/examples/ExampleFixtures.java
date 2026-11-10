@@ -89,11 +89,24 @@ final class ExampleFixtures {
 
     /** {@link #newSession(Path, Provider)} 的指定模型形。 */
     static AgentSession newSession(Path tmp, Provider provider, String model) {
+        return newSession(tmp, provider, model, new String[0]);
+    }
+
+    /**
+     * 追加扩展 flag（如 {@code --plan}、{@code --no-tools}）的形（docs/51 §3：
+     * W2 的 plan-mode 启动臂需要 unmatched 扩展 flag）。
+     */
+    static AgentSession newSession(Path tmp, Provider provider, String model,
+                                   String... extraArgs) {
         var providers = ProviderRegistry.create();
         providers.register(provider);
-        var args = ArgsParser.parse(new String[] {
+        var base = new String[] {
             "--provider", provider.name(), "--model", model,
-            "--no-session", "--no-mcp"});
+            "--no-session", "--no-mcp"};
+        var argv = new String[base.length + extraArgs.length];
+        System.arraycopy(base, 0, argv, 0, base.length);
+        System.arraycopy(extraArgs, 0, argv, base.length, extraArgs.length);
+        var args = ArgsParser.parse(argv);
         return AgentSession.create(args, providers, new ToolContext(tmp.toString(), Map.of(),
             new DefaultShellExecutor(), new DefaultFileSystem()));
     }
@@ -143,6 +156,15 @@ final class ExampleFixtures {
             new StreamEvent.StreamDone(StopReason.STOP, null, msg))));
     }
 
+    /** 重复 {@code text} 的 N 响应序列 faux（多轮运行夹具）。 */
+    static FauxProvider sequenceText(String name, String text, int count) {
+        var responses = new ArrayList<List<StreamEvent>>();
+        for (int i = 0; i < count; i++) {
+            responses.add(textEvents(text));
+        }
+        return FauxProvider.sequence(name, responses);
+    }
+
     /** 「工具调用 ⇒ 文本收尾」两响应序列 faux。 */
     static FauxProvider toolThenDone(String name, String callId, String toolName,
                                      Map<String, Object> args) {
@@ -185,11 +207,21 @@ final class ExampleFixtures {
         private static final Object CANCEL = new Object();
 
         private final Deque<Object> answers = new ArrayDeque<>();
+        private final Deque<Object> editorAnswers = new ArrayDeque<>();
         private final List<Notice> notices = new ArrayList<>();
+        private final Map<String, String> statuses = new java.util.LinkedHashMap<>();
+        private final Map<String, List<String>> widgets = new java.util.LinkedHashMap<>();
+        private final List<String> editorTexts = new ArrayList<>();
 
         /** 脚本化一次 select/input 应答（null ⇒ 取消）。 */
         ScriptedUi answer(Object value) {
             answers.add(value == null ? CANCEL : value);
+            return this;
+        }
+
+        /** 脚本化一次 editor 应答（null ⇒ 取消／undefined）。 */
+        ScriptedUi editorAnswer(String value) {
+            editorAnswers.add(value == null ? CANCEL : value);
             return this;
         }
 
@@ -203,6 +235,21 @@ final class ExampleFixtures {
             return notices;
         }
 
+        /** setStatus 录表（值 null ⇒ 删键臂）。 */
+        Map<String, String> statuses() {
+            return statuses;
+        }
+
+        /** setWidget 录表（值 null ⇒ 清槽臂）。 */
+        Map<String, List<String>> widgets() {
+            return widgets;
+        }
+
+        /** setEditorText 录表。 */
+        List<String> editorTexts() {
+            return editorTexts;
+        }
+
         private Object poll() {
             var value = answers.poll();
             return value == CANCEL ? null : value;
@@ -212,6 +259,50 @@ final class ExampleFixtures {
         public String select(String title, List<String> options,
                              com.pijava.coding.agent.extension.ExtensionUiDialogOptions opts) {
             return (String) poll();
+        }
+
+        @Override
+        public String editor(String title, String prefill) {
+            var value = editorAnswers.poll();
+            return value == CANCEL ? null : (String) value;
+        }
+
+        /**
+         * {@code ui.custom} 的脚本臂（docs/51 §3）：同步调工厂并回传 {@code done}
+         * 的值（宿主阻塞方言对位）。
+         */
+        @Override
+        @SuppressWarnings("unchecked")
+        public <T> T custom(
+                com.pijava.coding.agent.extension.ExtensionComponentFactory<T> factory,
+                com.pijava.coding.agent.extension.ExtensionCustomOptions opts) {
+            var box = new Object[1];
+            factory.create(new com.pijava.coding.agent.extension.ExtensionUiHostEnv(
+                () -> 80, () -> 24, () -> { }, (slot, text) -> text),
+                new com.pijava.coding.agent.core.KeybindingsManager(),
+                value -> box[0] = value);
+            return (T) box[0];
+        }
+
+        @Override
+        public void setStatus(String key, String text) {
+            statuses.put(key, text);
+        }
+
+        @Override
+        public void setWidget(String key,
+                              com.pijava.coding.agent.extension.ExtensionWidgetContent content,
+                              com.pijava.coding.agent.extension.ExtensionWidgetOptions opts) {
+            if (content instanceof com.pijava.coding.agent.extension.ExtensionWidgetContent.Lines l) {
+                widgets.put(key, l.lines());
+            } else {
+                widgets.put(key, null);
+            }
+        }
+
+        @Override
+        public void setEditorText(String text) {
+            editorTexts.add(text);
         }
 
         @Override
