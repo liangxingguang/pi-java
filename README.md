@@ -1,77 +1,105 @@
 # pi-java
 
-**pi-java** is a pure-Java port of [pi](https://github.com/earendil-works/pi), an AI coding agent and runtime. It reimplements pi's three layers — the coding-agent CLI, the generic agent runtime, and the multi-provider LLM API gateway — using idiomatic Java (records, sealed interfaces, pattern matching, virtual threads).
+**A pure-Java (JDK 25) reimplementation of [pi](https://github.com/earendil-works/pi)** — an AI coding agent and runtime. It rebuilds pi's three layers in idiomatic Java (records, sealed interfaces, pattern matching, virtual threads): the coding-agent CLI, the generic agent runtime, and the multi-provider LLM gateway.
 
-> **Status**: MVP (Phase 0–5) complete; Phase 6 (ecosystem) in progress.
+English | [简体中文](README_zh-CN.md)
 
-## Features
+> **Status** — The project is being aligned with pi one layer at a time against the pinned revision `56cae7823`. Layers L0–L6 (telemetry, ai, mcp, agent-core, session/SQLite, coding-agent, evals) are closed, with a few platform-specific narrow gaps registered in `docs/04`; L8 (examples library) is in progress; L7 (remaining TUI/web surface) is not started. See [`docs/06-current-alignment-plan.md`](docs/06-current-alignment-plan.md) for the current order and status.
 
-- **Multi-provider LLM gateway** — Anthropic, OpenAI, Google, Mistral, and DeepSeek behind a unified `StreamApi`, with SSE streaming and a programmable `FauxProvider` for offline replay.
-- **Manual-drive agent runtime** — `AgentHarness` as a state machine (`peekAction` / `executeAction`), multi-lane orchestration, lifecycle hooks, compaction, and skills.
-- **Built-in tools** — `bash`, `read`, `write`, `edit`, `grep`, `ls`, `glob`, with parallel execution and approval gating.
-- **Terminal UI** — a Ratatui-style TUI built on [TamboUI](https://tamboui.dev/), with interactive chat, settings, and slash commands.
-- **Durable sessions** — SQLite + JSONL v4 double-track storage, FTS5 search, writer leases, branch cache, and crash recovery.
-- **Native distribution** — GraalVM native-image binaries with sub-100ms startup.
+## Highlights
+
+- **Multi-provider gateway** — Anthropic, OpenAI, Google, Mistral and DeepSeek behind a unified `StreamApi`, plus OpenAI-compatible catalogs (xAI, Moonshot/Kimi, z.ai, OpenRouter, and user-defined `models.json` providers). SSE streaming, tool calls, images, OAuth, and a programmable `FauxProvider` for offline replay.
+- **Agent runtime** — `AgentHarness` as an explicit state machine (`peekAction` / `executeAction`), multi-lane orchestration, lifecycle hooks, context compaction, skills, prompt templates, and extension hooks.
+- **Built-in tools** — `bash`, `powershell`, `read`, `write`, `edit`, `grep`, `find`, and `ls`, with parallel execution, approval gating, and output truncation.
+- **Extensions** — a `PiExtension` SPI with lifecycle events, commands, tools, UI slots, model providers, and a growing example library in [`pi-java-examples`](pi-java-examples/README.md).
+- **Terminal UI** — a Ratatui-style TUI built on [TamboUI](https://tamboui.dev/): interactive chat, settings, slash commands, and theming.
+- **Web UI** — a browser client served by the same agent session, with a gateway token and `--mode web --port <port>`.
+- **Durable sessions** — SQLite + JSONL double-track storage, full-text search, branch caching, and crash recovery.
+- **Remote sessions** — CBOR protocol with client/server modules and an RPC mode (`--mode rpc`).
+- **Self-contained distribution** — a shaded fat jar plus a jlink-reduced JRE, packaged per platform by `dist.sh` / `install.sh` / `install.cmd`.
 
 ## Requirements
 
-- **JDK 25** (GraalVM for JDK 25 recommended — required for native image)
-- **Maven 3.9+** (or use the bundled `./mvnw` wrapper)
+- **JDK 25**
+- **Maven 3.9+** — or use the bundled wrapper (`./mvnw`, `mvnw.cmd`)
 
 ## Build
 
 ```bash
-./mvnw clean verify        # compile + test + Checkstyle + SpotBugs
-./mvnw test -pl pi-java-ai # run a single module's tests
-./mvnw checkstyle:check    # code style
+./mvnw clean verify            # compile + test + Checkstyle + SpotBugs
+./mvnw test -pl pi-java-ai     # run one module's tests
+./mvnw checkstyle:check        # code style only
 ```
 
-## Usage
+## Quick start
 
 ```bash
-# print mode (one-shot prompt)
+# one-shot print mode
 ./mvnw -pl pi-java-tui -am exec:java -Dexec.args='-p "hello"'
 
 # interactive TUI
 ./mvnw -pl pi-java-tui -am exec:java
 ```
 
-On Windows there is a one-click launcher:
+Provider credentials come from `~/.pi-java/auth.json` or the provider's environment variable (for example `ANTHROPIC_API_KEY`). `PI_JAVA_CODING_AGENT_DIR` overrides the config directory (default `~/.pi-java/agent`). Use `-p ... --list-models` to inspect the built-in model catalog.
 
-```bat
-run.cmd                 :: interactive TUI
-run.cmd --list-models   :: list built-in models
-run.cmd -p "hello"      :: print mode
-```
+On Windows, `run.cmd` wraps the same commands (`run.cmd`, `run.cmd --list-models`, `run.cmd -p "hello"`).
 
-## Native image
+## Web UI
 
 ```bash
-./mvnw -Pnative package   # produces pi-java-dist/target/pi-java(.exe)
+./mvnw -pl pi-java-dist -am clean package -DskipTests
+java -jar pi-java-dist/target/pi-java.jar --mode web --port 8787
 ```
 
-Native builds are gated behind the `native` profile. Windows native linking requires Visual Studio 2022 Build Tools (or CI, which pre-installs them). 设计记录见 git 历史（原 docs/10-phase5-native-design.md，已随过程文档清理删除）。
+Then open `http://localhost:8787`. The first start generates a gateway token at `~/.pi-java/web/gateway-token` (or set `PI_JAVA_WEB_TOKEN`); paste it into the browser prompt.
+
+The `web-ui.sh` and `web-ui.cmd` launchers build and start the server for you. They pin this machine's JDK and Maven paths at the top of the script — edit `JAVA_HOME` if yours differ.
+
+## Installation and packaging
+
+```bash
+./install.sh [dir]     # fat jar + jlink JRE, default ~/.local/pi-java
+./install.cmd [dir]    # same on Windows, default D:\soft\pi-java
+./dist.sh all          # per-platform .tar.gz packages (fat jar + JRE + launcher)
+```
+
+The fat jar is produced by `pi-java-dist` as `pi-java.jar` and is the supported distribution format.
 
 ## Modules
 
-Dependencies flow bottom-up: `telemetry ← ai ← agent ← coding-agent ← tui`, with `protocol ← client/server`.
+Dependencies flow bottom-up; each module depends only on the modules listed.
 
-| Module | Purpose |
+| Module | Purpose | Depends on |
+|---|---|---|
+| `pi-java-bom` | Bill of Materials — unified version management | — |
+| `pi-java-telemetry` | metrics / tracing contracts | — |
+| `pi-java-ai` | provider gateway: providers, streaming, model catalog, `pi-ai` CLI | `telemetry` |
+| `pi-java-mcp` | MCP client: JSON-RPC, transports, tool adapters | `ai` |
+| `pi-java-agent-core` | agent runtime: harness, tools, sessions, compaction | `ai` |
+| `pi-java-session-backend-sqlite` | SQLite session storage (ServiceLoader SPI) | `agent-core` |
+| `pi-java-coding-agent` | `pi-java` CLI entry point + `AgentSession` | `agent-core`, `mcp`, `session-backend-sqlite` |
+| `pi-java-tui` | terminal UI on TamboUI | `agent-core`, `coding-agent` |
+| `pi-java-web` | browser UI and gateway server | `agent-core`, `ai`, `coding-agent` |
+| `pi-java-protocol` | CBOR codec and framing | — |
+| `pi-java-client` | remote session client | `protocol` |
+| `pi-java-server` | remote session server | `protocol`, `client`, `agent-core` |
+| `pi-java-evals` | evaluation framework — conformance, smoke, extension tests | `agent-core`, `coding-agent` |
+| `pi-java-examples` | extension examples (not bundled into `dist`) | `coding-agent`, `tui` |
+| `pi-java-dist` | fat-jar assembly and distribution launchers | `coding-agent`, `tui`, `session-backend-sqlite`, `web` |
+
+## Documentation
+
+Development is AI-driven: every work package starts with a design document in [`docs/`](docs/), which must be reviewed before code is written.
+
+| Document | Content |
 |---|---|
-| `pi-java-telemetry` | metrics / tracing contracts |
-| `pi-java-ai` | LLM API layer — providers, streaming, model catalog, `pi-ai` CLI |
-| `pi-java-agent-core` | agent runtime — `AgentHarness`, tools, sessions |
-| `pi-java-session-backend-sqlite` | SQLite session storage (ServiceLoader SPI) |
-| `pi-java-tui` | TamboUI terminal UI |
-| `pi-java-protocol` / `pi-java-client` / `pi-java-server` | CBOR protocol + remote session (Phase 6) |
-| `pi-java-coding-agent` | `pi-java` CLI entry point + `AgentSession` |
-| `pi-java-evals` | provider conformance / smoke / extension tests |
-| `pi-java-dist` | GraalVM native-image aggregation (Phase 5) |
-| `pi-java-bom` | bill of materials — unified version management |
-
-## Design documents
-
-Development follows an AI-driven, batch-based process. Each batch begins with a design document in [`docs/`](docs/) — see [`docs/00-ai-driven-development-process.md`](docs/00-ai-driven-development-process.md), the open-items register [`docs/04-open-items-register.md`](docs/04-open-items-register.md), and the module alignment map [`docs/05-module-alignment-map.md`](docs/05-module-alignment-map.md).
+| [`docs/00-ai-driven-development-process.md`](docs/00-ai-driven-development-process.md) | the eight-step development process |
+| [`docs/04-open-items-register.md`](docs/04-open-items-register.md) | open items and standing decisions |
+| [`docs/05-module-alignment-map.md`](docs/05-module-alignment-map.md) | quantified module alignment and gaps |
+| [`docs/06-current-alignment-plan.md`](docs/06-current-alignment-plan.md) | current layer order, status, and review gates |
+| [`docs/07-examples-alignment.md`](docs/07-examples-alignment.md) | examples alignment rules and capabilities |
+| [`docs/08-pi-rebaseline-master-plan.md`](docs/08-pi-rebaseline-master-plan.md) | the full re-baseline design against `56cae7823` |
 
 ## Contributing
 
