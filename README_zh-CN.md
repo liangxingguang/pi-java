@@ -4,8 +4,6 @@
 
 [English](README.md) | 简体中文
 
-> **状态** —— 项目按层滚动对齐 pi，当前锁定锚点 `56cae7823`。L0–L6 层（telemetry、ai、mcp、agent-core、session/SQLite、coding-agent、evals）已完成对齐闭环（少量平台窄差登记在 `docs/04`）；L8 层（examples 示例库）实施中；L7 层（剩余 TUI/web 面）尚未开始。当前执行顺序与状态见 [`docs/06-current-alignment-plan.md`](docs/06-current-alignment-plan.md)。
-
 ## 特性
 
 - **多 provider 网关** —— Anthropic、OpenAI、Google、Mistral、DeepSeek 统一在一个 `StreamApi` 之下，并支持 OpenAI 兼容目录（xAI、Moonshot/Kimi、z.ai、OpenRouter，以及用户自定义的 `models.json` provider）。含 SSE 流式、工具调用、图片、OAuth，以及可编程的 `FauxProvider` 用于离线回放。

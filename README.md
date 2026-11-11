@@ -4,8 +4,6 @@
 
 English | [简体中文](README_zh-CN.md)
 
-> **Status** — The project is being aligned with pi one layer at a time against the pinned revision `56cae7823`. Layers L0–L6 (telemetry, ai, mcp, agent-core, session/SQLite, coding-agent, evals) are closed, with a few platform-specific narrow gaps registered in `docs/04`; L8 (examples library) is in progress; L7 (remaining TUI/web surface) is not started. See [`docs/06-current-alignment-plan.md`](docs/06-current-alignment-plan.md) for the current order and status.
-
 ## Highlights
 
 - **Multi-provider gateway** — Anthropic, OpenAI, Google, Mistral and DeepSeek behind a unified `StreamApi`, plus OpenAI-compatible catalogs (xAI, Moonshot/Kimi, z.ai, OpenRouter, and user-defined `models.json` providers). SSE streaming, tool calls, images, OAuth, and a programmable `FauxProvider` for offline replay.
