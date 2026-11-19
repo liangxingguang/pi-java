@@ -3,7 +3,6 @@ package com.pijava.coding.agent.extension;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 import com.pijava.agent.tool.ShellResult;
 import com.pijava.coding.agent.extension.event.ExtensionResults.CustomMessageDraft;
@@ -207,12 +206,12 @@ class SessionEventFirerTest {
     @Test
     void userBashFirstSpeakerWinsAndErrorRethrows() {
         var bash = new ShellResult("ext-output", 0, false, false, 1, 10);
-        bus.on("first", USER_BASH, (e, c) -> new UserBashEventResult(bash));
+        bus.on("first", USER_BASH, (e, c) -> new UserBashEventResult.Result(bash));
         bus.on("second", USER_BASH, (e, c) -> {
             throw new AssertionError("must not run"); // pi :1273-1278 首发言者赢
         });
-        Optional<ShellResult> result = firer.userBash("ls", false, "/tmp");
-        assertThat(result).containsSame(bash);
+        var outcome = firer.userBash("ls", false, "/tmp");
+        assertThat(((UserBashEventResult.Result) outcome.orElseThrow()).result()).isSameAs(bash);
 
         var bus2 = new ExtensionEventBus();
         var errors2 = new ArrayList<ExtensionError>();
@@ -224,6 +223,19 @@ class SessionEventFirerTest {
         assertThatThrownBy(() -> new SessionEventFirer(bus2, null).userBash("ls", true, "/tmp"))
             .isInstanceOf(RuntimeException.class).hasMessage("handler blew up");
         assertThat(errors2).hasSize(1);
+    }
+
+    @Test
+    void userBashOperationsArmPassesThroughAndNullSkips() {
+        com.pijava.agent.tool.ShellExecutor operations =
+            (command, options) -> new ShellResult("", 0, false, false, 0, 0);
+        bus.on("skip", USER_BASH, (e, c) -> null); // pi undefined ⇒ 继续
+        bus.on("ops", USER_BASH, (e, c) -> new UserBashEventResult.Operations(operations));
+
+        var outcome = firer.userBash("ls", false, "/tmp").orElseThrow();
+
+        assertThat(((UserBashEventResult.Operations) outcome).operations())
+            .isSameAs(operations);
     }
 
     // ── before_agent_start ──

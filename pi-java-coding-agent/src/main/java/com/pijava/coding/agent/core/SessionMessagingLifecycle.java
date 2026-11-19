@@ -6,9 +6,11 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.pijava.agent.entry.Entry;
+import com.pijava.agent.tool.ShellExecutor;
 import com.pijava.agent.tool.ShellOptions;
 import com.pijava.agent.tool.ShellResult;
 import com.pijava.ai.AbortSignal;
+import com.pijava.coding.agent.extension.event.ExtensionResults.UserBashEventResult;
 
 /**
  * 批 29（结构债拆分）：{@link AgentSession} 的消息/生命周期簇 —— bash/条目追加簇、
@@ -73,23 +75,26 @@ final class SessionMessagingLifecycle {
     /** 会话级 bash 执行（RPC {@code bash}）：经 harness shell 运行并发射一条
      *  {@link AgentSessionEvent.BashExecutionUpdate}。v1 阻塞执行，不增量流式。 */
     ShellResult executeBash(String id, String command, boolean excludeFromContext) {
-        // docs/15：pi emitUserBash 拦截（rpc-mode.ts:561-580 同位）——{result} 臂
-        // 直接落盘返回、不执行；处理器异常沿调用方错误链（不得回落本地执行，pi
-        // interactive-mode.ts:6994-6999 注释逐字）。{operations} 臂不移植（窄差 D10）。
+        var toolContext = owner.harness().toolContext();
+        // docs/15／B286：pi emitUserBash 拦截（rpc-mode.ts:561-580 同位）——{result} 臂
+        // 直接落盘返回、不执行；{operations} 臂换执行后端、宿主照常落会话；处理器异常
+        // 沿调用方错误链（不得回落本地执行，pi interactive-mode.ts:6994-6999 注释逐字）。
+        ShellExecutor executor = toolContext.shell();
         if (owner.extensionFirer() != null) {
-            var replaced = owner.extensionFirer().userBash(command, excludeFromContext,
-                owner.harness().toolContext().cwd());
-            if (replaced.isPresent()) {
-                var extensionResult = replaced.get();
-                recordBashResult(command, extensionResult, excludeFromContext);
-                return extensionResult;
+            var outcome = owner.extensionFirer().userBash(command, excludeFromContext,
+                toolContext.cwd());
+            if (outcome.isPresent()) {
+                if (outcome.get() instanceof UserBashEventResult.Result replaced) {
+                    recordBashResult(command, replaced.result(), excludeFromContext);
+                    return replaced.result();
+                }
+                executor = ((UserBashEventResult.Operations) outcome.get()).operations();
             }
         }
-        var toolContext = owner.harness().toolContext();
         var signal = AbortSignal.create();
         bashAbortSignal = signal;
         try {
-            var result = toolContext.shell().execute(command, new ShellOptions(
+            var result = executor.execute(command, new ShellOptions(
                 toolContext.cwd(), toolContext.env(), true,
                 java.util.OptionalLong.empty(), signal));
             owner.emitSessionEvent(new AgentSessionEvent.BashExecutionUpdate(id, result.output()));

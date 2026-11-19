@@ -69,6 +69,26 @@ public final class WebProtocol {
     public record SkillInfo(String name, String description) {
     }
 
+    /**
+     * 扩展面板项（web 独有面，pi 仓库无对应物）——{@link WebExtensions} 把「会话
+     * 已加载」与「resolve 已安装」两份视图合成一行。
+     *
+     * @param name 扩展名（清单 name，缺失时回落文件名/合成前缀后缀）
+     * @param path 身份路径（{@code builtin:<name>}／JAR 路径／{@code inline:<name>}）
+     * @param source sourceInfo 来源标签；{@code builtin} 是否自动发现身份
+     * @param scope sourceInfo 域（user/project/temporary）；{@code origin} 同族
+     * @param loaded 本次会话是否真的加载了它（false ⇒ 已安装未加载）
+     * @param version 清单版本；{@code description} 同（无清单空串）
+     * @param tools 清单声明的工具名；{@code commands}/{@code providers}/{@code skills} 同
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public record ExtensionInfo(
+            String name, String path, String source, String scope, String origin,
+            boolean builtin, boolean loaded, String version, String description,
+            List<String> tools, List<String> commands, List<String> providers,
+            List<String> skills) {
+    }
+
     // ── 客户端 → 服务端 ─────────────────────────────────────────────────
 
     @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "type",
@@ -100,8 +120,11 @@ public final class WebProtocol {
         @JsonSubTypes.Type(value = WebClientMessage.ListSkills.class),
         @JsonSubTypes.Type(value = WebClientMessage.SetSessionName.class),
         @JsonSubTypes.Type(value = WebClientMessage.GetSessionStats.class),
+        @JsonSubTypes.Type(value = WebClientMessage.GetContextInsights.class),
+        @JsonSubTypes.Type(value = WebClientMessage.GetSessionInsights.class),
         @JsonSubTypes.Type(value = WebClientMessage.GetSettings.class),
-        @JsonSubTypes.Type(value = WebClientMessage.SetSetting.class)
+        @JsonSubTypes.Type(value = WebClientMessage.SetSetting.class),
+        @JsonSubTypes.Type(value = WebClientMessage.GetExtensions.class)
     })
     public sealed interface WebClientMessage {
 
@@ -244,6 +267,18 @@ public final class WebProtocol {
             @Override public String type() { return "getSessionStats"; }
         }
 
+        /** 上下文洞察（Context 面板）请求。 */
+        @JsonTypeName("getContextInsights")
+        record GetContextInsights() implements WebClientMessage {
+            @Override public String type() { return "getContextInsights"; }
+        }
+
+        /** 跨会话洞察（Insights 页）请求；{@code range} 为 today/7d/30d/all。 */
+        @JsonTypeName("getSessionInsights")
+        record GetSessionInsights(String range) implements WebClientMessage {
+            @Override public String type() { return "getSessionInsights"; }
+        }
+
         @JsonTypeName("getSettings")
         record GetSettings() implements WebClientMessage {
             @Override public String type() { return "getSettings"; }
@@ -252,6 +287,12 @@ public final class WebProtocol {
         @JsonTypeName("setSetting")
         record SetSetting(String key, String value) implements WebClientMessage {
             @Override public String type() { return "setSetting"; }
+        }
+
+        /** 扩展面板请求（{@code getExtensions}）。 */
+        @JsonTypeName("getExtensions")
+        record GetExtensions() implements WebClientMessage {
+            @Override public String type() { return "getExtensions"; }
         }
     }
 
@@ -280,7 +321,10 @@ public final class WebProtocol {
         @JsonSubTypes.Type(value = WebServerMessage.Skills.class),
         @JsonSubTypes.Type(value = WebServerMessage.SessionNameChanged.class),
         @JsonSubTypes.Type(value = WebServerMessage.SessionStats.class),
-        @JsonSubTypes.Type(value = WebServerMessage.SettingsState.class)
+        @JsonSubTypes.Type(value = WebServerMessage.ContextInsights.class),
+        @JsonSubTypes.Type(value = WebServerMessage.SessionInsights.class),
+        @JsonSubTypes.Type(value = WebServerMessage.SettingsState.class),
+        @JsonSubTypes.Type(value = WebServerMessage.Extensions.class)
     })
     public sealed interface WebServerMessage {
 
@@ -428,10 +472,29 @@ public final class WebProtocol {
             @Override public String type() { return "sessionStats"; }
         }
 
+        /** 上下文洞察快照（{@code contextInsights}，Context 面板数据源）。 */
+        @JsonTypeName("contextInsights")
+        record ContextInsights(ContextReport.Report report) implements WebServerMessage {
+            @Override public String type() { return "contextInsights"; }
+        }
+
+        /** 跨会话洞察快照（{@code sessionInsights}，Insights 页数据源）。 */
+        @JsonTypeName("sessionInsights")
+        record SessionInsights(SessionInsightsReport.Report report)
+                implements WebServerMessage {
+            @Override public String type() { return "sessionInsights"; }
+        }
+
         /** 设置快照（{@code settingsState}，web 相关的平面 key→value）。 */
         @JsonTypeName("settingsState")
         record SettingsState(Map<String, String> settings) implements WebServerMessage {
             @Override public String type() { return "settingsState"; }
+        }
+
+        /** 扩展清单快照（{@code extensions}，扩展面板数据源）。 */
+        @JsonTypeName("extensions")
+        record Extensions(List<ExtensionInfo> extensions) implements WebServerMessage {
+            @Override public String type() { return "extensions"; }
         }
     }
 }

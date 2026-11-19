@@ -2,6 +2,9 @@ package com.pijava.agent.tool.builtin;
 
 import com.pijava.agent.tool.AgentTool;
 import com.pijava.agent.tool.PowerShellShellExecutor;
+import com.pijava.agent.tool.ShellExecutor;
+
+import org.jspecify.annotations.Nullable;
 
 /**
  * PowerShell 工具（B243）—— pi {@code powershell.ts}（67 行）对位：与 bash 同骨架
@@ -40,9 +43,19 @@ public final class PowerShellTool {
     /** Create the powershell tool（pi {@code PowerShellToolOptions.exposeSessionEnvironment}）。 */
     public static AgentTool<BashTool.BashInput, BashTool.BashDetails> create(
             boolean exposeSessionEnvironment) {
+        return create(exposeSessionEnvironment, new PowerShellShellExecutor());
+    }
+
+    /**
+     * Create the powershell tool with an execution backend override（pi
+     * {@code PowerShellToolOptions.operations}；与 bash 同一 {@link ShellExecutor} 缝）。
+     *
+     * @param executorOverride 执行后端；{@code null} ⇒ {@code context.shell()}
+     */
+    public static AgentTool<BashTool.BashInput, BashTool.BashDetails> create(
+            boolean exposeSessionEnvironment, @Nullable ShellExecutor executorOverride) {
         return ShellToolSupport.create(POWERSHELL_CONFIG, null, exposeSessionEnvironment,
-            PowerShellTool::wrapCommand,
-            new PowerShellShellExecutor());
+            PowerShellTool::wrapCommand, executorOverride);
     }
 
     /** pi :35 的 exec 包装：前置 UTF8 输出前缀。 */

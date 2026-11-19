@@ -24,17 +24,25 @@ import com.pijava.coding.agent.core.AgentSession;
 final class WebSessionState {
 
     private final Args args;
+    private final SessionInsightsService insights;
     private volatile AgentSession session;
     private final List<WebDispatcher> dispatchers = new CopyOnWriteArrayList<>();
 
     WebSessionState(Args args) {
         this.args = args;
+        this.insights = new SessionInsightsService(args);
     }
 
     /** 测试缝：直接种入已建会话（不走 {@link #ensure} 的 createWeb）。 */
     WebSessionState(Args args, AgentSession existing) {
         this.args = args;
+        this.insights = new SessionInsightsService(args);
         this.session = existing;
+    }
+
+    /** 跨会话洞察扫描器（进程内缓存，随服务端共享）。 */
+    SessionInsightsService insights() {
+        return insights;
     }
 
     /** 惰性创建共享会话（首个客户端连接时）；失败由调用方回 {@code error} 帧。 */

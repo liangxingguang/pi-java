@@ -7,7 +7,6 @@ import java.util.function.Supplier;
 
 import com.pijava.agent.entry.Entry;
 import com.pijava.agent.harness.CompactionAbortToken;
-import com.pijava.agent.tool.ShellResult;
 import com.pijava.coding.agent.extension.event.ExtensionEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.BeforeAgentStartEvent;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.InputEvent;
@@ -300,8 +299,8 @@ public final class SessionEventFirer {
      * ⇒ emitError 后<b>重抛</b>（调用方不得回落本地执行——pi interactive-mode.ts:6994-6999
      * 注释逐字）。
      */
-    public Optional<ShellResult> userBash(String command, boolean excludeFromContext,
-                                          String cwd) {
+    public Optional<UserBashEventResult> userBash(String command, boolean excludeFromContext,
+                                                  String cwd) {
         if (!bus.hasHandlers(USER_BASH)) {
             return Optional.empty();
         }
@@ -317,8 +316,8 @@ public final class SessionEventFirer {
                 }
                 throw new RuntimeException(e.getMessage(), e); // pi 的 throw err 同位
             }
-            if (r != null && r.result() != null) {
-                return Optional.of(r.result()); // 首个发言者赢（pi :1273-1278）
+            if (r != null) {
+                return Optional.of(r); // 首个发言者赢（pi :1273-1278）
             }
         }
         return Optional.empty();

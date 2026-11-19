@@ -30,9 +30,15 @@ export type ClientMessage =
   // ── Stage D：会话控制 ──
   | { type: "setSessionName"; name: string }
   | { type: "getSessionStats" }
+  // ── Context 面板：上下文洞察 ──
+  | { type: "getContextInsights" }
+  // ── Insights 页：跨会话洞察 ──
+  | { type: "getSessionInsights"; range: string }
   // ── Phase 3：设置 ──
   | { type: "getSettings" }
-  | { type: "setSetting"; key: string; value: string };
+  | { type: "setSetting"; key: string; value: string }
+  // ── 扩展面板：已加载 / 已安装扩展清单 ──
+  | { type: "getExtensions" };
 
 // ── Server → Client messages ──
 
@@ -78,6 +84,139 @@ export interface SkillInfo {
   description: string;
 }
 
+// ── 扩展面板：已加载 / 已安装扩展清单（web 独有面）──
+
+export interface ExtensionInfo {
+  name: string;
+  path: string;
+  source?: string;
+  scope?: string;
+  origin?: string;
+  builtin: boolean;
+  loaded: boolean;
+  version: string;
+  description: string;
+  tools: string[];
+  commands: string[];
+  providers: string[];
+  skills: string[];
+}
+
+// ── Context 面板：上下文洞察（对齐 dsh-context 的 Context 页签）──
+
+export interface ContextTotals {
+  turns: number;
+  requests: number;
+  toolCalls: number;
+  cacheHitRate: number;
+  costUsd: number;
+  promptTokens: number;
+  outputTokens: number;
+}
+
+export interface ContextItem {
+  label: string;
+  tokens: number;
+  preview: string;
+}
+
+export interface ContextCategory {
+  key: string;
+  label: string;
+  tokens: number;
+  items: ContextItem[];
+}
+
+export interface ContextStep {
+  index: number;
+  promptTokens: number;
+  outputTokens: number;
+  contextTokens: number;
+  reported: boolean;
+  categories: Record<string, number>;
+}
+
+export interface ContextEvent {
+  type: string;
+  label: string;
+  timestamp?: string;
+  tokensBefore?: number;
+  detail?: string;
+}
+
+export interface ContextReport {
+  sessionId: string;
+  model?: string;
+  contextWindow: number;
+  maxOutputTokens: number;
+  reserveTokens: number;
+  contextTokens: number;
+  estimatedTokens: number;
+  percent: number;
+  freeTokens: number;
+  totals: ContextTotals;
+  categories: ContextCategory[];
+  steps: ContextStep[];
+  events: ContextEvent[];
+}
+
+// ── Insights 页：跨会话洞察 ──
+
+export interface SessionInsightDay {
+  date: string;
+  promptTokens: number;
+  outputTokens: number;
+  costUsd: number;
+}
+
+export interface SessionInsightTool {
+  name: string;
+  count: number;
+}
+
+export interface SessionInsightSlice {
+  key: string;
+  label: string;
+  tokens: number;
+}
+
+export interface SessionInsightCard {
+  id: string;
+  path: string;
+  name: string;
+  cwd: string;
+  created?: string;
+  modifiedMs: number;
+  messages: number;
+  turns: number;
+  toolCalls: number;
+  promptTokens: number;
+  outputTokens: number;
+  costUsd: number;
+  cacheHitRate: number;
+  model?: string;
+  parentSessionId?: string;
+  firstMessage: string;
+  composition: SessionInsightSlice[];
+}
+
+export interface SessionInsightsReport {
+  range: string;
+  supported: boolean;
+  backend: string;
+  sessionCount: number;
+  promptTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  costUsd: number;
+  cacheHitRate: number;
+  turns: number;
+  toolCalls: number;
+  days: SessionInsightDay[];
+  tools: SessionInsightTool[];
+  sessions: SessionInsightCard[];
+}
+
 export type ServerMessage =
   | { type: "agentEvent"; event: any }
   | { type: "stateSync"; state: SerializedAgentState }
@@ -103,8 +242,14 @@ export type ServerMessage =
   // ── Stage D：会话控制 ──
   | { type: "sessionNameChanged"; sessionId: string; name: string }
   | { type: "sessionStats"; sessionId: string; name: string; messageCount: number; entryCount: number; model?: ModelInfo; thinkingLevel: string }
+  // ── Context 面板：上下文洞察 ──
+  | { type: "contextInsights"; report: ContextReport }
+  // ── Insights 页：跨会话洞察 ──
+  | { type: "sessionInsights"; report: SessionInsightsReport }
   // ── Phase 3：设置 ──
-  | { type: "settingsState"; settings: Record<string, string> };
+  | { type: "settingsState"; settings: Record<string, string> }
+  // ── 扩展面板：已加载 / 已安装扩展清单 ──
+  | { type: "extensions"; extensions: ExtensionInfo[] };
 
 export interface SerializedAgentState {
   messages: any[];

@@ -3,7 +3,7 @@ import "./app.css";
 
 import { html, render, nothing } from "lit";
 import { icon } from "@mariozechner/mini-lit";
-import { ChevronDown, Plus, History, PanelLeftClose, Menu, Code2, GitFork, Download, Pencil, Info, Send, Compass, Settings } from "lucide";
+import { ChevronDown, Plus, History, PanelLeftClose, Menu, Code2, GitFork, Download, Pencil, Info, Send, Compass, Settings, BarChart3, Puzzle } from "lucide";
 
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
 import type { ToolResultMessage } from "@mariozechner/pi-ai";
@@ -29,6 +29,9 @@ import * as debug from "./panels/debug.js";
 import * as treePanel from "./panels/tree.js";
 import * as statsPanel from "./panels/stats.js";
 import * as settingsPanel from "./panels/settings.js";
+import * as contextPanel from "./panels/context.js";
+import * as insightsPanel from "./panels/insights.js";
+import * as extensionsPanel from "./panels/extensions.js";
 import { initRuntime } from "./runtime.js";
 import { truncateText } from "./utils.js";
 
@@ -274,9 +277,24 @@ function handleServerMessage(msg: ServerMessage) {
       statsPanel.onSessionStats(msg);
       break;
 
+    // ── Context 面板：上下文洞察 ──
+    case "contextInsights":
+      contextPanel.onReport(msg.report);
+      break;
+
+    // ── Insights 页：跨会话洞察 ──
+    case "sessionInsights":
+      insightsPanel.onSessionInsights(msg.report);
+      break;
+
     // ── Phase 3：设置 ──
     case "settingsState":
       settingsPanel.onSettingsState(msg.settings);
+      break;
+
+    // ── 扩展面板：已加载 / 已安装扩展清单 ──
+    case "extensions":
+      extensionsPanel.onExtensions(msg.extensions);
       break;
   }
 }
@@ -292,6 +310,10 @@ function applyStateSync(state: SerializedAgentState) {
   if (state.errorMessage) errorMessage = state.errorMessage;
   currentSessionId = state.sessionId;
   currentSessionName = state.sessionName;
+  // 状态快照即会话建立/切换的权威点：同时刷新 Context 面板（header 占用条）
+  // 与扩展面板（换会话后已加载扩展会变）。
+  contextPanel.onSessionChanged();
+  extensionsPanel.onSessionChanged();
   renderApp();
 }
 
@@ -319,6 +341,7 @@ function handleAgentEvent(event: any) {
         console.warn("[agent_end] NO messages field in payload! prev=", messages.length);
       }
       updateStreamingContainer(null, false);
+      contextPanel.onAgentEnd();
       renderApp();
       break;
 
@@ -791,6 +814,16 @@ function renderApp() {
           </span>
         ` : ""}
 
+        ${contextPanel.renderContextMeter()}
+
+        <button
+          class="p-1.5 rounded hover:bg-accent transition-colors shrink-0"
+          title="Context insights (all sessions)"
+          @click=${insightsPanel.toggleInsights}
+        >
+          ${insightsPanel.isInsightsOpen() ? icon(PanelLeftClose, "sm") : icon(BarChart3, "sm")}
+        </button>
+
         <button
           class="p-1.5 rounded hover:bg-accent transition-colors shrink-0"
           title="Code debugging (files / git)"
@@ -805,6 +838,14 @@ function renderApp() {
           @click=${treePanel.toggleHistory}
         >
           ${treePanel.isHistoryOpen() ? icon(PanelLeftClose, "sm") : icon(History, "sm")}
+        </button>
+
+        <button
+          class="p-1.5 rounded hover:bg-accent transition-colors shrink-0"
+          title="Extensions (loaded / installed)"
+          @click=${extensionsPanel.toggleExtensions}
+        >
+          ${extensionsPanel.isExtensionsOpen() ? icon(PanelLeftClose, "sm") : icon(Puzzle, "sm")}
         </button>
 
         <button
@@ -913,6 +954,12 @@ function renderApp() {
     ${treePanel.renderHistoryPanel()}
 
     ${statsPanel.renderStatsModal()}
+
+    ${contextPanel.renderContextPanel()}
+
+    ${insightsPanel.renderInsightsPanel()}
+
+    ${extensionsPanel.renderExtensionsPanel()}
 
     ${settingsPanel.renderSettingsPanel()}
   `;

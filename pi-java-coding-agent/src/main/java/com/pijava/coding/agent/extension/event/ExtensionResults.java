@@ -2,12 +2,14 @@ package com.pijava.coding.agent.extension.event;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import com.pijava.agent.compaction.CompactionSettings;
 import com.pijava.agent.entry.CustomMessageContent;
 import com.pijava.agent.entry.Entry;
 import com.pijava.agent.hook.SuppliedCompaction;
 import com.pijava.agent.session.ContextEntries.ProjectedEntry;
+import com.pijava.agent.tool.ShellExecutor;
 import com.pijava.agent.tool.ShellResult;
 import com.pijava.agent.tool.ToolResult;
 import com.pijava.ai.message.ContentBlock;
@@ -82,11 +84,26 @@ public final class ExtensionResults {
     }
 
     /**
-     * pi {@code UserBashEventResult}（types.ts:1437-1450）的 {@code {result}} 臂
-     * （全替换：扩展已执行，直接用此结果）；{@code {operations}} 臂不移植
-     * （java 无 per-call BashOperations 缝，窄差 D10）。
+     * pi {@code UserBashEventResult}（types.ts:1437-1450）判别联合：
+     * {@code {operations}} 换执行后端、宿主照常落会话；{@code {result}} 表示扩展已执行完。
+     * 两臂二选一由类型系统保证（pi 运行时校验「两个都给」的非法形状在 Java 不可达）。
      */
-    public record UserBashEventResult(ShellResult result) {}
+    public sealed interface UserBashEventResult {
+
+        /** pi {@code {operations}}：扩展只换执行后端（B286）。 */
+        record Operations(ShellExecutor operations) implements UserBashEventResult {
+            public Operations {
+                Objects.requireNonNull(operations, "operations");
+            }
+        }
+
+        /** pi {@code {result}}：扩展已执行，宿主直接采用此结果。 */
+        record Result(ShellResult result) implements UserBashEventResult {
+            public Result {
+                Objects.requireNonNull(result, "result");
+            }
+        }
+    }
 
     /** pi {@code BeforeAgentStartEventResult}（types.ts:1467-1471）。 */
     public record BeforeAgentStartEventResult(CustomMessageDraft message, String systemPrompt) {}

@@ -6,6 +6,7 @@ import java.util.Optional;
 import java.util.function.Function;
 
 import com.pijava.agent.tool.AgentTool;
+import com.pijava.agent.tool.ShellExecutor;
 import com.pijava.agent.tool.TruncationUtils;
 import com.pijava.ai.stream.FinalToolArguments;
 import com.pijava.ai.stream.ToolCallArgumentsStream.Finish;
@@ -69,7 +70,21 @@ public final class BashTool {
      */
     public static AgentTool<BashInput, BashDetails> create(
             String commandPrefix, boolean exposeSessionEnvironment) {
+        return create(commandPrefix, exposeSessionEnvironment, null);
+    }
+
+    /**
+     * Create the bash tool with an execution backend override（pi
+     * {@code BashToolOptions.operations}，bash.ts:214-225）——扩展用它接入 Docker/SSH
+     * 等沙箱后端，其余语义（schema/截断/超时/PI_* 注入）全部复用。
+     *
+     * @param executorOverride 执行后端；{@code null} ⇒ {@code context.shell()}
+     *        （pi {@code createLocalBashOperations}）
+     */
+    public static AgentTool<BashInput, BashDetails> create(
+            String commandPrefix, boolean exposeSessionEnvironment,
+            @Nullable ShellExecutor executorOverride) {
         return ShellToolSupport.create(BASH_CONFIG, commandPrefix, exposeSessionEnvironment,
-            Function.identity(), null);
+            Function.identity(), executorOverride);
     }
 }

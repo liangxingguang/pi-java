@@ -6,10 +6,12 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicReference;
 
 import com.pijava.agent.entry.Entry;
 import com.pijava.agent.tool.DefaultFileSystem;
 import com.pijava.agent.tool.DefaultShellExecutor;
+import com.pijava.agent.tool.ShellExecutor;
 import com.pijava.agent.tool.ShellResult;
 import com.pijava.agent.tool.ToolContext;
 import com.pijava.ai.message.ContentBlock;
@@ -57,6 +59,7 @@ class SessionLifecycleEventsTest {
     static volatile boolean handleInput;
     static volatile String systemPromptOverride;
     static volatile ShellResult bashReplacement;
+    static volatile ShellExecutor bashOperations;
     static volatile String messageEndReplacement;
 
     /** 测试扩展：订阅本批全部宿主发射点并录制。 */
@@ -94,7 +97,9 @@ class SessionLifecycleEventsTest {
             ctx.on(USER_BASH, (e, c) -> {
                 EVENTS.add("user_bash:" + e.command());
                 return bashReplacement != null
-                    ? new UserBashEventResult(bashReplacement) : null;
+                    ? new UserBashEventResult.Result(bashReplacement)
+                    : bashOperations != null
+                        ? new UserBashEventResult.Operations(bashOperations) : null;
             });
             ctx.on(BEFORE_AGENT_START, (e, c) -> {
                 EVENTS.add("before_agent_start:" + e.prompt() + ":" + e.systemPrompt());
@@ -131,6 +136,7 @@ class SessionLifecycleEventsTest {
         handleInput = false;
         systemPromptOverride = null;
         bashReplacement = null;
+        bashOperations = null;
         messageEndReplacement = null;
         var servicesDir = Files.createDirectories(tmp.resolve("META-INF/services"));
         Files.writeString(
@@ -324,6 +330,27 @@ class SessionLifecycleEventsTest {
                 .toList();
             assertThat(bashEntries).hasSize(1);
             assertThat(bashEntries.get(0).output()).isEqualTo("ext-bash-output");
+        }
+    }
+
+    @Test
+    void userBashOperationsArmRunsTheExtensionBackend() {
+        try (var s = session(InMemorySessionRepository.create(), "--session-id", "ub2")) {
+            var seen = new AtomicReference<String>();
+            bashOperations = (command, options) -> {
+                seen.set(command);
+                return new ShellResult("docker-output", 0, false, false, 1, 12);
+            };
+            var result = s.executeBash("b2", "echo in-docker", false);
+            // {operations} 臂：宿主用扩展后端执行，并照常落会话（pi agent-session.ts:3922-3949）。
+            assertThat(seen.get()).isEqualTo("echo in-docker");
+            assertThat(result.output()).isEqualTo("docker-output");
+            var bashEntries = s.harness().snapshot(s.laneName()).transcript().stream()
+                .filter(e -> e instanceof Entry.BashExecution)
+                .map(e -> (Entry.BashExecution) e)
+                .toList();
+            assertThat(bashEntries).hasSize(1);
+            assertThat(bashEntries.get(0).output()).isEqualTo("docker-output");
         }
     }
 }

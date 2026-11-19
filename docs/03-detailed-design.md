@@ -683,6 +683,10 @@ public class ToolContext {
     public FileSystem fs();
 }
 
+/** B286（2026-11-19）：shell 工具工厂暴露可空执行后端（pi `BashToolOptions.operations`）。 */
+BashTool.create(String commandPrefix, boolean exposeSessionEnvironment, ShellExecutor executorOverride);
+PowerShellTool.create(boolean exposeSessionEnvironment, ShellExecutor executorOverride);
+
 public record ToolResult<TDetails>(
     List<ContentBlock> content,
     TDetails details,
@@ -727,7 +731,10 @@ final class FileMutationQueue {
 内置工具在 `com.pijava.agent.tool.builtin`：`BashTool` / `ReadTool` / `WriteTool` /
 `EditTool` / `GlobTool` / `GrepTool` / `LsTool`（另有 `EditDiff` / `LineDiff` 供 diff 渲染，
 `FileMutationQueue` 供串行化）。每个工具**自带参数校验**，没有集中的 options record
-—— 需要开关时由 `ToolSetFactory` 的构造参数决定启用集。
+—— 需要开关时由 `ToolSetFactory` 的构造参数决定启用集。`BashTool`／`PowerShellTool`
+另接受执行器覆盖（B286）：扩展注册同名 `bash` 即可把命令执行委托给 Docker/SSH 等后端；
+`user_bash` 结果联合为 `UserBashEventResult.Operations(ShellExecutor)` /
+`Result(ShellResult)`，会话 bash 按臂执行并照常落会话。
 
 ---
 

@@ -139,11 +139,19 @@ final class WebDispatcher {
                         session.sessionId(), session.sessionName()));
                 }
                 case WebClientMessage.GetSessionStats ignored -> send.accept(sessionStats());
+                case WebClientMessage.GetContextInsights ignored -> send.accept(contextInsights());
+                case WebClientMessage.GetSessionInsights s -> send.accept(
+                    new WebServerMessage.SessionInsights(state.insights().report(
+                        s.range(),
+                        session.services().settings().effective().sessionBackend)));
                 case WebClientMessage.GetSettings ignored -> send.accept(settingsState());
                 case WebClientMessage.SetSetting s -> {
                     setSetting(s.key(), s.value());
                     send.accept(settingsState());
                 }
+                case WebClientMessage.GetExtensions ignored -> send.accept(
+                    new WebServerMessage.Extensions(WebExtensions.list(
+                        session.extensionSourceInfos(), session.extensionResourcePaths())));
             }
         } catch (Exception e) {
             send.accept(new WebServerMessage.Error(
@@ -263,6 +271,46 @@ final class WebDispatcher {
         sessionsGeneration.incrementAndGet();   // 代次闸先翻，在飞回调自弃
         if (signal != null) {
             signal.abort();
+        }
+    }
+
+    /**
+     * 上下文洞察快照（{@code getContextInsights} 响应，Context 面板数据源）。
+     *
+     * <p>模型窗口取自 {@code ModelCatalog}；激活工具与系统提示取 harness 现值；
+     * 消息/事件取当前车道的 branch transcript。压缩预留读用户设置（默认 16384）。</p>
+     */
+    private WebServerMessage.ContextInsights contextInsights() {
+        var harness = session.harness();
+        var modelId = harness.getModel();
+        var catalogModel = modelId == null
+            ? null : session.modelCatalog().find(modelId).orElse(null);
+        int contextWindow = catalogModel == null ? 0 : catalogModel.maxInputTokens();
+        int maxOutput = catalogModel == null ? 0 : catalogModel.maxOutputTokens();
+        int reserve = session.services().settings().compaction()
+            .getCompactionSettings(modelId).reserveTokens();
+        var tools = harness.getActiveTools().stream()
+            .map(tool -> new ContextInsights.ToolView(
+                tool.name(), tool.description(), schemaJson(tool)))
+            .toList();
+        var report = ContextInsights.build(
+            session.sessionId(),
+            modelId == null ? null : modelId.provider() + "/" + modelId.modelName(),
+            contextWindow,
+            maxOutput,
+            reserve,
+            harness.currentSystemPrompt(),
+            tools,
+            harness.snapshot(session.laneName()).transcript());
+        return new WebServerMessage.ContextInsights(report);
+    }
+
+    /** 工具输入 schema 的 JSON 文本（估算工具定义 token 用；失败给空对象）。 */
+    private static String schemaJson(com.pijava.agent.tool.AgentTool<?, ?> tool) {
+        try {
+            return SessionJson.mapper().writeValueAsString(tool.inputSchema());
+        } catch (Exception e) {
+            return "{}";
         }
     }
 

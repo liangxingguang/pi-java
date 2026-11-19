@@ -252,6 +252,21 @@ class PiWebServerIntegrationTest {
         client.send("{\"type\":\"getSessions\"}");
         assertThat(awaitType(received, "sessions")).isEqualTo("sessions");
 
+        // Context 面板数据源：getContextInsights → contextInsights
+        client.send("{\"type\":\"getContextInsights\"}");
+        String context = awaitMessage(received, "contextInsights");
+        assertThat(context).contains("\"categories\"").contains("\"steps\"");
+
+        // Insights 页：跨会话洞察
+        client.send("{\"type\":\"getSessionInsights\",\"range\":\"7d\"}");
+        String insights = awaitMessage(received, "sessionInsights");
+        assertThat(insights).contains("\"supported\"").contains("\"sessions\"");
+
+        // 扩展面板：已加载扩展清单（测试 classpath 上挂着内置 mcp / tool-search）
+        client.send("{\"type\":\"getExtensions\"}");
+        String extensions = awaitMessage(received, "extensions");
+        assertThat(extensions).contains("\"loaded\":true").contains("\"source\":\"builtin\"");
+
         // Stage B：文件浏览器 / git 控制面
         client.send("{\"type\":\"listDir\",\"path\":\"\"}");
         assertThat(awaitType(received, "dirListing")).isEqualTo("dirListing");
