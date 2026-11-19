@@ -29,6 +29,10 @@ JDK 25 · Maven 4.x · Jackson (JSON/CBOR) · [TamboUI](https://tamboui.dev/) (�
 
 commands: `mvn clean verify`, `mvn test -pl <module> -am`, `mvn checkstyle:check`。分发使用 fat jar；Native Image 已放弃。
 
+前端产物已随源码提交（`pi-java-web/src/main/resources/web`），因此 `pi-java-web` 的 npm 再生步骤可跳过：
+受限 npm 环境（无网、或机器级 `safe-delete` 守卫拦住 `npm ci` 的批量删除）跑全仓验证用
+`mvn clean verify -Dfrontend.skip=true`。
+
 ## 开发流程
 
 所有代码由 AI 写，人只审核。每个 Phase 按 8 步推进。详见 `docs/00-ai-driven-development-process.md`。

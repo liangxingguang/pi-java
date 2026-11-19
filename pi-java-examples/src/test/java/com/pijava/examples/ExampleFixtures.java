@@ -212,6 +212,37 @@ final class ExampleFixtures {
         private final Map<String, String> statuses = new java.util.LinkedHashMap<>();
         private final Map<String, List<String>> widgets = new java.util.LinkedHashMap<>();
         private final List<String> editorTexts = new ArrayList<>();
+        /** W4：addAutocompleteProvider 调用次数。 */
+        int autocompleteCount;
+        /** W7：setTitle 录表。 */
+        private final List<String> titles = new ArrayList<>();
+        /** W5：setHiddenThinkingLabel 录表（{@code null} ⇒ pi 复位臂）。 */
+        private final List<String> hiddenThinkingLabels = new ArrayList<>();
+        /** W5：setWorkingMessage 录表。 */
+        private final List<String> workingMessages = new ArrayList<>();
+        /** W5：setWorkingIndicator 录表（{@code null} ⇒ pi 回默认）。 */
+        private final List<com.pijava.coding.agent.extension.WorkingIndicatorOptions>
+            workingIndicators = new ArrayList<>();
+        /** W5：setWorkingVisible 录表。 */
+        private final List<Boolean> workingVisibles = new ArrayList<>();
+        /** W5：setFooter 录表（每项是工厂本身；{@code null} ⇒ 回内置）。 */
+        private final List<com.pijava.coding.agent.extension.ExtensionFooterFactory> footers =
+            new ArrayList<>();
+        /** W5：setHeader 录表。 */
+        private final List<com.pijava.coding.agent.extension.ExtensionSlotFactory> headers =
+            new ArrayList<>();
+        /** W5：setEditorComponent 录表。 */
+        private final List<com.pijava.coding.agent.extension.ExtensionEditorFactory>
+            editorFactories = new ArrayList<>();
+        /** W5：setWidget 的 placement 录表（{@code null} ⇒ 省略）。 */
+        private final Map<String, String> widgetPlacements = new java.util.LinkedHashMap<>();
+
+        /** W4：记录补全 provider 注册。 */
+        @Override
+        public void addAutocompleteProvider(java.util.function.UnaryOperator<
+                com.pijava.coding.agent.extension.ExtensionAutocompleteProvider> factory) {
+            autocompleteCount++;
+        }
 
         /** 脚本化一次 select/input 应答（null ⇒ 取消）。 */
         ScriptedUi answer(Object value) {
@@ -258,6 +289,7 @@ final class ExampleFixtures {
         @Override
         public String select(String title, List<String> options,
                              com.pijava.coding.agent.extension.ExtensionUiDialogOptions opts) {
+            dialogOptions.add(opts);
             return (String) poll();
         }
 
@@ -298,6 +330,101 @@ final class ExampleFixtures {
             } else {
                 widgets.put(key, null);
             }
+            widgetPlacements.put(key, opts == null ? null : opts.placement());
+        }
+
+        @Override
+        public void setWorkingMessage(String message) {
+            workingMessages.add(message);
+        }
+
+        @Override
+        public void setWorkingVisible(boolean visible) {
+            workingVisibles.add(visible);
+        }
+
+        @Override
+        public void setWorkingIndicator(
+                com.pijava.coding.agent.extension.WorkingIndicatorOptions opts) {
+            workingIndicators.add(opts);
+        }
+
+        @Override
+        public void setHiddenThinkingLabel(String label) {
+            hiddenThinkingLabels.add(label);
+        }
+
+        @Override
+        public void setFooter(
+                com.pijava.coding.agent.extension.ExtensionFooterFactory factory) {
+            footers.add(factory);
+        }
+
+        @Override
+        public void setHeader(
+                com.pijava.coding.agent.extension.ExtensionSlotFactory factory) {
+            headers.add(factory);
+        }
+
+        @Override
+        public void setEditorComponent(
+                com.pijava.coding.agent.extension.ExtensionEditorFactory factory) {
+            editorFactories.add(factory);
+        }
+
+        /** W5：hidden thinking label 录表（{@code null} ＝复位）。 */
+        List<String> hiddenThinkingLabels() {
+            return hiddenThinkingLabels;
+        }
+
+        /** W5：working message 录表。 */
+        List<String> workingMessages() {
+            return workingMessages;
+        }
+
+        /** W5：working indicator 录表。 */
+        List<com.pijava.coding.agent.extension.WorkingIndicatorOptions> workingIndicators() {
+            return workingIndicators;
+        }
+
+        /** W5：working visible 录表。 */
+        List<Boolean> workingVisibles() {
+            return workingVisibles;
+        }
+
+        /** W5：footer 工厂录表。 */
+        List<com.pijava.coding.agent.extension.ExtensionFooterFactory> footers() {
+            return footers;
+        }
+
+        /** W5：header 工厂录表。 */
+        List<com.pijava.coding.agent.extension.ExtensionSlotFactory> headers() {
+            return headers;
+        }
+
+        /** W5：编辑器工厂录表。 */
+        List<com.pijava.coding.agent.extension.ExtensionEditorFactory> editorFactories() {
+            return editorFactories;
+        }
+
+        /** W5：widget placement 录表。 */
+        Map<String, String> widgetPlacements() {
+            return widgetPlacements;
+        }
+
+        /** W6：select/confirm/input 收到的对话框选项录表（按调用序）。 */
+        private final List<com.pijava.coding.agent.extension.ExtensionUiDialogOptions>
+            dialogOptions = new ArrayList<>();
+
+        /** W6：最近一次对话框选项（无调用 ⇒ {@code null}）。 */
+        com.pijava.coding.agent.extension.ExtensionUiDialogOptions lastDialogOptions() {
+            return dialogOptions.isEmpty() ? null
+                : dialogOptions.get(dialogOptions.size() - 1);
+        }
+
+        /** W6：对话框选项全表。 */
+        List<com.pijava.coding.agent.extension.ExtensionUiDialogOptions> dialogOptions() {
+            return dialogOptions;
         }
 
         @Override
@@ -308,18 +435,30 @@ final class ExampleFixtures {
         @Override
         public boolean confirm(String title, String message,
                                com.pijava.coding.agent.extension.ExtensionUiDialogOptions opts) {
+            dialogOptions.add(opts);
             return Boolean.TRUE.equals(poll());
         }
 
         @Override
         public String input(String title, String placeholder,
                             com.pijava.coding.agent.extension.ExtensionUiDialogOptions opts) {
+            dialogOptions.add(opts);
             return (String) poll();
         }
 
         @Override
         public void notify(String message, NotifyType type) {
             notices.add(new Notice(message, type));
+        }
+
+        /** W7：setTitle 录表。 */
+        List<String> titles() {
+            return titles;
+        }
+
+        @Override
+        public void setTitle(String title) {
+            titles.add(title);
         }
     }
 }

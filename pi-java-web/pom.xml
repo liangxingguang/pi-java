@@ -16,6 +16,13 @@
     <name>pi-java Web</name>
     <description>Web UI for pi-java (Phase 7)</description>
 
+    <properties>
+        <!-- 前端产物已随源码提交（src/main/resources/web），前端构建只是再生步骤。
+             设为 true 可在无网/受限 npm 环境（如 CI 的 safe-delete 守卫）下跑全仓
+             verify：mvn clean verify -Dfrontend.skip=true -->
+        <frontend.skip>false</frontend.skip>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>com.pi-java</groupId>
@@ -61,6 +68,7 @@
                 <artifactId>frontend-maven-plugin</artifactId>
                 <version>${version.frontend-maven-plugin}</version>
                 <configuration>
+                    <skip>${frontend.skip}</skip>
                     <workingDirectory>src/main/frontend</workingDirectory>
                     <installDirectory>${project.build.directory}/node</installDirectory>
                 </configuration>

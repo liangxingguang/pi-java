@@ -215,7 +215,7 @@ pi-java 的**引擎钩子** = `pi-java-agent-core/.../agent/hook/HookSystem.java
 | 37 | `thinking_level_select` | `:1632` | ✅ | 2 | **对齐** | 批 4 桥接（宿主 `AgentSession.java:513`）；`previousLevel` 桥内跟踪（种子＝装配时当前等级）—— 台账 **B35** 的扩展面已补 |
 | 38 | `tool_call` | `:1633` | ✅ | **3** | **对齐** | 批 4 `EngineHookBridge`（`before_tool` 适配器）：block 短路、异常向上传播（pi 逐字）、input 原地可变链（docs/14 §3.4.2） |
 | 39 | `tool_result` | `:1634` | ✅ | **3** | **对齐** | 批 4（`after_tool` 适配器）：逐字段合并＋structuredContent 丢弃规则（pi :1194-1214 逐字）；顺带修真 `applyAfterToolPatch` 洗 `isError`/`structuredContent` 的存量 bug（docs/14 §2.3） |
-| 40 | `user_bash` | `:1635` | ✅ | 1 | **对齐** | 批 5 `executeBash` chokepoint 拦截（{result} 替换臂＋异常重抛不回落，pi :1262-1296 逐字）；{operations} 臂不移植（窄差 D10） |
+| 40 | `user_bash` | `:1635` | ✅ | 1 | **对齐** | 批 5 `executeBash` chokepoint 拦截（异常重抛不回落，pi :1262-1296 逐字）；**B286（2026-11-19）** 补 `{operations}` 臂：`UserBashEventResult.Operations(ShellExecutor)` 换执行后端、宿主照常落会话；`{result}` 替换臂不变 |
 | 41 | `input` | `:1636` | ✅ | **3** | **对齐** | 批 5 `processPrompt` 内、展开**之前**（pi :1991 逐字）；transform 链＋handled（SessionResult "handled"）；images 恒 null（窄差 D12） |
 
 **汇总（宽口径，批 coding-agent-23 后）：对齐 41 / 缺失 0 / 存疑 0 / 合计 41 = 100%**；**Σ权重 83 / Σ(w×c) 83.0 / 加权 100%（满分域第十三，缺失清零）**
@@ -238,7 +238,7 @@ pi-java 的**引擎钩子** = `pi-java-agent-core/.../agent/hook/HookSystem.java
 | # | 内容 | 等级 |
 |---|---|---|
 | D9 | `message_end` 观察处理器在 sink 时点与结果处理器同批火一次（看到链中值）；pi 观察与结果同序但后续观察看到链终值。替换对宿主监听者/TUI/RPC 的效果与 pi 原地改写一致 | [内部] |
-| D10 | `user_bash` 的 `{operations}` 臂不移植（java 无 per-call BashOperations 缝；ToolContext 级 ShellExecutor 注入是既有等价物）；`{result}` 替换臂全落 | [内部] |
+| D10 | ~~`user_bash` 的 `{operations}` 臂不移植~~ **已闭环（B286，2026-11-19）**：`UserBashEventResult` 改为 sealed 联合（`Operations(ShellExecutor)` / `Result(ShellResult)`），会话 bash 按臂执行并落会话；`spawnHook` 仍无对位（D240） | [内部] |
 | D11 | `before_agent_start` 的 `systemPromptOptions` 可变对象不移植（java 无 BuildSystemPromptOptions 面；selectedTools 编辑臂随之不移植）；`systemPrompt` 覆盖是 harness **全局态**（粘性），非 pi 的 per-prompt options；事件的 `systemPrompt` 是配置原值（渲染拼装在引擎内） | [模型可见：覆盖持续生效] |
 | D12 | `input` 事件 `images` 恒 null；扩展来源消息以 `source="extension"` 进入 processPrompt | [内部，边缘] |
 | D14 | `previousSessionFile`/`targetSessionFile` 载荷装会话 **id**（裁决⑤：SQLite/JSONL 仓无文件路径面） | [内部] |
@@ -468,7 +468,7 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 | E5-30 | 扩展注册 CLI flag | `:1664` + `args.ts:186` | ✅ `ExtensionFlagBinder`＋`--help` 段 | 1 | **对齐** | 批 16 T1c–T1e（args.ts:247-271 三态＋agent-session-services.ts:82-128 绑定＋args.ts:273-283 help 面对位） |
 | E5-31 | 扩展 UI 注入（TUI） | `types.ts:149-323` | ⚠️ `TuiExtensionUI`（13 方法：对话四件套＋custom＋notify/setStatus/setWidget/setFooter/setHeader/setEditorText/getEditorText）＋widget/footer/header/状态段注入层；余 15 成员 default＝pi noOp 语义、TUI 臂挂账（docs/28 §4） | **0（转出 L7）** | **转出** | **L5（2026-11-05，docs/25 §1.5）**：新锚点新增 `blocked`、对话框堆叠、`KeybindingHints`，全部是 TUI 渲染/交互面 ⇒ 按 docs/04 归属**转 L7**；API 侧的 `KeybindingHints` 另见 **D220**。批 17 后旧读数：存疑 / 权重 2 |
 | E5-32 | 扩展 UI 通道（RPC，9 method） | `rpc-types.ts:253-297` | ✅ `RpcExtensionUI` 九方法 typed 实现＋`RpcDispatcher` 注入（晚绑定修真——context 现读会话字段） | 1 | **对齐** | 批 17（docs/28 T3）：参数键平铺顶层（pi spread 逐字）＋signal/timeout 本地解除（裁决⑦）＋setWidget 工厂臂静默忽略（pi 同缺） |
-| E5-33 | 扩展示例库（可执行验收规格） | 新锚点 `examples/`（102 个 `.ts`；L8 分母 88） | `pi-java-examples` 已移植 29 件（16 保留＋W1 5＋W2 8），见 docs/07 与 docs/27 | **0（转出 L8）** | **转出** | **L5（2026-11-05，docs/25 §1.5）**：examples 验收规格归 **L8**，L5 不保留第二计分入口（避免同一工作计两次）；主流 examples 继续全做 Java 移植，Chord plugin 按 R5 排除。**L8（docs/27）**：新分母 88＝102−8 外部运行时（D232）−1 R5−5 范围面主动（D237）；W0＋W1＋W2 已实施（29/88＝32.95%）。旧读数：缺失 / 权重 3 |
+| E5-33 | 扩展示例库（可执行验收规格） | 新锚点 `examples/`（102 个 `.ts`；L8 分母 88） | `pi-java-examples` 已移植 **88 件**（16 保留＋W1 5＋W2 8＋W3 10＋W4 10＋W5 13＋W6 4＋W7 5＋W8 17），见 docs/07 与 docs/27／51／52／54／55／56／57／58 | **0（转出 L8）** | **转出** | **L5（2026-11-05，docs/25 §1.5）**：examples 验收规格归 **L8**，L5 不保留第二计分入口（避免同一工作计两次）；主流 examples 继续全做 Java 移植，Chord plugin 按 R5 排除。**L8（docs/27）**：新分母 88＝102−8 外部运行时（D232）−1 R5−5 范围面主动（D237）；W0–W8 全部实施（**88/88＝100%**），注册表 70 项、模块 401 测 0 失败、SpotBugs 全模块 0 告警；仅剩 docs/05 总表刷新（等全仓 `mvn clean verify`）。旧读数：缺失 / 权重 3 |
 | E5-34 | 扩展来源追踪（`SourceInfo`） | `types.ts:1543/2055/2098` | ✅ `ExtensionSourceInfos` 四规则＋注册即盖 sourceInfo 章 | 1 | **对齐** | **批 23（docs/34 T4）**：getDefaultSourceInfoForPath 逐字（builtin:/`<inline:`⇒temporary、`<agentDir>/extensions`⇒user、`<cwd>/.pi-java/extensions`⇒project、包源经元数据携带 origin=package）；`CommandRegistry` 登记目注册即盖章（loader.ts:317 对位） |
 | E5-35 | `on()` 返回退订函数 | `types.ts:1569-1636`（41 条 `() => void`） | ✅ `ExtensionContext.on(spec, handler)`（批 4，docs/14 §3.2）→ `AutoCloseable` 退订：按实例移除、空表删键（loader.ts:272-288 逐字语义） | 2 | **对齐** | — |
 
