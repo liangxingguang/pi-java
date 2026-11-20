@@ -7,7 +7,9 @@
 > **实施进度（2026-11-21）：**
 > - P1 已完成：`9cccfe23 feat(ai): validate tool arguments with pi-schema semantics`。
 > - P2 首批已完成：`dc59f0c7 feat(ai): align v1.6.0 retry patterns and instruction role`。
-> - P2 余项（三个新 compat 键、Codex 其余形状）与 P3 之后未开始。
+> - P2b 已完成：`734c7a21 feat(ai): support v1.6.0 prompt cache key mode and assistant/tools compat keys`
+>   （三个新 compat 键贯穿 ModelCompat／models.json／四条车道解析与读点；响应车道 `disabled` 生效）。
+> - P2 余项（Codex/Copilot/Mistral 等既有形状复核）与 P3 之后未开始。
 >
 > 术语释义：
 > - **锚点**：pi 的一个固定 git 提交，pi-java 以它作为行为对照基准，取证只走 `git show <sha>:<path>`。
