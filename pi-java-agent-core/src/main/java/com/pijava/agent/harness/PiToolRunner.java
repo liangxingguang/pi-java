@@ -158,7 +158,7 @@ public final class PiToolRunner implements PiLoop.ToolRunner {
         }
         BeforeToolResult decision;
         try {
-            ToolArgumentsValidator.validate(tool.inputSchema(), effectiveArgs,
+            effectiveArgs = ToolArgumentsValidator.validate(tool.inputSchema(), effectiveArgs,
                 call.toolName(), argumentsError);
             decision = hooks == null ? null : hooks.fireBeforeTool(laneName,
                 new ToolCallContext(laneName, call.toolCallId(), call.toolName(), effectiveArgs,

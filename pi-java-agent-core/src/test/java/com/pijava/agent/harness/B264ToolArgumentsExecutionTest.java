@@ -51,7 +51,8 @@ class B264ToolArgumentsExecutionTest {
             "id", "custom", Map.of("_raw", "{\"command\":\"echo hi\"}"), false));
 
         assertThat(outcome.isError()).isTrue();
-        assertThat(text(outcome)).isEqualTo("missing required argument \"command\"");
+        assertThat(text(outcome)).startsWith("Validation failed for tool \"custom\":\n  - command: missing")
+            .contains("Received arguments:");
         assertThat(tool.executions).hasValue(0);
     }
 

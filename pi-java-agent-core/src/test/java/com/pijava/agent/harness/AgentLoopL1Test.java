@@ -155,8 +155,9 @@ class AgentLoopL1Test {
             "required", List.of("text"));
         var registry = new ToolRegistry(null);
         registry.register(recordingTool("echo", schema, executed));
-        // First response: toolUse with a non-string "text" (violates schema).
-        var badCall = toolUsePartial(StopReason.TOOL_USE, "echo", Map.of("text", 123));
+        // First response: toolUse with an object where the schema requires a string. pi-schema
+        // coerces numbers to strings, so use a value it cannot convert.
+        var badCall = toolUsePartial(StopReason.TOOL_USE, "echo", Map.of("text", Map.of("x", 1)));
         var finalStop = AssistantMessage.empty()
             .withContent(List.of(new ContentBlock.TextContent("done")))
             .withStopReason(StopReason.STOP);
@@ -180,7 +181,9 @@ class AgentLoopL1Test {
         // 前缀随 ToolExecutionPipeline 一起删除 —— pi 的 createErrorToolResult 也只带
         // 文本本身，不套前缀。
         var text = ((ContentBlock.TextContent) msg.content().get(0)).text();
-        assertThat(text).contains("text").contains("expected string");
+        assertThat(text).contains("Validation failed for tool \"echo\"")
+            .contains("- text: expected string, got object")
+            .contains("Received arguments:");
 
         // Run continued and ended normally.
         assertThat(h.lastAssistantMessage().stopReason()).isEqualTo(StopReason.STOP);

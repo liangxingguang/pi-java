@@ -145,7 +145,7 @@ public class ToolRegistry {
         // malformed arguments before they reach prepareArguments/execute. A
         // violation throws IllegalArgumentException, which the tool pipeline
         // encodes as an error result fed back to the model.
-        ToolArgumentsValidator.validate(rawTool.inputSchema(), arguments);
+        arguments = ToolArgumentsValidator.validate(rawTool.inputSchema(), arguments, toolName, null);
         var prepared = rawTool.prepareArguments(arguments);
         long startNanos = System.nanoTime();
         try {
