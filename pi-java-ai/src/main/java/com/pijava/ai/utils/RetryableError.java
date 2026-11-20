@@ -78,12 +78,17 @@ public final class RetryableError {
             "servers are currently busy", // retry.ts:34
             "currently experiencing high demand", // retry.ts:35（紧跟 high demand 组）
             "model is at capacity", // retry.ts:36
+            // A request that waited too long in the provider's queue (#12227).
+            "admission ceiling",
             "rate.?limit",
             "too many requests",
             // Status codes must not be part of a longer word or number, e.g. a request id or byte count (#11057).
-            "(?<![a-z0-9])(?:429|500|502|503|504|520|524)(?![a-z0-9])", // retry.ts:46-47
+            // 520, 524 and 525 are Cloudflare's: an unknown error, a timeout, and a failed TLS handshake.
+            "(?<![a-z0-9])(?:429|500|502|503|504|520|524|525)(?![a-z0-9])", // retry.ts:46-47
             // Also matches "The service is temporarily unavailable" (#10965).
             "service.?(?:is.?)?(?:temporarily.?)?unavailable",
+            // Gateway wording such as "The provider is temporarily unavailable. Retry shortly." (#12227).
+            "provider.?(?:is.?)?temporarily.?unavailable",
             "server.?error",
             "internal.?error",
 
@@ -91,6 +96,9 @@ public final class RetryableError {
             // "Provider returned error" responses (#2264) and gateway wording such as
             // "The upstream provider returned an error" (#10842).
             "provider.?returned.?(?:an.?)?error",
+            // Anthropic's internal error, sent as HTTP 500 before streaming and as an event
+            // without a status once the stream has started (#12227).
+            "\"type\"\\s*:\\s*\"api_error\"",
             "exceeded request buffer limit while retrying upstream",
             // Gateway failure relaying the upstream response stream, sent as an OpenAI
             // Responses `response.failed` event without an error code (#10920).
@@ -108,8 +116,14 @@ public final class RetryableError {
             "connection.?error",
             "connection.?refused",
             "connection.?lost",
+            // A gateway's mid-stream drop, e.g. "Connection closed." (#12064).
+            "connection.?closed",
             "other side closed",
             "fetch failed",
+            // Bare Node socket error codes, e.g. "read ECONNRESET", "write EPIPE",
+            // or "connect ETIMEDOUT 1.2.3.4:443" (#12128).
+            "(?<![a-z0-9_])(?:ECONNRESET|ECONNABORTED|ECONNREFUSED|ETIMEDOUT|EPIPE)(?![a-z0-9_])",
+            "connection reset by peer",
             // node-fetch system errors, e.g. the Google ADC OAuth token refresh used by
             // google-vertex. The reason is often empty (#10996).
             "request to \\S+ failed, reason:",
@@ -127,6 +141,8 @@ public final class RetryableError {
             // WebSocket transports can report close/error text instead of HTTP/fetch text.
             "websocket.?closed",
             "websocket.?error",
+            // Codex 60-minute WebSocket lifetime limit; a retry opens a fresh connection (#12124).
+            "websocket.?connection.?limit.?reached",
 
             // Premature stream endings from SDKs and transports. Anthropic can throw
             // "stream ended without ..." and "Anthropic stream ended before message_stop"
@@ -135,6 +151,19 @@ public final class RetryableError {
             "stream ended before message_stop",
             "stream ended before a terminal response event",
             "http2 request did not get a response",
+            // An OpenAI-compatible stream that ended with `finish_reason: "error"`, which
+            // OpenRouter sends when its provider fails mid-stream (#12227).
+            "provider finish_reason: error",
+            // OpenRouter: "Provider returned an empty response", and its wrapper for a provider
+            // that gave up (#12227).
+            "returned an empty response",
+            "stopped before completing the response",
+            // Magpie gateway relaying a dropped upstream Anthropic stream (#11879).
+            "cut short after the reply had begun",
+            // Gateway mid-stream failures relayed as SSE `event: error` frames (#12227).
+            "ended the response before it was complete",
+            "connection to the provider was reset",
+            "reported a failure while generating the response",
             // Codex CLI mid-stream disconnect, relayed by proxies that wrap the Codex CLI,
             // e.g. "stream disconnected before completion: stream closed before response.completed" (#11057).
             "stream disconnected before completion",
@@ -151,6 +180,8 @@ public final class RetryableError {
             "you can retry your request",
             "try your request again",
             "please retry your request",
+            // recursive: "Unable to process request. Repeat the request later."
+            "repeat the request later",
 
             // gRPC based providers (e.g. NVIDIA NIM)
             "ResourceExhausted",

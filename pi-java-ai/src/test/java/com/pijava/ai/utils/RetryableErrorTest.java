@@ -49,11 +49,19 @@ class RetryableErrorTest {
         // pi 白名单里插在 504 与 524 之间的那条（retry.ts:37）。
         "520 status code",
         "524 origin timeout",
+        // v1.6.0: Cloudflare's failed TLS handshake between Cloudflare and the origin.
+        "525 SSL handshake failed",
+        // v1.6.0: a request that waited too long in the provider's queue.
+        "waited 73.4s in queue, reaching this model's admission ceiling of 60s",
+        // v1.6.0: gateway wording that requires "temporarily".
+        "The provider is temporarily unavailable. Retry shortly.",
         // 1308 的长码（13080）不命中排除表，429 仍使本条瞬断（retry.ts:32-34 的
         // `(?![0-9])` 边界）。
         "429 {\"code\":\"13080\",\"message\":\"Usage limit reached\"}",
         "server error, please wait",
         "Provider returned error: upstream gone",
+        // v1.6.0: Anthropic's api_error event, including mid-stream without a status.
+        "{\"type\":\"error\",\"error\":{\"type\":\"api_error\",\"message\":\"Unable to complete this request right now.\"}}",
         // pi retry.ts:54-56（#10842）：网关转述的上游失败。
         "Provider returned an error: upstream gone",
         // pi retry.ts:48-49（#10965）：带 "is temporarily" 的形态。
@@ -69,6 +77,12 @@ class RetryableErrorTest {
         "connection refused",
         "connection lost mid-stream",
         "other side closed",
+        // v1.6.0: a gateway's mid-stream drop and bare Node socket codes.
+        "Connection closed.",
+        "read ECONNRESET",
+        "write EPIPE",
+        "connect ETIMEDOUT 1.2.3.4:443",
+        "connection reset by peer",
         "fetch failed",
         // pi retry.ts:78（#10996）：node-fetch 系统错误，reason 常为空。
         "request to https://oauth2.googleapis.com/token failed, reason:",
@@ -83,10 +97,20 @@ class RetryableErrorTest {
         "terminated",
         "websocket closed",
         "websocket error",
+        // v1.6.0: Codex's 60-minute WebSocket lifetime limit.
+        "Responses websocket connection limit reached",
         "stream ended before message_stop",
         "ended without a terminal event",
         "stream ended before a terminal response event",
         "http2 request did not get a response",
+        // v1.6.0: OpenRouter/gateway mid-stream failures.
+        "provider finish_reason: error",
+        "Provider returned an empty response",
+        "The model stopped before completing the response.",
+        "Claude Code's stream from Anthropic was cut short after the reply had begun",
+        "The provider ended the response before it was complete.",
+        "The connection to the provider was reset.",
+        "The provider reported a failure while generating the response.",
         // pi retry.ts:102-103（#11057）：Codex CLI 中流断开，被转述为 response.failed。
         "stream disconnected before completion: stream closed before response.completed",
         // pi retry.ts:88（5b6c792b4）：Node ERR_HTTP2_STREAM_CANCEL，HTTP/2 会话先死
@@ -96,6 +120,7 @@ class RetryableErrorTest {
         "you can retry your request",
         "try your request again",
         "please retry your request",
+        "Unable to process request. Repeat the request later.",
         "ResourceExhausted. Failed, hit resource quota",
         // ChatGPT 订阅路的中流失败（retry.ts:100-101）—— 无 HTTP 503 也要重试。
         "subscription_sharing_usage_unavailable",

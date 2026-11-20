@@ -86,10 +86,9 @@ public final class CompatResolver {
         // pi detectCompat:1664 —— completions strict 门的五否定缺省（explicit 在 resolved pick）。
         var detectedStrictMode = !isMoonshot && !isTogether && !isCloudflareAiGateway
             && !isNvidia && !isCerebras;
-        // detectCompat:1630 —— 判据**同时**看 provider 与模型 id 前缀（OpenRouter 上只有
-        // anthropic/* 与 openai/* 走 developer 角色）。
-        var isOpenRouterDeveloperRoleModel = isOpenRouter
-            && (modelName.startsWith("anthropic/") || modelName.startsWith("openai/"));
+        // detectCompat:1630（v1.6.0 #10741）—— developer 角色是 OpenAI 自己的；其他主机
+        // 的聊天模板常拒绝它，而所有主机都接受 system，故只有 OpenAI 自家 API 默认 developer。
+        var isOpenAI = provider.equals("openai") || url.contains("api.openai.com");
 
         // 包 A-09：思考开关的两个探测值（pi :1629/:1637-1638/:1646-1656）。
         // ⚠️ **不许把目录值塞进探测**（原 docs/58 §4.4 R7）：moonshotai／xiaomi／qwen-token-plan*
@@ -124,7 +123,7 @@ public final class CompatResolver {
             null,
             useMaxTokens ? MaxTokensField.MAX_TOKENS : MaxTokensField.MAX_COMPLETION_TOKENS,
             !isNonStandard,
-            isOpenRouterDeveloperRoleModel || (!isNonStandard && !isOpenRouter),
+            isOpenAI,
             detectedStrictMode,
             // 包 A-02：`supportsLongCacheRetention` 的 completions 探测面（B105 闭环；
             // `cacheControlFormat` 的探测走 withCompletions 的合一位，与 thinkingFormat 同形）。

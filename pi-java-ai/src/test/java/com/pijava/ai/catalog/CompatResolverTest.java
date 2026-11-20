@@ -78,14 +78,15 @@ class CompatResolverTest {
     }
 
     @Test
-    void openRouterKeepsTheDeveloperRoleForVendorModelsOnly() {
-        // pi detectCompat:1630 —— OpenRouter 上只有 anthropic/* 与 openai/* 走 developer 角色。
+    void openRouterDoesNotUseTheDeveloperRoleByDefault() {
+        // pi detectCompat:1630（v1.6.0 #10741）—— developer 只给 OpenAI 自家 API；
+        // OpenRouter（含其 anthropic/* 与 openai/* 前缀模型）默认 system。
         var vendor = CompatResolver.forCompletions(
             model("openrouter", "anthropic/claude-opus-4-8"), "https://openrouter.ai/api/v1");
         var own = CompatResolver.forCompletions(
             model("openrouter", "z-ai/glm-5.2"), "https://openrouter.ai/api/v1");
 
-        assertThat(vendor.supportsDeveloperRole()).isTrue();
+        assertThat(vendor.supportsDeveloperRole()).isFalse();
         assertThat(own.supportsDeveloperRole()).isFalse();
         // ⚠️ 但 **store 是开的**：pi 的 `isNonStandard`（`detectCompat:1603-1617`）里
         // **没有** `isOpenRouter` —— 直觉上「OpenRouter 是聚合端点所以非标准」是**错的**。

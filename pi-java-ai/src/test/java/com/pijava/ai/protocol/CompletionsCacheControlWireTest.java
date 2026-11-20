@@ -156,10 +156,11 @@ class CompletionsCacheControlWireTest {
         var paths = cacheControlPaths(wire);
         assertThat(paths).hasSize(3);
 
-        // ① 第一条指令消息：batch 模型是 reasoning + anthropic/ 前缀 ⇒ developer 角色，
-        //    串 content 被改写成 [{type:text,text,cache_control}]（pi :1160-1171）。
+        // ① 第一条指令消息：batch 模型是 reasoning，但 OpenRouter 不是 OpenAI 自家 API
+        //    ⇒ system 角色（v1.6.0 #10741）；content 仍被改写成
+        //    [{type:text,text,cache_control}]（pi :1160-1171）。
         var instruction = wire.path("messages").get(0);
-        assertThat(instruction.path("role").asText()).isEqualTo("developer");
+        assertThat(instruction.path("role").asText()).isEqualTo("system");
         assertThat(instruction.path("content").get(0).path("cache_control").path("type").asText())
             .isEqualTo("ephemeral");
         assertThat(instruction.path("content").get(0).path("cache_control").has("ttl")).isFalse();

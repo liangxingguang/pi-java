@@ -183,8 +183,9 @@ class CompletionsB98WireTest {
                 List.of(new ContentBlock.TextContent("done")), false),
             user("next"));
         var body = body(compat(b -> {}), messages, List.of(), Optional.empty());
-        // 前导 "developer" 是 THINKING 模型在默认 compat 下的指令角色（探测给真）。
-        assertThat(roles(body)).containsExactly("developer", "assistant", "tool", "user");
+        // 前导 "system" 是 THINKING 模型在默认 compat 下的指令角色（非 OpenAI 主机的
+        // developer 探测默认 false，v1.6.0 #10741）。
+        assertThat(roles(body)).containsExactly("system", "assistant", "tool", "user");
     }
 
     @Test
