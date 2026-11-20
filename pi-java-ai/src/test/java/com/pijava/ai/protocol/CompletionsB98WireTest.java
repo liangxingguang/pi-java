@@ -248,9 +248,79 @@ class CompletionsB98WireTest {
         assertThat(wire.has("reasoning_content")).isFalse();
     }
 
+    // ── v1.6.0（P2b）：三个新 compat 键 ──────────────────────────────
+
+    @Test
+    void requiresToolsWithToolHistorySendsAnEmptyArray() throws Exception {
+        // pi :852：请求没有工具，但历史里有 tool call/result ⇒ `"tools":[]` 必须在场。
+        List<Message> history = List.of(assistantToolCall(),
+            new Message.ToolResultMessage("call_1", "write",
+                List.of(new ContentBlock.TextContent("done")), false),
+            user("next"));
+        var body = body(compat(b -> b.toolsWithHistory = true), history, List.of(),
+            Optional.empty());
+
+        assertThat(body.has("tools")).isTrue();
+        assertThat(body.path("tools").isArray()).isTrue();
+        assertThat(body.path("tools").size()).isZero();
+    }
+
+    @Test
+    void toolsStayAbsentWithoutTheFlagEvenWithHistory() throws Exception {
+        // 缺省是**省略整个键**（vLLM 0.20+ 拒绝空数组，#11843）。
+        List<Message> history = List.of(assistantToolCall(),
+            new Message.ToolResultMessage("call_1", "write",
+                List.of(new ContentBlock.TextContent("done")), false),
+            user("next"));
+        var body = body(compat(b -> {}), history, List.of(), Optional.empty());
+
+        assertThat(body.has("tools")).isFalse();
+    }
+
+    @Test
+    void toolsHistoryFlagNeedsActualToolHistory() throws Exception {
+        // 门是 `hasToolHistory(messages)` —— 纯文本历史仍不发空数组。
+        var body = body(compat(b -> b.toolsWithHistory = true),
+            msgs(user("hi")), List.of(), Optional.empty());
+
+        assertThat(body.has("tools")).isFalse();
+    }
+
+    @Test
+    void requiresNonNullAssistantContentSendsEmptyString() throws Exception {
+        // v1.6.0（pi :1290）：只有 tool_calls 的 assistant 消息 content 必须是 ""。
+        var body = body(compat(b -> b.nonNullAssistantContent = true),
+            msgs(assistantToolCall()), List.of(), Optional.empty());
+
+        var assistant = assistantMessage(body);
+        assertThat(assistant.path("content").asText()).isEqualTo("");
+    }
+
+    @Test
+    void promptCacheKeyModeEnabledSendsTheKeyToAProxy() throws Exception {
+        // pi :808-812：enabled ⇒ 只要缓存开着就发（不要求 api.openai.com / long）。
+        var body = bodyWith(model(compat(b -> b.promptCacheKey = "enabled"),
+                Set.of(ModelCapability.TEXT)), msgs(user("hi")), List.of(),
+            Map.of("sessionId", "sid-1"), Optional.empty());
+
+        assertThat(body.has("prompt_cache_key")).isTrue();
+    }
+
+    @Test
+    void promptCacheKeyModeDisabledSuppressesTheKey() throws Exception {
+        // disabled ⇒ 永不发 —— 即使 long ＋ supportsLongCacheRetention（auto 会发的组合）。
+        var body = bodyWith(model(compat(b -> b.promptCacheKey = "disabled"),
+                Set.of(ModelCapability.TEXT)), msgs(user("hi")), List.of(),
+            Map.of("sessionId", "sid-1", "cacheRetention", "long"),
+            Optional.empty());
+
+        assertThat(body.has("prompt_cache_key")).isFalse();
+        assertThat(body.path("prompt_cache_retention").asText()).isEqualTo("24h");
+    }
+
     // ── 夹具 ──────────────────────────────────────────────────────────
 
-    /** B98 八开关（fallback 是 anthropic 专属，本车道恒 null）。 */
+    /** B98 八开关（fallback 是 anthropic 专属，本车道恒 null）＋ v1.6.0 三键。 */
     private static final class B98 {
         Boolean toolResultName;
         Boolean assistantAfterToolResult;
@@ -259,6 +329,9 @@ class CompletionsB98WireTest {
         Boolean zaiToolStream;
         Integer vllmPriority;
         VercelGatewayRouting vercel;
+        Boolean nonNullAssistantContent;
+        Boolean toolsWithHistory;
+        String promptCacheKey;
     }
 
     private static ModelCompat compat(java.util.function.Consumer<B98> set) {
@@ -271,7 +344,11 @@ class CompletionsB98WireTest {
             b.toolResultName, b.assistantAfterToolResult, b.thinkingAsText, b.usage,
             b.zaiToolStream, b.vllmPriority, b.vercel, null,
             // B99：supportsMidConvoEffort 缺席。
-            null);
+            null,
+            // v1.6.0（P2b）三键。
+            b.nonNullAssistantContent, b.toolsWithHistory,
+            b.promptCacheKey == null ? null
+                : com.pijava.ai.catalog.PromptCacheKeyMode.parse(b.promptCacheKey).orElseThrow());
     }
 
     private static ModelInfo model(ModelCompat compat, Set<ModelCapability> capabilities) {
@@ -297,9 +374,15 @@ class CompletionsB98WireTest {
     private static JsonNode body(ModelInfo model, List<Message> messages,
                                  List<ToolDefinition> tools,
                                  Optional<ThinkingLevel> reasoning) throws Exception {
+        return bodyWith(model, messages, tools, Map.of(), reasoning);
+    }
+
+    private static JsonNode bodyWith(ModelInfo model, List<Message> messages,
+                                     List<ToolDefinition> tools, Map<String, Object> extra,
+                                     Optional<ThinkingLevel> reasoning) throws Exception {
         try (var server = new RecordingHttpServer()) {
             var api = new OpenAICompletionsApi(
-                new ApiOptions(server.baseUrl(), "test-key", Duration.ofSeconds(5), 0, Map.of()));
+                new ApiOptions(server.baseUrl(), "test-key", Duration.ofSeconds(5), 0, extra));
             var request = new StreamRequest(model, "be brief", messages, tools,
                 -1, -1, reasoning);
             try (var iter = api.streamBlocking(request, ApiOptions.defaults())) {

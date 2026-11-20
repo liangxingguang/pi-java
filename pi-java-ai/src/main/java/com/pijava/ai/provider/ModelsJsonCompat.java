@@ -121,7 +121,13 @@ final class ModelsJsonCompat {
             ModelsJsonCompatFieldParsers.vercelRoutingOf(providerId, model.id(), def.vercelGatewayRouting()),
             ModelsJsonCompatFieldParsers.fallbacksOf(providerId, model.id(), def.allowedFallbackModels()),
             // B99：原样透传可空值（缺省 false 在车道读点以 === true 判定）。
-            def.supportsMidConvoEffort());
+            def.supportsMidConvoEffort(),
+            // v1.6.0（P2b）：两个布尔原样透传可空值（读点写 === true）；
+            // promptCacheKeyMode 三值闭集响亮抛，缺席保持 null（≙ "auto"，读点归一）。
+            def.requiresNonNullAssistantContent(),
+            def.requiresToolsWithToolHistory(),
+            ModelsJsonCompatFieldParsers.promptCacheKeyModeOf(providerId, model.id(),
+                def.promptCacheKeyMode()));
     }
 
     /**
@@ -236,7 +242,18 @@ final class ModelsJsonCompat {
                 : base.allowedFallbackModels(),
             // B99：标量 override ?? base。
             raw.supportsMidConvoEffort() != null
-                ? raw.supportsMidConvoEffort() : base.supportsMidConvoEffort());
+                ? raw.supportsMidConvoEffort() : base.supportsMidConvoEffort(),
+            // v1.6.0（P2b）：标量 override ?? base；闭集串经解析器。
+            raw.requiresNonNullAssistantContent() != null
+                ? raw.requiresNonNullAssistantContent()
+                : base.requiresNonNullAssistantContent(),
+            raw.requiresToolsWithToolHistory() != null
+                ? raw.requiresToolsWithToolHistory()
+                : base.requiresToolsWithToolHistory(),
+            raw.promptCacheKeyMode() != null
+                ? ModelsJsonCompatFieldParsers.promptCacheKeyModeOf(providerId, modelId,
+                    raw.promptCacheKeyMode())
+                : base.promptCacheKeyMode());
     }
 
     /**
@@ -340,7 +357,16 @@ final class ModelsJsonCompat {
             override.allowedFallbackModels() != null
                 ? override.allowedFallbackModels() : base.allowedFallbackModels(),
             override.supportsMidConvoEffort() != null
-                ? override.supportsMidConvoEffort() : base.supportsMidConvoEffort());
+                ? override.supportsMidConvoEffort() : base.supportsMidConvoEffort(),
+            // v1.6.0（P2b）：raw 层逐字段覆盖（标量语义）。
+            override.requiresNonNullAssistantContent() != null
+                ? override.requiresNonNullAssistantContent()
+                : base.requiresNonNullAssistantContent(),
+            override.requiresToolsWithToolHistory() != null
+                ? override.requiresToolsWithToolHistory()
+                : base.requiresToolsWithToolHistory(),
+            override.promptCacheKeyMode() != null
+                ? override.promptCacheKeyMode() : base.promptCacheKeyMode());
     }
 
     /** 两个 raw JSON map 的键级合并（{@code override} 同键覆盖）；皆 null ⇒ null。 */

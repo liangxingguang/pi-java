@@ -311,6 +311,20 @@ import java.util.Map;
  * @param supportsMidConvoEffort B99（anthropic，{@code compat-schema.ts:466-472}）：
  *        是否支持中途 effort-only 系统消息与 thinking binding 控制；{@code null} ≙
  *        {@code false}，读点全写 {@code === true}。只来自生成目录/models.json，无探测。
+ * @param requiresNonNullAssistantContent pi {@code compat.requiresNonNullAssistantContent}
+ *        （v1.6.0 {@code openai-completions.ts:1290}）：回放「只有 tool_calls、没有文本」的
+ *        assistant 消息时，{@code content} 必须发空串 {@code ""} 而不是 {@code null}。
+ *        与 {@code requiresAssistantAfterToolResult} **同一条读点**（两者任一为真即发空串），
+ *        但只由 models.json 显式开启（探测恒 {@code false}）。缺席 ≙ {@code false}（二态）。
+ * @param requiresToolsWithToolHistory pi {@code compat.requiresToolsWithToolHistory}
+ *        （v1.6.0 {@code openai-completions.ts:852}）：请求没有工具、但会话历史里出现过
+ *        tool call/tool result 时，仍要发 {@code "tools": []}。vLLM 0.20+ 之类端点拒绝
+ *        **非空**数组，而 Anthropic 前置的老式 LiteLLM 代理在工具历史后要求该字段在场。
+ *        缺席 ≙ {@code false}（默认**省略**该字段，二态）。
+ * @param promptCacheKeyMode pi {@code compat.promptCacheKeyMode}
+ *        （v1.6.0 {@code compat-schema.ts:192-194}）：{@code prompt_cache_key} 的发送策略。
+ *        {@code null} ≙ pi 的 {@code ?? "auto"}（读点归一）。三个取值语义见
+ *        {@link PromptCacheKeyMode}；本组件只被 completions 与 responses 两条车道读。
  */
 public record ModelCompat(boolean allowEmptySignature,
                           Boolean requiresReasoningContentOnAssistantMessages,
@@ -359,7 +373,11 @@ public record ModelCompat(boolean allowEmptySignature,
                            * 所有读点写 {@code === true}。值只来自生成目录（9 个 Claude 5 模型）
                            * 与 models.json，无探测面。
                            */
-                          Boolean supportsMidConvoEffort) {
+                          Boolean supportsMidConvoEffort,
+                          // ── v1.6.0（P2b）：三个新键 ─────────────────────────────
+                          Boolean requiresNonNullAssistantContent,
+                          Boolean requiresToolsWithToolHistory,
+                          PromptCacheKeyMode promptCacheKeyMode) {
 
     /** Compact constructor（包 A-09）：两个模板 map 的 {@code null} 归一成空表（pi 的
      *  {@code ?? {}}，{@code getCompat:1714-1715}）⇒ 二态、读点免判空；防御性复制

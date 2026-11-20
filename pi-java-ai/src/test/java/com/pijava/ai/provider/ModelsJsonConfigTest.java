@@ -241,6 +241,47 @@ class ModelsJsonConfigTest {
     }
 
     /**
+     * P2b（pi v1.6.0）：三个新 compat 键从 models.json 读进 {@link ModelCompat}：
+     * 两个布尔原样保留三态（读点写 {@code === true}），{@code promptCacheKeyMode} 走
+     * 三值闭集。
+     */
+    @Test
+    void readsTheV16CompatKeys() {
+        var config = write("""
+            {"providers": {"relay": {
+              "baseUrl": "https://relay.example.com",
+              "api": "openai-completions",
+              "models": [{"id": "m1", "compat": {
+                "requiresNonNullAssistantContent": true,
+                "requiresToolsWithToolHistory": true,
+                "promptCacheKeyMode": "disabled"
+              }}]
+            }}}
+            """);
+
+        var compat = config.catalog().find(ModelId.of("relay", "m1")).orElseThrow().compat();
+        assertThat(compat.requiresNonNullAssistantContent()).isTrue();
+        assertThat(compat.requiresToolsWithToolHistory()).isTrue();
+        assertThat(compat.promptCacheKeyMode())
+            .isEqualTo(com.pijava.ai.catalog.PromptCacheKeyMode.DISABLED);
+    }
+
+    /** 未知的 {@code promptCacheKeyMode} 响亮抛错（与 {@code maxTokensField} 同口径）。 */
+    @Test
+    void unknownPromptCacheKeyModeFailsLoudly() {
+        var config = write("""
+            {"providers": {"relay": {
+              "baseUrl": "https://relay.example.com",
+              "api": "openai-completions",
+              "models": [{"id": "m1", "compat": {"promptCacheKeyMode": "always"}}]
+            }}}
+            """);
+        assertThatThrownBy(() -> config.catalog())
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("promptCacheKeyMode");
+    }
+
+    /**
      * 包 A-10 第 6 步：{@code supportsMaxOutputTokens} 从 models.json 读进 {@code compat}，
      * 且**原样保留三态**（「没写」必须与「写了 {@code true}」可分 —— 前者会吃车道缺省）。
      *

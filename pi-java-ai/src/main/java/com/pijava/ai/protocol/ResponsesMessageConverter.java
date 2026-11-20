@@ -16,6 +16,7 @@ import com.pijava.ai.api.Transcripts;
 import com.pijava.ai.catalog.CompatResolver;
 import com.pijava.ai.catalog.ModelCompat;
 import com.pijava.ai.catalog.ModelInfo;
+import com.pijava.ai.catalog.PromptCacheKeyMode;
 import com.pijava.ai.api.SimpleOptions;
 import com.pijava.ai.model.ModelCapability;
 import com.pijava.ai.thinking.ModelThinkingLevel;
@@ -291,7 +292,12 @@ final class ResponsesMessageConverter {
         var explicit = Boolean.TRUE.equals(compat == null ? null : compat.supportsExplicitPromptCacheMode());
 
         // B240（pi :334）：prompt_cache_key **无 omit 门**，订阅 token 照发。
-        if (retention != ResponsesOptions.CacheRetention.NONE && ropts.sessionId() != null) {
+        // v1.6.0（pi :362）：promptCacheKeyMode === "disabled" 是唯一新增的撤键门
+        // （responses 车道的 auto 与 enabled 同义 —— 有缓存就发）。
+        boolean promptCacheKeyDisabled = compat != null
+            && compat.promptCacheKeyMode() == PromptCacheKeyMode.DISABLED;
+        if (retention != ResponsesOptions.CacheRetention.NONE
+                && ropts.sessionId() != null && !promptCacheKeyDisabled) {
             builder.promptCacheKey(clampCacheKey(ropts.sessionId()));
         }
         // B240（pi :335-336）：retention 与 options 两支整体在门后，订阅 token 整键不发。

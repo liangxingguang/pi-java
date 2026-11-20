@@ -268,7 +268,24 @@ public final class ModelsJsonSchema {
          * effort-only 系统消息（中途 effort marker）与 thinking binding 控制
          * （{@code block_binding}）。缺省 {@code false}，读点全写 {@code === true}。
          */
-        @JsonProperty("supportsMidConvoEffort") Boolean supportsMidConvoEffort
+        @JsonProperty("supportsMidConvoEffort") Boolean supportsMidConvoEffort,
+        // ── v1.6.0（P2b）：三个新键 ────────────────────────────────────
+        /**
+         * v1.6.0（pi {@code compat-schema.ts:239-244}）：只有 tool_calls 的 assistant
+         * 回放消息是否必须发 {@code content:""} 而不是 {@code null}；缺省 {@code false}。
+         */
+        @JsonProperty("requiresNonNullAssistantContent") Boolean requiresNonNullAssistantContent,
+        /**
+         * v1.6.0（pi {@code compat-schema.ts:245-250}）：无工具的请求在历史含工具调用/结果时
+         * 是否仍发 {@code "tools":[]}；缺省 {@code false}（整个键省略）。
+         */
+        @JsonProperty("requiresToolsWithToolHistory") Boolean requiresToolsWithToolHistory,
+        /**
+         * v1.6.0（pi {@code compat-schema.ts:192-194}）：{@code prompt_cache_key} 发送策略，
+         * 三值闭集 {@code "auto" | "enabled" | "disabled"}；未知取值**响亮抛错**
+         * （与 {@code maxTokensField} 同口径）。缺省 ≙ {@code "auto"}。
+         */
+        @JsonProperty("promptCacheKeyMode") String promptCacheKeyMode
     ) {
 
         /** pi {@code VercelGatewayRoutingSchema}（compat-schema.ts:151-169）。 */

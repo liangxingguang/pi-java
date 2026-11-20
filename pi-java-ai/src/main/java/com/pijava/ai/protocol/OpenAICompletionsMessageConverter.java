@@ -30,6 +30,7 @@ import com.pijava.ai.catalog.CacheRetention;
 import com.pijava.ai.catalog.CompatResolver;
 import com.pijava.ai.catalog.MaxTokensField;
 import com.pijava.ai.catalog.ModelCompat;
+import com.pijava.ai.catalog.PromptCacheKeyMode;
 import com.pijava.ai.catalog.ThinkingTokenBudgetField;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
@@ -247,7 +248,16 @@ final class OpenAICompletionsMessageConverter {
         CompletionsCacheControl.cacheControlOf(compat, cacheRetention)
             .ifPresent(cc -> CompletionsCacheControl.apply(wire, wireTools, cc));
         wire.forEach(builder::addMessage);
-        wireTools.forEach(builder::addTool);
+        // v1.6.0（pi :852，compat-schema.ts:245-250）：没有请求工具、但历史里出现过
+        // tool call / tool result 时，requiresToolsWithToolHistory 的端点要求
+        // `"tools":[]` 在场（老式 LiteLLM 前置 Anthropic 的 400 修复）；缺省则整个键省略
+        // —— vLLM 0.20+ 拒绝空数组正是**不写它**的理由（#11843）。
+        if (!wireTools.isEmpty()) {
+            wireTools.forEach(builder::addTool);
+        } else if (Boolean.TRUE.equals(compat.requiresToolsWithToolHistory())
+                && hasToolHistory(transcript.messages())) {
+            builder.tools(List.of());
+        }
 
         // B98（pi :856-860/:873-875）：zai tool_stream（门＝有请求工具，位置紧随工具表）
         // 与 vllm priority（位置在思考形态链条之前）。
@@ -256,9 +266,8 @@ final class OpenAICompletionsMessageConverter {
         CompletionsCompatWire.applyVllmPriority(builder, compat);
 
         // pi :825 —— prompt_cache_retention 的门**不含** cacheControlFormat（与断点族独立）。
-        // prompt_cache_key（:819-823）不移植：两个合取支都终结在
-        // clampOpenAIPromptCacheKey(options?.sessionId)，java 无该通道的生产者（B134；
-        // pi 在同样条件下也发不出这个键——clamp(undefined) → undefined）。
+        // prompt_cache_key（:819-823，v1.6.0 加 promptCacheKeyMode）的发送策略在下面
+        // 会话亲和块里与 cacheSessionId 共用同一门（B103）。
         if (cacheRetention == CacheRetention.LONG
                 && Boolean.TRUE.equals(compat.supportsLongCacheRetention())) {
             builder.putAdditionalBodyProperty("prompt_cache_retention", JsonValue.from("24h"));
@@ -330,10 +339,17 @@ final class OpenAICompletionsMessageConverter {
                     request.modelId() == null ? null : request.modelId().provider(),
                     baseUrl)
                 .forEach(builder::putAdditionalHeader);
+            // v1.6.0（pi :808-812）：`auto` 的两支同 B103 原判据（api.openai.com 或 long＋长缓存能力）；
+            // `enabled` 只要缓存开着就发（兼容代理）；`disabled` 永不发。
+            var promptCacheMode = compat.promptCacheKeyMode() == null
+                ? PromptCacheKeyMode.AUTO : compat.promptCacheKeyMode();
             boolean officialOpenAi = baseUrl != null && baseUrl.contains("api.openai.com");
-            if (officialOpenAi
-                    || (cacheRetention == CacheRetention.LONG
-                        && Boolean.TRUE.equals(compat.supportsLongCacheRetention()))) {
+            boolean supportsPromptCacheKey = promptCacheMode == PromptCacheKeyMode.ENABLED
+                || (promptCacheMode == PromptCacheKeyMode.AUTO
+                    && (officialOpenAi
+                        || (cacheRetention == CacheRetention.LONG
+                            && Boolean.TRUE.equals(compat.supportsLongCacheRetention()))));
+            if (supportsPromptCacheKey) {
                 builder.promptCacheKey(PromptCacheKeys.clamp(cacheSessionId));
             }
         }
@@ -374,6 +390,24 @@ final class OpenAICompletionsMessageConverter {
     }
 
     // Kimi 工具系统消息已抽到 CompletionToolWire.kimiSystemMessage（原 docs/66，步骤 7）。
+
+    /**
+     * v1.6.0（pi {@code openai-completions.ts:99-111}）：历史里是否出现过工具往返 ——
+     * 任一 toolResult 消息，或任一 assistant 消息带 {@code toolCall} 块。
+     */
+    private static boolean hasToolHistory(List<Message> messages) {
+        for (var msg : messages) {
+            if (msg instanceof Message.ToolResultMessage) {
+                return true;
+            }
+            if (msg instanceof Message.AssistantMessage assistant
+                    && assistant.content().stream()
+                        .anyMatch(ContentBlock.ToolUseContent.class::isInstance)) {
+                return true;
+            }
+        }
+        return false;
+    }
 
     /**
      * B98（pi {@code openai-completions.ts:1240-1246}）：上一条落线消息来自 toolResult 组、

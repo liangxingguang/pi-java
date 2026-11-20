@@ -82,9 +82,12 @@ final class CompletionAssistantMessage {
         var ab = ChatCompletionAssistantMessageParam.builder();
         boolean assistantAfterToolResult =
             Boolean.TRUE.equals(compat.requiresAssistantAfterToolResult());
-        // B98（pi :1294-1296）：flag 开时 assistant 消息默认 content 是 "" 而不是省略
-        // —— 只带 tool_calls 的助手消息也必须显式空串（下面各内容分支会覆盖它）。
-        if (assistantAfterToolResult) {
+        // B98（pi :1294-1296）＋ v1.6.0（:1290）：两个 flag 任一开时，assistant 消息默认
+        // content 是 "" 而不是省略 —— 只带 tool_calls 的助手消息也必须显式空串
+        // （下面各内容分支会覆盖它）。requiresNonNullAssistantContent 是 B98 之外独立的
+        // 第三个 provider 要求（v1.6.0 #8118），读点却与 requiresAssistantAfterToolResult 同一条。
+        if (assistantAfterToolResult
+                || Boolean.TRUE.equals(compat.requiresNonNullAssistantContent())) {
             ab.content("");
         }
         if (!toolCalls.isEmpty()) {

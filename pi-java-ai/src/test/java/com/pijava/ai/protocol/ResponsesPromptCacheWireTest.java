@@ -88,6 +88,15 @@ class ResponsesPromptCacheWireTest {
         assertThat(body.has("prompt_cache_options")).isFalse();
     }
 
+    /** v1.6.0（pi :362）：{@code promptCacheKeyMode:"disabled"} 撤掉 key，其它键不动。 */
+    @Test
+    void promptCacheKeyModeDisabledDropsOnlyTheKey() throws Exception {
+        var body = capture("long", compat(null, null, "disabled"));
+
+        assertThat(body.has("prompt_cache_key")).isFalse();
+        assertThat(body.path("prompt_cache_retention").asText()).isEqualTo("24h");
+    }
+
     // ── 夹具 ───────────────────────────────────────────────────────
 
     private static JsonNode capture(String retention, ModelCompat compat) throws Exception {
@@ -119,8 +128,13 @@ class ResponsesPromptCacheWireTest {
             PricingInfo.UNKNOWN, ThinkingLevelMap.empty(), Map.of(), Map.of(), compat);
     }
 
-    /** 三十一参规范构造：只关心第 15 位（longCacheRetention）与第 31 位（explicitPromptCacheMode）。 */
     private static ModelCompat compat(Boolean longRetention, Boolean explicitMode) {
+        return compat(longRetention, explicitMode, null);
+    }
+
+    /** 只关心第 15 位（longCacheRetention）、第 31 位（explicitPromptCacheMode）与 promptCacheKeyMode。 */
+    private static ModelCompat compat(Boolean longRetention, Boolean explicitMode,
+                                      String promptCacheKeyMode) {
         return new ModelCompat(false, null, true, false, null, null, null, null, null,
             true, null, null, null, null, longRetention, null, null, null, null,
             null, Map.of(), Map.of(), null, null, null, null, null, false, null,
@@ -128,6 +142,10 @@ class ResponsesPromptCacheWireTest {
             // B98 八字段缺席。
             null, null, null, null, null, null, null, null,
             // B99：supportsMidConvoEffort 缺席。
-            null);
+            null,
+            // v1.6.0（P2b）：两个布尔缺席，仅 promptCacheKeyMode 按需。
+            null, null,
+            promptCacheKeyMode == null ? null
+                : com.pijava.ai.catalog.PromptCacheKeyMode.parse(promptCacheKeyMode).orElseThrow());
     }
 }

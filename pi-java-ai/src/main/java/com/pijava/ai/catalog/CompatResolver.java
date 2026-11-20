@@ -211,7 +211,12 @@ public final class CompatResolver {
             // completions 车道不定义 fallback 列表（pi 同理）。
             null,
             // B99：completions 车道不读它，但逐组件重建不许静默丢值。
-            c.supportsMidConvoEffort());
+            c.supportsMidConvoEffort(),
+            // v1.6.0（P2b）：三个新键无探测面（pi 的 detected 恒 false / undefined）
+            // ⇒ 原样透传显式值，读点补缺省。
+            c.requiresNonNullAssistantContent(),
+            c.requiresToolsWithToolHistory(),
+            c.promptCacheKeyMode());
     }
 
     /**
@@ -266,7 +271,11 @@ public final class CompatResolver {
             null, null, null, null, null, null, null,
             base(model).allowedFallbackModels(),
             // B99：managed effort 标志只来自目录/models.json（无探测），原样透传。
-            partial.supportsMidConvoEffort());
+            partial.supportsMidConvoEffort(),
+            // v1.6.0（P2b）：completions/responses 专属，本车道不读；透传防静默丢值。
+            partial.requiresNonNullAssistantContent(),
+            partial.requiresToolsWithToolHistory(),
+            partial.promptCacheKeyMode());
     }
 
     /**
@@ -453,7 +462,11 @@ public final class CompatResolver {
             c.zaiToolStream(), c.vllmPriority(), c.vercelGatewayRouting(),
             c.allowedFallbackModels(),
             // B99：无探测面，原样透传模型上的显式值（目录/models.json）。
-            c.supportsMidConvoEffort());
+            c.supportsMidConvoEffort(),
+            // v1.6.0（P2b）：无探测面（detected 恒 false / undefined），原样透传。
+            c.requiresNonNullAssistantContent(),
+            c.requiresToolsWithToolHistory(),
+            c.promptCacheKeyMode());
     }
 
     private static Boolean pick(Boolean explicit, Boolean detected) {

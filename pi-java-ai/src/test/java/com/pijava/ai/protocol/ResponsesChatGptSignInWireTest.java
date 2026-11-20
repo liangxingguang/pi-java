@@ -153,6 +153,7 @@ class ResponsesChatGptSignInWireTest {
             null, Map.of(), Map.of(), null, null, null, null, null, false, null,
             null, Boolean.TRUE,
             null, null, null, null, null, null, null, null,
-            null);
+            // B99 与 v1.6.0 三键缺席。
+            null, null, null, null);
     }
 }

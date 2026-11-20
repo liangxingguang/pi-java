@@ -9,6 +9,7 @@ import com.pijava.ai.catalog.AllowedFallbackModel;
 import com.pijava.ai.catalog.CacheControlFormat;
 import com.pijava.ai.catalog.ChatTemplateKwargValue;
 import com.pijava.ai.catalog.MaxTokensField;
+import com.pijava.ai.catalog.PromptCacheKeyMode;
 import com.pijava.ai.catalog.ThinkingFormat;
 import com.pijava.ai.catalog.ThinkingTokenBudgetField;
 import com.pijava.ai.catalog.VercelGatewayRouting;
@@ -95,6 +96,25 @@ final class ModelsJsonCompatFieldParsers {
         return CacheControlFormat.parse(value).orElseThrow(() -> new IllegalStateException(
             "models.json provider \"" + providerId + "\", model \"" + modelId
                 + "\": unknown compat.cacheControlFormat \"" + value + "\" (expected \"anthropic\")"));
+    }
+
+    /**
+     * models.json 的 {@code promptCacheKeyMode} 串 ⇒ {@link PromptCacheKeyMode}
+     * （v1.6.0 P2b）。
+     *
+     * <p>⚠️ 未知取值**响亮抛错**，理由与 {@link #maxTokensFieldOf} 完全相同：它是三值
+     * 闭集，写错会让 {@code prompt_cache_key} 的发送策略静默换掉（pi 的 zod 联合同样
+     * 拒绝未知取值）。</p>
+     */
+    static PromptCacheKeyMode promptCacheKeyModeOf(String providerId, String modelId,
+                                                   String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return PromptCacheKeyMode.parse(value).orElseThrow(() -> new IllegalStateException(
+            "models.json provider \"" + providerId + "\", model \"" + modelId
+                + "\": unknown compat.promptCacheKeyMode \"" + value
+                + "\" (expected \"auto\", \"enabled\" or \"disabled\")"));
     }
 
     /**

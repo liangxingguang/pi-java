@@ -64,7 +64,9 @@ public final class ModelCompatFactories {
              // 包 09 两字段缺席；B98 八字段在本档全部缺席（null ≙ 探测/省略）。
              null, null, null, null, null, null, null, null, null, null,
              // B99：supportsMidConvoEffort 缺席（null ≙ false）。
-             null);
+             null,
+             // v1.6.0（P2b）：三个新键缺席（null ≙ false / false / auto）。
+             null, null, null);
     }
 
     /**

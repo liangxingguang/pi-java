@@ -154,7 +154,9 @@ class AnthropicManagedEffortWireTest {
             Map.of(), Map.of(), null, null, null, null, null, true, null,
             null, null,
             null, null, null, null, null, null, null, null,
-            Boolean.TRUE);
+            Boolean.TRUE,
+            // v1.6.0（P2b）三键缺席。
+            null, null, null);
         var model = new com.pijava.ai.catalog.ModelInfo(
             ModelId.of("anthropic", "custom-managed"), "Custom Managed",
             java.util.Set.of(com.pijava.ai.model.ModelCapability.TEXT,
