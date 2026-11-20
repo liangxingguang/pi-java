@@ -238,4 +238,13 @@ final class SessionDataViews {
         return context == null
             ? java.util.List.of() : context.markdownTransformers();
     }
+
+    /** docs/65（L7 W5）：技能加载诊断行（装配期写、启动提示读；空 ⇒ 不出区段）。 */
+    private volatile java.util.List<String> skillWarnings = java.util.List.of();
+
+    java.util.List<String> skillWarnings() { return skillWarnings; }
+
+    void setSkillWarnings(java.util.List<String> lines) {
+        skillWarnings = com.pijava.coding.agent.core.SkillDiagnostics.copy(lines);
+    }
 }

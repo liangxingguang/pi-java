@@ -51,7 +51,8 @@ class TuiExtensionUITest {
             new KeybindingsManager(), () -> null);
         host.bindApp(opened::set,
             overlay -> overlay.apply(null, s -> { }),     // dismisser＝直调 apply
-            (command, content) -> Optional.of("rt:" + content),
+            (command, content) -> new com.pijava.coding.agent.core.ExternalEditorSupport
+                .Result.Complete("rt:" + content),
             () -> 80, () -> 24);
         host.markRenderLoopActive(new Thread("fake-render"));
         ui = new TuiExtensionUI(host);

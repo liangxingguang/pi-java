@@ -41,7 +41,8 @@ public final class MessageBubble {
             case ChatMessage.Assistant(var blocks, var messageId, var timestamp) ->
                 renderBlocks(blocks, messageId, timestamp);
             case ChatMessage.ToolCall(var name, var arguments) -> toolCallCard(name, arguments);
-            case ChatMessage.ToolResult(var content, var isError) -> toolResult(content, isError);
+            case ChatMessage.ToolResult(var content, var isError, var durationMillis, var toolName) ->
+                toolResult(content, isError, durationMillis, toolName);
             case ChatMessage.Error(var message) ->
                 TextLayout.split("[red]" + TextLayout.escapeMarkup(message) + "[/]", false);
             case ChatMessage.System(var text, var kind) -> system(text, kind);
@@ -182,11 +183,11 @@ public final class MessageBubble {
      */
     private static List<LogicalLine> toolUseLines(String name, Map<String, Object> arguments) {
         var renderer = ToolRenderers.resolve(name);
-        if (renderer == null) {
+        var rendered = renderer == null ? null : renderer.renderCall(toolName(name),
+            arguments == null ? Map.of() : arguments, MessageBubbleVisibility.toolsExpanded());
+        if (rendered == null) {
             return new ToolCallCard(toolName(name), toolArgs(arguments), "running").lines();
         }
-        var rendered = renderer.renderCall(toolName(name),
-            arguments == null ? Map.of() : arguments, MessageBubbleVisibility.toolsExpanded());
         return styledFlat(rendered, 0, Style.EMPTY.bold(), Style.EMPTY.dim());
     }
 
@@ -195,14 +196,14 @@ public final class MessageBubble {
     private static List<LogicalLine> toolResultLines(String toolName,
             List<ContentBlock> content, boolean isError) {
         var renderer = ToolRenderers.resolve(toolName);
-        if (renderer == null) {
+        var rendered = renderer == null ? null : renderer.renderResult(toolName(toolName),
+            joinText(content), isError, MessageBubbleVisibility.toolsExpanded());
+        if (rendered == null) {
             return new ToolCallCard(
                 toolName(toolName),
                 truncate(TextLayout.escapeMarkup(joinText(content)), 500),
                 isError ? "error" : "done").lines();
         }
-        var rendered = renderer.renderResult(toolName(toolName), joinText(content),
-            isError, MessageBubbleVisibility.toolsExpanded());
         var style = isError ? Style.EMPTY.red() : Style.EMPTY.dim();
         return styledFlat(rendered, TOOL_INDENT, style, style);
     }
@@ -232,9 +233,22 @@ public final class MessageBubble {
 
     /**
      * Renders a tool result: text blocks as indented dim/red lines, diff blocks
-     * via {@link DiffView} (P6-26). Other block kinds produce no flat line.
+     * via {@link DiffView} (P6-26), and — L7 W1 — the recorded duration as a
+     * trailing {@code Took X.Ys} row when the message carries one
+     * ({@link ToolDurations#timerText}). Other block kinds produce no flat line.
      */
-    private static List<LogicalLine> toolResult(List<ContentBlock> content, boolean isError) {
+    private static List<LogicalLine> toolResult(List<ContentBlock> content, boolean isError,
+                                               Long durationMillis, String toolName) {
+        // docs/60：结果面优先问渲染器（内置/扩展），null ≙ 无意见 ⇒ 默认逐块渲染。
+        var renderer = toolName == null ? null : ToolRenderers.resolve(toolName);
+        var rendered = renderer == null ? null : renderer.renderResult(toolName,
+            joinText(content), isError, MessageBubbleVisibility.toolsExpanded());
+        if (rendered != null) {
+            var style = isError ? Style.EMPTY.red() : Style.EMPTY.dim();
+            var renderedLines = new ArrayList<>(styledFlat(rendered, TOOL_INDENT, style, style));
+            addTiming(renderedLines, durationMillis);
+            return List.copyOf(renderedLines);
+        }
         var out = new ArrayList<LogicalLine>();
         for (var block : content) {
             switch (block) {
@@ -253,7 +267,17 @@ public final class MessageBubble {
                 case ContentBlock.ToolResultContent ignored -> { }
             }
         }
-        return out;
+        addTiming(out, durationMillis);
+        return List.copyOf(out);
+    }
+
+    /** L7 W1：结果行末的 {@code Took X.Ys}（{@code null} ≙ 无计时）。 */
+    private static void addTiming(List<LogicalLine> out, Long durationMillis) {
+        if (durationMillis != null) {
+            out.add(new LogicalLine(
+                "[dim]" + ToolDurations.timerText(false, durationMillis, 0L) + "[/]",
+                TOOL_INDENT, TOOL_INDENT, false, Style.EMPTY.dim()));
+        }
     }
 
     /** Shifts every line's indents by {@code indent} cells (preserves style). */

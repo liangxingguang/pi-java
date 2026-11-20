@@ -76,10 +76,10 @@ class WebWireJsonTest {
     }
 
     @Test
-    void assistantCarriesIdentityAndMetricsButNoTimestamp() {
+    void assistantCarriesIdentityMetricsAndTimestamp() {
         // 3a（原 docs/31 §8.19）：身份三元组 + usage + stopReason/errorMessage 上 wire；
-        // timestamp 缺席是**维持既有有意偏离**（wire 无消息 timestamp，
-        // client/main.ts:261/286 直贴不判重），不是遗漏 —— 这条断言就是那条偏离的哨兵。
+        // docs/66（W9，pi docs/message-types.md:5）：timestamp 以 Unix 毫秒上 wire
+        // （此前"wire 无消息 timestamp"的有意偏离已解除）。
         var usage = new com.pijava.ai.Usage(10, 5, 1, 2, null, null, 18,
             com.pijava.ai.Usage.Cost.zero());
         var m = new Message.AssistantMessage(List.of(new ContentBlock.TextContent("hi")),
@@ -92,7 +92,7 @@ class WebWireJsonTest {
         assertThat(node.get("model").asText()).isEqualTo("mock");
         assertThat(node.get("usage").get("input").asInt()).isEqualTo(10);
         assertThat(node.get("usage").get("cost").get("total").asInt()).isZero();
-        assertThat(node.has("timestamp")).isFalse();
+        assertThat(node.get("timestamp").asLong()).isEqualTo(1_700_000_000_000L);
         assertThat(node.get("errorMessage")).isNull();
         assertThat(node.get("deferred")).isNull();
         // ⑨（D5）：线格原值与映射结果并列上 wire（pi 的消息本就全形状，3a 口径）。

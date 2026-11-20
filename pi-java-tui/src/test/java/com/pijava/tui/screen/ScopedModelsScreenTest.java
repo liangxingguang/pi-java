@@ -50,6 +50,36 @@ class ScopedModelsScreenTest {
             .containsExactly("b", "a");
     }
 
+    /** docs/62（pi scoped-models-selector.ts:301-306）：PgDn 步长 8，clamp 不 wrap。 */
+    @Test
+    void pageKeysMoveByEightAndClamp() {
+        var ids = new String[20];
+        for (int i = 0; i < ids.length; i++) {
+            ids[i] = "p/m" + i;
+        }
+        var rig = new Rig(ids);
+        assertThat(rig.screen.selectedIndex()).isZero();
+
+        rig.screen.onKeyEvent(pageDown());
+        assertThat(rig.screen.selectedIndex()).isEqualTo(8);
+        rig.screen.onKeyEvent(pageDown());
+        assertThat(rig.screen.selectedIndex()).isEqualTo(16);
+        rig.screen.onKeyEvent(pageDown());
+        assertThat(rig.screen.selectedIndex()).isEqualTo(19);
+        rig.screen.onKeyEvent(pageDown());
+        assertThat(rig.screen.selectedIndex()).as("末尾钳位").isEqualTo(19);
+        rig.screen.onKeyEvent(pageUp());
+        assertThat(rig.screen.selectedIndex()).isEqualTo(11);
+    }
+
+    private static KeyEvent pageDown() {
+        return new KeyEvent(KeyCode.PAGE_DOWN, KeyModifiers.NONE, 0);
+    }
+
+    private static KeyEvent pageUp() {
+        return new KeyEvent(KeyCode.PAGE_UP, KeyModifiers.NONE, 0);
+    }
+
     @Test
     void providerToggleUsesCurrentProviderAndUnavailableRowsStayVisible() {
         var rig = new Rig("p/a", "p/b");

@@ -171,7 +171,7 @@ public final class PiTuiApp {
 
     /** Attach to a runner: register the global key handler + snapshot feed. */
     public void start(ToolkitRunner runner) {
-        startupNotices.showWelcomeOnce();
+        startupNotices.showWelcomeOnce(keys);
         this.runner = runner;
         // 批 17（T7，裁决⑤）：渲染循环起步 ⇒ 扩展阻塞对话自此可用。
         if (extensionHostWiring.extensionUiHost() != null) {
@@ -187,7 +187,7 @@ public final class PiTuiApp {
 
     /** Attach the raw-scrollback inline shell (regular TUI mode). */
     public void startInline(InlineTuiShell shell) {
-        startupNotices.showWelcomeOnce();
+        startupNotices.showWelcomeOnce(keys);
         this.inlineShell = shell;
         if (extensionHostWiring.extensionUiHost() != null) {
             extensionHostWiring.extensionUiHost().markRenderLoopActive(Thread.currentThread());
@@ -336,20 +336,17 @@ public final class PiTuiApp {
     }
 
     // ── 批 29（E1）：overlay 委托（本体在 {@link OverlayManager}）──
-
-    void openOverlay(ScreenOverlay screenOverlay) {
-        overlayManager.openOverlay(screenOverlay);
-    }
+    void openOverlay(ScreenOverlay screenOverlay) { overlayManager.openOverlay(screenOverlay); }
 
     /** 批 17（T4/T5）：扩展对话框的程序式关闭（abort/timeout/会话复位路径）。 */
-    void dismissOverlay(ScreenOverlay target) {
-        overlayManager.dismissOverlay(target);
-    }
+    void dismissOverlay(ScreenOverlay target) { overlayManager.dismissOverlay(target); }
 
-    /** The current modal overlay, or null (test hook). */
-    ScreenOverlay currentOverlay() {
-        return overlayManager.currentOverlay();
-    }
+    ScreenOverlay currentOverlay() { return overlayManager.currentOverlay(); }
+
+    /** 栈深／帧级结局收口（docs/64 测试面；生产由 render 路径调后者）。 */
+    int overlayDepth() { return overlayManager.depth(); }
+
+    void closeCompletedOverlay() { overlayManager.closeOverlayIfDone(); }
 
     // ── 批 29（E1）：扩展宿主接线委托（本体在 {@link ExtensionHostWiring}）──
 
@@ -460,6 +457,8 @@ public final class PiTuiApp {
         snapshotHandle = newSession.watchSession();
         snapshotHandle.subscribe(snapshot ->
             dispatcher.dispatch(() -> chatScreen.updateSnapshot(snapshot)));
+        // docs/65（R23，pi updateTerminalTitle 的 session_info_changed 时机对位）。
+        startupNotices.applyTerminalTitle();
     }
 
     /** Visible for testing（docs/16 ExitPathCloseTest 的退出驱动口）。 */

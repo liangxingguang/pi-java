@@ -32,6 +32,7 @@ import com.pijava.tui.screen.ExtensionEditorOverlay;
 import com.pijava.tui.screen.ExtensionInputOverlay;
 import com.pijava.tui.screen.ExtensionSelectorOverlay;
 import com.pijava.tui.screen.ScreenOverlay;
+import com.pijava.tui.util.TerminalTitle;
 import com.pijava.tui.util.TextLayout;
 
 /**
@@ -294,9 +295,13 @@ public final class TuiExtensionUI implements ExtensionUI {
     }
 
     /**
-     * pi setTitle：TamboUI Terminal 无窗口标题 API（docs/28 §2）——空操作（记注不登窄差：
-     * pi 的能力面在 java 终端栈缺席，docs/28 §4 未列 ⇒ 归 E5 余面挂账）。
+     * pi {@code setTitle}（TUI 臂）：docs/65（R23）起直写 OSC 0——控制字符按
+     * {@code [\u0000-\u001f\u007f-\u009f]+ → 空格} 过滤（{@link TerminalTitle}）。
      */
+    @Override
+    public void setTitle(String title) {
+        TerminalTitle.write(title);
+    }
 
     // ── 生命周期（T7 接线：onSessionInvalidated ⇒ resetAll）──
 

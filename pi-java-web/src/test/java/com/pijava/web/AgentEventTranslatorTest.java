@@ -132,11 +132,64 @@ class AgentEventTranslatorTest {
         assertThat(translator.isStreaming()).isFalse();
     }
 
+    /** docs/66（W10，pi agent-loop.ts:263）：空转录也写键，前端整表替换语义才成立。 */
+    /** docs/66（W8，pi agent-session.ts:217-221）：两个全量快照数组。 */
     @Test
-    void emptyTranscriptOmitsMessagesOnAgentEnd() {
+    void queueUpdateForwardsBothFullSnapshots() {
+        var msgs = translator.translate(new AgentSessionEvent.QueueUpdate(
+            List.of("steer 1"), List.of("follow 1", "follow 2")));
+
+        var ev = event(msgs.get(0));
+        assertThat(ev.get("type").asText()).isEqualTo("queue_update");
+        assertThat(ev.get("steering")).hasSize(1);
+        assertThat(ev.get("steering").get(0).asText()).isEqualTo("steer 1");
+        assertThat(ev.get("followUp")).hasSize(2);
+    }
+
+    /** docs/66（W8，pi :222-233）：小写 reason、省略 result、Java 独有的 compactionEntry 不出线。 */
+    @Test
+    void compactionEventsUseThePiWireShape() {
+        var start = event(translator.translate(new AgentSessionEvent.CompactionStart(
+            AgentSessionEvent.CompactionReason.MANUAL)).get(0));
+        assertThat(start.get("type").asText()).isEqualTo("compaction_start");
+        assertThat(start.get("reason").asText()).isEqualTo("manual");
+
+        var end = event(translator.translate(new AgentSessionEvent.CompactionEnd(
+            AgentSessionEvent.CompactionReason.THRESHOLD, null, false, true, "boom", null))
+            .get(0));
+        assertThat(end.get("type").asText()).isEqualTo("compaction_end");
+        assertThat(end.get("reason").asText()).isEqualTo("threshold");
+        assertThat(end.has("result")).isFalse();
+        assertThat(end.has("compactionEntry")).isFalse();
+        assertThat(end.get("aborted").asBoolean()).isFalse();
+        assertThat(end.get("willRetry").asBoolean()).isTrue();
+        assertThat(end.get("errorMessage").asText()).isEqualTo("boom");
+    }
+
+    /** docs/66（W8，pi :234-235）：finalError 可空 ⇒ 键省略。 */
+    @Test
+    void autoRetryEventsForwardAttemptsAndOmitAbsentFinalError() {
+        var start = event(translator.translate(new AgentSessionEvent.AutoRetryStart(1, 3, 500, "rate"))
+            .get(0));
+        assertThat(start.get("type").asText()).isEqualTo("auto_retry_start");
+        assertThat(start.get("attempt").asInt()).isEqualTo(1);
+        assertThat(start.get("maxAttempts").asInt()).isEqualTo(3);
+        assertThat(start.get("delayMs").asLong()).isEqualTo(500);
+        assertThat(start.get("errorMessage").asText()).isEqualTo("rate");
+
+        var end = event(translator.translate(new AgentSessionEvent.AutoRetryEnd(true, 1, null))
+            .get(0));
+        assertThat(end.get("type").asText()).isEqualTo("auto_retry_end");
+        assertThat(end.get("success").asBoolean()).isTrue();
+        assertThat(end.has("finalError")).isFalse();
+    }
+
+    @Test
+    void emptyTranscriptStillEmitsAnEmptyMessagesArray() {
         var msgs = translator.translate(new AgentSessionEvent.AgentEnd(List.of(), true));
         var ev = event(msgs.get(0));
-        assertThat(ev.get("messages")).isNull();
+        assertThat(ev.has("messages")).isTrue();
+        assertThat(ev.get("messages")).isEmpty();
     }
 
     @Test

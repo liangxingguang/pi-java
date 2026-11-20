@@ -25,6 +25,8 @@ class UserMessageSelectorScreenTest {
 
     private static final KeyEvent UP = new KeyEvent(KeyCode.UP, KeyModifiers.NONE, 0);
     private static final KeyEvent DOWN = new KeyEvent(KeyCode.DOWN, KeyModifiers.NONE, 0);
+    private static final KeyEvent PAGE_UP = new KeyEvent(KeyCode.PAGE_UP, KeyModifiers.NONE, 0);
+    private static final KeyEvent PAGE_DOWN = new KeyEvent(KeyCode.PAGE_DOWN, KeyModifiers.NONE, 0);
     private static final KeyEvent ENTER = new KeyEvent(KeyCode.ENTER, KeyModifiers.NONE, 0);
     private static final KeyEvent ESC = new KeyEvent(KeyCode.ESCAPE, KeyModifiers.NONE, 0);
 
@@ -46,6 +48,27 @@ class UserMessageSelectorScreenTest {
         var screen = new UserMessageSelectorScreen(messages, initialSelectedId,
             () -> cols, selected::set, () -> cancelled.set(true));
         return new Rig(screen, selected, cancelled);
+    }
+
+    /** docs/62（pi user-message-selector.ts:97-99）：PgDn 步长 10，clamp 不 wrap。 */
+    @Test
+    void pageKeysMoveByTenAndClampInsteadOfWrapping() {
+        var rig = rig(messages(25), "e1", 80);
+
+        rig.screen().onKeyEvent(PAGE_DOWN);
+        assertThat(rig.screen().selectedIndex()).isEqualTo(10);
+        rig.screen().onKeyEvent(PAGE_DOWN);
+        assertThat(rig.screen().selectedIndex()).isEqualTo(20);
+        rig.screen().onKeyEvent(PAGE_DOWN);
+        assertThat(rig.screen().selectedIndex()).isEqualTo(24);
+        rig.screen().onKeyEvent(PAGE_DOWN);
+        assertThat(rig.screen().selectedIndex()).as("末尾钳位").isEqualTo(24);
+
+        rig.screen().onKeyEvent(PAGE_UP);
+        assertThat(rig.screen().selectedIndex()).isEqualTo(14);
+        rig.screen().onKeyEvent(PAGE_UP);
+        rig.screen().onKeyEvent(PAGE_UP);
+        assertThat(rig.screen().selectedIndex()).as("顶部钳位").isZero();
     }
 
     /** 定案并 apply（PiTuiApp 循环对位：键 → isDone → apply）。 */

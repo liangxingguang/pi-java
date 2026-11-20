@@ -35,6 +35,26 @@ public final class SettingsListModel {
         selectedIndex = Math.floorMod(selectedIndex + delta, filteredItems.size());
     }
 
+    /**
+     * 整页移动（docs/62，pi {@code settings-list.ts:234-243} {@code getSelectPageIndex}）：
+     * 步长＝{@link #maxVisible}，<b>clamp 不 wrap</b>；空表或零位移返回 {@code false}。
+     *
+     * @param direction {@code -1}＝PgUp，{@code +1}＝PgDn
+     * @return 是否发生了位移
+     */
+    public boolean page(int direction) {
+        if (filteredItems.isEmpty()) {
+            return false;
+        }
+        int target = Math.max(0,
+            Math.min(filteredItems.size() - 1, selectedIndex + direction * maxVisible));
+        if (target == selectedIndex) {
+            return false;
+        }
+        selectedIndex = target;
+        return true;
+    }
+
     /** Filter labels only and reset selection to the first match. */
     public void search(String query) {
         this.query = query == null ? "" : query;

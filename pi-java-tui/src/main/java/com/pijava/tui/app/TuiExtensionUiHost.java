@@ -38,8 +38,10 @@ public final class TuiExtensionUiHost {
     // ── PiTuiApp 回填（bindApp）──
     private volatile Consumer<ScreenOverlay> overlayOpener = overlay -> { };
     private volatile Consumer<ScreenOverlay> overlayDismisser = overlay -> { };
-    private volatile BiFunction<String, String, Optional<String>> externalEditorRoundtrip =
-        (command, content) -> Optional.empty();
+    private volatile BiFunction<String, String,
+        com.pijava.coding.agent.core.ExternalEditorSupport.Result> externalEditorRoundtrip =
+        (command, content) -> new com.pijava.coding.agent.core.ExternalEditorSupport
+            .Result.Failed("Failed to launch external editor: " + command);
     private volatile IntSupplier terminalCols = () -> 80;
     private volatile IntSupplier terminalRows = () -> 24;
     /** 批 34（K8，D97）：扩展选择器内 Ctrl+O 的全局展开态翻转（pi :2721 对位）。 */
@@ -63,7 +65,8 @@ public final class TuiExtensionUiHost {
 
     /** PiTuiApp 构造后回填（晚绑定）：overlay 开合＋外部编辑器往返＋终端几何。 */
     public void bindApp(Consumer<ScreenOverlay> opener, Consumer<ScreenOverlay> dismisser,
-                        BiFunction<String, String, Optional<String>> editorRoundtrip,
+                        BiFunction<String, String,
+                            com.pijava.coding.agent.core.ExternalEditorSupport.Result> editorRoundtrip,
                         IntSupplier cols, IntSupplier rows) {
         this.overlayOpener = opener;
         this.overlayDismisser = dismisser;
@@ -131,8 +134,9 @@ public final class TuiExtensionUiHost {
         return terminalRows;
     }
 
-    /** 外部编辑器往返（命令, 内容) ⇒ 读回内容；空 ⇒ 不动（pi 非 complete 臂）。 */
-    public BiFunction<String, String, Optional<String>> externalEditorRoundtrip() {
+    /** 外部编辑器往返（命令, 内容) ⇒ 结果（docs/64：complete 回写／failed 出框内 warning）。 */
+    public BiFunction<String, String,
+        com.pijava.coding.agent.core.ExternalEditorSupport.Result> externalEditorRoundtrip() {
         return externalEditorRoundtrip;
     }
 

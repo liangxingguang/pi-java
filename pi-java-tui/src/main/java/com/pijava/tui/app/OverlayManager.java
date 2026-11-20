@@ -16,9 +16,9 @@ final class OverlayManager {
     private final PiTuiApp app;
     private final ChatScreen chatScreen;
     private final SlashFlowRouter slashFlow;
-    // Written on the render thread (dispatcher drain) and read by the global
-    // key handler plus test hooks on other threads — needs volatile visibility.
-    private volatile ScreenOverlay overlay;
+    // docs/64（L7 W4，pi interactive-mode.ts:573 `extensionDialogs` 栈）：写于 dispatcher
+    // 线程、读于全局键处理/测试钩子 ⇒ 全部入口 synchronized。栈顶＝head。
+    private final java.util.Deque<ScreenOverlay> stack = new java.util.ArrayDeque<>();
 
     OverlayManager(PiTuiApp app, ChatScreen chatScreen, SlashFlowRouter slashFlow) {
         this.app = app;
@@ -31,12 +31,12 @@ final class OverlayManager {
      * 键路径外完成）。docs/18：先清位再 apply——apply 可链式开下一个 overlay
      * （树导航流：树选择器→三选→编辑器），旧序会把它立即抹掉。
      */
-    void closeOverlayIfDone() {
-        var done = overlay;
+    synchronized void closeOverlayIfDone() {
+        var done = stack.peek();
         if (done == null || !done.isDone()) {
             return;
         }
-        overlay = null;
+        stack.pop();
         done.apply(app.session, app::switchSession);
         // 批 12 T14：设置屏的 thinking-level 子菜单请求 ⇒ 不关屏改开
         // ModelThinkingLevelScreen（pi settings-selector.ts:607-610 对位）。
@@ -72,8 +72,10 @@ final class OverlayManager {
         }
     }
 
-    void openOverlay(ScreenOverlay screenOverlay) {
-        this.overlay = screenOverlay;
+    synchronized void openOverlay(ScreenOverlay screenOverlay) {
+        if (screenOverlay != null) {
+            stack.push(screenOverlay);
+        }
     }
 
     /**
@@ -81,16 +83,21 @@ final class OverlayManager {
      * pi {@code hideExtensionSelector} 族的「清位＋编辑器回槽」在 java 的对位：
      * 编辑器从未离屏（裁决④），只需清位；apply 照常完成结局 future）。
      */
-    void dismissOverlay(ScreenOverlay target) {
-        if (overlay != target) {
+    synchronized void dismissOverlay(ScreenOverlay target) {
+        // 按引用移除（pi removeExtensionDialog :2799-2804）：非栈顶被隐藏时不能误伤栈顶。
+        if (!stack.removeIf(o -> o == target)) {
             return;
         }
-        overlay = null;
         target.apply(app.session, app::switchSession);
     }
 
-    /** The current modal overlay, or null (test hook). */
-    ScreenOverlay currentOverlay() {
-        return overlay;
+    /** The current (topmost) modal overlay, or null (test hook). */
+    synchronized ScreenOverlay currentOverlay() {
+        return stack.peek();
+    }
+
+    /** 栈深（测试探针；0 ⇒ 回落编辑器）。 */
+    synchronized int depth() {
+        return stack.size();
     }
 }

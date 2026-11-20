@@ -15,12 +15,20 @@ import dev.tamboui.tui.event.KeyEvent;
  * Generic selectable list: up/down selection, Enter confirm, Esc cancel,
  * fuzzy filter (Phase 3 design §8.3). Shared by the model/session/tree
  * selectors.
+ *
+ * <p>docs/62（L7 W2，pi {@code tui/components/select-list.ts}）：PgUp/PgDn 整页翻，
+ * 页大小＝{@link #maxVisible}（默认 5，pi {@code :46}），<b>clamp 不 wrap</b>
+ * （pi {@code keybindings.ts:327-339}）；可见窗口以选中项居中（pi {@code :181-188}）。</p>
  */
 public final class SelectList<T> {
+
+    /** pi {@code select-list.ts:46} 的默认可见项数。 */
+    public static final int DEFAULT_MAX_VISIBLE = 5;
 
     private final List<T> allItems;
     private final Function<T, String> label;
     private final List<T> visible = new ArrayList<>();
+    private final int maxVisible;
     private int selected;
     private boolean cancelled;
     private boolean confirmed;
@@ -33,13 +41,34 @@ public final class SelectList<T> {
      * @param label maps an item to its display label
      */
     public SelectList(List<T> items, Function<T, String> label) {
+        this(items, label, DEFAULT_MAX_VISIBLE);
+    }
+
+    /**
+     * Creates a selectable list with an explicit visible-item count
+     * (page size for PgUp/PgDn, also the render window).
+     *
+     * @param items      all items in their canonical order
+     * @param label      maps an item to its display label
+     * @param maxVisible visible items (pi per-selector {@code maxVisible})
+     */
+    public SelectList(List<T> items, Function<T, String> label, int maxVisible) {
         this.allItems = List.copyOf(items);
         this.label = label;
+        this.maxVisible = Math.max(1, maxVisible);
         refresh();
     }
 
     /** Handle selection keys; returns true when a key was consumed. */
     public boolean onKeyEvent(KeyEvent event) {
+        if (event.isPageUp()) {
+            page(-1);
+            return true;
+        }
+        if (event.isPageDown()) {
+            page(1);
+            return true;
+        }
         if (event.isUp()) {
             selected = Math.max(0, selected - 1);
             return true;
@@ -126,6 +155,48 @@ public final class SelectList<T> {
         return Math.min(selected, Math.max(0, visible.size() - 1));
     }
 
+    /**
+     * 整页移动（pi {@code getSelectPageIndex}）：clamp 不 wrap；空表或零位移
+     * 返回 {@code false}（pi {@code select-list.ts:161} 的"无位移不发事件"）。
+     *
+     * @param direction {@code -1}＝PgUp，{@code +1}＝PgDn
+     * @return 是否发生了位移
+     */
+    public boolean page(int direction) {
+        if (visible.isEmpty()) {
+            return false;
+        }
+        int target = Math.max(0,
+            Math.min(visible.size() - 1, selected + direction * maxVisible));
+        if (target == selected) {
+            return false;
+        }
+        selected = target;
+        return true;
+    }
+
+    /**
+     * 居中窗口（pi {@code :181-188}）：选中项永远在窗口内，窗口大小＝{@link #maxVisible}。
+     *
+     * @return 渲染窗口内的可见项（项数 ≤ maxVisible）
+     */
+    public List<T> visibleRange() {
+        if (visible.size() <= maxVisible) {
+            return List.copyOf(visible);
+        }
+        int start = Math.max(0, Math.min(selected - maxVisible / 2, visible.size() - maxVisible));
+        return List.copyOf(visible.subList(start, start + maxVisible));
+    }
+
+    /** 窗口内选中项的下标（渲染高亮用；pi 每帧由 {@code getVisibleRange} 重算）。 */
+    public int windowSelectedIndex() {
+        if (visible.size() <= maxVisible) {
+            return selectedIndex();
+        }
+        int start = Math.max(0, Math.min(selected - maxVisible / 2, visible.size() - maxVisible));
+        return Math.max(0, Math.min(maxVisible - 1, selected - start));
+    }
+
     /** Reset selection state (e.g. when reopening the selector). */
     public void reset() {
         selected = 0;
@@ -155,8 +226,8 @@ public final class SelectList<T> {
             ? "Select (type to filter, ↑/↓ enter, Esc cancel)"
             : "Filter: \"" + filter + "\" (Esc clear, enter confirm)";
         return TamboUIAdapter.list(
-            visible.stream().map(label).toList())
-            .selected(Math.min(selected, Math.max(0, visible.size() - 1)))
+            visibleRange().stream().map(label).toList())
+            .selected(windowSelectedIndex())
             .highlightColor(dev.tamboui.style.Color.CYAN)
             .rounded()
             .title(title)

@@ -25,6 +25,12 @@ public final class SettingsScreen implements ScreenOverlay {
     private ScreenOverlay submenu;
     private boolean done;
     private boolean modelThinkingRequested;
+
+    /** 当前选中项 id（宿主/测试只读探针）。 */
+    String selectedItemId() {
+        var selected = model.selected();
+        return selected == null ? null : selected.id();
+    }
     private boolean cacheMissNoticesToggled;
     private boolean themeRequested;
 
@@ -64,6 +70,15 @@ public final class SettingsScreen implements ScreenOverlay {
         }
         if (event.isCancel() || event.isCtrlC()) {
             done = true;
+            return true;
+        }
+        if (event.isPageUp()) {
+            // docs/62：整页步长＝maxVisible，clamp 不 wrap（pi settings-list.ts:234-243）。
+            model.page(-1);
+            return true;
+        }
+        if (event.isPageDown()) {
+            model.page(1);
             return true;
         }
         if (event.isUp()) {

@@ -4,6 +4,7 @@ import java.util.List;
 
 import com.pijava.agent.entry.Entry;
 import com.pijava.ai.message.ContentBlock;
+import com.pijava.ai.message.Message;
 
 /**
  * TUI-internal message model: projects agent-core {@link Entry} values into
@@ -34,8 +35,28 @@ public sealed interface ChatMessage {
         }
     }
     record ToolCall(String name, String arguments) implements ChatMessage {}
-    /** Tool result content blocks (text and/or diff), for rich rendering (P6-26). */
-    record ToolResult(List<ContentBlock> content, boolean isError) implements ChatMessage {
+    /**
+     * Tool result content blocks (text and/or diff), for rich rendering (P6-26).
+     *
+     * <p>L7 W1（pi {@code render-utils.ts:146-164} 的 {@code toolTimerText} 终局臂）：
+     * {@code durationMillis} 直接取自持久化 {@link Message.ToolResultMessage#durationMs()}
+     * （B234，pi {@code types.ts:635}——只围 {@code execute()} 本体，未执行调用与旧盘为
+     * {@code null} ≙ 键省略）。有值时结果行末追加 {@code Took X.Ys}，跨重载仍准
+     * （pi 的「recorded duration wins」）。</p>
+     */
+    record ToolResult(List<ContentBlock> content, boolean isError, Long durationMillis,
+                      String toolName) implements ChatMessage {
+
+        /** 无计时形（{@code null} ≙ pi 的 {@code durationMs} 键省略）。 */
+        public ToolResult(List<ContentBlock> content, boolean isError) {
+            this(content, isError, null, null);
+        }
+
+        /** 无工具名形（docs/60 之前的构造点：渲染器查表落空 ⇒ 默认渲染）。 */
+        public ToolResult(List<ContentBlock> content, boolean isError, Long durationMillis) {
+            this(content, isError, durationMillis, null);
+        }
+
         /** Defensively copies the content blocks. */
         public ToolResult {
             content = List.copyOf(content);
@@ -178,21 +199,29 @@ public sealed interface ChatMessage {
             // L5 W8（pi types.ts:1562-1568）：持久化条目 ⇒ 带 id 与 ISO 时间。
             case "assistant" -> new Assistant(content, message.id(),
                 message.timestamp() == null ? null : message.timestamp().toString());
-            case "tool" -> fromToolBlocks(content);
+            case "tool" -> fromToolBlocks(content, message.message());
             default -> new System("Unknown message role: " + message.message().role(),
                 MetaKind.GENERIC);
         };
     }
 
-    private static ChatMessage fromToolBlocks(List<ContentBlock> blocks) {
+    /**
+     * 工具结果投影：{@code isError} 与 {@code durationMs} 从持久化
+     * {@link Message.ToolResultMessage} 取（B234）；内嵌 {@link ContentBlock.ToolResultContent}
+     * 的旧形只有内容面，包内 {@code isError} 优先、计时沿用外层。
+     */
+    private static ChatMessage fromToolBlocks(List<ContentBlock> blocks, Message source) {
+        var tool = source instanceof Message.ToolResultMessage result ? result : null;
+        var durationMs = tool == null ? null : tool.durationMs();
+        var toolName = tool == null ? null : tool.toolName();
         if (blocks.isEmpty()) {
-            return new ToolResult(List.of(), false);
+            return new ToolResult(List.of(), tool != null && tool.isError(), durationMs, toolName);
         }
         var block = blocks.get(0);
         if (block instanceof ContentBlock.ToolResultContent result) {
-            return new ToolResult(result.content(), result.isError());
+            return new ToolResult(result.content(), result.isError(), durationMs, result.toolName());
         }
-        return new ToolResult(blocks, false);
+        return new ToolResult(blocks, tool != null && tool.isError(), durationMs, toolName);
     }
 
     /** Join the text of every TextContent block (shared by ChatScreen, formerly duplicated). */

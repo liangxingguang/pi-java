@@ -180,6 +180,35 @@ class PiTuiAppScrollTest {
         }
     }
 
+    /** docs/62（K24，pi editor.ts:307-310）：补全弹层打开时 PgUp/PgDn 归弹层，不滚转录。 */
+    @Test
+    void completerConsumesPageKeysInsteadOfScrollingTheViewport() throws Exception {
+        try (var harness = start(wheelConfig(), null)) {
+            harness.chatScreen.setSlashCommands(java.util.List.of(
+                new com.pijava.tui.component.SlashCompleter.CommandItem("alpha", "", ""),
+                new com.pijava.tui.component.SlashCompleter.CommandItem("bravo", "", ""),
+                new com.pijava.tui.component.SlashCompleter.CommandItem("charlie", "", ""),
+                new com.pijava.tui.component.SlashCompleter.CommandItem("delta", "", ""),
+                new com.pijava.tui.component.SlashCompleter.CommandItem("echo", "", ""),
+                new com.pijava.tui.component.SlashCompleter.CommandItem("foxtrot", "", ""),
+                new com.pijava.tui.component.SlashCompleter.CommandItem("golf", "", ""),
+                new com.pijava.tui.component.SlashCompleter.CommandItem("hotel", "", "")));
+            harness.chatScreen.appendSystemText(lines(40));
+            Thread.sleep(300);
+
+            harness.backend.feed("/");
+            Thread.sleep(200);
+            assertThat(harness.chatScreen.completerActive()).isTrue();
+            // 弹层打开会抬高底区，滚动位置随之变化——在弹层稳定后再取基准。
+            int bottom = harness.chatScreen.scrollOffset();
+
+            harness.backend.feed("\u001b[6~"); // PageDown
+            Thread.sleep(200);
+            assertThat(harness.chatScreen.scrollOffset()).as("弹层打开时视口不动").isEqualTo(bottom);
+            assertThat(harness.chatScreen.inputText()).as("PgDn 不落字").isEqualTo("/");
+        }
+    }
+
     /** 批 34（K20/D195）：内联（runner == null）裸 ↑/Home 仍由编辑器消费。 */
     @Test
     void inlineBareArrowsAndHomeGoToEditor() throws Exception {

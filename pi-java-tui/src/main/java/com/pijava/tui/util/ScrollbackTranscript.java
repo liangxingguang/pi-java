@@ -112,7 +112,7 @@ public final class ScrollbackTranscript {
             case ChatMessage.User(String text) -> text;
             case ChatMessage.Assistant(var blocks, _, _) -> joinText(blocks);
             case ChatMessage.ToolCall(String name, String arguments) -> name + " " + arguments;
-            case ChatMessage.ToolResult(var content, boolean isError) -> joinText(content);
+            case ChatMessage.ToolResult(var content, boolean isError, _, _) -> joinText(content);
             case ChatMessage.Error(String text) -> text;
             case ChatMessage.System(String text, MetaKind kind) -> text;
             case ChatMessage.TurnSeparator(String label) -> label;

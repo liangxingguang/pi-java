@@ -143,7 +143,8 @@ public final class ThemeSubmenuScreen implements ScreenOverlay {
 
     private void showSingleMenu() {
         mode = Mode.SINGLE;
-        themeList = new SelectList<>(List.copyOf(singleModeItems()), ThemeItem::label);
+        themeList = new SelectList<>(List.copyOf(singleModeItems()), ThemeItem::label,
+            pageSize(singleModeItems().size()));
         var current = singleTheme;
         themeList.selectItem(item -> item.value().equals(current));
         lastPreviewed = current;
@@ -156,7 +157,7 @@ public final class ThemeSubmenuScreen implements ScreenOverlay {
             new AutoRow("dark-theme", "Dark theme: " + darkTheme),
             new AutoRow("apply", "Apply — save and go back"),
             new AutoRow("single-mode", "Change mode — switch to single theme"));
-        autoList = new SelectList<>(rows, AutoRow::label);
+        autoList = new SelectList<>(rows, AutoRow::label, pageSize(rows.size()));
         lastPreviewed = automaticSetting();
     }
 
@@ -168,9 +169,14 @@ public final class ThemeSubmenuScreen implements ScreenOverlay {
             .map(name -> new ThemeItem(name,
                 (name.equals(current) ? "✓ " : "  ") + name))
             .toList();
-        themeList = new SelectList<>(List.copyOf(items), ThemeItem::label);
+        themeList = new SelectList<>(List.copyOf(items), ThemeItem::label, pageSize(items.size()));
         themeList.selectItem(item -> item.value().equals(current));
         lastPreviewed = automaticSetting();
+    }
+
+    /** pi {@code settings-submenu.ts:95}：页大小 = {@code min(项数, 10)}。 */
+    private static int pageSize(int itemCount) {
+        return Math.min(itemCount, 10);
     }
 
     // ── 输入 ────────────────────────────────────────────────────

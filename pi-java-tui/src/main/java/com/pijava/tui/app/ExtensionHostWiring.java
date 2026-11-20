@@ -76,7 +76,8 @@ final class ExtensionHostWiring {
      * {@code handleOpenExternalEditor} :129-139 对位——tui.stop/start ⇒
      * java 的 alt 屏退出/重进；inline 臂摘/挂 overlay 同旨）。
      */
-    private java.util.Optional<String> externalEditorRoundtrip(String command, String content) {
+    private com.pijava.coding.agent.core.ExternalEditorSupport.Result externalEditorRoundtrip(
+            String command, String content) {
         boolean altScreen = app.runner != null;
         boolean inlineOverlay = !altScreen && app.inlineShell != null && app.inlineShell.overlayActive();
         if (altScreen) {
@@ -89,16 +90,11 @@ final class ExtensionHostWiring {
             }
         }
         try {
-            var result =
-                com.pijava.coding.agent.core.ExternalEditorSupport.edit(command, content);
-            if (result instanceof com.pijava.coding.agent.core.ExternalEditorSupport
-                    .Result.Complete(var text)) {
-                return java.util.Optional.of(text);
-            }
-            return java.util.Optional.empty();
+            // docs/64（pi external-editor.ts:41-47）：失败文案随结果回给对话框框内。
+            return com.pijava.coding.agent.core.ExternalEditorSupport.edit(command, content);
         } catch (Exception e) {
-            chatScreen.showError("External editor failed: " + e.getMessage());
-            return java.util.Optional.empty();
+            return new com.pijava.coding.agent.core.ExternalEditorSupport
+                .Result.Failed("Failed to launch external editor: " + command);
         } finally {
             if (altScreen) {
                 TamboUIAdapter.enterAlternateScreen();

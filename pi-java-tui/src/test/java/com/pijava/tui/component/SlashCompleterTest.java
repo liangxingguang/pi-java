@@ -53,6 +53,36 @@ class SlashCompleterTest {
         assertThat(completer.active()).isFalse();
     }
 
+    /** docs/62（pi editor.ts:762-777）：菜单打开时 PgUp/PgDn 归列表，clamp 不 wrap。 */
+    @Test
+    void pageKeysMoveByVisibleRowsAndClamp() {
+        var items = new java.util.ArrayList<SlashCompleter.CommandItem>();
+        for (int i = 0; i < 8; i++) {
+            items.add(new SlashCompleter.CommandItem("c" + i, "", ""));
+        }
+        var completer = new SlashCompleter(items, () -> 5);
+        completer.update("/");
+
+        assertThat(completer.onKeyEvent(key(KeyCode.PAGE_DOWN)))
+            .isEqualTo(SlashCompleter.KeyAction.HANDLED);
+        assertThat(completer.selectedName()).isEqualTo("/c5");
+        completer.onKeyEvent(key(KeyCode.PAGE_DOWN));
+        assertThat(completer.selectedName()).isEqualTo("/c7");
+        completer.onKeyEvent(key(KeyCode.PAGE_DOWN));
+        assertThat(completer.selectedName()).as("末尾钳位").isEqualTo("/c7");
+
+        completer.onKeyEvent(key(KeyCode.PAGE_UP));
+        assertThat(completer.selectedName()).isEqualTo("/c2");
+        assertThat(completer.lineCount()).as("窗口 5 行＋省略行").isEqualTo(6);
+    }
+
+    @Test
+    void pageKeysAreIgnoredWhileInactive() {
+        var completer = new SlashCompleter(ITEMS);
+        assertThat(completer.onKeyEvent(key(KeyCode.PAGE_DOWN)))
+            .isEqualTo(SlashCompleter.KeyAction.IGNORED);
+    }
+
     @Test
     void arrowsMoveSelectionAndTabCompletes() {
         var completer = new SlashCompleter(ITEMS);

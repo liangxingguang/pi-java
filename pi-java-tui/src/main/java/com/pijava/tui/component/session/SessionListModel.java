@@ -204,12 +204,11 @@ public final class SessionListModel {
         confirmingDeletePath = null;
     }
 
-    /** pi {@code isCurrentSessionPath}（:415-418）逐字。 */
+    /** pi {@code isCurrentSessionPath}（:415-418）：docs/63 起走比较键（含 Windows 折大小写）。 */
     public boolean isCurrentSessionPath(String path) {
         if (currentSessionCanonicalPath == null) {
             return false;
         }
-        return Objects.equals(SessionTreeBuilder.canonicalizePath(path),
-            currentSessionCanonicalPath);
+        return SessionPathKey.same(path, currentSessionCanonicalPath);
     }
 }

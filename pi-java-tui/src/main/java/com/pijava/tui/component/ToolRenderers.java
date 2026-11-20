@@ -1,5 +1,6 @@
 package com.pijava.tui.component;
 
+import com.pijava.coding.agent.core.render.BuiltInRenderers;
 import com.pijava.coding.agent.extension.ToolCallRenderer;
 import com.pijava.coding.agent.extension.ToolRendererRegistry;
 
@@ -23,11 +24,13 @@ public final class ToolRenderers {
     }
 
     /**
-     * 解析 {@code toolName} 的渲染器；无注册表/全链不管 ⇒ {@code null}
+     * 解析 {@code toolName} 的渲染器：扩展链优先，链尾落 <b>内置渲染器</b>
+     * （docs/60，pi {@code createAllToolRenderers}）；无注册表/全链不管 ⇒ {@code null}
      * （调用方回落 ToolCallCard 默认路径）。
      */
     public static ToolCallRenderer resolve(String toolName) {
         var current = registry;
-        return current == null || toolName == null ? null : current.resolve(toolName, null);
+        return current == null || toolName == null ? null
+            : current.resolve(toolName, () -> BuiltInRenderers.resolve(toolName));
     }
 }

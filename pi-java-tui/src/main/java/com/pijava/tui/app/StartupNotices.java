@@ -38,16 +38,53 @@ final class StartupNotices {
     }
 
     /** Emit the startup banner exactly once (fullscreen or inline launch). */
-    void showWelcomeOnce() {
+    void showWelcomeOnce(com.pijava.coding.agent.core.KeybindingsManager keys) {
         if (welcomeShown) {
             return;
         }
         welcomeShown = true;
         chatScreen.showWelcome(new WelcomeOverlay(app.session).text());
+        // docs/65（L7 W5，pi :2015-2023 / :1507-1521）：启动资源区与模型 scope 行。
+        showSkillWarnings();
+        showModelScope(keys);
+        applyTerminalTitle();
         showStartupChangelog();
         showStartupCrashNotice();
         showStartupDiagnostics();
         schedulePackageUpdateCheck();
+    }
+
+    /** pi {@code [Skill warnings]} 区段：标题＋诊断行（dim 系统文本，D83 同族）。 */
+    private void showSkillWarnings() {
+        var warnings = app.session.skillWarnings();
+        if (warnings.isEmpty()) {
+            return;
+        }
+        chatScreen.appendSystemText(
+            com.pijava.coding.agent.core.SkillDiagnostics.SKILL_WARNINGS_TITLE
+                + "\n" + String.join("\n", warnings));
+    }
+
+    /** pi {@code Model scope:} 行（以前打 stdout；docs/65 起渲进聊天 header 区）。 */
+    private void showModelScope(com.pijava.coding.agent.core.KeybindingsManager keys) {
+        var scope = app.session.scopedModels();
+        if (scope.isEmpty()) {
+            return;
+        }
+        var keyText = com.pijava.tui.util.TerminalTitle.capitalizeKey(
+            com.pijava.tui.component.KeybindingHints.keyText(
+                keys.strokeFor(com.pijava.coding.agent.core.KeybindingsManager.MODEL_CYCLE)));
+        var text = com.pijava.coding.agent.core.ModelScopeNotice.text(scope, keyText);
+        if (text != null) {
+            chatScreen.appendSystemText(text);
+        }
+    }
+
+    /** docs/65（R23）：{@code <app> - <session> - <cwd>}，会话切换后重刷。 */
+    void applyTerminalTitle() {
+        com.pijava.tui.util.TerminalTitle.write(
+            com.pijava.tui.util.TerminalTitle.title(
+                app.session.sessionName(), System.getProperty("user.dir")));
     }
 
     /**

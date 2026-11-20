@@ -108,6 +108,16 @@ public final class SlashCompleter {
         if (!active) {
             return KeyAction.IGNORED;
         }
+        // docs/62（L7 W2，pi editor.ts:762-777）：菜单打开时 PgUp/PgDn 归列表；
+        // 步长＝maxVisible，clamp 不 wrap（pi getSelectPageIndex）。
+        if (event.isPageUp()) {
+            page(-1);
+            return KeyAction.HANDLED;
+        }
+        if (event.isPageDown()) {
+            page(1);
+            return KeyAction.HANDLED;
+        }
         if (event.isUp()) {
             selected = Math.max(0, selected - 1);
             return KeyAction.HANDLED;
@@ -128,6 +138,24 @@ public final class SlashCompleter {
         return KeyAction.IGNORED;
     }
 
+    /** 整页移动（clamp 不 wrap；零位移不动）。 */
+    private void page(int direction) {
+        if (matches.isEmpty()) {
+            return;
+        }
+        int step = Math.max(1, maxVisible.getAsInt());
+        selected = Math.max(0, Math.min(matches.size() - 1, selected + direction * step));
+    }
+
+    /** 居中窗口起点（选中项永远可见，pi select-list.ts:181-188）。 */
+    private int windowStart() {
+        int visible = Math.max(1, maxVisible.getAsInt());
+        if (matches.size() <= visible) {
+            return 0;
+        }
+        return Math.max(0, Math.min(selected - visible / 2, matches.size() - visible));
+    }
+
     /** The popup element, or null when inactive. */
     public Element render() {
         if (!active) {
@@ -135,7 +163,8 @@ public final class SlashCompleter {
         }
         var rows = new ArrayList<Element>();
         int shown = Math.min(matches.size(), maxVisible.getAsInt());
-        for (int i = 0; i < shown; i++) {
+        int start = windowStart();
+        for (int i = start; i < start + shown; i++) {
             String line = matches.get(i).display();
             rows.add(i == selected
                 ? TamboUIAdapter.markupText("[cyan]▸ " + line + "[/]")

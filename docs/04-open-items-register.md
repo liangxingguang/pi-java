@@ -2,7 +2,7 @@
 
 > 【背景摘要】本文档只保留当前未结项、待用户决定事项和仍有效的范围裁决。已闭环批次、实施过程与旧账面沿革不在这里保存，历史在 git。
 >
-> 当前目标锚点为 pi `56cae7823`。下列旧锚点开放项必须随 docs/08 的所属层重新取证；未经重测，不自动翻成新基线结论。
+> 当前锚点为 pi `56cae7823`（2026-11-20 七层 L0–L8 重测闭环后切换，见 `docs/map/ANCHOR.md`）。下方条目均已随所属层重测；个别行仍引 `ea448f454` 作对照证据，冲突时以新锚点为准。
 
 ## 0. 口径
 
@@ -81,6 +81,8 @@ L3 agent-core 新锚点重测与对齐已于 2026-11-05 按 docs/23 实施并闭
 L5 coding-agent 新锚点重测与对齐已于 2026-11-05 按 docs/25（W1–W10）全量实施并闭环：W1 run 启动窗＋`before_agent_start` user／custom 联合（B275）、W2 `reachesTools` 投影（B276）、W3 `pi.exec` maxBuffer／truncated／UTF-8 边界、W4 三个新 settings 键＋`/share` destination＋`update self` 配置命令＋扩展 changelog 启动展示＋manifest `changelogPath`、W5 包管理器容错与 temporary 刷新（B279／B280）、W6 模型引用解析统一策略（B277d：`ModelReferenceResolver`＋`CliModelResolution`＋`CliModelWiring`，含两处行为变化）、W7 tool_search Unicode 分词＋分字段 BM25、W8 HTML 导出系统消息＋迭代回溯＋CJK 强调＋markdown 上下文 `messageId`／`timestamp`、W9 思考档 RPC 过滤（B259）、W10 print 截断（B281）／trust 优先级／删除 cwd／帮助与 slash 文案／图片编码（B282）／shell 平台（B283）。**转出**：E3-3 会话选择器与 E5-31 扩展 UI → L7，E5-33 examples → L8（权重 0，行与证据保留）。B275／B276／B277（含 B277a–f）／B259 全销号；新登记 D219–D227（其中 D223 auth EPERM、D226 macOS 进程组 STOP 为平台面不适用）。map/04 计分口径见该图各域汇总；全仓 verify **6,397 测零失败**，Checkstyle 零错误、SpotBugs 零告警。
 
 L6 evals 新锚点重测与对齐已于 2026-11-05 按 docs/26（W1–W7）全量实施并闭环。本层特点：`packages/evals/src` 两锚点间**净变 +1 行**（只有 `report.ts` 改 9 行），`harness.ts`／`cli.ts`／`docker.ts`／`plan.ts`／`entrypoint.ts`／`Dockerfile` 全部逐字节相同，故工作量在**重判**而非追新。逐行重测查出旧账面把 **#5 对照报告汇总记成「对齐」过宽**：pi 的四组配对标量（token／工具调用／延迟／成本）、按变体运行总量与 **pass-rate 定义的 lift** 在 Java 侧当时均不存在。W1 补齐报告（`PairedMetricSummary`／`EvalSetComparison`／`VariantTotals`／`OperationalMetricTotal`，`schemaVersion=3`）；W2 补按变体运行总量与覆盖度（不折零）；W3 给审计加取证断言（必须读过被审页面＋必须读过实现源，`AuditSourceIndex` 按页选集，D230）；W4 新增 prompt template 文档 eval（project／user 双 scope，`HarnessOptions.output` 观测面），并修好 agent 目录隔离缝（`pi.java.agentDir` 属性，D231）；W5 拆出 `--audit` 独立执行档（`EvalSuite.expensive()`）。评测域 **24 行 / Σ49 / 48.0＝97.96%**（对齐 23／存疑 1／缺失 0）；唯一存疑仍是 #20（TUI 审计 oracle 形态差，复核后维持）。补回文档重编时丢失的 **D182–D189**（八条复核后全部成立），新登记 **D228–D231**。全仓 verify **6,424 测 0 失败 0 错误 / 33 跳过**，Checkstyle 零错误、SpotBugs 零告警。
+
+L7 TUI/web 新锚点重测与对齐已于 2026-11-19/20 按 docs/59（W1–W6）全部实施并闭环：W1b 内置工具渲染器 8 件＋工具行计时（docs/60，R11 缺失→**对齐**）；W2 选择器整页翻页＋模型别名 `(name)`＋补全弹层抢 PageUp/PageDown（docs/62）；W3 会话搜索分级＋`FuzzyMatch`/`FuzzyMatcher` 双引擎合一＋同会话比较键（docs/63）；W4 overlay 单槽改栈＋扩展编辑器 Ctrl+G 框内 warning＋外部编辑器逐字文案（docs/64）；W5 `[Skill warnings]`＋`Model scope:` 入 header＋终端标题控制字符清洗（docs/65，**D258 销号**）；W6 web 面四类事件转发＋消息 `timestamp` 上 wire＋`agent_end` 恒写 `messages`＋宿主并发契约＋`find()` 项目内断言（docs/66，R11 之外的 W10 存疑→**对齐**）。map/05 账面 **179.0/244＝73.4%**（对齐 88／存疑 21／缺失 38；权重 3 子集 64.5/78＝82.7%）；其中 14 个权重单位仍标「（旧基线）」待逐条复核（保守区间 70.5%）。新登记窄差 **D260–D273**；**D258 销号**（终端标题控制字符清洗）。全仓 `mvn clean verify -Dfrontend.skip=true` **BUILD SUCCESS**（16 模块），`docs/05` §1 总表按七层地图重算 **1,291.0/1,356＝95.2%**，`docs/map/ANCHOR.md` 当前锚点切至 `56cae7823`。
 
 ## 3. MCP 开放项与复核项
 
@@ -213,6 +215,20 @@ SQLite 后端是 pi-java 独立实现，保留模块，不对齐已删除 schema
 | D252 | Java `RpcExtensionUI` 处理 `setTitle`（`RpcExtensionUI.java:142`），而 pi 锚点的 rpc-extension-ui.ts TUI 未处理 `setTitle`（rpc-demo 发但静默忽略）——Java 侧为行为增强差，登记不改（docs/56 §2.3）。 |
 | D253 | `SlashCommand` 无 pi 的 `getArgumentCompletions` 对位（Java 只有扩展级 autocomplete provider 空接口，见 D242）：commands 示例的来源参数补全降级为纯函数 `sourceCompletions(prefix)`，只做断言不入键盘面（docs/58 §1.2）。 |
 | D254 | 工具渲染器无 theme／`result.details`（D241 同族）：question/questionnaire 的 `renderResult` 按 `textOutput` 前缀复原 `✓ …`／`Cancelled`，questionnaire 的逐题答案只能从内容行前缀推出（docs/58 §1.3/§1.4）。 |
+| D260 | read 的紧凑分类行（`read docs <label>`／`[skill] <label>`，pi `renderers/read.ts:46-107`）不移植：判定依赖 pi 包根（`getReadmePath()`）与 `SKILL.md` 探测，属 pi 产品布局；内置渲染器的 call 行恒为 `read <path><:range>`（docs/60 §3.1）。 |
+| D261 | 工具结果折叠按**逻辑行**计数：pi bash 用 `VisualLinePreview{maxVisualLines:5, keep:"end"}`（宽度感知视觉行，`renderers/bash.ts:58-68`），Java 的逻辑行在渲染期才折行，故"尾部 5 行"取逻辑行（docs/60 §3.2，D92 同族）。 |
+| D262 | 渲染器侧的 `[Truncated: …]`／`[Full output: …]` 警告行（pi 由 `details.truncation`/`fullOutputPath` 生成）不移植，也不给 `ToolCallRenderer` 加 details 通道（D241 扩展）：同款文案已由工具层写进正文（`ReadTool:123-146`、`ShellToolSupport:236-248`、`GrepTool:194-207`、`FindTool:195-206`、`LsTool:141-149`），双重产出只会重复（docs/60 §3）。 |
+| D263 | edit 的 call 行读盘 preview（`computeEditsDiff`＋`argsComplete` 异步 `invalidate`，pi `renderers/edit.ts:177-195`）不移植：Java 渲染器是纯函数、无 fs 访问；diff 仍由结果 `ContentBlock.DiffContent` 经 `DiffView` 上色（docs/60 §3.7）。 |
+| D264 | 列表行无分段配色：pi 用 `theme.fg("muted", …)` 单独给模型别名 `(name)`／`[provider]` 上色，Java `SelectList` 标签是单个 `String`，整行同色；文案逐字，颜色不移植（docs/62 §3.3，D92 同族）。 |
+| D265 | `capturesViewportInput` 没有通用组件级契约：Java 只在 `GlobalKeyRouter.completerTakesPageKeys` 为补全弹层开了一个门；扩展 overlay 的视口键语义沿用 D99/D256，不新增框架层拦截抽象（docs/62 §3.4）。 |
+| D266 | 分页单位是「项」不是「可视行／终端高度」：pi 自身如此（`user-message-selector` 每项 3 行但 `maxVisible=10`），Java 同形不修；树/配置两处按高度算页大小的实现维持现状（docs/62 §3.5）。 |
+| D267 | 排序文本比较：pi 在 `model-selector`/`theme`/`config-selector`/`footer`/`settings-selector` 用 `String.localeCompare`（ICU，随运行环境 locale 变，pi 自身输出不确定）；Java 用 `String.compareTo`（UTF-16 码元序），大小写/重音的相对顺序可能不同。不引入 `Collator`，以确定性优先（docs/63 §4）。 |
+| D268 | 消息文本缓存：pi 用 `WeakMap` 按字符串身份缓存小写/折叠结果（`session-selector-search.ts:45-60`），Java 每次按键重算；会话数×消息体量的最坏情形有性能差，功能面无差异（docs/63 §3.3）。 |
+| D269 | 路径键的平台边角：pi 走 Node `path.win32.resolve`＋`realpathSync`；Java 走 `Path.toRealPath`＋`PathComparisonKeys`。UNC 前缀、8.3 短名、`\\?\` 长路径前缀的规范化结果不保证逐字一致；符号链接语义相同（docs/63 §3.4）。 |
+| D270 | `FuzzyMatch` 只返回分数、无命中下标：pi 同样不返回（`fuzzy.ts:7-10`），本包不额外造 indices（当前无高亮消费点）。 |
+| D271 | `--session <id>` 保留跨项目阶梯：pi 只做项目内精确查找（未命中即报错/新建，`main.ts:243-249`），Java 的 `find()` 阶梯 ③ 会扫全库并在命中时打印提示＋确认 fork。项目内命中路径行为一致，差异只在跨项目时多给一次机会（docs/66 §3）。 |
+| D272 | 扩展对话框 `blocked` 无对位：pi 有 program-status 区（`interactive-mode.ts:2812` `setBlocked("extension-dialog", top?.blocked)`），Java 无状态行、也无按 blocked 拦截输入的消费面；栈化已对齐"只挂栈顶/回退上一层"（docs/64 §3）。 |
+| D273 | 技能 collision 的 winner/loser 行尾 ` (source)` 不移植：Java `ResourceDiagnostic.Collision` 只有路径，没有来源包字段；其余文案逐字（docs/65 §1）。另：`--skills` 的 `SessionSetup.discoverSkills` 为纯静态无会话句柄，其诊断仍未上抛，只有扩展贡献技能那条路进 `[Skill warnings]`。 |
 | B83 | pi 自身三处 sanitize 缺口保持同样行为；pi 修补时同步。 |
 | B100 | compat 探测的 baseUrl 在内置模型上行为等价；出现可观察差异再重裁。 |
 | B126 | Codex 车道及其 transport 等随 R2/R5 出分母。 |
@@ -232,4 +248,4 @@ SQLite 后端是 pi-java 独立实现，保留模块，不对齐已删除 schema
 3. 条目关闭后从开放表移除，历史由 git 保存，编号不复用。
 4. 每层重测后同步更新对应地图；全部层完成前不发布新全仓百分比。
 5. 每个实施工作包仍需独立设计稿和用户审核。
-6. 新文档号取「历史已用最大号 +1」，不得复用已闭环批次编号（历史已用到 `docs/58`）；下一新文档号为 **docs/59**。`docs/58` 为 L8 W6 交互/命令移植设计（4 件，2026-11-19 用户裁决直接实施，逐批测试全绿、注册表 **70** 项、模块 401 测 0 失败；零新增宿主成员，窄差 D253/D254＋沿用 D241/D246）；`docs/57` 为 L8 W5 UI 槽位/编辑器移植设计（13 件，2026-11-19 用户裁决直接实施，逐批测试全绿、注册表 66 项；零新增宿主成员，窄差沿用 docs/27 §3.4／D92／D100／D246）；`docs/56` 为 L8 W8 SDK/RPC/资源移植设计（17 件，2026-11-19 用户裁决直接实施，逐批测试全绿、注册表 53 项；窄差 D247–D252）；`docs/55` 为 L8 W7 平台/文件移植设计（5 件，2026-11-19 用户裁决直接实施，逐批测试全绿、注册表 51 项；窄差 D245/D246）；`docs/54` 为 L8 W4 工具语义/执行移植设计（10 件，2026-11-19 用户裁决直接实施，逐批测试全绿、注册表 46 项；窄差 D241–D244）；`docs/53` 为 B286 沙箱执行后端接缝设计（2026-11-19 审核通过并实施闭环）；`docs/52` 为 L8 W3 会话树/标签/持久化移植设计（10 件，2026-11-19 用户裁决直接实施，逐批测试全绿、注册表 37 项；窄差 D238/D239）；`docs/50` 为 L8 W2/W3 前置包（B284/B285，2026-11-09 已闭环）；`docs/51` 为 L8 W2 生命周期/压缩移植设计（2026-11-09 审核通过并实施闭环）；`docs/27` 为 L8 examples 重测与移植设计（2026-11-08 审核通过、2026-11-09 按 D237 把分母修正为 88，实施中）；`docs/21`–`docs/26` 已闭环（L2 mcp 2026-11-04；L3 agent-core、L4 session、L5 coding-agent、L6 evals 2026-11-05）；`docs/20` 及更早已闭环。
+6. 新文档号取「历史已用最大号 +1」，不得复用已闭环批次编号（历史已用到 `docs/66`）；下一新文档号为 **docs/67**。`docs/59` 为 L7 TUI/web 重测与对齐设计，`docs/60`–`docs/66` 为其六个实施包（W1b 内置渲染器、W2 选择器翻页、W3 搜索排名、W4 对话框栈、W5 启动头/标题、W6 web 协议），均于 2026-11-19/20 实施并闭环；`docs/61` 为 B161 codemode 机制设计。`docs/58` 为 L8 W6 交互/命令移植设计（4 件，2026-11-19 用户裁决直接实施，逐批测试全绿、注册表 **70** 项、模块 401 测 0 失败；零新增宿主成员，窄差 D253/D254＋沿用 D241/D246）；`docs/57` 为 L8 W5 UI 槽位/编辑器移植设计（13 件，2026-11-19 用户裁决直接实施，逐批测试全绿、注册表 66 项；零新增宿主成员，窄差沿用 docs/27 §3.4／D92／D100／D246）；`docs/56` 为 L8 W8 SDK/RPC/资源移植设计（17 件，2026-11-19 用户裁决直接实施，逐批测试全绿、注册表 53 项；窄差 D247–D252）；`docs/55` 为 L8 W7 平台/文件移植设计（5 件，2026-11-19 用户裁决直接实施，逐批测试全绿、注册表 51 项；窄差 D245/D246）；`docs/54` 为 L8 W4 工具语义/执行移植设计（10 件，2026-11-19 用户裁决直接实施，逐批测试全绿、注册表 46 项；窄差 D241–D244）；`docs/53` 为 B286 沙箱执行后端接缝设计（2026-11-19 审核通过并实施闭环）；`docs/52` 为 L8 W3 会话树/标签/持久化移植设计（10 件，2026-11-19 用户裁决直接实施，逐批测试全绿、注册表 37 项；窄差 D238/D239）；`docs/50` 为 L8 W2/W3 前置包（B284/B285，2026-11-09 已闭环）；`docs/51` 为 L8 W2 生命周期/压缩移植设计（2026-11-09 审核通过并实施闭环）；`docs/27` 为 L8 examples 重测与移植设计（2026-11-08 审核通过、2026-11-09 按 D237 把分母修正为 88，实施中）；`docs/21`–`docs/26` 已闭环（L2 mcp 2026-11-04；L3 agent-core、L4 session、L5 coding-agent、L6 evals 2026-11-05）；`docs/20` 及更早已闭环。

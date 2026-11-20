@@ -47,13 +47,13 @@ public final class SessionTreeBuilder {
     public static List<SessionTreeNode> buildSessionTree(List<RichSessionInfo> sessions) {
         var byPath = new HashMap<String, MutableNode>();
         for (var session : sessions) {
-            byPath.put(canonicalizePath(session.path()), new MutableNode(session));
+            byPath.put(SessionPathKey.key(session.path()), new MutableNode(session));
         }
 
         var roots = new ArrayList<MutableNode>();
         for (var session : sessions) {
-            var node = byPath.get(canonicalizePath(session.path()));
-            var parentPath = canonicalizePath(session.parentSessionPath());
+            var node = byPath.get(SessionPathKey.key(session.path()));
+            var parentPath = SessionPathKey.key(session.parentSessionPath());
             var parent = parentPath == null ? null : byPath.get(parentPath);
             if (parent != null) {
                 parent.children.add(node);

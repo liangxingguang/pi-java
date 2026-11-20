@@ -56,6 +56,26 @@ class MessageBubbleTest {
     }
 
     @Test
+    void toolResultAppendsTheRecordedDurationAsATrailingDimRow() {
+        var lines = MessageBubble.lines(new ChatMessage.ToolResult(
+            List.of(new ContentBlock.TextContent("file")), false, 4_200L));
+
+        assertThat(lines).hasSize(2);
+        var timing = lines.get(1);
+        assertThat(timing.markup()).isEqualTo("[dim]Took 4.2s[/]");
+        assertThat(timing.initialIndent()).isEqualTo(4);
+        assertThat(timing.style()).isEqualTo(Style.EMPTY.dim());
+    }
+
+    @Test
+    void toolResultWithoutARecordedDurationHasNoTimingRow() {
+        var lines = MessageBubble.lines(new ChatMessage.ToolResult(
+            List.of(new ContentBlock.TextContent("file")), false));
+
+        assertThat(lines).hasSize(1);
+    }
+
+    @Test
     void toolResultIsPreformattedTruncatedIndentedAndDim() {
         var lines = MessageBubble.lines(new ChatMessage.ToolResult(
             List.of(new ContentBlock.TextContent("x".repeat(600))), false));
@@ -240,6 +260,21 @@ class MessageBubbleTest {
 
         var message = ChatMessage.from(entry);
         assertThat(message).isInstanceOf(ChatMessage.ToolResult.class);
+    }
+
+    /** L7 W1：{@code durationMs} 从持久化工具结果消息透传到气泡（B234）。 */
+    @Test
+    void chatMessageProjectsRecordedToolDuration() {
+        var entry = new com.pijava.agent.entry.Entry.Message(
+            "t-2", 0, null, null,
+            new Message.ToolResultMessage("id", "read",
+                List.of(new ContentBlock.TextContent("file")),
+                null, null, List.of(), true, null, 4_200L, null), null);
+
+        var message = (ChatMessage.ToolResult) ChatMessage.from(entry);
+
+        assertThat(message.durationMillis()).isEqualTo(4_200L);
+        assertThat(message.isError()).isTrue();
     }
     @Test
     void toolCardInAssistantBlocksGetsNoBulletPrefix() {

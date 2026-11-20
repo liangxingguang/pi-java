@@ -85,8 +85,16 @@ final class AgentEventTranslator {
             case AgentSessionEvent.ToolExecutionStart s -> out.add(toolExecutionStart(s));
             case AgentSessionEvent.ToolExecutionUpdate u -> out.add(toolExecutionUpdate(u));
             case AgentSessionEvent.ToolExecutionEnd e -> out.add(toolExecutionEnd(e));
+            // docs/66（L7 W6／W8）：队列与压缩/重试事件此前被静默吞掉——线形状复用
+            // RPC 面的显式投影（compactionEntry 等 Java 独有字段在那里已剔除）。
+            case AgentSessionEvent.QueueUpdate q -> out.add(wire(q));
+            case AgentSessionEvent.CompactionStart c -> out.add(wire(c));
+            case AgentSessionEvent.CompactionEnd c -> out.add(wire(c));
+            case AgentSessionEvent.AutoRetryStart r -> out.add(wire(r));
+            case AgentSessionEvent.AutoRetryEnd r -> out.add(wire(r));
             default -> {
-                // queue_update / compaction_* / auto_retry_* 等暂不推前端
+                // 其余事件（entry_appended / session_info_changed / thinking_level_changed
+                // / summarization_retry_*）前端无消费点，不推。
             }
         }
         return out;
@@ -135,17 +143,21 @@ final class AgentEventTranslator {
         var node = typeNode("agent_end");
         node.put("willRetry", e.willRetry());
         var transcript = transcriptSource.get();
-        if (!transcript.isEmpty()) {
-            var arr = node.putArray("messages");
-            for (var m : transcript) {
-                arr.add(WebWireJson.messageNode(m));
-            }
-            LOG.debug("[web] agent_end translated with {} messages", transcript.size());
-        } else {
-            LOG.warn("[web] agent_end has EMPTY messages — payload omits messages; "
-                + "frontend will keep stale list. willRetry={}", e.willRetry());
+        // docs/66（W10，pi agent-loop.ts:152/263）：pi 空表也照写键；前端是整表替换，
+        // 省键会让它保留过期列表。载荷源仍取全量转录（前端语义要求，见 §2.3）。
+        var arr = node.putArray("messages");
+        for (var m : transcript) {
+            arr.add(WebWireJson.messageNode(m));
         }
+        LOG.debug("[web] agent_end translated with {} messages (willRetry={})",
+            transcript.size(), e.willRetry());
         return new WebServerMessage.AgentEvent(node);
+    }
+
+    /** docs/66（W8）：复用 RPC 面的逐字线形（省略规则只维护一处）。 */
+    private static WebServerMessage wire(AgentSessionEvent event) {
+        return new WebServerMessage.AgentEvent(
+            com.pijava.coding.agent.mode.JsonEventMapper.toWire(event));
     }
 
     private WebServerMessage bashOutput(AgentSessionEvent.BashExecutionUpdate b) {

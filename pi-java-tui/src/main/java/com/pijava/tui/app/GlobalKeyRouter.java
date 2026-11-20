@@ -154,11 +154,12 @@ final class GlobalKeyRouter {
         // 批 34（K20；pi tui-alt-screen.ts:750-792 对位）：全屏 PgUp/PgDn 恒滚视口、
         // Ctrl+Home/End 顶/底；内联保留空编辑器的 PgUp/PgDn（D195）。裸 ↑↓/Home/End
         // 归还编辑器（K27 历史／行首行尾——B238-①）。
-        if (app.runner != null && isAltScreenScroll(event)) {
+        if (app.runner != null && isAltScreenScroll(event) && !completerTakesPageKeys(event)) {
             scrollViewport(event);
             return EventResult.HANDLED;
         }
-        if (chatScreen.isInputEmpty() && isInlinePageScroll(event)) {
+        if (chatScreen.isInputEmpty() && isInlinePageScroll(event)
+                && !completerTakesPageKeys(event)) {
             scrollViewport(event);
             return EventResult.HANDLED;
         }
@@ -174,6 +175,14 @@ final class GlobalKeyRouter {
         }
         return event.hasCtrl() && !event.hasAlt() && !event.hasShift()
             && (event.code() == KeyCode.HOME || event.code() == KeyCode.END);
+    }
+
+    /**
+     * docs/62（L7 W2，pi {@code editor.ts:307-310} 的 {@code capturesViewportInput}）：
+     * 补全弹层打开时，裸 PgUp/PgDn 归弹层列表，两种屏幕模式都不滚转录。
+     */
+    private boolean completerTakesPageKeys(KeyEvent event) {
+        return chatScreen.completerActive() && isInlinePageScroll(event);
     }
 
     /** 内联（regular）独有：空编辑器裸 PgUp/PgDn 滚转录（D195；裸 Home/End 归编辑器）。 */
@@ -331,9 +340,12 @@ final class GlobalKeyRouter {
             if (result instanceof com.pijava.coding.agent.core.ExternalEditorSupport
                     .Result.Complete(var text)) {
                 chatScreen.setEditorText(text);
+            } else if (result instanceof com.pijava.coding.agent.core.ExternalEditorSupport
+                    .Result.Failed(var message)) {
+                chatScreen.showError(message);   // docs/64：逐字文案（pi :41-47）
             }
         } catch (Exception e) {
-            chatScreen.showError("External editor failed: " + e.getMessage());
+            chatScreen.showError("Failed to launch external editor: " + command);
         } finally {
             if (altScreen) {
                 TamboUIAdapter.enterAlternateScreen();

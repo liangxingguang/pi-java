@@ -90,6 +90,28 @@ class FuzzyMatchTest {
         assertThat(r.score()).isCloseTo(-208.5, within(1e-9));
     }
 
+    /**
+     * docs/63（pi fuzzy.ts:70-79）：枚举 query 整段出现，取最优对齐。
+     *
+     * <p>文本 {@code aXbXabc}：贪心 {0,2,6}（a 在 0、b 在 2、c 在 6）= −6.2；整段
+     * "abc"@4 = {4,5,6} = −13.5（更优）。注意 i=0 会命中 pi 的哨兵比较
+     * （{@code lastMatchIndex = -1 == 0 - 1}）⇒ 首位额外 −5，这是 pi 的既有行为。</p>
+     */
+    @Test
+    void bestContiguousAlignmentBeatsTheGreedyOne() {
+        assertThat(FuzzyMatch.fuzzyMatch("abc", "aXbXabc").score())
+            .isCloseTo(-13.5, within(1e-9));
+
+        assertThat(FuzzyMatch.fuzzyMatch("abc", "aXbXabc").score())
+            .isLessThan(FuzzyMatch.fuzzyMatch("abc", "aXbXcX").score());
+    }
+
+    @Test
+    void contiguousRunRanksBeforeSplitRun() {
+        assertThat(FuzzyMatch.fuzzyMatch("ab", "xab").score())
+            .isLessThan(FuzzyMatch.fuzzyMatch("ab", "xaXb").score());
+    }
+
     @Test
     void swapArmDoesNotFireWhenPrimaryMatches() {
         // exact 6-char match: -213.5 (no +5 penalty — swap only fires on primary failure)

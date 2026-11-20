@@ -76,6 +76,29 @@ class SettingsScreenTest {
         });
     }
 
+    /** docs/62：PgDn 整页（步长 10）并在末尾钳位，不环绕回顶部。 */
+    @Test
+    void pageDownMovesByVisibleCountAndClampsAtTheEnd() throws Exception {
+        withIsolatedHome(() -> {
+            try (var session = AgentSession.create(ArgsParser.parse(new String[] { }))) {
+                var screen = new SettingsScreen(session);
+                var initial = screen.selectedItemId();
+
+                screen.onKeyEvent(KeyEvent.ofKey(dev.tamboui.tui.event.KeyCode.PAGE_DOWN));
+                var afterPage = screen.selectedItemId();
+                assertThat(afterPage).isNotEqualTo(initial);
+
+                for (int i = 0; i < 20; i++) {
+                    screen.onKeyEvent(KeyEvent.ofKey(dev.tamboui.tui.event.KeyCode.PAGE_DOWN));
+                }
+                var last = screen.selectedItemId();
+                assertThat(last).isNotEqualTo(initial);
+                screen.onKeyEvent(KeyEvent.ofKey(dev.tamboui.tui.event.KeyCode.PAGE_DOWN));
+                assertThat(screen.selectedItemId()).as("末尾钳位").isEqualTo(last);
+            }
+        });
+    }
+
     @Test
     void thinkingLevelRowRequestsTheSubmenu() throws Exception {
         withIsolatedHome(() -> {

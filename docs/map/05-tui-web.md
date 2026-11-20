@@ -5,6 +5,7 @@
 ## 基准与口径
 
 - 基准：pi-java @ `edc8749d`（main，2026-10-11）；pi @ `ea448f454`（2026-10-11，v1.1.0-22）。
+- **L7 重测锚点**：`PI_PIN=56cae7823`（pi `56cae782341c339d3bb820081f0f9425d8c5b1ec`，2026-10-31）／pi-java @ `0adcc04f`（2026-11-19，工作树含 L7 未提交改动）。W1–W6 行按新锚点取证；其余行保留 `ea448f454` 证据作对照，冲突以新锚点为准。
 - 判定单位＝**可被外部观察到的行为承诺**（一个屏幕 / 一个键绑定 / 一个渲染特性 / 一个主题能力 / 一个 TUI 组件 / 一个 web 能力）。
 - 三档：**对齐**＝pi 有、pi-java 有、行为相同；**缺失**＝pi 有、pi-java 无；**存疑**＝pi-java 有但行为/形状与 pi 不同或未核。
 - 所有证据均为 `file:line`。pi 侧路径前缀 `D:\workplaceForai\pi\packages\`，java 侧 `D:\workplaceForai\pi-java\`。
@@ -17,7 +18,7 @@
 |---|---|---|---|---|
 | TUI 框架层 | `packages/tui/src`（**46** 文件） | **19505** | —（对应物是**外部库 TamboUI**） | — |
 | TUI 应用层 | `coding-agent/src/modes/interactive`（**62** TS 文件） | **21895** | — | — |
-| 工具渲染器 | `coding-agent/src/core/tools/renderers`（8 文件） | **1053**（逻辑另在 `core/tools/render-utils.ts` 112 行） | 0 | 0% |
+| 工具渲染器 | `coding-agent/src/core/tools/renderers`（8 文件） | **1053**（逻辑另在 `core/tools/render-utils.ts` 112 行） | **390**（`coding-agent/.../core/render/`：`BuiltInRenderers` 274＋`DisplayPath` 57＋`RenderText` 59，L7 W1b／docs/60） | **37.0%**（390/1053；文本级方言，判别见 R11） |
 | HTML 导出 | `coding-agent/src/core/export-html`（3 TS：`index`+`ansi-to-html`+`tool-renderer`） | **748** | 288+ | — |
 | CLI 启动 UI | `coding-agent/src/cli`（startup-ui/session-picker/config-selector/list-models） | **484** | 见 coding-agent | — |
 | **UI 合计（pi，剔 micro）** | | **43685** | — | — |
@@ -47,14 +48,14 @@
 | S2c | 全屏：flash 提示（短暂状态行） | ✓ `tui-alt-screen.ts:665 flash()` + `tui/src/components/alt-screen-flash.ts:1`（51 行） | ✗ | **缺失** | 1 | — |
 | S2d | 全屏：图像渲染（Kitty/iTerm2） | ✓ `tui-alt-screen.ts:358`（stop 时 `setCapabilities(… images: null)`） | ✗ | **缺失** | 1 | 见 R14 |
 | S3 | regular（非备用屏）inline 模式 | ✓ `tui/src/tui-main-screen.ts`（655 行） | ✓ `InlineTuiShell.java:1`（390 行） | **对齐** | 1 | 两者都是「终端原生 scrollback + 底部固定输入区」；**两侧均为非默认**（`--tui-mode regular`，pi `args.ts:340`，java `PiTuiLauncher.java:111`） |
-| S4 | 启动欢迎卡（**不列 themes**） | ✓ `interactive-mode.ts:1772 showLoadedResources` | ✓ `WelcomeOverlay.java:41 buildCard` | **对齐** | 2 | 形状不同（pi 列 context/skills/prompts/extensions、不列 themes；java 是 Codex 风格方框），但承诺相同：启动即告知模型/目录/版本 |
-| S5 | 模型选择器（列表 / 上下选 / 确认） | ✓ `components/model-selector.ts:40`（421 行） | ✓ `ModelSelectorScreen.java:17`（58 行） | **对齐** | 2 | java：`ModelsJsonConfig.allModels()` 平铺排序 + `SelectList` |
+| S4 | 启动欢迎卡（**不列 themes**） | ✓ `interactive-mode.ts:1772 showLoadedResources` | ✓ `WelcomeOverlay.java:41 buildCard` | **对齐** | 2 | 形状不同（pi 列 context/skills/prompts/extensions、不列 themes；java 是 Codex 风格方框），但承诺相同：启动即告知模型/目录/版本；**L7 W5（docs/65）**：欢迎卡后补 `[Skill warnings]` 区段（collision 三行形）与 `Model scope:` 行（此前 stdout/无输出） |
+| S5 | 模型选择器（列表 / 上下选 / 确认） | ✓ `components/model-selector.ts:40`（421 行） | ✓ `ModelSelectorScreen.java:17`（86 行） | **对齐** | 2 | java：`ModelsJsonConfig.allModels()` 平铺排序 + `SelectList`；**L7 W2（docs/62）**：翻页（`maxVisible=10`）＋去重别名 `(name)`（`ModelLabels`，纯文本见 D264） |
 | S6 | 模型选择器：搜索过滤 | ✓ `model-search.ts`＋`model-selector.ts` | `ModelSelectorScreen`＋`ScopedModelsScreen` 已有搜索与过滤 | **对齐（旧基线）** | 1 | 新锚点搜索排名在 L7 重测 |
-| S7 | scoped-models 选择器（Ctrl+P 循环集） | ✓ `components/scoped-models-selector.ts:97`（401 行） | ✓ `ScopedModelsScreen.java`＋`ScopedModelController`＋`ScopedModelRefresh` | **对齐** | 1 | **批 31（docs/43 T4/T5）**：搜索、单项/全选/清空/provider 切换、排序、不可用项；`All` 与显式空表分流，修改仅会话 scope、Ctrl+S 持久化；15s 刷新＋代次取消（D181） |
+| S7 | scoped-models 选择器（Ctrl+P 循环集） | ✓ `components/scoped-models-selector.ts:97`（401 行） | ✓ `ScopedModelsScreen.java`＋`ScopedModelController`＋`ScopedModelRefresh` | **对齐** | 1 | **批 31（docs/43 T4/T5）**：搜索、单项/全选/清空/provider 切换、排序、不可用项；`All` 与显式空表分流，修改仅会话 scope、Ctrl+S 持久化；15s 刷新＋代次取消（D181）；**L7 W2（docs/62）**：翻页（`MAX_VISIBLE=8`，clamp）＋`(name)` 别名 |
 | S8 | thinking level 选择器 | ✓ `components/thinking-selector.ts:36`（154 行） | ✓ `ThinkingLevelScreen.java:36`（批 34，docs/46） | **对齐** | 2 | **批 34 翻判定**：标题/cycle hint/描述列（`LEVEL_DESCRIPTIONS` 逐字）/默认级 ` · default`/选中 `✓ `/自绘搜索行/`ctrl+s` 存默认＋Enter 只设会话级/底行三键提示；`SelectList` 读点 `visibleItems`/`selectedIndex`；窄差 D196（自绘搜索行） |
 | S9 | theme 选择器 | ✓ `components/theme-selector.ts:13`（67 行）＋`settings-selector.ts` ThemeSubmenu | ✓ `ThemeSubmenuScreen.java`＋`SettingsScreen` Theme 子菜单入口 | **对齐** | 1 | **批 21（docs/32 T11）**：single/automatic 两模式＋预览＋Esc 还原＋对形持久化；独立 ThemeSelectorComponent（pi 仅导出未自用）不移植（窄差 D130） |
 | S10 | 会话选择器（列表 / 选 / 确认） | ✓ `session-selector.ts:694 class SessionSelectorComponent`（1045 行） | ✓ `SessionListScreen.java:16`（50 行） | **对齐** | 2 | java：`session.listSessions()` + 前 8 位 id |
-| S11 | 会话选择器：搜索 / 排序 / 命名过滤 / 路径切换 / 重命名 / 删除 / 进度 | ✓ `session-selector.ts:76-116`、`session-selector-search.ts`、`user-message-selector.ts`；`onProgress` 带 `partialSessions` 增量渲染 + `AbortController` 取消 | ✓ `component/session/`（批 14，docs/25：搜索/三档排序/命名过滤/路径开关/删除流/双 scope 进度全落） | **存疑** | 1 | **批 14 翻判定**：picker 语境与 pi 逐字节一致；**rename 面板 UI 不移植**（picker 臂 pi 本就无生产者，裁决⑦——rename 生产者是会话内 `/resume` 面，随交互选择器批收编）；`SessionListScreen`（S10 的 `/resume` 旧屏）未换引擎 |
+| S11 | 会话选择器：搜索 / 排序 / 命名过滤 / 路径切换 / 重命名 / 删除 / 进度 | ✓ `session-selector.ts:76-116`、`session-selector-search.ts`、`user-message-selector.ts`；`onProgress` 带 `partialSessions` 增量渲染 + `AbortController` 取消 | ✓ `component/session/`（批 14，docs/25：搜索/三档排序/命名过滤/路径开关/删除流/双 scope 进度全落） | **对齐** | 1 | **批 14 翻判定**：picker 语境与 pi 逐字节一致；**rename 面板 UI 不移植**（picker 臂 pi 本就无生产者，裁决⑦——rename 生产者是会话内 `/resume` 面，随交互选择器批收编）；`SessionListScreen`（S10 的 `/resume` 旧屏）未换引擎；**L7 W3（docs/63）**：搜索改分级（名字 > 文本 > 模糊，`TIER_WEIGHT=1e6`）＋逐字段匹配（模糊只打 name/cwd，#11024）、`re:` 加 `UNICODE_CASE`、同一会话改比较键（realpath＋Windows 折大小写；选中恢复仍裸串，pi 同） |
 | S12 | 会话树选择器（分支列表） | ✓ `components/tree-selector.ts:1336 class TreeSelectorComponent`（~1400 行） | ✓ `component/tree/TreeSelectorOverlay.java`＋`TreeListModel`＋`TreeListRenderer`（批 9，docs/19） | **对齐** | 2 | 批 9（docs/19）：entry 树本体落地（D37 销号）——树形缩进/连接符/gutter、折叠、活动路径、多根虚拟根全对位；窄差 D43–D46/D48 登记；`/fork` 的 lane 平表留在旧 `TreeSelectorScreen`（pi 实为 user-message 选择器，B254） |
 | S13 | 树选择器：折叠展开 / 标签编辑 / 过滤模式 / 搜索 / 复制 | ✓ `tree-selector.ts:112 filterMode`（5 种）、`:632 copySelected`、`:637 updateNodeLabel`、`:1004 handleInput` | ✓ `TreeListModel.java`（折叠传染/五过滤/搜索 AND/段跳）、`TreeSelectorOverlay.java`（label 编辑臂/copy 三结局）、`AgentSession.setLabel`（持久化＋时间戳） | **对齐** | 1 | 批 9（docs/19）：折叠/标签编辑（含 `[+label time]`）/五过滤/搜索/复制全落（pi tree-selector.test.ts 13 用例对位移植 23 测） |
 | S14 | 设置页（字段列表 + 循环取值） | ✓ `settings-selector.ts:465 class SettingsSelectorComponent`（~960 行） | ✓ `SettingsScreen.java:21`（153 行） | **对齐** | 2 | java `SettingsScreen.java:30-47`；pi 侧字段含 `tuiMode`/`fullscreenExitOutput`/`fullscreenScrollbar`/`fullscreenWheelScrollLines`/`outputPad`（本锚点起说明文案改为「messages, tool output, and command output」）等，java 列表是其子集 |
@@ -63,9 +64,9 @@
 | S17 | OAuth / 登录对话框 | ✓ `login-dialog.ts:12` + `oauth-selector.ts:58` | ✓ `LoginFlow.java`＋`LoginDialogScreen`＋`LoginProviderScreen` | **对齐** | 2 | **批 31（docs/43 T6–T9）**：认证方式/provider 选择与搜索、API key 掩码/OAuth 双法、迟到选择保护、Radius MCP 提议；文本级对话框（D179） |
 | S18 | 首次设置向导 | ✓ `components/first-time-setup.ts:33` | ✗ | **缺失** | 1 | 一次性路径 |
 | S19 | 项目信任选择器 | ✓ `components/trust-selector.ts` | `ProjectTrustPrompter`＋`TrustPromptRunner` 已接项目信任弹窗 | **对齐（旧基线）** | 2 | 新锚点保存的 do-not-trust 优先级在 L5/L7 重测 |
-| S20 | 排队消息选择器（Alt+Up 取回并编辑） | ✓ `components/user-message-selector.ts:110`（155 行） | ✓ `InteractiveMode.restoreQueuedMessages`＋`PiTuiApp` DEQUEUE 臂＋`ChatScreen.restoreToEditor`（批 10，docs/21） | **对齐** | 1 | 批 10（docs/21）：dequeue 全链接地——引擎两队列＋压缩缓冲清空、pi 序合并 `"\n\n"` 回填编辑器（排队在前草稿在后）、文案逐字＋复数形、hint 行随绑定表取键名；键平台规则同批落（Windows/WSL `alt+q`，K11 同翻） |
+| S20 | 排队消息选择器（Alt+Up 取回并编辑） | ✓ `components/user-message-selector.ts:110`（155 行） | ✓ `InteractiveMode.restoreQueuedMessages`＋`PiTuiApp` DEQUEUE 臂＋`ChatScreen.restoreToEditor`（批 10，docs/21） | **对齐** | 1 | 批 10（docs/21）：dequeue 全链接地——引擎两队列＋压缩缓冲清空、pi 序合并 `"\n\n"` 回填编辑器（排队在前草稿在后）、文案逐字＋复数形、hint 行随绑定表取键名；键平台规则同批落（Windows/WSL `alt+q`，K11 同翻）；**L7 W2（docs/62）**：PgUp/PgDn 整页（10，clamp 不 wrap） |
 | S21 | show-images 选择器 | ✓ `components/show-images-selector.ts:13`（50 行） | ✗ | **缺失** | 1 | — |
-| S22 | 扩展 UI：选择器 / 输入框 / 确认框 / 编辑器 | ✓ `interactive-mode.ts:2690 showExtensionSelector`/`:2773 showExtensionInput`/`:2831 showExtensionEditor` | ✓ `ExtensionSelectorOverlay`/`ExtensionInputOverlay`/`ExtensionEditorOverlay`＋`TuiExtensionUI`（pi-java-tui） | **对齐** | 1 | **批 17（2026-10-24，docs/28 T4）**：ScreenOverlay 模态层落位（裁决④/窄差 D95）、k/j 别名＋空表不提交＋hint 行逐字、倒计时标题 ({N}s)＋到期取消、confirm＝selector 特化 Yes/No、ctrl+g 外部编辑器回落链逐字；窄差 D95–D98 |
+| S22 | 扩展 UI：选择器 / 输入框 / 确认框 / 编辑器 | ✓ `interactive-mode.ts:2690 showExtensionSelector`/`:2773 showExtensionInput`/`:2831 showExtensionEditor` | ✓ `ExtensionSelectorOverlay`/`ExtensionInputOverlay`/`ExtensionEditorOverlay`＋`TuiExtensionUI`（pi-java-tui） | **对齐** | 1 | **L7 W4（docs/64）**：`OverlayManager` 单槽改栈（嵌套打开/关闭回上层、按引用关闭），框内 Ctrl+G 失败 warning；**批 17（2026-10-24，docs/28 T4）**：ScreenOverlay 模态层落位（裁决④/窄差 D95）、k/j 别名＋空表不提交＋hint 行逐字、倒计时标题 ({N}s)＋到期取消、confirm＝selector 特化 Yes/No、ctrl+g 外部编辑器回落链逐字；窄差 D95–D98 |
 | S23 | 扩展 widget / footer / header / 状态槽 | ✓ `interactive-mode.ts:2398 setExtensionWidget`、`:2524 setExtensionFooter`、`:2551 setExtensionHeader` | ✓ `ChatScreen` 注入层（widgetsAbove/Below＋customFooter/customHeader＋extensionStatuses）＋`TuiExtensionUI` 四方法 | **对齐** | 1 | **批 17（2026-10-24，docs/28 T6）**：同 key 两区先清、MAX_WIDGET_LINES=10 截断＋逐字标记行、spacer 序逐字、footer/header dispose 序、状态段字典序＋sanitize 逐字＋截断 dim "..."；窄差 D100/D101 |
 | S24 | `/hotkeys` 与 `/help` 面板 | ✓ `interactive-mode.ts` + `core/slash-commands.ts:33 hotkeys`（Markdown 渲染） | ✓ `MiscCommands.java:34`、`:122` | **对齐** | 1 | 批 25（docs/36 T8）：两命令输出改产 markdown 源（粗体标题＋管道表格），TUI 经 `ChatMessage.Markdown` 走 Markdown 渲染（pi Markdown 组件对位）——旧「纯文本落差」消除 |
 | S25 | 会话统计面（`/session`） | ✓ `/session` 与 footer 用量统计 | `SessionStats`＋TUI `/session` 全段已落地，web 另有统计面板 | **对齐（旧基线）** | 2 | D68 已关闭 |
@@ -94,8 +95,8 @@
 | R8 | LaTeX 数学（行内 `$…$` 与块级 `$$…$$`） | ✓ `tui/src/latex.ts`（**1506 行**）+ `test/latex.test.ts` | ✗ | **缺失** | 1 | java 全仓无 latex 命中 |
 | R9 | 代码块语法高亮（多语言、highlight.js 词法） | ✓ `utils/syntax-highlight.ts`（**219 行**）+ `loadAllHighlightLanguages`（`interactive-mode.ts:133` import、`:1122` 调用）、theme 里 10 个 `syntax*` token | ✓（批 25 接线，子集） | **对齐** | 2 | 批 25（docs/36）：`SyntaxHighlighter` 四色改主题令牌（syntaxKeyword/String/Number/Comment）＋代码块消费链接通（高亮门＝lang 非空）。窄差 D146：高亮器＝关键字/字符串/数字/注释子集（pi 是 highlight.js 全词法＋supportsLanguage 白名单门） |
 | R10 | Diff 渲染（+/−/hunk 着色） | ✓ `components/diff.ts:79 renderDiff`（147 行）+ `toolDiffAdded/Removed/Context` token | ✓ `DiffView.java:18`（64 行） | **存疑** | 3 | java 按行首字符给色（`DiffView.java:52-63`），无 hunk 头/行号/词级 diff；pi 的 diff 走 `tool-execution.ts` 的富渲染 |
-| R11 | 逐工具渲染器（read/write/edit/bash/grep/find/ls 各自形状） | ✓ `core/tools/renderers/*.ts`（**1053 行 / 8 文件**；逻辑拆至 `core/tools/render-utils.ts` 112 行）。本锚点：bash 结果显示记录在事件上的单调 **`Took …`（durationMs，重载后仍准）**；edit 渲染吃 `outputPad` | ✗ | **缺失** | 3 | java 只有一张通用 `ToolCallCard.java:13`（39 行：`name`+`status`+截断 200 字的 args） |
-| R12 | 工具执行卡：可折叠＋流式部分结果 | ✓ `tool-execution.ts` 的展开态与折叠提示 | 全局 Ctrl+O 展开态已接入渲染参数；完整工具执行卡、折叠提示和流式部分结果仍缺 | **缺失** | 2 | D197；旧“无折叠态”已失效 |
+| R11 | 逐工具渲染器（read/write/edit/bash/grep/find/ls 各自形状） | ✓ `core/tools/renderers/*.ts`（**1053 行 / 8 文件**；逻辑拆至 `core/tools/render-utils.ts` 112 行）。本锚点：bash 结果显示记录在事件上的单调 **`Took …`（durationMs，重载后仍准）**；edit 渲染吃 `outputPad` | ✓ `coding-agent/.../core/render/BuiltInRenderers.java`（8 个工具名 = **7 族**：read 带 `:range`、`bash`/`powershell` 各带 `$`/`PS>` 前缀与 timeout 后缀、write、grep/find/ls 尾部折叠 5/10/15/20 行、edit 只接 call 行）＋`DisplayPath.shorten`＋链尾注入 `ToolRenderers.resolve`（无注册表仍回落 `ToolCallCard`，扩展优先） | **对齐** | 3 | **L7 W1b（docs/60）**：call/result 两面逐字（折叠省略行文案、`ctrl+o to expand` 提示行），耗时行走 `ChatMessage.ToolResult.durationMillis`；窄差 D260–D263（文本级方言 D92：无 theme 色；按**逻辑行**折叠；渲染器侧 `[Truncated…]` 不重复产出；edit 不读盘 preview，diff 仍由 `DiffView` 上色），全仓 verify 前已跑 `coding-agent+tui -am test` 全绿 |
+| R12 | 工具执行卡：可折叠＋流式部分结果 | ✓ `tool-execution.ts` 的展开态与折叠提示 | 全局 Ctrl+O 展开态已接入渲染参数；**折叠预览行＋省略行**随 docs/60 落地（按工具族的尾部行数）；完整工具执行卡与**流式部分结果**仍缺 | **缺失** | 2 | D197（`ToolCallRenderer` 无 `isPartial` 通道）；折叠提示面已由 R11 覆盖 |
 | R13 | bash 执行组件（实时增量输出 + 宽度自适应） | ✓ `components/bash-execution.ts:21`（**223 行**；`!!` 命令 dim 边框、`outputPad` 可配）+ `test/bash-execution-width.test.ts` | ✗ | **缺失** | 2 | java TUI 无 bash 屏；web 侧有 `bashOutput` 帧（`AgentEventTranslator.java:130`） |
 | R14 | 图片渲染（Kitty / iTerm2 图像协议 + 单元格尺寸探测 + 降级） | ✓ `tui/src/terminal-image.ts`（**763 行**；本锚点加 **Herdr 终端识别**：转 OSC 8 超链接、关图像协议）+ `tui/src/components/image.ts:55 class Image`（167 行） | ✗ | **缺失** | 1 | java 只有 `[image: mimeType]` 占位文本（`MessageBubble.java:102`） |
 | R15 | 图片粘贴（剪贴板 → 附件） | ✓ `app.clipboard.pasteImage`（`core/keybindings.ts:75`）+ `utils/clipboard-image.ts` + 测试 | ✗ | **缺失** | 1 | java 全仓无 clipboard-image |
@@ -106,7 +107,7 @@
 | R20 | 自定义消息卡（`custom_message`，`display` 门） | ✓ `custom-message.ts:12`（113 行；本锚点默认渲染也套 `outputPad`） | ✓ `ChatMessage.java:56-59` | **对齐** | 1 | java 用 `[customType] plainText`，pi 用 Markdown 渲染 `content` |
 | R21 | 回合分隔条（`Worked for Ns • Local tools: N calls`） | ✗（pi 无此构造） | ✓ `ChatScreen.java:170-181` | **非对齐项**（java 独有，Codex 风格） | 0 | 见「pi-java 独有」，**排除出分母** |
 | R22 | 启动公告组件（`earendil-announcement`、`armin`） | ✓ `components/earendil-announcement.ts:27`、`armin.ts:62 class ArminComponent`（384 行） | ✗ | **缺失** | 1 | 旧的 `daxnuts.ts` 已删，彩蛋迁到 R27 |
-| R23 | 窗口/终端标题更新 | ✓ `interactive-mode.ts:1132 updateTerminalTitle` | ✗ | **缺失** | 1 | — |
+| R23 | 窗口/终端标题更新 | ✓ `interactive-mode.ts:1132 updateTerminalTitle` | ✓ `util/TerminalTitle.java`（OSC 0，`TuiExtensionUI.setTitle` 覆盖＋启动/切会话重刷） | **对齐** | 1 | **L7 W5（docs/65）**：标题 `${app} - ${session} - ${cwdBasename}`；控制字符 `[\u0000-\u001f\u007f-\u009f]+ → 空格`（pi `utils.ts:372-377`）；D258 关闭 |
 | R24 | 缓存预热用量行（聊天区 `formatCacheWarmingUsage` + `/session` 的 `formatCacheWarmingStatus`／missCost／warmCost；footer 计入 `usage` 条目） | ✓ `core/cache-warmer.ts:449/433`；`interactive-mode.ts:4110 addCacheWarmingUsage` | 批 13：`ChatMessage.cacheWarmNotice`（pi :449-453 逐字经 `CacheWarmingFormatting.formatUsage`）＋`ChatScreen.appendUsageNotice` 门控＋`/session` Cache Warming 段＋footer `AgentHarness.addTokens` | **对齐** | 1 | **批 13（docs/24）翻判定**：生产者（CacheWarmer）落地 ⇒ 自有 `cache_warm` 条目照渲染；文案改 pi 逐字（"Cache warmed[: (note)]: $cost"，原自造 "Cache warming: N tokens" 删）；门 `getShowCacheMissNotices()` 三处调用点全接（onEntry/rebuild/EntryAppended 即时臂）；`/session` 段逐字（Mode/Status/decision 两行＋Cache Re-billed 挂段尾＝D68 结构差）；footer 计入（pi getSessionStats usage 条目臂对位） |
 | R25 | thinking 块被丢弃提示（`Anthropic dropped N thinking blocks …`） | ✓ `interactive-mode.ts:4134 countDroppedThinkingBlocks`、`:4150 maybeShowThinkingDropNotice` | ✗ | **缺失** | 1 | 只在与上一条 assistant 消息的丢弃数**增加**时显示；java 无此构造 |
 | R26 | 工具调用参数渲染（MCP 与 fallback 显式展示 args） | ✓ `core/tools/render-utils.ts`＋`tool-execution.ts` | `McpToolCallRenderer` 与责任链接口已存在；通用工具参数渲染覆盖仍不完整 | **存疑** | 1 | 旧“无 MCP 渲染器”已失效 |
@@ -131,7 +132,7 @@
 | K7 | `Shift+Tab` 循环 thinking level | 键绑定 | `keybindings.ts:33 app.thinking.cycle` | ✓ `GlobalKeyRouter` THINKING_CYCLE 臂（批 34，docs/46）＋`AgentSession.cycleThinkingLevel`＋转录系统行 | **对齐** | 2 | ~~B66~~ 批 34 接线（docs/46） |
 | K8 | `Ctrl+O` 展开/折叠工具输出 | 键绑定 | `keybindings.ts:50 app.tools.expand` | ✓ `GlobalKeyRouter` TOOLS_EXPAND 臂＋`PiTuiApp.toggleToolsExpanded`→`MessageBubbleVisibility.installToolsExpanded` 渲染现读（批 34，docs/46）；扩展选择器 `ctrl+o` 转发（D97 销） | **对齐** | 2 | ~~B66~~ 批 34 接线；R12 工具卡折叠/流式整块仍缺（窄差 D197） |
 | K9 | `Ctrl+T` 显隐 thinking 块 | 键绑定 | `keybindings.ts:51 app.thinking.toggle` | ✓ `GlobalKeyRouter` THINKING_TOGGLE 臂＋`MessageBubbleVisibility.install` 现读（批 34，docs/46）；设置项 `hideThinkingBlock` 口径 | **对齐** | 2 | ~~B66~~ 批 34 接线（docs/46） |
-| K10 | `Ctrl+G` 外部编辑器 | 键绑定 | `keybindings.ts:59 app.editor.external` + `external-editor.ts:46` | ✓ `GlobalKeyRouter.java:250 EXTERNAL_EDITOR → openExternalEditor()`（批 12 T3 已接） | **对齐** | 1 | ~~B66~~ 批 34 账面翻账（docs/46，接线早于台账） |
+| K10 | `Ctrl+G` 外部编辑器 | 键绑定 | `keybindings.ts:59 app.editor.external` + `external-editor.ts:46` | ✓ `GlobalKeyRouter.java:250 EXTERNAL_EDITOR → openExternalEditor()`（批 12 T3 已接） | **对齐** | 1 | ~~B66~~ 批 34 账面翻账（docs/46，接线早于台账）；**L7 W4（docs/64）**：失败文案逐字（`Failed to launch external editor: <cmd>` / `External editor exited with code N; prompt unchanged`），退出码非零不再静默 |
 | K11 | `Alt+Up` 取回排队消息 | 键绑定 | `keybindings.ts:71-73 app.message.dequeue`（**Windows 默认改为 `alt+q`**） | `KeybindingsManager.java`（`useWindowsKeybindings` 逐字：Windows/WSL `alt+q`、其余 `alt+up`）＋`PiTuiApp` DEQUEUE 臂 | **对齐** | 1 | ~~B66~~ 批 10（docs/21，2026-10-22）接线 |
 | K12 | `Ctrl+Z` 挂起进程 | 键绑定 | `keybindings.ts:29-32 app.suspend`（非 Windows） | ✗ | **缺失** | 1 | — |
 | K13 | `Ctrl+X` 复制消息到剪贴板 | 键绑定 | `keybindings.ts:63 app.message.copy`（描述「Copy selection or last assistant message」） | ✗（有 `/copy` 命令 `MiscCommands.java:95-96`，无键位） | **缺失** | 1 | — |
@@ -145,7 +146,7 @@
 | K21 | 转录搜索 | 交互 | `tui/src/alt-screen-search.ts:156-197` | ✗ | **缺失** | 1 | — |
 | K22 | 鼠标文本选择 / copy-on-select | 交互 | `tui-alt-screen.ts:305 hasActiveSelection`、`:1464 copySelectionToClipboard`（失败时具体错误文案 + 5 s flash） | ✗ | **缺失** | 1 | — |
 | K23 | 滚动条（绘制 + 拖拽 + 悬停加宽） | 交互 | `tui-alt-screen` scrollbar + `test/scrollbar-theme.test.ts` | `ChatViewportElement.java:129-190`、`:224-283` | **对齐** | 3 | — |
-| K24 | 斜杠命令补全弹层 | 交互 | `autocomplete.ts:303 CombinedAutocompleteProvider`（835 行；前导空白后仍补全） | `SlashCompleter.java:17`（146 行，前缀匹配） | **对齐** | 2 | — |
+| K24 | 斜杠命令补全弹层 | 交互 | `autocomplete.ts:303 CombinedAutocompleteProvider`（835 行；前导空白后仍补全） | `SlashCompleter.java:17`（176 行，前缀匹配） | **对齐** | 2 | **L7 W2（docs/62）**：弹层打开时 PgUp/PgDn 归弹层（`GlobalKeyRouter.completerTakesPageKeys`，alt-screen 与 inline 同门）＋选中项居中窗口（选中项不再跑出可视区） |
 | K25 | `@文件` 路径补全（fuzzy + `fd`） | 交互 | `autocomplete.ts:421-477`（file 分支）、`:737 scoreEntry`；CJK 标点作分隔符（`tui/src/utils.ts:58-63`）、`skill:` 按裸名模糊排序、wrapper 后补路径 | ✗ | **缺失** | 2 | — |
 | K26 | 大粘贴折叠为 `[paste #N +L lines]` | 交互 | `tui/components/editor.ts:31-55`（paste marker 原子段）+ `test/editor.test.ts` | ✗ | **缺失** | 1 | — |
 | K27 | 提示历史 ↑/↓ 导航（含 draft 还原、100 条上限） | 交互 | `editor.ts:347 history/historyIndex`、`:428 addToHistory` | ✓ `EditorHistory.java`（143 行，批 34，docs/46）＋`EditorComponent` ↑/↓ 三臂：首/末行导航历史、draft 还原、100 条上限、非导航键重置浏览 | **对齐** | 3 | ~~H-9.2-②~~ 批 34 接线（docs/46） |
@@ -167,7 +168,7 @@
 | # | 能力单元 | 类别 | pi 侧证据 | pi-java 侧证据 | 判定 | 权重 | 台账条目 |
 |---|---|---|---|---|---|---|---|
 | C1 | 滚动视图（行级 offset + follow 语义 + resize 重排） | 组件 | `tui/components/scroll-view.ts:224` + `chat-viewport.ts:46` | `ChatViewportElement.java:35`（300 行，`ScrollState` 内嵌） | **对齐** | 3 | — |
-| C2 | 选择列表（上下选 + 确认/取消） | 组件 | `tui/components/select-list.ts:273` | `SelectList.java:1`（145 行） | **存疑** | 2 | pi 有分组/模糊/多选；java 只有单选线性列表 |
+| C2 | 选择列表（上下选 + 确认/取消） | 组件 | `tui/components/select-list.ts:273` | `SelectList.java:1`（198 行） | **存疑** | 2 | **L7 W2（docs/62）**：PgUp/PgDn 整页（步长＝`maxVisible`，clamp 不 wrap）＋选中项居中窗口已补齐；分组渲染与多选仍未移植（Java 侧无消费点） |
 | C3 | 设置列表（bool/enum/string/number 多类型编辑） | 组件 | `tui/components/settings-list.ts:328` | ✗（`SettingsScreen` 用裸 Element 拼行） | **缺失** | 2 | — |
 | C4 | 输入框（单行，`components/input.ts`） | 组件 | `tui/components/input.ts:32 class Input`（501 行） | ✗（统一走 `TextAreaState`） | **缺失** | 1 | — |
 | C5 | loader / spinner（braille 10 帧动画 + 文案 + 颜色函数） | 组件 | `tui/components/loader.ts:13-60`（101 行） | ✗（`StatusBar.java:27-31` 是静态 `● running`） | **缺失** | 3 | — |
@@ -182,7 +183,7 @@
 | C14 | mouse-region（把鼠标事件限定到区域） | 组件 | `tui/components/mouse-region.ts:33`（三张消息卡用它，见 K37） | ✗（`ChatViewportElement.handleMouseEvent:205` 是元素级） | **缺失** | 1 | — |
 | C15 | dynamic-border（编辑框边框随思考等级变色） | 组件 | `components/dynamic-border.ts:25` + `interactive-mode.ts:4516 updateEditorBorderColor` | ✗ | **缺失** | 1 | — |
 | C16 | 编辑组件（多行 + 折叠 + 历史） | 组件 | `tui/components/editor.ts:297 class Editor`（2473 行）+ `editor-component.ts:74` + `custom-editor.ts:148` | `EditorComponent.java:27`（500 行）＋`EditorHistory.java`（143 行，批 34） | **存疑** | 3 | 批 34 补 K27（提示历史）；仍缺 K26 大粘贴折叠／K31 jump mode；见「存疑」清单 |
-| C17 | 模糊匹配 | 工具 | `tui/src/fuzzy.ts:12 fuzzyMatch`（**子序列**匹配 + `-5×连续 / +2×间隔 / -10×词边界 / +0.1×位置`）、`:100 fuzzyFilter`（按空白/斜杠**分词**、每词都要匹配、分数求和） | `FuzzyMatcher.java:50 score()` 是**子串**匹配（`startsWith`→0、`indexOf`→下标、否则不匹配），**无分词** | **存疑** | 2 | B78 |
+| C17 | 模糊匹配 | 工具 | `tui/src/fuzzy.ts:12 fuzzyMatch`（**子序列**匹配 + `-5×连续 / +2×间隔 / -10×词边界 / +0.1×位置`）、`:100 fuzzyFilter`（按空白/斜杠**分词**、每词都要匹配、分数求和） | `FuzzyMatch.java:30`（同一打分引擎，**docs/63 补整段最优对齐**）＋`FuzzyMatcher.java:22 rank()`（已收敛为 `fuzzyFilter` 对位：`[\s/]+` 分词、AND、稳定排序） | **对齐** | 2 | **L7 W3（docs/63）**：B78 关闭——两套引擎合一，`SelectList` 全部屏（模型/主题/登录/thinking/旧会话列表）随 `FuzzyMatcher` 换引擎 |
 | C18 | 布局引擎（constraint/flex/嵌套） | 框架 | `tui/src/layout.ts:449` + `layout-node.ts:51` | TamboUI 布局（外部） | **对齐**（经 TamboUI） | 3 | — |
 | C19 | stdin 缓冲（CSI 分片重组） | 框架 | `tui/src/stdin-buffer.ts:444` + `test/stdin-buffer.test.ts` | TamboUI `Backend` | **对齐**（经 TamboUI） | 3 | — |
 | C20 | 假光标（APC 标记的反白光标，与硬件光标互斥） | 组件 | `tui/src/tui.ts` 的 renderFakeCursor 与合成逻辑 | `showHardwareCursor` 设置已存在；APC 假光标标记及互斥解析未实现 | **缺失** | 1 | B238④；旧“无 hardware-cursor 开关”已失效 |
@@ -216,15 +217,15 @@
 | W5 | `toolcall_start` 带 `id`+`toolName` | web 协议 | `json-event.ts:23-30` | `StreamPartialBuilder.emitToolCallStart(id,name):390` | **对齐** | 3 | B29（已结案） |
 | W6 | 消息 wire 形状（`role`、`toolCallId`、块判别字面量 `toolCall`/`thinking`） | web 协议 | pi-ai `types.ts` 消息形状 | `WebWireJson.java:26-100` | **对齐** | 3 | B48（已结案） |
 | W7 | 终局 assistant 消息 `usage` 非空 | web 协议 | `types.ts:439` | `WebWireJson.java:92`（`B41` 已修） | **对齐** | 3 | B41（已结案） |
-| W8 | `queue_update` / `compaction_*` / `auto_retry_*` 推送前端 | web 协议 | pi `agent-session.ts:1047`（queue_update 发射）、压缩/重试事件 | ✗ `AgentEventTranslator.java:63-65` 明确「暂不推前端」 | **缺失** | 1 | H-9.2-⑨、B34、B35 |
-| W9 | 消息 `timestamp` 上 wire | web 协议 | pi-ai 消息必填 `timestamp`（`types.ts:417-421`） | ✗ **刻意偏差**（`WebWireJson.java:58` 注释「维持既有『wire 无消息 timestamp』的有意偏离」） | **存疑** | 1 | B50、H-9.2-⑧ |
-| W10 | `agent_end.messages` 整表替换 | web 协议 | pi `agent_end` 带本 pass `newMessages`（本锚点 `agent_settled` 另带 `aborted`，不影响本面） | `AgentEventTranslator.java:113-124`（空消息时不带 `messages` 键，防前端清空） | **存疑** | 3 | A8 |
-| W11 | 宿主消费者并发契约声明（TUI/RPC/web 三面） | 架构 | —— | 收敛到 `PiLaneSink.emit` 锁，无显式声明 | **存疑** | 1 | A6 |
-| W12 | `transcript()` 读取点清点（web 三处） | 架构 | —— | `WebDispatcher.java:235,349,380` | **存疑** | 1 | A2 |
+| W8 | `queue_update` / `compaction_*` / `auto_retry_*` 推送前端 | web 协议 | pi `agent-session.ts:1047`（queue_update 发射）、压缩/重试事件 | ✓ `AgentEventTranslator` 五类转发（复用 `JsonEventMapper.toWire` 形状） | **对齐** | 1 | **L7 W6（docs/66）**：全量快照数组、小写 `reason`、`compactionEntry` 剔除、`finalError` 省略；H-9.2-⑨/B34/B35 关闭 |
+| W9 | 消息 `timestamp` 上 wire | web 协议 | pi-ai 消息必填 `timestamp`（`types.ts:417-421`） | ✓ `WebWireJson.messageNode` 写 `timestamp`（Unix ms，null 省略） | **对齐** | 1 | **L7 W6（docs/66）**：B50 关闭——旧「wire 无消息 timestamp」的有意偏离已解除 |
+| W10 | `agent_end.messages` 整表替换 | web 协议 | pi `agent_end` 带本 pass `newMessages`（本锚点 `agent_settled` 另带 `aborted`，不影响本面） | ✓ 全量转录源＋**空表也写 `messages: []`**（此前空则省键） | **对齐** | 3 | **L7 W6（docs/66）**：A8 关闭；载荷源仍取全量转录（前端整表替换语义，刻意保留的差异已记录） |
+| W11 | 宿主消费者并发契约声明（TUI/RPC/web 三面） | 架构 | —— | ✓ 契约写入 docs/66 §2.4＋`PiLaneSink.emit` 锁注释指向 | **对齐** | 1 | **L7 W6**：单线程串行投递／消费者可阻塞／不保证跨 lane 顺序 |
+| W12 | `transcript()` 读取点清点（web 三处） | 架构 | —— | ✓ `WebDispatcher:304/320/412` 均为请求驱动只读快照 | **对齐** | 1 | **L7 W6（docs/66 §2.5）**：不进事件热路径，不引缓存 |
 | W13 | web 会话范围（`--session-dir` / `latest(cwd)`） | 行为 | pi `findMostRecentSession(dir)` 只读一个项目目录 | `PersistentSessionRepositories.latest(cwd)`（包⑫ 已修） | **对齐** | 2 | A12（已结案） |
 | W14 | `--no-session` 在 web 路径生效 | 行为 | 不落盘 | web 已使用 ephemeral/no-session 路径 | **对齐（旧基线）** | 1 | B54 已关闭 |
 | W15 | 会话列表 API 带 `onProgress`（异步进度 + 增量结果 + 可取消） | 行为 | pi `core/session-manager.ts:884-889 SessionListProgress`（带 **`partialSessions`** 第三参 + `AbortSignal`；`:943 onProgress`）；`session-selector.ts:76-116` 消费 | ✓ repo 层批 14（listRich 进度＋取消）＋TUI 选择器批 14＋**web 面批 22** | **对齐** | 1 | **批 22（docs/33 T1）**：`sessionsProgress`/`cancelSessions` 协议帧＋代次闸＋虚拟线程富列表＋前端渐进渲染（picker 关闭发 cancelSessions）；B55 批 14 已销 |
-| W16 | `find()` 的范围（`--session <id>` 跨项目查找） | 行为 | pi `findLocalSessionByExactId(id, cwd, sessionDir)` 项目内 | `PersistentSessionRepositories.find():59` 走 `all()` ⇒ O(全部)、跨项目 | **缺失** | 1 | **B53** |
+| W16 | `find()` 的范围（`--session <id>` 跨项目查找） | 行为 | pi `findLocalSessionByExactId(id, cwd, sessionDir)` 项目内 | 精确臂已是 header-only 项目内（`findById`），但阶梯 ③ 仍跨项目扫描；`findWithScope` 带 `global` 标＋确认提示 | **存疑** | 1 | **L7 W6（docs/66 §2.6）**：登记 **D271**——保留跨项目能力（显式可感知），项目内命中路径与 pi 一致；新增 `exactIdLaneStaysInsideTheProject` 断言钉住 header-only/项目内 |
 
 ---
 
@@ -267,16 +268,25 @@
 `3` = 每轮对话都走／默认路径；`2` = 每次会话走／常用命令；`1` = 低频／边缘／纯内部；`0` = 非目标（排除出分母）。
 **完成系数**：对齐 = 1.0 ／ 存疑 = 0.5 ／ 缺失 = 0。
 
+**L7 新读数（2026-11-20，逐行重算；全仓 `mvn clean verify -Dfrontend.skip=true` BUILD SUCCESS）**
+
 | 域 | Σ权重 | Σ(w×系数) | 加权完成度 | 未加权完成度 |
 |---|---:|---:|---:|---:|
-| 屏幕/面板（35 单元） | 47 | 26.5 | **56.4%** | 42.9% |
-| 渲染特性（R1–R29，28 单元；R21 权重 0 已剔；R29 批 22 出分母） | 39 | 17.5 | **44.9%** | 33.3% |
-| 键绑定/交互（K1–K39，39 单元；K36 权重 0 已剔） | 66 | 46.5 | **70.5%** | 47.4% |
-| TUI 组件（C1–C20，20 单元） | 41 | 22.5 | **54.9%** | 35.0% |
-| 主题/样式（T1–T11，11 单元） | 18 | 6.5 | **36.1%** | 27.3% |
-| web 对齐面（W1–W16，16 单元） | 33 | 27.0 | **81.8%** | 56.3% |
+| 屏幕/面板（35 单元） | 47 | 38.5 | **81.9%** | 71.4%（25/35） |
+| 渲染特性（R1–R28，27 计分单元；R21 权重 0 已剔；R29 批 22 出分母） | 39 | 23.0 | **59.0%** | 44.4%（12/27） |
+| 键绑定/交互（K1–K39，38 计分单元；K36 权重 0 已剔） | 66 | 46.5 | **70.5%** | 52.6%（20/38） |
+| TUI 组件（C1–C20，20 单元） | 41 | 23.5 | **57.3%** | 40.0%（8/20） |
+| 主题/样式（T1–T11，11 单元） | 18 | 15.0 | **83.3%** | 72.7%（8/11） |
+| web 对齐面（W1–W16，16 单元） | 33 | 32.5 | **98.5%** | 93.8%（15/16） |
+| **合计** | **244** | **179.0** | **73.4%** | **59.9%（88/147）** |
 
-**旧基线量化快照**：Σ权重 **244** ／ Σ(w×c) **152.5** ／ **62.5%**。本图修正了若干滞后行，但不借文档清理重算旧分数；L7 逐行重测后发布新读数。
+**权重 3 子集（26 条）**：Σ权重 **78** ／ Σ(w×c) **64.5** ／ **82.7%**（对齐 19 条＝57.0、存疑 5 条＝7.5、缺失 2 条＝0）。
+
+**读数的构成与边界（必须连带读）**
+
+1. 本轮翻了 3 行：**R11 缺失 → 对齐**（docs/60，+3.0）、**W10 存疑 → 对齐**（docs/66，+1.5）、W8/W9/W11–W15 已在 W6 包内落定。其余行的判定值未动，只把旧的加权合计按当前判定列**逐行复算**——旧表 Σ(w×c) 152.5 与行值不自洽（多行 L5/L7 期间已翻判定但未回算）。
+2. 系数取 1.0 的行里有 **10 行带「（旧基线）」标**（S6／S16／S19／S25／T3／T4／T5／T7／T10／W14，Σ权重 **14**）。按 docs/05 §3 第 1 条「旧对齐不能直接继承」，这些行尚未按新锚点逐条复核；若整批下调为存疑，读数降为 **70.5%**（172.0/244）。当前发布 73.4%，同时把该区间明确登记，不虚报。
+3. 未加权百分比的分母是**计分单元数**（147），非标签总数（S31 作废、R21/R29、K36 出分母）。
 
 **权重 3 的单元清单（26 条 —— 最该先修）**
 
@@ -285,7 +295,7 @@
 | S1 | 主聊天屏 | **对齐** |
 | R1 | Markdown 渲染 | **对齐**（批 25/docs/36 接线，B65 销号） |
 | R10 | Diff 渲染 | **存疑** |
-| R11 | 逐工具渲染器 | **缺失** |
+| R11 | 逐工具渲染器 | **对齐**（L7 W1b／docs/60：8 工具名 7 族；窄差 D260–D263） |
 | K1 | `Esc` 中断 | **对齐** |
 | K19 | 滚轮/触控板归一化 | **存疑** |
 | K23 | 滚动条 | **对齐** |
@@ -307,6 +317,6 @@
 | W5 | `toolcall_start` 带 `id`+`toolName` | **对齐** |
 | W6 | 消息 wire 形状 | **对齐** |
 | W7 | 终局 `usage` 非空 | **对齐** |
-| W10 | `agent_end.messages` 整表替换 | **存疑** |
+| W10 | `agent_end.messages` 整表替换 | **对齐**（L7 W6／docs/66） |
 
-权重 3 的当前判定以本表为准。R11、C5、C6 仍是明确缺失；T2 已有主题消费实现但覆盖待核，记存疑。旧权重 3 百分比不在本次清理中重算，L7 统一发布新读数。
+权重 3 的当前判定以本表为准：**19 对齐／5 存疑／2 缺失**。剩余缺口按可观察影响排序是 C5、C6（每轮都走的状态面，pi 有 loader/working 动画而 java 仍是静态 `● running`）、R10 与 K19/K32（形状不同）、C16（大粘贴折叠/jump mode 缺）、T2（token 覆盖未逐键核）。旧基线快照 244／152.5／62.5% 仅作历史，不再作为当前读数。

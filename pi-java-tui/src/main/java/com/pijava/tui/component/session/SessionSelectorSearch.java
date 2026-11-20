@@ -77,6 +77,18 @@ public final class SessionSelectorSearch {
 
     private static final Pattern WHITESPACE_RUN = Pattern.compile("\\s+");
 
+    // docs/63（L7 W3，pi session-selector-search.ts:30-33）：档位绝对支配分数。
+    /** pi {@code TIER_NAME}。 */
+    private static final int TIER_NAME = 0;
+    /** pi {@code TIER_TEXT}。 */
+    private static final int TIER_TEXT = 1;
+    /** pi {@code TIER_FUZZY}。 */
+    private static final int TIER_FUZZY = 2;
+    /** pi {@code TIER_WEIGHT}：档内分数最大绝对值远小于它，跨档不会互串。 */
+    private static final double TIER_WEIGHT = 1_000_000d;
+
+    private static final MatchResult NO_MATCH = new MatchResult(false, 0);
+
     private SessionSelectorSearch() {}
 
     /** pi {@code hasSessionName} (:30-32). */
@@ -84,7 +96,12 @@ public final class SessionSelectorSearch {
         return session.name() != null && !session.name().strip().isEmpty();
     }
 
-    /** pi {@code getSessionSearchText} (:26-28) verbatim. */
+    /**
+     * pi {@code getSessionSearchText}（{@code :26-28}）的拼接形——仅作诊断/契约面。
+     *
+     * <p>docs/63 起打分改为<b>逐字段</b>（{@link #matchLiteralToken}），不再对拼接串
+     * 做整体模糊匹配；保留本方法是为了让"可搜索语料"这件事仍有可测的表达。</p>
+     */
     public static String searchText(RichSessionInfo session) {
         return session.id() + " " + (session.name() == null ? "" : session.name())
             + " " + session.allMessagesText() + " " + session.cwd();
@@ -110,7 +127,7 @@ public final class SessionSelectorSearch {
             }
             try {
                 return new ParsedQuery(Mode.REGEX, List.of(),
-                    Pattern.compile(pattern, Pattern.CASE_INSENSITIVE), null);
+                    Pattern.compile(pattern, Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE), null);
             } catch (PatternSyntaxException e) {
                 // D75: error text is the PatternSyntaxException form (pi: V8 form);
                 // behaviour identical (error ⇒ empty result).
@@ -170,53 +187,118 @@ public final class SessionSelectorSearch {
         tokens.add(new Token(kind, v));
     }
 
-    /** pi {@code matchSession} (:116-154) verbatim. */
+    /**
+     * pi {@code matchSession}（{@code :195-220}）：token 逐个独立匹配、分数累加，任一
+     * token 不中即整条不匹配。字段分级见 {@link #matchLiteralToken} 等（docs/63）。
+     */
     public static MatchResult matchSession(RichSessionInfo session, ParsedQuery parsed) {
-        var text = searchText(session);
-
         if (parsed.mode() == Mode.REGEX) {
-            if (parsed.regex() == null) {
-                return new MatchResult(false, 0);
-            }
-            var m = parsed.regex().matcher(text);
-            if (!m.find()) {
-                return new MatchResult(false, 0);
-            }
-            return new MatchResult(true, m.start() * 0.1);
+            return parsed.regex() == null ? NO_MATCH : matchRegex(session, parsed.regex());
         }
-
         if (parsed.tokens().isEmpty()) {
             return new MatchResult(true, 0);
         }
-
-        double totalScore = 0;
-        String normalizedText = null;
-
+        double total = 0;
         for (var token : parsed.tokens()) {
-            if (token.kind() == Kind.PHRASE) {
-                if (normalizedText == null) {
-                    normalizedText = normalizeWhitespaceLower(text);
-                }
-                var phrase = normalizeWhitespaceLower(token.value());
-                if (phrase.isEmpty()) {
-                    continue;
-                }
-                var idx = normalizedText.indexOf(phrase);
-                if (idx < 0) {
-                    return new MatchResult(false, 0);
-                }
-                totalScore += idx * 0.1;
+            var result = token.kind() == Kind.PHRASE
+                ? matchPhraseToken(session, token.value())
+                : matchFuzzyToken(session, token.value());
+            if (!result.matches()) {
+                return NO_MATCH;
+            }
+            total += result.score();
+        }
+        return new MatchResult(true, total);
+    }
+
+    /** 档位分（pi {@code tierScore}，{@code :62-64}）：档位绝对支配。 */
+    private static MatchResult hit(int tier, double score) {
+        return new MatchResult(true, tier * TIER_WEIGHT + score);
+    }
+
+    private static String lower(String value) {
+        return value == null ? "" : value.toLowerCase(Locale.ROOT);
+    }
+
+    /**
+     * pi {@code matchRegex}（{@code :97-103}）：逐字段 {@code find}，命中即按字段定档
+     * （{@code name} ⇒ 名字档，其余 ⇒ 文本档）。
+     */
+    private static MatchResult matchRegex(RichSessionInfo session, Pattern regex) {
+        if (regex.matcher(lower(session.name())).find()) {
+            return hit(TIER_NAME, 0);
+        }
+        for (var field : textFields(session)) {
+            if (regex.matcher(field).find()) {
+                return hit(TIER_TEXT, 0);
+            }
+        }
+        return NO_MATCH;
+    }
+
+    /**
+     * pi {@code matchLiteralToken}（{@code :67-74}）：大小写不敏感精确子串，字段序
+     * {@code name → id → allMessagesText → cwd}；命中 {@code name} 时子分取模糊分，
+     * 其余字段子分固定 0。
+     */
+    private static MatchResult matchLiteralToken(RichSessionInfo session, String token) {
+        var query = lower(token);
+        var name = lower(session.name());
+        if (name.contains(query)) {
+            return hit(TIER_NAME, FuzzyMatch.fuzzyMatch(query, name).score());
+        }
+        for (var field : textFields(session)) {
+            if (field.contains(query)) {
+                return hit(TIER_TEXT, 0);
+            }
+        }
+        return NO_MATCH;
+    }
+
+    /** pi {@code matchPhraseToken}（{@code :88-95}）：折叠空白后逐字段命中。 */
+    private static MatchResult matchPhraseToken(RichSessionInfo session, String token) {
+        var phrase = normalizeWhitespaceLower(token);
+        if (phrase.isEmpty()) {
+            return new MatchResult(true, 0);
+        }
+        if (normalizeWhitespaceLower(lower(session.name())).contains(phrase)) {
+            return hit(TIER_NAME, 0);
+        }
+        for (var field : textFields(session)) {
+            if (normalizeWhitespaceLower(field).contains(phrase)) {
+                return hit(TIER_TEXT, 0);
+            }
+        }
+        return NO_MATCH;
+    }
+
+    /**
+     * pi {@code matchFuzzyToken}（{@code :76-86}）：先退回精确匹配；未中才在
+     * <b>{@code name}/{@code cwd}</b> 上取最小模糊分。{@code id}/消息文本只允许精确
+     * 匹配（回归 #11024）。
+     */
+    private static MatchResult matchFuzzyToken(RichSessionInfo session, String token) {
+        var literal = matchLiteralToken(session, token);
+        if (literal.matches()) {
+            return literal;
+        }
+        var query = lower(token);
+        double best = Double.POSITIVE_INFINITY;
+        for (var field : new String[] {lower(session.name()), lower(session.cwd())}) {
+            if (field.isEmpty()) {
                 continue;
             }
-
-            var match = FuzzyMatch.fuzzyMatch(token.value(), text);
-            if (!match.matches()) {
-                return new MatchResult(false, 0);
+            var match = FuzzyMatch.fuzzyMatch(query, field);
+            if (match.matches()) {
+                best = Math.min(best, match.score());
             }
-            totalScore += match.score();
         }
+        return best == Double.POSITIVE_INFINITY ? NO_MATCH : hit(TIER_FUZZY, best);
+    }
 
-        return new MatchResult(true, totalScore);
+    /** 文本档字段（小写）：{@code id → allMessagesText → cwd}。 */
+    private static String[] textFields(RichSessionInfo session) {
+        return new String[] {lower(session.id()), lower(session.allMessagesText()), lower(session.cwd())};
     }
 
     /**

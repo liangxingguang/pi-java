@@ -52,15 +52,13 @@ import com.pijava.coding.agent.extension.SessionEventFirer;
 import com.pijava.coding.agent.theme.Theme;
 
 /**
- * Session orchestration: wraps an {@link AgentHarness} with settings, trust,
- * providers and slash commands, and exposes prompt execution with live
- * streaming (Phase 3 design §9.5/§11.5). Since Phase 4, sessions are backed
- * by a persistent {@link com.pijava.agent.session.SessionRepository}
- * (JSONL default, SQLite opt-in)
- * so {@code -c/-r} and {@code /resume} survive process restarts.
+ * Session orchestration: wraps an {@link AgentHarness} with settings, trust, providers and
+ * slash commands, exposing prompt execution with live streaming (Phase 3 §9.5/§11.5). Since
+ * Phase 4 sessions are backed by a persistent {@link com.pijava.agent.session.SessionRepository}
+ * (JSONL default, SQLite opt-in) so {@code -c/-r} and {@code /resume} survive restarts.
  *
- * <p>批 29（结构债拆分）：实现迁同包包私有协作者（纯移动，行为零变化）；本类留壳——
- * 共享字段、构造器、事件核心、公开嵌套类型、包私有访问器、public 方法的一行委托。</p>
+ * <p>批 29（结构债拆分）：实现迁同包包私有协作者；本类留壳——共享字段、构造器、事件核心、
+ * 公开嵌套类型、包私有访问器、public 方法的一行委托。</p>
  */
 public final class AgentSession implements AutoCloseable {
 
@@ -129,6 +127,9 @@ public final class AgentSession implements AutoCloseable {
     public SessionServices services() { return services; }
     /** Session display name. */
     public String sessionName() { return name; }
+
+    public java.util.List<String> skillWarnings() { return views.skillWarnings(); }
+    public void setSkillWarnings(java.util.List<String> w) { views.setSkillWarnings(w); }
     /** The CLI arguments this session was assembled from ({@code /new}). */
     public Args sessionArgs() { return args; }
 

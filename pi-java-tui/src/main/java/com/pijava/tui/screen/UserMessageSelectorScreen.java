@@ -84,6 +84,14 @@ public final class UserMessageSelectorScreen implements ScreenOverlay {
 
     @Override
     public boolean onKeyEvent(KeyEvent event) {
+        if (event.isPageUp()) {
+            page(-1);
+            return true;
+        }
+        if (event.isPageDown()) {
+            page(1);
+            return true;
+        }
         if (event.isUp()) {
             // 上＝更旧，到顶环绕到底（pi :84-87）。
             if (!messages.isEmpty()) {
@@ -109,6 +117,18 @@ public final class UserMessageSelectorScreen implements ScreenOverlay {
             return true;
         }
         return false;
+    }
+
+    /**
+     * 整页（docs/62，pi {@code user-message-selector.ts:97-99}）：步长＝
+     * {@link #MAX_VISIBLE}，clamp 不 wrap（与 ↑/↓ 的环绕相反）。
+     */
+    private void page(int direction) {
+        if (messages.isEmpty()) {
+            return;
+        }
+        selectedIndex = Math.max(0,
+            Math.min(messages.size() - 1, selectedIndex + direction * MAX_VISIBLE));
     }
 
     // ── 结局 ──────────────────────────────────────────────────

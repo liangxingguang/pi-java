@@ -54,7 +54,13 @@ public final class FuzzyMatch {
         return new Result(true, swappedMatch.score() + 5);
     }
 
-    /** pi fuzzy.ts:245-262 inner {@code matchQuery} verbatim. */
+    /**
+     * pi fuzzy.ts inner {@code matchQuery}：贪心对齐取位后，再枚举 query 的**每一次整段
+     * 出现**重打分取最小（{@code :70-79}）——docs/63（L7 W3，C17）。
+     *
+     * <p>注意这不是 DP：离散匹配时贪心位是唯一候选，只有"query 整段出现在文本里"才多出
+     * 候选起点。写 DP 会算出 pi 没有的分数。</p>
+     */
     private static Result matchQuery(String normalizedQuery, String textLower) {
         if (normalizedQuery.isEmpty()) {
             return new Result(true, 0);
@@ -62,15 +68,38 @@ public final class FuzzyMatch {
         if (normalizedQuery.length() > textLower.length()) {
             return NO_MATCH;
         }
-        int queryIndex = 0;
+        var greedy = new int[normalizedQuery.length()];
+        int lastMatchIndex = -1;
+        for (int queryIndex = 0; queryIndex < normalizedQuery.length(); queryIndex++) {
+            int i = textLower.indexOf(normalizedQuery.charAt(queryIndex), lastMatchIndex + 1);
+            if (i == -1) {
+                return NO_MATCH;
+            }
+            greedy[queryIndex] = i;
+            lastMatchIndex = i;
+        }
+        double best = scorePositions(textLower, greedy);
+        for (int start = textLower.indexOf(normalizedQuery);
+             start >= 0;
+             start = textLower.indexOf(normalizedQuery, start + 1)) {
+            var contiguous = new int[normalizedQuery.length()];
+            for (int k = 0; k < contiguous.length; k++) {
+                contiguous[k] = start + k;
+            }
+            best = Math.min(best, scorePositions(textLower, contiguous));
+        }
+        if (normalizedQuery.equals(textLower)) {
+            best -= 100;
+        }
+        return new Result(true, best);
+    }
+
+    /** pi fuzzy.ts:12-42 {@code scorePositions}：按给定命中位打分（越低越好）。 */
+    private static double scorePositions(String textLower, int[] positions) {
         double score = 0;
         int lastMatchIndex = -1;
         int consecutiveMatches = 0;
-        while (queryIndex < normalizedQuery.length()) {
-            int i = textLower.indexOf(normalizedQuery.charAt(queryIndex), lastMatchIndex + 1);
-            if (i == -1) {
-                break;
-            }
+        for (int i : positions) {
             boolean isWordBoundary = i == 0 || isBoundaryChar(textLower.charAt(i - 1));
             if (lastMatchIndex == i - 1) {
                 consecutiveMatches++;
@@ -86,15 +115,8 @@ public final class FuzzyMatch {
             }
             score += i * 0.1;
             lastMatchIndex = i;
-            queryIndex++;
         }
-        if (queryIndex < normalizedQuery.length()) {
-            return NO_MATCH;
-        }
-        if (normalizedQuery.equals(textLower)) {
-            score -= 100;
-        }
-        return new Result(true, score);
+        return score;
     }
 
     /** pi fuzzy.ts word-boundary class {@code [\s\-_./:]}. */

@@ -66,15 +66,61 @@ class MessageBubbleRendererTest {
     @Test
     void unregisteredToolFallsBackToToolCallCard() {
         ToolRenderers.install(null);
-        var fallback = markups(toolUse("read", Map.of("path", "/tmp/x")));
+        var fallback = markups(toolUse("custom_tool", Map.of("path", "/tmp/x")));
         assertThat(fallback).isNotEmpty();
 
         var registry = new ToolRendererRegistry();
         registry.register(McpToolCallRenderer.resolver());
         ToolRenderers.install(registry);
-        // 非 mcp__ 名：resolver 不管 ⇒ ToolCallCard（与无注册表同输出）。
-        assertThat(markups(toolUse("read", Map.of("path", "/tmp/x"))))
+        // 非 mcp__ 名且非内置工具：内置链尾也不管 ⇒ ToolCallCard（与无注册表同输出）。
+        assertThat(markups(toolUse("custom_tool", Map.of("path", "/tmp/x"))))
             .isEqualTo(fallback);
+    }
+
+    /** docs/60：内置渲染器坐链尾——空注册表也能接管 8 个内置工具。 */
+    @Test
+    void builtInRenderersFillTheChainTail() {
+        ToolRenderers.install(new ToolRendererRegistry());
+
+        assertThat(markups(toolUse("bash", Map.of("command", "echo hi"))))
+            .containsExactly("$ echo hi");
+        assertThat(markups(toolUse("read", Map.of("path", "a.txt", "limit", 2))))
+            .containsExactly("read a.txt:1-2");
+        assertThat(markups(toolUse("custom_tool", Map.of()))).isNotEmpty();
+    }
+
+    /** 扩展优先：先注册的 resolver 抢在内置之前。 */
+    @Test
+    void extensionResolversWinOverBuiltIns() {
+        var registry = new ToolRendererRegistry();
+        registry.register((name, next) -> "bash".equals(name)
+            ? new StubRenderer(List.of("ext bash"))
+            : next.get());
+        ToolRenderers.install(registry);
+
+        assertThat(markups(toolUse("bash", Map.of("command", "echo hi"))))
+            .containsExactly("ext bash");
+    }
+
+    /** docs/60 §2.4：结果气泡按工具名查渲染器；edit 保持"无意见" ⇒ DiffView 原样。 */
+    @Test
+    void toolResultBubbleConsultsRenderers() {
+        ToolRenderers.install(new ToolRendererRegistry());
+
+        var read = MessageBubble.lines(new ChatMessage.ToolResult(
+            List.of(new ContentBlock.TextContent("l1\nl2")), false, null, "read"));
+        assertThat(read).as("read 折叠态不显示结果").isEmpty();
+
+        var edit = MessageBubble.lines(new ChatMessage.ToolResult(
+            List.of(new ContentBlock.DiffContent("+new\n-old")), false, null, "edit"));
+        assertThat(edit).extracting(LogicalLine::markup).contains("+new", "-old");
+    }
+
+    private record StubRenderer(List<String> lines) implements com.pijava.coding.agent.extension.ToolCallRenderer {
+        @Override
+        public List<String> renderCall(String toolName, Map<String, Object> args, boolean expanded) {
+            return lines;
+        }
     }
 
     /** 批 34（K8）：投影现读全局展开态——true ⇒ 展开臂全量，无折叠提示行。 */

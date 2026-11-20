@@ -361,6 +361,9 @@ final class ExtensionLoading {
             for (var skill : result.skills()) {
                 harness.skillManager().register(skill);
             }
+            // docs/65（pi :2015-2023）：诊断不再丢弃——启动提示渲染 `[Skill warnings]`。
+            owner.setSkillWarnings(
+                SkillDiagnostics.format(result.diagnostics()));
         }
         // prompts: 加载钩子贡献的路径并入 SessionServices 的注册表。
         if (!paths.promptPaths().isEmpty() && !args.noPromptTemplates()) {

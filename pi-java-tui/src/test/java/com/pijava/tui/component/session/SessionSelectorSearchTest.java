@@ -64,18 +64,51 @@ class SessionSelectorSearchTest {
 
     @Test
     void relevanceSortsByScoreThenModifiedDesc() {
+        // pi #11220：消息正文里的命中**位置**不影响分数 ⇒ 同档同分，按 modified 降序。
         var sessions = List.of(
             session("late", "xxxx brave", 3_000L),
             session("early", "brave xxxx", 1_000L));
         var result = SessionSelectorSearch.filterAndSortSessions(sessions, "\"brave\"", SortMode.RELEVANCE, NameFilter.ALL);
-        assertThat(ids(result)).containsExactly("early", "late");
+        assertThat(ids(result)).containsExactly("late", "early");
 
-        // equal scores ⇒ modified descending wins
         var tied = List.of(
             session("newer", "brave", 3_000L),
             session("older", "brave", 1_000L));
         var tiedResult = SessionSelectorSearch.filterAndSortSessions(tied, "\"brave\"", SortMode.RELEVANCE, NameFilter.ALL);
         assertThat(ids(tiedResult)).containsExactly("newer", "older");
+    }
+
+    /** docs/63（pi :30-33）：名字命中 > 文本命中 > 分散模糊，档位绝对支配。 */
+    @Test
+    void nameHitOutranksMessageHitOutranksFuzzy() {
+        var byName = session("by-name", "brave plan", "nothing here", "", 1_000L);
+        var byMessage = session("by-message", null, "we discussed brave", "", 2_000L);
+        var scattered = session("scattered", "b-r-a-v-e", "", "", 3_000L);
+
+        var result = SessionSelectorSearch.filterAndSortSessions(
+            List.of(scattered, byMessage, byName), "brave", SortMode.RELEVANCE, NameFilter.ALL);
+
+        assertThat(ids(result)).containsExactly("by-name", "by-message", "scattered");
+    }
+
+    /** docs/63（pi :66/#11024）：id 与消息文本只允许精确匹配，模糊只打 name／cwd。 */
+    @Test
+    void fuzzyDoesNotMatchIdsOrMessages() {
+        var scatteredId = session("a-b-r-a-v-e", null, "b r a v e", "", 1L);
+        assertThat(SessionSelectorSearch.matchSession(scatteredId,
+            SessionSelectorSearch.parseSearchQuery("brave")).matches()).isFalse();
+
+        var literalId = session("brave-session", null, "", "", 1L);
+        assertThat(SessionSelectorSearch.matchSession(literalId,
+            SessionSelectorSearch.parseSearchQuery("brave")).matches()).isTrue();
+    }
+
+    /** docs/63：JS 的 {@code i} 是 Unicode-aware，Java 需 {@code UNICODE_CASE} 才同判。 */
+    @Test
+    void regexCaseInsensitivityCoversNonAscii() {
+        var s = session("x", null, "MÜLLER war hier", "", 1L);
+        assertThat(SessionSelectorSearch.matchSession(s,
+            SessionSelectorSearch.parseSearchQuery("re:müller")).matches()).isTrue();
     }
 
     @Test
@@ -97,15 +130,15 @@ class SessionSelectorSearchTest {
     }
 
     @Test
-    void regexHitScoresByMatchIndex() {
-        // text = "abc  alltext /cwd" (null name ⇒ empty segment) ⇒ "all" at index 5
+    void regexHitScoresByTier() {
+        // docs/63：逐字段匹配，命中 allMessagesText ⇒ 文本档（1e6），位置不再计分。
         var s = session("abc", null, "alltext", "/cwd", 0L);
         var parsed = SessionSelectorSearch.parseSearchQuery("re:all");
         assertThat(parsed.mode()).isEqualTo(ParsedQuery.Mode.REGEX);
         assertThat(parsed.error()).isNull();
         var result = SessionSelectorSearch.matchSession(s, parsed);
         assertThat(result.matches()).isTrue();
-        assertThat(result.score()).isCloseTo(0.5, within(1e-9));
+        assertThat(result.score()).isCloseTo(1_000_000d, within(1e-9));
     }
 
     @Test
@@ -169,6 +202,6 @@ class SessionSelectorSearchTest {
             session("late", "xxxx brave", 3_000L),
             session("early", "brave xxxx", 1_000L));
         var result = SessionSelectorSearch.filterAndSortSessions(sessions, "\"brave\"", SortMode.THREADED, NameFilter.ALL);
-        assertThat(ids(result)).containsExactly("early", "late");
+        assertThat(ids(result)).as("同档同分 ⇒ modified 降序").containsExactly("late", "early");
     }
 }

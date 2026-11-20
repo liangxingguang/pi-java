@@ -33,12 +33,20 @@ class ExternalEditorSupportTest {
             .isEqualTo(new ExternalEditorSupport.Result.Complete("hello"));
     }
 
+    /** docs/64（pi external-editor.ts:41-47）：两条失败文案逐字。 */
     @Test
-    void nonZeroExitLeavesContentUntouched() throws Exception {
+    void failingEditorReportsPiWording() throws Exception {
         var result = ExternalEditorSupport.edit(failingEditor(), "draft text");
 
         assertThat(result).isInstanceOf(ExternalEditorSupport.Result.Failed.class);
-        assertThat(((ExternalEditorSupport.Result.Failed) result).exitCode()).isNotZero();
+        var message = ((ExternalEditorSupport.Result.Failed) result).message();
+        if (WINDOWS) {
+            // cmd /c 找不到命令 ⇒ 进程能起，退出码 9009。
+            assertThat(message).matches("External editor exited with code \\d+; prompt unchanged");
+        } else {
+            // POSIX 启动即失败。
+            assertThat(message).isEqualTo("Failed to launch external editor: " + failingEditor());
+        }
     }
 
     @Test

@@ -1,9 +1,9 @@
 package com.pijava.tui.screen;
 
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
 
+import com.pijava.coding.agent.core.ExternalEditorSupport;
 import com.pijava.coding.agent.core.KeybindingsManager;
 
 import dev.tamboui.tui.event.KeyCode;
@@ -25,15 +25,19 @@ class ExtensionEditorOverlayTest {
 
     private ExtensionEditorOverlay overlay(String prefill, CompletableFuture<String> result,
                                            java.util.function.BiFunction<String, String,
-                                               Optional<String>> external) {
+                                               ExternalEditorSupport.Result> external) {
         return new ExtensionEditorOverlay("Compose", prefill, keys, () -> 80,
             "notepad", external, result);
+    }
+
+    private static ExternalEditorSupport.Result failed(String message) {
+        return new ExternalEditorSupport.Result.Failed(message);
     }
 
     @Test
     void prefillAndEnterSubmits() {
         var result = new CompletableFuture<String>();
-        var overlay = overlay("line1", result, (cmd, c) -> Optional.empty());
+        var overlay = overlay("line1", result, (cmd, c) -> failed("no external editor"));
         assertThat(overlay.editorText()).isEqualTo("line1");
         overlay.onKeyEvent(KeyEvent.ofKey(KeyCode.ENTER));
         overlay.apply(null, s -> { });
@@ -43,7 +47,7 @@ class ExtensionEditorOverlayTest {
     @Test
     void shiftEnterInsertsNewlineEnterSubmits() {
         var result = new CompletableFuture<String>();
-        var overlay = overlay(null, result, (cmd, c) -> Optional.empty());
+        var overlay = overlay(null, result, (cmd, c) -> failed("no external editor"));
         overlay.onKeyEvent(KeyEvent.ofChar('a'));
         overlay.onKeyEvent(KeyEvent.ofKey(KeyCode.ENTER, KeyModifiers.SHIFT));
         overlay.onKeyEvent(KeyEvent.ofChar('b'));
@@ -60,7 +64,7 @@ class ExtensionEditorOverlayTest {
     @Test
     void escapeCancelsToNull() {
         var result = new CompletableFuture<String>();
-        var overlay = overlay("draft", result, (cmd, c) -> Optional.empty());
+        var overlay = overlay("draft", result, (cmd, c) -> failed("no external editor"));
         overlay.onKeyEvent(KeyEvent.ofKey(KeyCode.ESCAPE));
         overlay.apply(null, s -> { });
         assertThat(result).isCompletedWithValue(null);
@@ -72,18 +76,43 @@ class ExtensionEditorOverlayTest {
         var seenCommand = new AtomicReference<String>();
         var overlay = overlay("local", result, (cmd, content) -> {
             seenCommand.set(cmd);
-            return Optional.of(content + " +external");     // complete 臂回写
+            // complete 臂回写
+            return new ExternalEditorSupport.Result.Complete(content + " +external");
         });
         overlay.onKeyEvent(KeyEvent.ofChar('g', KeyModifiers.CTRL));
         assertThat(seenCommand).hasValue("notepad");
         assertThat(overlay.editorText()).isEqualTo("local +external");
+        assertThat(overlay.warningText()).isNull();
         assertThat(overlay.isDone()).isFalse();   // 往返不结束对话框（pi finally 回屏）
     }
 
+    /** docs/64（pi extension-editor.ts:136）：失败 ⇒ 框内 warning，内容不动。 */
     @Test
-    void ctrlGNonCompleteLeavesContentUntouched() {
-        var overlay = overlay("keep", new CompletableFuture<>(), (cmd, c) -> Optional.empty());
+    void ctrlGFailureShowsWarningAndKeepsContent() {
+        var overlay = overlay("keep", new CompletableFuture<>(),
+            (cmd, c) -> failed("External editor exited with code 1; prompt unchanged"));
+
         overlay.onKeyEvent(KeyEvent.ofChar('g', KeyModifiers.CTRL));
+
         assertThat(overlay.editorText()).isEqualTo("keep");
+        assertThat(overlay.warningText())
+            .isEqualTo("External editor exited with code 1; prompt unchanged");
+    }
+
+    /** 下一次成功的往返才清 warning（pi 无定时清除）。 */
+    @Test
+    void aLaterSuccessClearsTheWarning() {
+        var attempt = new java.util.concurrent.atomic.AtomicInteger();
+        var overlay = overlay("keep", new CompletableFuture<>(), (cmd, content) ->
+            attempt.getAndIncrement() == 0
+                ? failed("Failed to launch external editor: notepad")
+                : new ExternalEditorSupport.Result.Complete(content + "!"));
+
+        overlay.onKeyEvent(KeyEvent.ofChar('g', KeyModifiers.CTRL));
+        assertThat(overlay.warningText()).isNotNull();
+
+        overlay.onKeyEvent(KeyEvent.ofChar('g', KeyModifiers.CTRL));
+        assertThat(overlay.warningText()).isNull();
+        assertThat(overlay.editorText()).isEqualTo("keep!");
     }
 }

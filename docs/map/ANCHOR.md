@@ -5,15 +5,13 @@
 ## 当前状态
 
 ```text
-CURRENT_PI_PIN=ea448f454af474f3e2fe9733b331e17b0662f5d6
-TARGET_PI_PIN=56cae782341c339d3bb820081f0f9425d8c5b1ec
-TARGET_PI_DATE=2026-10-31
+CURRENT_PI_PIN=56cae782341c339d3bb820081f0f9425d8c5b1ec
+CURRENT_PI_DATE=2026-10-31
 ```
 
-- 现有地图中的旧证据默认对应 `CURRENT_PI_PIN`。
-- 新基线工作统一使用 `TARGET_PI_PIN`，完整规则见 `docs/08-pi-rebaseline-master-plan.md`。
-- 每层地图完成重测后，必须在自己的头部写明 `PI_PIN=56cae7823` 和 pi-java 当层 SHA。
-- 全部层完成前，不把全局当前锚点切换为目标锚点，也不发布新全仓完成度。
+- 七层（L0–L8）已于 2026-11-20 全部按 `56cae7823` 重测并闭环，全局当前锚点已切换；换锚历史见 git 与 `docs/08-pi-rebaseline-master-plan.md` §9。
+- 旧锚点 `ea448f454` 的证据仍保留在个别行内作对照，凡与 `56cae7823` 冲突时以新锚点为准。
+- 新全仓完成度已在 `docs/05` §1 发布（Σ权重 1,356／Σ(w×c) 1,291.0＝**95.2%**）。
 
 ## 取证规则
 

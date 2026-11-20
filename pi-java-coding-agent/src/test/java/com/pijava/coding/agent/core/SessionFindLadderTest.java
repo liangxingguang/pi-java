@@ -98,6 +98,23 @@ class SessionFindLadderTest {
         }
     }
 
+    /** docs/66（W16，pi main.ts:243-249）：精确臂只在本项目内、且只读 header。 */
+    @Test
+    void exactIdLaneStaysInsideTheProject() throws Exception {
+        Path root = Files.createTempDirectory("pi-ladder-local");
+        seed(root, CWD, "local-hit", 1);
+        seed(root, OTHER, "remote-hit", 2);
+        var handle = PersistentSessionRepositories.jsonl(root);
+        try {
+            assertThat(handle.findLocalById(CWD, "local-hit")).isPresent();
+            assertThat(handle.findLocalById(CWD, "remote-hit"))
+                .as("跨项目不命中（pi findLocalSessionByExactId 同义）")
+                .isEmpty();
+        } finally {
+            handle.close();
+        }
+    }
+
     @Test
     void pathFastLaneOpensTheFileDirectly() throws Exception {
         // ⓪ pi main.ts:253-256：路径形入参直接开文件，不走阶梯。

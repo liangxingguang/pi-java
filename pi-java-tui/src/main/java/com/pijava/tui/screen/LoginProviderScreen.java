@@ -11,8 +11,16 @@ import com.pijava.tui.util.TamboUIAdapter;
 import dev.tamboui.toolkit.element.Element;
 import dev.tamboui.tui.event.KeyEvent;
 
-/** Searchable provider/authentication-method selector. */
+/**
+ * Searchable provider/authentication-method selector.
+ *
+ * <p>docs/62（L7 W2，pi {@code components/oauth-selector.ts:56}）：PgUp/PgDn 整页翻，
+ * 页大小 8。</p>
+ */
 public final class LoginProviderScreen implements ScreenOverlay {
+
+    /** pi {@code oauth-selector.ts:56}。 */
+    private static final int MAX_VISIBLE = 8;
 
     private final SelectList<LoginProviderOption> list;
     private final Consumer<LoginProviderOption> onChoice;
@@ -20,7 +28,7 @@ public final class LoginProviderScreen implements ScreenOverlay {
     /** Create a selector with an optional initial fuzzy query. */
     public LoginProviderScreen(List<LoginProviderOption> options, String initialSearch,
                                Consumer<LoginProviderOption> onChoice) {
-        this.list = new SelectList<>(options, LoginProviderScreen::label);
+        this.list = new SelectList<>(options, LoginProviderScreen::label, MAX_VISIBLE);
         this.onChoice = onChoice;
         list.filter(initialSearch);
     }

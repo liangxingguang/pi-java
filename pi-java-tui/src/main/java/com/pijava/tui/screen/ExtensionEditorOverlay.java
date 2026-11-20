@@ -2,13 +2,13 @@ package com.pijava.tui.screen;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.IntSupplier;
 
 import com.pijava.coding.agent.core.AgentSession;
+import com.pijava.coding.agent.core.ExternalEditorSupport;
 import com.pijava.coding.agent.core.KeybindingsManager;
 import com.pijava.tui.component.EditorComponent;
 import com.pijava.tui.component.KeybindingHints;
@@ -42,10 +42,15 @@ public final class ExtensionEditorOverlay implements ScreenOverlay, ExtensionDia
     private final IntSupplier terminalCols;
     private final CompletableFuture<String> result;
     private final EditorComponent editor = new EditorComponent();
-    /** 外部编辑器往返：（命令, 当前内容) ⇒ 读回内容（空 ⇒ 内容不动，pi 非 complete 臂）。 */
-    private final BiFunction<String, String, Optional<String>> externalEditor;
+    /**
+     * 外部编辑器往返：（命令, 当前内容) ⇒ 结果（docs/64：complete 回写、failed 出框内
+     * warning；pi {@code extension-editor.ts:132-139}）。
+     */
+    private final BiFunction<String, String, ExternalEditorSupport.Result> externalEditor;
     /** 已解析的编辑器命令（pi :55-59 回落链由宿主构造期解析）。 */
     private final String externalEditorCommand;
+    /** 框内 warning 行（pi {@code externalEditorStatus}，失败置文案、下次成功清空）。 */
+    private volatile String warning;
     private volatile boolean done;
     /** cancel 可从宿主复位线程进入（⇒ volatile；pi 单线程无此形态）。 */
     private volatile boolean cancelled;
@@ -62,7 +67,7 @@ public final class ExtensionEditorOverlay implements ScreenOverlay, ExtensionDia
     public ExtensionEditorOverlay(String title, String prefill,
                                   KeybindingsManager keys, IntSupplier terminalCols,
                                   String externalEditorCommand,
-                                  BiFunction<String, String, Optional<String>> externalEditor,
+                                  BiFunction<String, String, ExternalEditorSupport.Result> externalEditor,
                                   CompletableFuture<String> result) {
         this.title = title;
         this.keys = keys;
@@ -87,8 +92,13 @@ public final class ExtensionEditorOverlay implements ScreenOverlay, ExtensionDia
         }
         // pi :125-128：ctrl+g 外部编辑器往返（complete 臂回写）。
         if (keys.matches(KeybindingsManager.EXTERNAL_EDITOR, stroke)) {
-            externalEditor.apply(externalEditorCommand, editor.getText())
-                .ifPresent(editor::setText);
+            var outcome = externalEditor.apply(externalEditorCommand, editor.getText());
+            if (outcome instanceof ExternalEditorSupport.Result.Complete(var text)) {
+                editor.setText(text);
+                warning = null;
+            } else if (outcome instanceof ExternalEditorSupport.Result.Failed(var message)) {
+                warning = message;   // pi :136：主题 warning 色，内容不动
+            }
             return true;
         }
         // java 特有拦截（Enter 归应用壳——pi 里 Enter 由 Editor 内部 onSubmit 吃）：
@@ -135,6 +145,11 @@ public final class ExtensionEditorOverlay implements ScreenOverlay, ExtensionDia
         return editor.getText();
     }
 
+    /** 框内 warning 文案（测试探针；null ⇒ 无 warning 行）。 */
+    String warningText() {
+        return warning;
+    }
+
     // ── 渲染（pi 构造器 :64-111 子件序逐字）───────────────────
 
     @Override
@@ -151,6 +166,12 @@ public final class ExtensionEditorOverlay implements ScreenOverlay, ExtensionDia
             }
         }
         children.add(editor.renderBare());   // pi :90：内嵌 Editor 直挂
+        if (warning != null) {
+            // pi :34/:90 externalEditorStatus：warning 色、单行、空则零行。
+            children.add(TamboUIAdapter.richText(Text.from(Line.from(
+                new dev.tamboui.text.Span(" " + warning, SemanticColors.warning())))));
+            children.add(TamboUIAdapter.spacer(1));
+        }
         children.add(TamboUIAdapter.spacer(1));
         children.add(TamboUIAdapter.richText(Text.from(Line.from(hintRow().stream()
             .map(s -> new dev.tamboui.text.Span(s.text(), s.style()))

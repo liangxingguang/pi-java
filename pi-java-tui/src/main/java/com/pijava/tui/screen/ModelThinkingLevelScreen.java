@@ -69,7 +69,7 @@ public final class ModelThinkingLevelScreen implements ScreenOverlay {
             // pi：description 显示现有 override。
             return m.id().provider() + "/" + m.id().modelName()
                 + (override == null ? "" : "  (thinking: " + override + ")");
-        });
+        }, pageSize(models.size()));
     }
 
     @Override
@@ -123,8 +123,14 @@ public final class ModelThinkingLevelScreen implements ScreenOverlay {
                 model.id().provider(), model.id().modelName()) != null) {
             choices.add(new LevelChoice("(clear override)", null));
         }
-        this.levelList = new SelectList<>(List.copyOf(choices), LevelChoice::label);
+        this.levelList = new SelectList<>(List.copyOf(choices), LevelChoice::label,
+            pageSize(choices.size()));
         this.step = Step.LEVEL;
+    }
+
+    /** pi {@code settings-submenu.ts:95}：页大小 = {@code min(项数, 10)}。 */
+    private static int pageSize(int itemCount) {
+        return Math.min(itemCount, 10);
     }
 
     @Override

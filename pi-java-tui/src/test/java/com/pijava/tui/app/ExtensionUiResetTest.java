@@ -38,7 +38,8 @@ class ExtensionUiResetTest {
         var host = new TuiExtensionUiHost(dispatcher, chatScreen,
             new KeybindingsManager(), () -> null);
         host.bindApp(opened::set, overlay -> overlay.apply(null, s -> { }),
-            (command, content) -> Optional.empty(), () -> 80, () -> 24);
+            (command, content) -> new com.pijava.coding.agent.core.ExternalEditorSupport
+                .Result.Failed("unused"), () -> 80, () -> 24);
         host.markRenderLoopActive(new Thread("fake-render"));
         ui = new TuiExtensionUI(host);
     }

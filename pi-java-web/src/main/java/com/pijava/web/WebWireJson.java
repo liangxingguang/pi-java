@@ -113,6 +113,17 @@ final class WebWireJson {
                 node.put("responseId", assistant.responseId());
             }
         }
+        // docs/66（W9，pi docs/message-types.md:5）：消息时间戳上 wire（Unix 毫秒）；
+        // 旧会话/兼容构造的 null ⇒ 键省略。
+        var timestamp = switch (m) {
+            case Message.UserMessage u -> u.timestamp();
+            case Message.AssistantMessage a -> a.timestamp();
+            case Message.ToolResultMessage t -> t.timestamp();
+            case Message.SystemMessage s -> s.timestamp();
+        };
+        if (timestamp != null) {
+            node.put("timestamp", timestamp.toEpochMilli());
+        }
         return node;
     }
 

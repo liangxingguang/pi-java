@@ -13,6 +13,7 @@ import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.coding.agent.core.EnabledModelSet;
 import com.pijava.coding.agent.core.KeybindingsManager;
 import com.pijava.coding.agent.core.ModelCatalogRefresh;
+import com.pijava.coding.agent.core.ModelLabels;
 import com.pijava.coding.agent.core.ScopedModelController;
 import com.pijava.coding.agent.core.ScopedModelSelection;
 import com.pijava.tui.component.FuzzyMatch;
@@ -67,6 +68,14 @@ public final class ScopedModelsScreen implements ScreenOverlay {
     @Override
     public boolean onKeyEvent(KeyEvent event) {
         var stroke = TamboUIAdapter.toStroke(event);
+        if (keys.matches(KeybindingsManager.SELECT_PAGE_UP, stroke)) {
+            pageSelection(-1);
+            return true;
+        }
+        if (keys.matches(KeybindingsManager.SELECT_PAGE_DOWN, stroke)) {
+            pageSelection(1);
+            return true;
+        }
         if (keys.matches(KeybindingsManager.SELECT_UP, stroke)) {
             moveSelection(-1);
             return true;
@@ -141,6 +150,23 @@ public final class ScopedModelsScreen implements ScreenOverlay {
         if (!filteredItems.isEmpty()) {
             selectedIndex = Math.floorMod(selectedIndex + delta, filteredItems.size());
         }
+    }
+
+    /**
+     * 整页移动（docs/62，pi {@code scoped-models-selector.ts:301-306}）：步长＝
+     * {@link #MAX_VISIBLE}，clamp 不 wrap（与 {@link #moveSelection} 的 wrap 相反）。
+     */
+    /** 当前选中下标（宿主/测试只读探针）。 */
+    int selectedIndex() {
+        return selectedIndex;
+    }
+
+    private void pageSelection(int direction) {
+        if (filteredItems.isEmpty()) {
+            return;
+        }
+        selectedIndex = Math.max(0,
+            Math.min(filteredItems.size() - 1, selectedIndex + direction * MAX_VISIBLE));
     }
 
     private void reorder(int delta) {
@@ -277,7 +303,8 @@ public final class ScopedModelsScreen implements ScreenOverlay {
                 var badge = item.model() == null ? " [unavailable]"
                     : " [" + item.model().id().provider() + "]";
                 var text = TamboUIAdapter.text((selected ? "→ " : "  ")
-                    + (item.model() != null && item.enabled() ? "✓ " : "  ") + id + badge);
+                    + (item.model() != null && item.enabled() ? "✓ " : "  ") + id
+                    + nameText(item) + badge);
                 rows.add(selected ? text.cyan() : text);
             }
             if (start > 0 || end < filteredItems.size()) {
@@ -292,6 +319,19 @@ public final class ScopedModelsScreen implements ScreenOverlay {
         rows.add(TamboUIAdapter.text("  " + refreshStatus()).dim());
         rows.add(TamboUIAdapter.text("  " + footerText()).dim());
         return TamboUIAdapter.panel("Model Configuration", TamboUIAdapter.column(rows)).fill();
+    }
+
+    /**
+     * docs/62（pi {@code scoped-models-selector.ts:257-261}）：去重别名 {@code (name)}；
+     * 纯文本无 muted 分段（D264）。
+     */
+    private static String nameText(ModelItem item) {
+        if (item.model() == null) {
+            return "";
+        }
+        var name = ModelLabels.distinctName(
+            item.model().id().modelName(), item.model().displayName());
+        return name == null ? "" : " (" + name + ")";
     }
 
     private static String fullId(ModelInfo model) {

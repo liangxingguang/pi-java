@@ -18,12 +18,17 @@ public final class ExternalEditorSupport {
 
     private ExternalEditorSupport() {}
 
-    /** pi {@code editInExternalEditor} 结果：complete 带读回内容；其余编辑器不动。 */
+    /** pi {@code editInExternalEditor} 结果：complete 带读回内容；failed 带逐字提示。 */
     public sealed interface Result {
         /** 退出码 0：读回（已规范化）的内容。 */
         record Complete(String content) implements Result {}
-        /** 非 0 退出：内容不动。 */
-        record Failed(int exitCode) implements Result {}
+        /**
+         * 失败（内容不动）：docs/64（L7 W4，pi {@code external-editor.ts:41-47}）。
+         *
+         * <p>{@code message} 逐字：启动失败 {@code Failed to launch external editor: <cmd>}；
+         * 退出码非零 {@code External editor exited with code N; prompt unchanged}。</p>
+         */
+        record Failed(String message) implements Result {}
     }
 
     /**
@@ -48,9 +53,17 @@ public final class ExternalEditorSupport {
                 // pi：command.split(" ") 简单拆（不支持引号转义）——逐字对位。
                 : new ProcessBuilder(append(command.split(" "), file.toString()));
             pb.inheritIO();
-            int code = pb.start().waitFor();
+            int code;
+            try {
+                code = pb.start().waitFor();
+            } catch (IOException e) {
+                // pi external-editor.ts:41：启动失败不抛，转成框内提示。
+                return new Result.Failed("Failed to launch external editor: " + command);
+            }
             if (code != 0) {
-                return new Result.Failed(code);
+                // pi external-editor.ts:43-47 逐字（java 无信号臂）。
+                return new Result.Failed(
+                    "External editor exited with code " + code + "; prompt unchanged");
             }
             return new Result.Complete(normalize(Files.readString(file, StandardCharsets.UTF_8)));
         } finally {

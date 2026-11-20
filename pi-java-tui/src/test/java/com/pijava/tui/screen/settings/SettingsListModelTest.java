@@ -55,6 +55,25 @@ class SettingsListModelTest {
         assertThat(model.scrollPosition()).isEqualTo("  (15/15)");
     }
 
+    /** docs/62：整页步长＝maxVisible，clamp 不 wrap（与 move 的环绕相反）。 */
+    @Test
+    void pageMovesByVisibleCountAndClamps() {
+        var items = new java.util.ArrayList<SettingsItem>();
+        for (int i = 0; i < 15; i++) {
+            items.add(SettingsItem.cycle("i" + i, "Item " + i, "", "off", List.of("off")));
+        }
+        var model = new SettingsListModel(items, 10);
+
+        assertThat(model.page(1)).isTrue();
+        assertThat(model.selected().id()).isEqualTo("i10");
+        assertThat(model.page(1)).isTrue();
+        assertThat(model.selected().id()).isEqualTo("i14");
+        assertThat(model.page(1)).as("末尾钳位").isFalse();
+        assertThat(model.selected().id()).isEqualTo("i14");
+        assertThat(model.page(-1)).isTrue();
+        assertThat(model.selected().id()).isEqualTo("i4");
+    }
+
     @Test
     void submenuActivationCarriesTypeAndDoesNotCycle() {
         var model = new SettingsListModel(List.of(new SettingsItem(
