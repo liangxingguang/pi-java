@@ -95,9 +95,9 @@ java -jar pi-java-dist/target/pi-java.jar --mode web --port 8787
 | [`docs/00-ai-driven-development-process.md`](docs/00-ai-driven-development-process.md) | 八步开发流程 |
 | [`docs/04-open-items-register.md`](docs/04-open-items-register.md) | 开放项与有效裁决 |
 | [`docs/05-module-alignment-map.md`](docs/05-module-alignment-map.md) | 逐模块量化对齐与缺口 |
-| [`docs/06-current-alignment-plan.md`](docs/06-current-alignment-plan.md) | 当前层顺序、状态与审核门 |
 | [`docs/07-examples-alignment.md`](docs/07-examples-alignment.md) | examples 对齐口径与能力清单 |
-| [`docs/08-pi-rebaseline-master-plan.md`](docs/08-pi-rebaseline-master-plan.md) | 针对 `56cae7823` 的换锚总设计 |
+| [`docs/map/ANCHOR.md`](docs/map/ANCHOR.md) | 当前 `56cae7823` 锚点的取证与切换规则 |
+| [`docs/08-b161-codemode-mechanism-design.md`](docs/08-b161-codemode-mechanism-design.md) | B161 codemode 设计稿（待审、未实施，保留） |
 
 ## 贡献
 

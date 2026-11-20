@@ -134,7 +134,7 @@ final class PiLaneSink implements PiLoop.Sink {
         // （会话事件、TUI/RPC/web、记录发射）此前都按单线程写。加锁即把它们还原成 pi 的
         // 运行时语义 —— pi 是 JS 单线程 + 逐个 await emit，并发只存在于工具体；
         // synchronized 可重入，消费者内部再回调 emit 不会自锁。
-        // 契约（TUI/RPC/web 三面共用）见 docs/66 §2.4。
+        // 契约（TUI/RPC/web 三面共用）见 docs/map/05 W11（三条硬约束）。
         synchronized (emitLock) {
             if (event instanceof PiLoop.Event.MessageStart start) {
                 onMessageStart(start.message());

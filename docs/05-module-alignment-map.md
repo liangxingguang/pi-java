@@ -98,6 +98,6 @@
 |---|---|
 | 当前未结项与范围裁决 | `docs/04-open-items-register.md` |
 | 旧基线最终量化快照与新计分口径 | 本文档 |
-| 当前层级执行状态 | `docs/06-current-alignment-plan.md` |
-| 新基线完整换锚规则 | `docs/08-pi-rebaseline-master-plan.md` |
+| 当前层级执行状态 | 本文件 §1（七层已于 2026-11-20 全部闭环） |
+| 新锚点取证与切换规则 | `docs/map/ANCHOR.md` |
 | 逐单元源码证据 | `docs/map/01..07` 与 `docs/map/ANCHOR.md` |

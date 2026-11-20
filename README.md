@@ -95,9 +95,9 @@ Development is AI-driven: every work package starts with a design document in [`
 | [`docs/00-ai-driven-development-process.md`](docs/00-ai-driven-development-process.md) | the eight-step development process |
 | [`docs/04-open-items-register.md`](docs/04-open-items-register.md) | open items and standing decisions |
 | [`docs/05-module-alignment-map.md`](docs/05-module-alignment-map.md) | quantified module alignment and gaps |
-| [`docs/06-current-alignment-plan.md`](docs/06-current-alignment-plan.md) | current layer order, status, and review gates |
 | [`docs/07-examples-alignment.md`](docs/07-examples-alignment.md) | examples alignment rules and capabilities |
-| [`docs/08-pi-rebaseline-master-plan.md`](docs/08-pi-rebaseline-master-plan.md) | the full re-baseline design against `56cae7823` |
+| [`docs/map/ANCHOR.md`](docs/map/ANCHOR.md) | evidence rules for the current `56cae7823` anchor |
+| [`docs/08-b161-codemode-mechanism-design.md`](docs/08-b161-codemode-mechanism-design.md) | pending B161 codemode design (not approved, not implemented) |
 
 ## Contributing
 

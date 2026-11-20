@@ -3,6 +3,8 @@
 > 【背景摘要】本文档只保留当前未结项、待用户决定事项和仍有效的范围裁决。已闭环批次、实施过程与旧账面沿革不在这里保存，历史在 git。
 >
 > 当前锚点为 pi `56cae7823`（2026-11-20 七层 L0–L8 重测闭环后切换，见 `docs/map/ANCHOR.md`）。下方条目均已随所属层重测；个别行仍引 `ea448f454` 作对照证据，冲突时以新锚点为准。
+>
+> **历史设计稿引用**：`docs/08-b161-codemode-mechanism-design.md`（B161 codemode 机制设计，**设计待审、尚未实施；已从原 `docs/61` 重编号**）是唯一保留的设计稿；其余批次设计/进度稿（`docs/06`、`docs/09`–`docs/60`、`docs/62`–`docs/66` 等）已删除。正文与代码注释中残留的 `docs/NN` 只是历史溯源标记，不构成有效链接。**现行结论以本文档 + `docs/map/` + `docs/05` 为准**，历史过程在 git。
 
 ## 0. 口径
 
@@ -21,6 +23,18 @@
 | B58 | 固定 pi 与当前 pi-java 的 OpenAI 默认 wire 均已是 `openai-responses`；旧“Java 默认 completions”的描述已过期 | 是否确认按现状对齐并销号，还是登记刻意偏差。AI 层设计时单独提交裁决，不擅自修改。 |
 
 Chord plugin 已按 R5 决定不做，不再是待拍板项。
+
+### codemode 机制提案（尚未批准、尚未实施；R5 现状仍是「不做、不进分母」）
+
+完整设计保留在 `docs/08-b161-codemode-mechanism-design.md`（设计待审、未实施），下列 F1–F5 是其待拍板摘要。
+
+| 编号 | 问题 | 建议与依据 |
+|---|---|---|
+| F1 | R5 是否改为「实现 codemode **能力版**、仍不进对齐分母」？ | 建议同意。模型可见语言保持 JavaScript；B161（机制）与 B177（MCP 默认激活）随之重开。 |
+| F2 | 引擎选型 | 建议 **Endive 1.1.0 + quickjs-wasi** 优先（2026-11-20 实测运行时全能力可用，压缩体积仅 +0.95 MB；1.2.0 有编译器 bug 故锁 1.1.0），**GraalJS 兜底**（+64 MB、零 ABI 绑定），Chicory 备选；若 Java 绑定超预算回落 GraalJS。 |
+| F3 | 是否批准新接缝 `B288 AgentTool.prepareLoadout(ToolLoadout)` 对位 `mode`/内联目录？ | 建议批准；否则降级并另登新窄差。原稿曾预占编号 D264–D272，该批编号已被 L7 正式占用，若采纳必须重新分配。 |
+| F4 | `models` 命名空间 v1 是否直接不做？ | 建议不做（Java 无 classifier/图像 API）；脚本调用时报 `models is not defined`。 |
+| F5 | web 模式是否默认允许 codemode？ | 建议与 CLI 同策略：本地单用户默认可用、可关闭；多租户/远程默认关闭或改用进程后端。 |
 
 ## 2. 主流功能与协议开放项
 
@@ -215,6 +229,10 @@ SQLite 后端是 pi-java 独立实现，保留模块，不对齐已删除 schema
 | D252 | Java `RpcExtensionUI` 处理 `setTitle`（`RpcExtensionUI.java:142`），而 pi 锚点的 rpc-extension-ui.ts TUI 未处理 `setTitle`（rpc-demo 发但静默忽略）——Java 侧为行为增强差，登记不改（docs/56 §2.3）。 |
 | D253 | `SlashCommand` 无 pi 的 `getArgumentCompletions` 对位（Java 只有扩展级 autocomplete provider 空接口，见 D242）：commands 示例的来源参数补全降级为纯函数 `sourceCompletions(prefix)`，只做断言不入键盘面（docs/58 §1.2）。 |
 | D254 | 工具渲染器无 theme／`result.details`（D241 同族）：question/questionnaire 的 `renderResult` 按 `textOutput` 前缀复原 `✓ …`／`Cancelled`，questionnaire 的逐题答案只能从内容行前缀推出（docs/58 §1.3/§1.4）。 |
+| D255 | pi 本锚点扩了 Kitty 协议/键解析（F1–F12 识别、`ESC+CR`＝Shift+Enter、F13–F35 不注入）：Java 的按键解析在 **TamboUI**（外部库），扩展需改库；登记不移植，K5/K32 维持存疑（docs/map/05 K5/K32）。 |
+| D256 | 框架层整块面归属 TamboUI：全屏转录搜索（S2a）、鼠标选区/copy-on-select（S2b/K22）、flash（S2c）、图像协议与能力探测（S2d/R14/K35）、OSC 应答串终止符（C19）、OSC 133 丢弃、双击选区连接符、`capturesViewportInput` 路由消费点。Java 均无同名构造，登记不移植。 |
+| D257 | 删除线行尾复位（`ESC[29m`）与跨行样式隔离：Java 渲染走 TamboUI markup（行级样式由库输出），无 SGR 直写面；R3 判定不变。 |
+| D259 | 工具行计时的**流中臂**（`Elapsed X.Ys`，pi 每 1 秒 `context.invalidate()` 重绘）无对位：Java 的逻辑行是一次性投影，无逐行定时重绘面。终局臂逐字对齐且来源更硬——直接取持久化 `Message.ToolResultMessage.durationMs`（跨重载仍准），渲染为结果行末 `Took X.Ys`；`ToolDurations.timerText` 两臂仍按 pi 实现并各有测试。 |
 | D260 | read 的紧凑分类行（`read docs <label>`／`[skill] <label>`，pi `renderers/read.ts:46-107`）不移植：判定依赖 pi 包根（`getReadmePath()`）与 `SKILL.md` 探测，属 pi 产品布局；内置渲染器的 call 行恒为 `read <path><:range>`（docs/60 §3.1）。 |
 | D261 | 工具结果折叠按**逻辑行**计数：pi bash 用 `VisualLinePreview{maxVisualLines:5, keep:"end"}`（宽度感知视觉行，`renderers/bash.ts:58-68`），Java 的逻辑行在渲染期才折行，故"尾部 5 行"取逻辑行（docs/60 §3.2，D92 同族）。 |
 | D262 | 渲染器侧的 `[Truncated: …]`／`[Full output: …]` 警告行（pi 由 `details.truncation`/`fullOutputPath` 生成）不移植，也不给 `ToolCallRenderer` 加 details 通道（D241 扩展）：同款文案已由工具层写进正文（`ReadTool:123-146`、`ShellToolSupport:236-248`、`GrepTool:194-207`、`FindTool:195-206`、`LsTool:141-149`），双重产出只会重复（docs/60 §3）。 |
@@ -248,4 +266,4 @@ SQLite 后端是 pi-java 独立实现，保留模块，不对齐已删除 schema
 3. 条目关闭后从开放表移除，历史由 git 保存，编号不复用。
 4. 每层重测后同步更新对应地图；全部层完成前不发布新全仓百分比。
 5. 每个实施工作包仍需独立设计稿和用户审核。
-6. 新文档号取「历史已用最大号 +1」，不得复用已闭环批次编号（历史已用到 `docs/66`）；下一新文档号为 **docs/67**。`docs/59` 为 L7 TUI/web 重测与对齐设计，`docs/60`–`docs/66` 为其六个实施包（W1b 内置渲染器、W2 选择器翻页、W3 搜索排名、W4 对话框栈、W5 启动头/标题、W6 web 协议），均于 2026-11-19/20 实施并闭环；`docs/61` 为 B161 codemode 机制设计。`docs/58` 为 L8 W6 交互/命令移植设计（4 件，2026-11-19 用户裁决直接实施，逐批测试全绿、注册表 **70** 项、模块 401 测 0 失败；零新增宿主成员，窄差 D253/D254＋沿用 D241/D246）；`docs/57` 为 L8 W5 UI 槽位/编辑器移植设计（13 件，2026-11-19 用户裁决直接实施，逐批测试全绿、注册表 66 项；零新增宿主成员，窄差沿用 docs/27 §3.4／D92／D100／D246）；`docs/56` 为 L8 W8 SDK/RPC/资源移植设计（17 件，2026-11-19 用户裁决直接实施，逐批测试全绿、注册表 53 项；窄差 D247–D252）；`docs/55` 为 L8 W7 平台/文件移植设计（5 件，2026-11-19 用户裁决直接实施，逐批测试全绿、注册表 51 项；窄差 D245/D246）；`docs/54` 为 L8 W4 工具语义/执行移植设计（10 件，2026-11-19 用户裁决直接实施，逐批测试全绿、注册表 46 项；窄差 D241–D244）；`docs/53` 为 B286 沙箱执行后端接缝设计（2026-11-19 审核通过并实施闭环）；`docs/52` 为 L8 W3 会话树/标签/持久化移植设计（10 件，2026-11-19 用户裁决直接实施，逐批测试全绿、注册表 37 项；窄差 D238/D239）；`docs/50` 为 L8 W2/W3 前置包（B284/B285，2026-11-09 已闭环）；`docs/51` 为 L8 W2 生命周期/压缩移植设计（2026-11-09 审核通过并实施闭环）；`docs/27` 为 L8 examples 重测与移植设计（2026-11-08 审核通过、2026-11-09 按 D237 把分母修正为 88，实施中）；`docs/21`–`docs/26` 已闭环（L2 mcp 2026-11-04；L3 agent-core、L4 session、L5 coding-agent、L6 evals 2026-11-05）；`docs/20` 及更早已闭环。
+6. 批次设计稿不属于本仓库的最终产物：**实施前**的设计稿按需临时编号，闭环后结论回写 `docs/04` 与 `docs/map/`，稿件删除（历史在 git）。截至 2026-11-20 已清理所有**已闭环**批次设计稿；**`docs/08`（B161 codemode 机制，原 `docs/61`，设计待审、尚未实施）例外保留**，直至裁决与实施闭环后再回写删除。现行结论入口为 `docs/01`–`docs/05`、`docs/07`、`docs/map/`。

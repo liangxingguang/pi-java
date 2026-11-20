@@ -47,12 +47,12 @@ commands: `mvn clean verify`, `mvn test -pl <module> -am`, `mvn checkstyle:check
 | `docs/02-architecture-design.md` | 15 个子模块、分层依赖、核心接口 |
 | `docs/03-detailed-design.md` | 类级设计：Entry/LaneRecord、AgentHarness、SessionStorage/Repository、SQLite schema、JSONL 格式、TamboUI 业务组件、slash 命令、CLI 参数 |
 | `docs/04-open-items-register.md` | 当前未结项与有效裁决 |
-| `docs/05-module-alignment-map.md` | 旧基线最终读数与新基线计分口径；明细在 `docs/map/` |
-| `docs/06-current-alignment-plan.md` | 当前逐层执行顺序、状态与审核门 |
+| `docs/05-module-alignment-map.md` | 新基线七层读数与计分口径；明细在 `docs/map/` |
 | `docs/07-examples-alignment.md` | examples 的有效裁决、现有能力与新基线验收口径 |
-| `docs/08-pi-rebaseline-master-plan.md` | pi `56cae7823` 新基线换锚总设计 |
+| `docs/map/ANCHOR.md` | 当前锚点 `56cae7823` 的取证与切换规则 |
+| `docs/08-b161-codemode-mechanism-design.md` | B161 codemode 设计稿（待审、未实施，保留至闭环） |
 
-遵循 .claude/rules.md 文档写作规则。当前任务：将技术裁决记录改写为开发工单可读版本，采用【场景/决定/风险】三段式，术语首次附带释义，分点列出裁决条目，区分模型可见/内部实现。
+遵循 .claude/rules.md 文档写作规则：裁决记录用【场景/决定/风险】三段式，术语首次附释义，分点列出裁决条目，区分模型可见/内部实现。
 
 ## 编码规范
 

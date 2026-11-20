@@ -9,7 +9,7 @@
 - 判定单位＝**可被外部观察到的行为承诺**（一个屏幕 / 一个键绑定 / 一个渲染特性 / 一个主题能力 / 一个 TUI 组件 / 一个 web 能力）。
 - 三档：**对齐**＝pi 有、pi-java 有、行为相同；**缺失**＝pi 有、pi-java 无；**存疑**＝pi-java 有但行为/形状与 pi 不同或未核。
 - 所有证据均为 `file:line`。pi 侧路径前缀 `D:\workplaceForai\pi\packages\`，java 侧 `D:\workplaceForai\pi-java\`。
-- pi 侧旧基线取证为 `git show ea448f454:<path>`；新目标锚点与重测规则见 docs/08 和 map/ANCHOR。
+- pi 侧旧基线取证为 `git show ea448f454:<path>`；新锚点取证与切换规则见 `docs/map/ANCHOR.md`。
 
 ---
 ## 规模
@@ -220,7 +220,7 @@
 | W8 | `queue_update` / `compaction_*` / `auto_retry_*` 推送前端 | web 协议 | pi `agent-session.ts:1047`（queue_update 发射）、压缩/重试事件 | ✓ `AgentEventTranslator` 五类转发（复用 `JsonEventMapper.toWire` 形状） | **对齐** | 1 | **L7 W6（docs/66）**：全量快照数组、小写 `reason`、`compactionEntry` 剔除、`finalError` 省略；H-9.2-⑨/B34/B35 关闭 |
 | W9 | 消息 `timestamp` 上 wire | web 协议 | pi-ai 消息必填 `timestamp`（`types.ts:417-421`） | ✓ `WebWireJson.messageNode` 写 `timestamp`（Unix ms，null 省略） | **对齐** | 1 | **L7 W6（docs/66）**：B50 关闭——旧「wire 无消息 timestamp」的有意偏离已解除 |
 | W10 | `agent_end.messages` 整表替换 | web 协议 | pi `agent_end` 带本 pass `newMessages`（本锚点 `agent_settled` 另带 `aborted`，不影响本面） | ✓ 全量转录源＋**空表也写 `messages: []`**（此前空则省键） | **对齐** | 3 | **L7 W6（docs/66）**：A8 关闭；载荷源仍取全量转录（前端整表替换语义，刻意保留的差异已记录） |
-| W11 | 宿主消费者并发契约声明（TUI/RPC/web 三面） | 架构 | —— | ✓ 契约写入 docs/66 §2.4＋`PiLaneSink.emit` 锁注释指向 | **对齐** | 1 | **L7 W6**：单线程串行投递／消费者可阻塞／不保证跨 lane 顺序 |
+| W11 | 宿主消费者并发契约声明（TUI/RPC/web 三面） | 架构 | —— | ✓ 契约正文即本行＋`PiLaneSink.emit` 锁注释指向；现状即契约，不改代码 | **对齐** | 1 | **三条硬约束**：①**单线程串行投递**——所有 `AgentSessionEvent` 经同一漏斗，`emit` 全程 `synchronized`（可重入，消费者内部回调不自锁）；②**消费者可阻塞**——TUI（dispatcher 排队）、RPC（逐帧写）、web（`WebSocket` 发送）都在 `emit` 内完成入队，不做重活；③**不保证跨 lane 顺序**——多 lane 并发运行时各自 emit 序列独立。不得后续误加「异步 emit」。 |
 | W12 | `transcript()` 读取点清点（web 三处） | 架构 | —— | ✓ `WebDispatcher:304/320/412` 均为请求驱动只读快照 | **对齐** | 1 | **L7 W6（docs/66 §2.5）**：不进事件热路径，不引缓存 |
 | W13 | web 会话范围（`--session-dir` / `latest(cwd)`） | 行为 | pi `findMostRecentSession(dir)` 只读一个项目目录 | `PersistentSessionRepositories.latest(cwd)`（包⑫ 已修） | **对齐** | 2 | A12（已结案） |
 | W14 | `--no-session` 在 web 路径生效 | 行为 | 不落盘 | web 已使用 ephemeral/no-session 路径 | **对齐（旧基线）** | 1 | B54 已关闭 |

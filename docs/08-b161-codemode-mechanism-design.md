@@ -1,4 +1,4 @@
-# 61 - B161 codemode 机制等价设计（能力版）
+# 08 - B161 codemode 机制等价设计（能力版）
 
 > 【背景摘要】用户提出「codemode 能否实现」「是否必须用 JS」「JVM 脚本语言是否更好」三问。
 > 本设计给出建议：**实现 pi codemode 的机制等价能力，模型可见语言保持 JavaScript，
@@ -18,7 +18,7 @@
 
 - pi 锚点：`56cae782341c339d3bb820081f0f9425d8c5b1ec`
 - 台账：`docs/04` B161（重开）、B177（MCP 默认 codemode 激活）、R5（修订建议）、拟新增 B288（loadout 接缝）
-- 上游裁决：`docs/01` §R5、`docs/04` §5.1、`docs/08` R5
+- 上游裁决：`docs/01` §R5、`docs/04` §5.1（原 `docs/08` 已清理，现行裁决以 `docs/04` 为准）
 - 相关既有实现：`NestedToolCallRunner`、`ToolExposure.CODEMODE`、`ToolReach`、`tool_search`、`GrammarSampling`
 
 ## 0. 取证口径
@@ -561,7 +561,9 @@ Codemode 侧逐字实现 `prepareCodemodeLoadout`（`tool.ts:343-379`）：
 
 ## 7. 裁剪与窄差
 
-拟新增（编号接 docs/60 的 D263，使用 D264–D272；避免与并行 docs/59/60 冲突）：
+> **编号失效提示**：原稿预占的 D264–D272 已被 L7 正式占用（见 `docs/04` §6）；下表窄差编号仅为本稿内部草案，获批采纳时必须从当前最大号之后重新分配，不得直接照搬。
+
+拟新增（原稿草案，编号待重新分配）：
 
 | 编号 | 差异 | 级别 | 说明 |
 |---|---|---|---|
