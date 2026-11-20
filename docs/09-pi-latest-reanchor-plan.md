@@ -2,7 +2,12 @@
 
 > 【背景摘要】2026-11-20 重新拉取 pi `main` 到 `a00a5048d`（v1.6.0 发布后 12 个提交，距 v1.5.2 约 380 个提交），与 pi-java 当前锚点 `56cae7823` 对比，给出结构差异、七层差异和对齐排期。
 >
-> **状态：计划已审核通过（2026-11-20）。** 目标锚点已写入 `docs/map/ANCHOR.md`；P0 进行中，尚未切 `CURRENT_PI_PIN`、尚未写对齐代码。
+> **状态：计划已审核通过（2026-11-20）。** 目标锚点已写入 `docs/map/ANCHOR.md`；`CURRENT_PI_PIN` 仍未切换。
+>
+> **实施进度（2026-11-21）：**
+> - P1 已完成：`9cccfe23 feat(ai): validate tool arguments with pi-schema semantics`。
+> - P2 首批已完成：`dc59f0c7 feat(ai): align v1.6.0 retry patterns and instruction role`。
+> - P2 余项（三个新 compat 键、Codex 其余形状）与 P3 之后未开始。
 >
 > 术语释义：
 > - **锚点**：pi 的一个固定 git 提交，pi-java 以它作为行为对照基准，取证只走 `git show <sha>:<path>`。
