@@ -24,9 +24,13 @@ if [ ! -d "$PI_DIR/.git" ]; then
   exit 2
 fi
 
-PIN=$(grep -m1 '^PI_PIN=' "$MAP_DIR/ANCHOR.md" | cut -d= -f2 | tr -d '[:space:]')
+# 换锚期间优先比对目标锚点；没有目标时退回当前锚点。
+PIN=$(grep -m1 '^TARGET_PI_PIN=' "$MAP_DIR/ANCHOR.md" | cut -d= -f2 | tr -d '[:space:]')
 if [ -z "$PIN" ]; then
-  echo "✗ ANCHOR.md 里没找到 PI_PIN=" >&2
+  PIN=$(grep -m1 '^CURRENT_PI_PIN=' "$MAP_DIR/ANCHOR.md" | cut -d= -f2 | tr -d '[:space:]')
+fi
+if [ -z "$PIN" ]; then
+  echo "✗ ANCHOR.md 里没找到 TARGET_PI_PIN= 或 CURRENT_PI_PIN=" >&2
   exit 2
 fi
 

@@ -5,26 +5,29 @@
 ## 当前状态
 
 ```text
+TARGET_PI_PIN=a00a5048dfae964fe89dce593215d0c3d275017c
+TARGET_PI_DATE=2026-11-20
 CURRENT_PI_PIN=56cae782341c339d3bb820081f0f9425d8c5b1ec
 CURRENT_PI_DATE=2026-10-31
 ```
 
-- 七层（L0–L8）已于 2026-11-20 全部按 `56cae7823` 重测并闭环，全局当前锚点已切换；换锚历史见 git。
-- 旧锚点 `ea448f454` 的证据仍保留在个别行内作对照，凡与 `56cae7823` 冲突时以新锚点为准。
-- 新全仓完成度已在 `docs/05` §1 发布（Σ权重 1,356／Σ(w×c) 1,291.0＝**95.2%**）。
+- 目标锚点 `a00a5048d` 为 2026-11-20 main HEAD（v1.6.0 后 12 个提交）；换锚计划见 `docs/09-pi-latest-reanchor-plan.md`。
+- 七层（L0–L8）已于 2026-11-20 全部按 `56cae7823` 重测并闭环；新目标锚点的重测尚未完成，`CURRENT_PI_PIN` 暂不切换。
+- 旧锚点 `ea448f454` 的证据仍保留在个别行内作对照，凡与 `56cae7823` 冲突时以当前锚点为准。
+- 新全仓完成度已在 `docs/05` §1 发布（Σ权重 1,356／Σ(w×c) 1,291.0＝**95.2%**）；目标锚点的读数在 P12 前不发布。
 
 ## 取证规则
 
 pi 侧只读固定提交，不依赖可能移动的工作树：
 
 ```bash
-git -C D:/workplaceForai/pi show 56cae7823:<path>
+git -C D:/workplaceForai/pi show a00a5048d:<path>
 ```
 
 新旧行为比较：
 
 ```bash
-git -C D:/workplaceForai/pi diff ea448f454..56cae7823 -- <path>
+git -C D:/workplaceForai/pi diff 56cae7823..a00a5048d -- <path>
 ```
 
 规则：
@@ -51,13 +54,14 @@ bash docs/map/check-drift.sh
 
 - **R1**：pi 已删除的面，pi-java 也评估删除。
 - **R2**：只覆盖已批准的主流 Provider。
-- **R5**：codemode、durable、chord、pico3、micro 不对齐、不进分母。
+- **R5**：codemode、durable、chord、env、pico3、micro、apps/p2、apps/p2-mac、apps/p3 不对齐、不进分母。
+- codemode 沙箱出分母，但 `tool_search` 消费的 `resolveSchemaRef`（本地 `$ref` 跟随）属于共享主流行为，在册。
 - R5 按消费链判断，不排除 tool_search、MCP、OAuth 等共享主流行为。
 
 ## 完成条件
 
 只有七份地图全部以目标锚点重测、docs/04 与 docs/05 同步、总分可由逐行权重复算后，才允许：
 
-1. 将 `CURRENT_PI_PIN` 更新为 `56cae7823`；
+1. 将 `CURRENT_PI_PIN` 更新为 `a00a5048d`；
 2. 删除上方的目标锚点过渡状态；
 3. 在 docs/05 发布新全仓读数。
