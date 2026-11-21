@@ -20,23 +20,23 @@ import java.util.Optional;
 public final class DefaultModelIds {
 
     private static final Map<String, String> BY_PROVIDER = Map.ofEntries(
-        Map.entry("anthropic", "claude-opus-4-8"),
-        Map.entry("openai", "gpt-6.1-sol"),
-        Map.entry("google", "gemini-3.1-pro-preview"),
+        Map.entry("anthropic", "claude-opus-5-5"),
+        Map.entry("openai", "gpt-6.2-sol"),
+        Map.entry("google", "gemini-4-argon"),
         Map.entry("deepseek", "deepseek-v4-pro"),
         Map.entry("mistral", "devstral-medium-latest"),
         Map.entry("xai", "grok-4.7"),
-        Map.entry("minimax", "MiniMax-M2.7"),
-        Map.entry("minimax-cn", "MiniMax-M2.7"),
-        Map.entry("moonshotai", "kimi-k2.6"),
-        Map.entry("moonshotai-cn", "kimi-k2.6"),
+        Map.entry("minimax", "MiniMax-M3"),
+        Map.entry("minimax-cn", "MiniMax-M3"),
+        Map.entry("moonshotai", "kimi-k2.7-code"),
+        Map.entry("moonshotai-cn", "kimi-k2.7-code"),
         Map.entry("zai", "glm-5.3"),
         Map.entry("zai-coding-cn", "glm-5.3"),
-        Map.entry("qwen-token-plan-cn", "qwen3.7-max"),
+        Map.entry("qwen-token-plan-cn", "qwen3.8-max"),
         Map.entry("xiaomi", "mimo-v2.6-pro"),
         Map.entry("xiaomi-token-plan-cn", "mimo-v2.6-pro"),
         Map.entry("ant-ling", "Ring-2.6-1T"),
-        Map.entry("openrouter", "moonshotai/kimi-k2.6"),
+        Map.entry("openrouter", "moonshotai/kimi-k2.7-code"),
         Map.entry("radius", "balanced"));
 
     private DefaultModelIds() {}
