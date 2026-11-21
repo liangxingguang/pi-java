@@ -64,6 +64,17 @@ class GoogleGenerativeAiApiTest {
         assertThat(last(events, StreamEvent.StreamDone.class).reason()).isEqualTo(StopReason.LENGTH);
     }
 
+    /**
+     * v1.6.0（pi google-shared.ts:504-507）：{@code CONTINUATION} 是请求级 token 上限，
+     * pi 不续跑（SDK 自动续写已关闭）⇒ 与 {@code MAX_TOKENS} 同映射为 {@code "length"}。
+     */
+    @Test
+    void continuationFinishReasonMapsToLength() throws Exception {
+        var events = collect(text("partial"), finish("CONTINUATION"));
+
+        assertThat(last(events, StreamEvent.StreamDone.class).reason()).isEqualTo(StopReason.LENGTH);
+    }
+
     /** {@code STOP} ⇒ {@code "stop"}（正常收尾的**对照面**：旧实现下也是绿的）。 */
     @Test
     void stopFinishReasonMapsToStop() throws Exception {

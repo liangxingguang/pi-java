@@ -354,7 +354,9 @@ public final class GoogleGenerativeAiApi extends AbstractChatApi {
     private static StopReason mapStopReason(String reason) {
         return switch (reason) {
             case "STOP" -> StopReason.STOP;
-            case "MAX_TOKENS" -> StopReason.LENGTH;
+            // v1.6.0（pi google-shared.ts:504-507，@google/genai 2.32）：SDK 引入
+            // CONTINUATION（请求级 token 上限，未完成生成）。pi 不续跑，按 length 结束。
+            case "MAX_TOKENS", "CONTINUATION" -> StopReason.LENGTH;
             case "BLOCKLIST", "PROHIBITED_CONTENT", "SPII", "SAFETY",
                  "IMAGE_SAFETY", "IMAGE_PROHIBITED_CONTENT", "IMAGE_RECITATION",
                  "IMAGE_OTHER", "RECITATION", "FINISH_REASON_UNSPECIFIED", "OTHER",
