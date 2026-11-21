@@ -388,12 +388,11 @@ class PiLoopTest {
     }
 
     @Test
-    void abortedParallelBatchFramesOnlyTheFirstCallLikePi() {
-        // pi executeToolCallsParallel：批次开始前信号已中止时，准备循环给**第一个**调用
-        // 发 start、在其执行票闭包里收尾 end（"Operation aborted"，:521-524 的中止检查），
-        // 随后 break（:542-544）—— 后续调用**一帧都没有**，结果消息也只补发一条。
-        // 本测试旧断言（「每个已 start 的调用都收到 end」）钉住的是 pi-java 自创形状，
-        // 随端口两相拆分一并改为 pi 的真实形状；原 docs/29 §4 同步修正。
+    void abortedParallelBatchAnswersEveryCallLikePi() {
+        // v1.6.0（pi #9986，4438c58ba）：批次循环**不再提前 break**，prepareToolCall 的
+        // 顶端中止门给每个剩余调用 "Operation aborted" —— 每个调用都有 start/end/结果消息，
+        // 且钩子不被告知不会执行的调用（tools.invoked 为空）。旧断言（只有第一个调用有帧）
+        // 钉的是修复前的 pi 形状。
         var signal = AbortSignal.create();
         signal.abort();
         var rec = new Recorder();
@@ -424,10 +423,12 @@ class PiLoopTest {
         assertThat(rec.frames.stream().filter(f -> f.startsWith("tool_execution_")).toList())
             .containsExactly(
                 "tool_execution_start:bash",
-                "tool_execution_end:bash");
+                "tool_execution_end:bash",
+                "tool_execution_start:read",
+                "tool_execution_end:read");
         assertThat(rec.frames.stream().filter(f -> f.equals("message_end:tool")).count())
-            .as("break 之后 c2 没有任何结果消息（pi 的 finalizedCalls 里只有 c1）")
-            .isEqualTo(1);
+            .as("每个调用都补一条 Operation aborted 结果消息")
+            .isEqualTo(2);
         assertThat(tools.invoked).isEmpty();
     }
 

@@ -138,6 +138,12 @@ public final class PiToolRunner implements PiLoop.ToolRunner {
      */
     @Override
     public PiLoop.Preparation prepare(PiLoop.ToolCall call) {
+        // v1.6.0（pi #9986，agent-loop.ts:716-722）：已中止 ⇒ 在工具查找与 beforeToolCall
+        // **之前**直接给 "Operation aborted"。环里的批次循环不再提前 break，而是让每个剩余
+        // 调用都走到这里 —— 每个调用都有 start/end/错误结果，钩子不被告知不会执行的调用。
+        if (signal != null && signal.isAborted()) {
+            return immediate(call, true, "Operation aborted", false);
+        }
         // pi {@code :613/:716}：{@code (currentContext.tools ?? []).find} —— 查找面是
         // **活跃集**（批 16 修真：失活工具 ⇒ "Tool <name> not found"，与 pi 的
         // system-prompt-updates.test.ts oracle 同断言）；无供应口时回落注册表全局查找。

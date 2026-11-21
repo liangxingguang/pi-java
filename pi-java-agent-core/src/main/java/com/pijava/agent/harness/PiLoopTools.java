@@ -96,11 +96,14 @@ final class PiLoopTools {
         for (var call : calls) {
             emit.emit(new PiLoop.Event.ToolExecutionStart(
                 call.id(), call.name(), call.arguments()));
-            // pi :451-468：immediate 与已执行的分岔只影响结果从哪来，收尾时序相同
-            var outcome = switch (config.toolRunner().prepare(toolCall(call))) {
-                case PiLoop.ImmediateOutcome immediate -> immediate.outcome();
-                case PiLoop.Prepared prepared -> config.toolRunner().execute(prepared, emit);
-            };
+            // pi :451-468：immediate 与已执行的分岔只影响结果从哪来，收尾时序相同。
+            // v1.6.0（pi #9986）：已中止 ⇒ prepareToolCall 顶端门直接定局，不问端口。
+            var outcome = aborted(config)
+                ? abortedOutcome(call)
+                : switch (config.toolRunner().prepare(toolCall(call))) {
+                    case PiLoop.ImmediateOutcome immediate -> immediate.outcome();
+                    case PiLoop.Prepared prepared -> config.toolRunner().execute(prepared, emit);
+                };
             outcomes.add(outcome);
             emit.emit(new PiLoop.Event.ToolExecutionEnd(
                 call.id(), call.name(), outcome.result(), outcome.isError(),
@@ -108,9 +111,8 @@ final class PiLoopTools {
             emit.emit(new PiLoop.Event.MessageStart(outcome.message()));
             emit.emit(new PiLoop.Event.MessageEnd(outcome.message()));
             messages.add(outcome.message());
-            if (aborted(config)) {
-                break;
-            }
+            // v1.6.0（pi #9986）：中止后**不再 break** —— 剩余调用逐个经 prepare 得到
+            // "Operation aborted" 的 start/end/结果消息（每调用都有结果）。
         }
         return new Batch(List.copyOf(messages), allTerminate(outcomes));
     }
@@ -156,7 +158,10 @@ final class PiLoopTools {
         for (var call : calls) {
             emit.emit(new PiLoop.Event.ToolExecutionStart(
                 call.id(), call.name(), call.arguments()));
-            var preparation = config.toolRunner().prepare(toolCall(call));
+            // v1.6.0（pi #9986）：已中止 ⇒ 顶端中止门先于端口准备，直接定局。
+            var preparation = aborted(config)
+                ? new PiLoop.ImmediateOutcome(abortedOutcome(call))
+                : config.toolRunner().prepare(toolCall(call));
             if (preparation instanceof PiLoop.ImmediateOutcome immediate) {
                 emit.emit(new PiLoop.Event.ToolExecutionEnd(
                     call.id(), call.name(),
@@ -164,9 +169,7 @@ final class PiLoopTools {
                     // B234：immediate 是准备相当场失败（未执行），消息无 durationMs。
                     immediate.outcome().message().durationMs()));
                 entries.add(immediate::outcome);
-                if (aborted(config)) {
-                    break;
-                }
+                // v1.6.0（pi #9986）：不再 break —— 后续调用同样在准备相定局。
                 continue;
             }
             var prepared = (PiLoop.Prepared) preparation;
@@ -179,9 +182,7 @@ final class PiLoopTools {
                     outcome.message().durationMs()));
                 return outcome;
             });
-            if (aborted(config)) {
-                break;
-            }
+            // v1.6.0（pi #9986）：不再 break —— 已中止时执行票闭包自己回 "Operation aborted"。
         }
         // pi 的 `await Promise.all(entries.map(e => e()))`（:547-549）：全部执行票**同时**开跑，
         // 结果**按源序**收回。两套顺序由此分家 —— end 帧是**完成序**（各任务在完成时自己发），

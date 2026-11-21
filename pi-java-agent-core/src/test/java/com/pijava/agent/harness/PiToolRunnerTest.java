@@ -213,6 +213,36 @@ class PiToolRunnerTest {
         assertThat(noHooks.execute((PiLoop.Prepared) ticket, NO_EMIT).isError()).isFalse();
     }
 
+    /**
+     * v1.6.0（pi #9986）：信号已中止 ⇒ 在工具查找与 beforeToolCall **之前**返回
+     * "Operation aborted" —— 钩子不被告知不会执行的调用（连未知工具也走这条）。
+     */
+    @Test
+    void abortedSignalShortCircuitsBeforeLookupAndHooks() {
+        var signal = AbortSignal.create();
+        signal.abort();
+        var hookCalls = new java.util.ArrayList<String>();
+        var hooks = new HookSystem(new LaneState());
+        hooks.onBeforeTool("default", ctx -> {
+            hookCalls.add(ctx.toolName());
+            return null;
+        });
+        var runner = new PiToolRunner("default", registryWith(okTool("echo", "hi")),
+            hooks, CTX, signal, null);
+
+        var preparation = runner.prepare(call("echo"));
+        assertThat(preparation).isInstanceOf(PiLoop.ImmediateOutcome.class);
+        var outcome = ((PiLoop.ImmediateOutcome) preparation).outcome();
+        assertThat(outcome.isError()).isTrue();
+        assertThat(outcome.message().content().toString()).contains("Operation aborted");
+        assertThat(hookCalls).as("中止调用不问钩子").isEmpty();
+
+        // 未知工具同样先吃中止门（不上报 Tool ... not found）。
+        assertThat(runner.prepare(call("nope"))).isInstanceOf(PiLoop.ImmediateOutcome.class);
+        assertThat(((PiLoop.ImmediateOutcome) runner.prepare(call("nope")))
+            .outcome().message().content().toString()).contains("Operation aborted");
+    }
+
     // ═══ tool_execution_update：pi executePreparedToolCall 的回调转接（agent-loop.ts:690-704）═══
 
     /** 执行中流出 N 条更新，并把 update 回调**漏**到外面（模拟执行返回后的泄漏线程）。 */
