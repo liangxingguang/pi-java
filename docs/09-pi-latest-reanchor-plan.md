@@ -14,7 +14,12 @@
 > - P2 余项结论：Codex 专属形状（developer item／`max_output_tokens`／`configuration_update`／WS 60 分钟）
 >   **不适用** —— pi-java 无 `openai-codex-responses` 车道（R5 范围外）；共享的 responses 部分已逐项核对
 >   （`max_output_tokens ≥16`、显式 prompt cache、亲和头）。Copilot 的 strict/reasoning 两条已落；
->   剩余分类器（Microsoft-Decision-1）按计划属 R5。P3 之后未开始。
+>   剩余分类器（Microsoft-Decision-1）按计划属 R5。
+> - P3 部分完成（2026-11-21）：`fca70024`（catalog 规则按 `a00a5048d` 重新 vendor、上游快照重取、
+>   18 分片重生成：645 chat／74 image，radius 基线 28→39）、`21ec26b0`（默认模型表同步：
+>   Anthropic Opus 5.5、OpenAI GPT-6.2 Sol、Google gemini-4-argon 等）。**未做**：新增 provider
+>   （Qwen Token Plan Individual／Individual CN、Xiaomi AMS/SGP 等）与 provider 级默认值的 Java 注册。
+> - P4 之后未开始。
 >
 > 术语释义：
 > - **锚点**：pi 的一个固定 git 提交，pi-java 以它作为行为对照基准，取证只走 `git show <sha>:<path>`。
