@@ -10,6 +10,7 @@ import com.pijava.ai.provider.ConfigurableProvider;
 import com.pijava.ai.provider.Protocol;
 import com.pijava.ai.provider.ProviderConfig;
 
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -39,7 +40,7 @@ public final class OpenRouterProvider extends ConfigurableProvider {
     protected ProviderConfig config() {
         return new ProviderConfig(
             "openrouter", "OpenRouter", "https://openrouter.ai/api/v1",
-            "OPENROUTER_API_KEY", Protocol.OPENAI_COMPLETIONS,
+            List.of("OPENROUTER_API_KEY"), Protocol.OPENAI_COMPLETIONS,
             Set.of(Protocol.OPENAI_COMPLETIONS, Protocol.ANTHROPIC_MESSAGES),
             BuiltinModelCatalogs.catalog("openrouter"));
     }

@@ -131,7 +131,7 @@ class ApiOptionsTelemetryPropagationTest {
         @Override
         protected ProviderConfig config() {
             return new ProviderConfig(
-                "capturing", "Capturing", "https://default", null,
+                "capturing", "Capturing", "https://default", java.util.List.of(),
                 Protocol.OPENAI_COMPLETIONS, Set.of(Protocol.OPENAI_COMPLETIONS),
                 ModelCatalog.empty());
         }

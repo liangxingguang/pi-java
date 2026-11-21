@@ -13,7 +13,7 @@ public final class OllamaProvider extends OpenAiCompatibleProvider {
     protected ProviderConfig config() {
         return ProviderConfig.single(
             "ollama", "Ollama", "http://localhost:11434/v1",
-            null, Protocol.OPENAI_COMPLETIONS,
+            (String) null, Protocol.OPENAI_COMPLETIONS,
             ModelData.ollamaModels());
     }
 }

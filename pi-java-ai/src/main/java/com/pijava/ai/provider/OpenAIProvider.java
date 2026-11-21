@@ -1,5 +1,6 @@
 package com.pijava.ai.provider;
 
+import java.util.List;
 import java.util.Set;
 
 import com.pijava.ai.api.ApiOptions;
@@ -22,7 +23,7 @@ public final class OpenAIProvider extends ConfigurableProvider {
     protected ProviderConfig config() {
         return new ProviderConfig(
             "openai", "OpenAI", "https://api.openai.com/v1",
-            "OPENAI_API_KEY", Protocol.OPENAI_RESPONSES,
+            List.of("OPENAI_API_KEY"), Protocol.OPENAI_RESPONSES,
             Set.of(Protocol.OPENAI_COMPLETIONS, Protocol.OPENAI_RESPONSES),
             BuiltinModelCatalogs.catalog("openai"));
     }

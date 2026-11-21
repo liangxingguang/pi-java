@@ -79,7 +79,7 @@ public final class CustomProviderGitlabDuoExtension implements PiExtension {
     private static final ModelCatalog CATALOG = BuiltinCatalog.of(MODELS);
 
     private static final ProviderConfig CONFIG = new ProviderConfig(
-            PROVIDER_NAME, "GitLab Duo", AI_GATEWAY_URL, API_KEY_ENV,
+            PROVIDER_NAME, "GitLab Duo", AI_GATEWAY_URL, List.of(API_KEY_ENV),
             Protocol.ANTHROPIC_MESSAGES,
             Set.of(Protocol.ANTHROPIC_MESSAGES, Protocol.OPENAI_RESPONSES), CATALOG);
 

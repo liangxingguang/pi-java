@@ -118,8 +118,10 @@ public final class Credentials {
                 return Optional.of(new RecordedCredential(token.kind(), value.get(), "env:" + token.name()));
             }
         }
-        var envValue = env.resolveApiKey(provider);
-        return envValue.map(s -> plain(s, "env:" + providerEnvVar(provider)))
+        // docs/11 A2：env 层按链取第一个非空；source 记实际命中的变量名
+        // （pi envApiKeyAuth 的 source: envVar 同口径，回落键也照实报）。
+        var envMatch = env.resolveApiKeyMatch(provider);
+        return envMatch.map(m -> plain(m.value(), "env:" + m.name()))
             .or(() -> file.resolveApiKey(provider).map(value -> plain(value, "stored:" + provider)))
             // #98：federation 是末位回落（pi providers/anthropic.ts:49-69）。
             .or(() -> resolveFederation(provider, env));

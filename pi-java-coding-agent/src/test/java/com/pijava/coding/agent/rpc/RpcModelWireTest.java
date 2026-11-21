@@ -35,7 +35,7 @@ class RpcModelWireTest {
 
     private static final ProviderConfig CONFIG = new ProviderConfig(
         "testprov", "Test Provider", "https://api.testprov.example/v1",
-        null, Protocol.OPENAI_COMPLETIONS,
+        List.of(), Protocol.OPENAI_COMPLETIONS,
         Set.of(Protocol.OPENAI_COMPLETIONS), ModelCatalog.empty());
 
     private static ModelInfo fullModel() {

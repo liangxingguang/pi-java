@@ -46,7 +46,7 @@ public final class OpenAIImagesProvider extends ConfigurableProvider {
     @Override
     protected ProviderConfig config() {
         return new ProviderConfig(
-            ID, "OpenAI Images", "https://api.openai.com/v1", "OPENAI_API_KEY",
+            ID, "OpenAI Images", "https://api.openai.com/v1", List.of("OPENAI_API_KEY"),
             Protocol.OPENAI_COMPLETIONS, Set.of(), MODELS);
     }
 

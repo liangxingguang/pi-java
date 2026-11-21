@@ -1,6 +1,8 @@
 package com.pijava.ai.provider;
 
 import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 import com.pijava.ai.api.ApiOptions;
@@ -12,6 +14,7 @@ import com.pijava.ai.catalog.ModelCatalog;
 import com.pijava.ai.identity.ClientIdentityTarget;
 import com.pijava.ai.identity.IdentityHeaders;
 import com.pijava.ai.utils.OpenRouterBilling;
+import com.pijava.ai.utils.ProviderEnv;
 
 /**
  * Config-driven Provider base class — all new Providers reuse this.
@@ -96,17 +99,44 @@ public abstract class ConfigurableProvider implements Provider {
         return protocol;
     }
 
-    /** Fall back to defaultBaseUrl when options.baseUrl is empty. */
+    /**
+     * Fall back to defaultBaseUrl when options.baseUrl is empty, and resolve the
+     * api key from the config's env chain when {@code options.apiKey} is blank.
+     *
+     * <p>docs/11 A2：链解析放在 provider 归一化点，协议构造器仍只收单
+     * {@code envVar} —— 链命中后 {@code apiKey} 已在 options 上，构造器先读它。
+     * 直接构造协议类的库用户没有链，这是登记的已知边界。</p>
+     */
     protected final ApiOptions effectiveOptions(ApiOptions options) {
-        if (options.baseUrl() != null && !options.baseUrl().isBlank()) {
+        var baseUrl = options.baseUrl() != null && !options.baseUrl().isBlank()
+            ? options.baseUrl() : config().defaultBaseUrl();
+        var apiKey = options.apiKey();
+        if (apiKey == null || apiKey.isBlank()) {
+            var resolved = resolveApiKeyFromChain(options.env());
+            if (resolved != null) {
+                apiKey = resolved;
+            }
+        }
+        if (Objects.equals(baseUrl, options.baseUrl()) && Objects.equals(apiKey, options.apiKey())) {
             return options;
         }
         // ⚠️ 八参构造（docs/14 B266）：七参形态会把 identity 丢掉 ——
         // 本方法是 baseUrl 缺席时的生产必经点，漏传会让归因头静默消失。
         return new ApiOptions(
-            config().defaultBaseUrl(), options.apiKey(),
+            baseUrl, apiKey,
             options.timeout(), options.maxRetries(), options.extra(), options.authKind(),
             options.telemetry(), options.identity(), options.env());
+    }
+
+    /** First non-blank value along {@link ProviderConfig#apiKeyEnvVars()} (pi 回落后). */
+    private String resolveApiKeyFromChain(Map<String, String> scopedEnv) {
+        for (var name : config().apiKeyEnvVars()) {
+            var value = ProviderEnv.value(name, scopedEnv);
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return null;
     }
 
     /**

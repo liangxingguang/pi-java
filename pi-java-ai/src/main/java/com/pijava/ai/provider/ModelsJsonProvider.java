@@ -1,5 +1,6 @@
 package com.pijava.ai.provider;
 
+import java.util.List;
 import java.util.Set;
 
 import com.pijava.ai.api.ApiOptions;
@@ -41,7 +42,7 @@ public final class ModelsJsonProvider extends ConfigurableProvider {
             }
         }
         this.config = new ProviderConfig(
-            id, displayName, def.baseUrl(), null, protocol, Set.copyOf(protocols), catalog);
+            id, displayName, def.baseUrl(), List.of(), protocol, Set.copyOf(protocols), catalog);
         this.inlineApiKey = def.apiKey();
     }
 

@@ -1,5 +1,6 @@
 package com.pijava.ai.provider.builtin;
 
+import java.util.List;
 import java.util.Set;
 
 import com.pijava.ai.api.ApiOptions;
@@ -24,7 +25,7 @@ public final class OpenRouterImagesProvider extends ConfigurableProvider {
     protected ProviderConfig config() {
         return new ProviderConfig(
             "openrouter-images", "OpenRouter Images",
-            "https://openrouter.ai/api/v1", "OPENROUTER_API_KEY",
+            "https://openrouter.ai/api/v1", List.of("OPENROUTER_API_KEY"),
             Protocol.OPENAI_COMPLETIONS, Set.of(),
             BuiltinModelCatalogs.imageCatalog("openrouter"));
     }
