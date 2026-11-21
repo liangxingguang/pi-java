@@ -242,6 +242,8 @@ final class ResponsesStreamProcessor {
         // (Azure gives it only here), before usage/stop handling.
         var terminalOutput = response._output().asKnown().orElse(List.of());
         reasoningCapture.backfill(builder, terminalOutput);
+        // v1.6.0（pi :629-650）：API 丢弃的重放 reasoning 项 → openai_input_transformations 诊断。
+        ResponsesInputTransformations.appendReasoningRemovals(builder, response);
         var status = response.status().orElse(null);
         String incompleteReason = incompleteReason(response);
         // pi shared `:588`：原值是**复合量**（⑨/D5）——
