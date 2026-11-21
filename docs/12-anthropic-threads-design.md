@@ -123,4 +123,41 @@ prepare(model, sessionId, params):
 - **D-2**：`disableContinuation` 放 `ApiOptions.extra`（不破记录元数）还是给 `ApiOptions` 加组件（更显式但要改所有构造点）？
 - **D-3**：默认值是否与 pi 完全一致（`api.anthropic.com` 一律开启）？若要稳妥，可先默认关闭、由 `compat` 显式开启，但那会在默认路径上与 pi 不一致。
 
-三项都需要你拍板后我才开工（S6 起）。
+三项都已按建议拍板：D-1 先按 baseUrl 推导并登记窄差；D-2 放 `ApiOptions.extra`；D-3 与 pi 一致默认开启，
+但回退矩阵测试必须先绿。
+
+## 10. 实施记录
+
+| 阶段 | 状态 | 提交 |
+|---|---|---|
+| S6 状态 ＋ 哈希 | **完成（2026-11-22）** | `177acc36`：`AnthropicThreadState`（单次消费／`off`／10k／清理）＋ `AnthropicThreadHash`（删 `cache_control`、字符串 content 归一）＋ 7 例 |
+| S7a builder 支持 | **完成（2026-11-22）** | `25e00d5b`：`ThreadRequest` 三态、continue 省略 `system`／`tools` 且只写尾部行、`messageCount` 按完整请求计；无车道调用点 ⇒ 行为未变 |
+| S7b 车道接入 | **阻塞：哈希取源待定** | 见下 |
+| S8 回退矩阵 | 未开始 | — |
+| S9 开关 ＋ 冒烟 | 未开始 | — |
+
+### S7b 的阻塞点（实测）
+
+pi 的 `hashThreadPrefix` 哈希的是**已构造的请求对象**（`params` 与 `params.messages`）。Java 侧实测：
+`ObjectMappers.jsonMapper().valueToTree(built.params())` 返回 **`{}`** —— 稳定 SDK 的 params 无法反序列化回
+JSON（其自定义序列化只在写线上生效）。因此「哈希线上报文」这条路在当前 SDK 下不可行。
+
+两条备选：
+
+- **A（推荐）改哈希输入**：对 `TranscriptContext` 的消息 ＋ 固定设置做归一化签名。语义上等价
+  （前缀变了才需要新线程），且**风险更低**：`cache_control` 与字符串 content 的归一化发生在转换期，
+  转录层没有这两类形态，恰好绕开设计稿 §8 第 2 条点名的静默退化风险。代价是哈希口径与 pi 不同——
+  但状态只在本进程内，不跨语言、不跨版本。
+  **漏掉某个设置的代价**也被 S8 兜住：服务端回 `thread_fingerprint_mismatch` ⇒ 重发 `create`（pi 自己
+  在 `:317-318` 也是这么权衡的）。
+- **B 自建 JSON 序列化**：把 `MessageParam` 逐字段再序列化一份用于哈希。能贴 pi 的字面口径，但要维护
+  第二套序列化，与 SDK 版本漂移即成错源。
+
+若采纳 A，还需要同步改一处：状态里的 `prefixCount` 必须与哈希同单位。方案是把计数改到**转录消息**
+口径（`transcript.messages().size() + 1`），再由 builder 在写行时按「转录消息 → 行」的映射切分；
+不能一边按行计数、一边按转录哈希。
+
+## 11. 后续
+
+A 拍板后：S7b（车道接入 ＋ 两轮 `RecordingHttpServer` 观测）→ S8（回退矩阵）→ S9（开关与冒烟）。
+
