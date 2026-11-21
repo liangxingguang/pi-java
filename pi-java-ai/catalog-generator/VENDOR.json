@@ -1,10 +1,10 @@
 {
-  "anchor": "56cae782341c339d3bb820081f0f9425d8c5b1ec",
+  "anchor": "a00a5048d",
   "files": [
     {
       "path": "vendor/catalog/README.md",
       "source": "packages/ai/catalog/README.md",
-      "sha256": "b4a7547e51dc76f945e5671d3bebc243b4ee179c5906eecaaa50d8129beef847"
+      "sha256": "5e015e57b7ab457e2f1f449138d1f923b87c1aa5a410e857814a19c2e9483f88"
     },
     {
       "path": "vendor/catalog/build.ts",
@@ -19,12 +19,12 @@
     {
       "path": "vendor/catalog/families/anthropic.ts",
       "source": "packages/ai/catalog/families/anthropic.ts",
-      "sha256": "f044d99b3970b47e7bf4170160b3b42cdc09748622a45510e739c89cd2c4568c"
+      "sha256": "2814d3dec7cfff9fcd37297c3a2a470779a5fc97f295fadb563285c765165a67"
     },
     {
       "path": "vendor/catalog/families/deepseek.ts",
       "source": "packages/ai/catalog/families/deepseek.ts",
-      "sha256": "f8ef46270bda33741d8f6a87649c5e614167665adb14f0ae5d64bf348ad78cf4"
+      "sha256": "eda831203c6de54ca3a722916fd1a9aebaac2d855c6ff1570672adc66761cae2"
     },
     {
       "path": "vendor/catalog/families/google.ts",
@@ -34,27 +34,27 @@
     {
       "path": "vendor/catalog/families/kimi.ts",
       "source": "packages/ai/catalog/families/kimi.ts",
-      "sha256": "b2a5a8bc64c1979b650c8a09a3ba19d12b2d94a09a18a221bd69db61c135c2de"
+      "sha256": "20a5015482081c4a76d3e4a21f32f005ae397db448aee3b78990f5f9edc1e5af"
     },
     {
       "path": "vendor/catalog/families/openai.ts",
       "source": "packages/ai/catalog/families/openai.ts",
-      "sha256": "c37baec7f69e053ec46d7a0a4fea908b408f82702b39d1b1f7ad94d32739e549"
+      "sha256": "f9ae0d49509194ec939bfb2ef1a39c4574cd6dc46b05cdbdcad842a7968fb9ac"
     },
     {
       "path": "vendor/catalog/providers/ant-ling.ts",
       "source": "packages/ai/catalog/providers/ant-ling.ts",
-      "sha256": "013c67590ef8cd19dc199e1d92ef2649ff6a7101bf80912a3852287c24e4ca79"
+      "sha256": "7b0b20d4407c2260b3eae5568cd19266820ec6185082fc84abcc7330ad5d1f22"
     },
     {
       "path": "vendor/catalog/providers/anthropic.ts",
       "source": "packages/ai/catalog/providers/anthropic.ts",
-      "sha256": "7230815973a164578e19246eb3bcd2875a9613ef808facb47ada8169be623bdb"
+      "sha256": "b4e09f431218c6fcf5a7643cb79cc82e93e0cd77db7a1a497c3c4178666bb665"
     },
     {
       "path": "vendor/catalog/providers/deepseek.ts",
       "source": "packages/ai/catalog/providers/deepseek.ts",
-      "sha256": "2094212cff13c16ca9b2f594439c190cd8696e049a9ec9edabd164d093e3edef"
+      "sha256": "352a20775266b2ca0eeaea75b5b62ee80df44c4781ed2915b19d9b2f3ea81a63"
     },
     {
       "path": "vendor/catalog/providers/google.ts",
@@ -84,27 +84,27 @@
     {
       "path": "vendor/catalog/providers/moonshotai.ts",
       "source": "packages/ai/catalog/providers/moonshotai.ts",
-      "sha256": "994d88db4c173b06f54584604314640b07f73f1ff2342b6fb942ba3ee8bd4b00"
+      "sha256": "2b5081863a3e37d11a45b604d64492042a27dcf6a398d3cd8742701f8e9a76c1"
     },
     {
       "path": "vendor/catalog/providers/openai.ts",
       "source": "packages/ai/catalog/providers/openai.ts",
-      "sha256": "8b9f4f3973fa45dad7030a7c54f2fb1e82144ba59733bede8b24818558a43ef6"
+      "sha256": "0a29404dc7a5b9067299a9c59bddb336fbc2738e8f7c812993404619c18e1f03"
     },
     {
       "path": "vendor/catalog/providers/openrouter.ts",
       "source": "packages/ai/catalog/providers/openrouter.ts",
-      "sha256": "032f47644d3f825d87615f1bc18730a01d258aff09617d6f7e08c9adcd03944d"
+      "sha256": "355194bac3f98fa80f1c655c0dff2283727a0354e37ecc52582da8607421676d"
     },
     {
       "path": "vendor/catalog/providers/qwen-token-plan-cn.ts",
       "source": "packages/ai/catalog/providers/qwen-token-plan-cn.ts",
-      "sha256": "2ffe161e63b63e86780b1b668a7d6f4de7c831f5a730429fe2dae41577346e59"
+      "sha256": "846bbd60c2313873f14812ee8ee5fa63e5be04d5e3c5c6428ada82a2c3156df7"
     },
     {
       "path": "vendor/catalog/providers/qwen-token-plan.ts",
       "source": "packages/ai/catalog/providers/qwen-token-plan.ts",
-      "sha256": "67e1cce48ca567e67d1303afbecdeaae7471ad9fce93bbd961ae1fd966ba5626"
+      "sha256": "83ab7caab42b3e6a1c0443ff04f770b2b8922af0ead62a6c22f6d13e6b1a32da"
     },
     {
       "path": "vendor/catalog/providers/radius.ts",
@@ -134,7 +134,7 @@
     {
       "path": "vendor/catalog/providers/zai.ts",
       "source": "packages/ai/catalog/providers/zai.ts",
-      "sha256": "387f6fdca15795e39bf5d8f7f4d6e4a2c624390e4fbf3503ce6d9fb10c7dfa17"
+      "sha256": "b3bcf82f684d96cfb95d20cad9ff6a7d8889edcce3cb7b22e87ecd320380b76e"
     },
     {
       "path": "vendor/catalog/reasoning.ts",
@@ -164,7 +164,7 @@
     {
       "path": "vendor/scripts/model-data.ts",
       "source": "packages/ai/scripts/model-data.ts",
-      "sha256": "f2605a61ad57d8a3edb93e5c36c0f543d051796b8353452a1fd584eec33f02f4"
+      "sha256": "7b4db1969e6c8012159fb720f9ced006c6bb29093184ca0c73281336475463e9"
     },
     {
       "path": "vendor/src/providers/openrouter-api.ts",
@@ -179,7 +179,7 @@
     {
       "path": "vendor/src/types.ts",
       "source": "packages/ai/src/types.ts",
-      "sha256": "e299ef7495e6882baf2d5f3745f26f40c573999ddbeb0e8e0af63f179ec7a23e"
+      "sha256": "8f6b4b9f443708c567dea650d40d247c547e5f3a36481d86acbee545cd038f22"
     },
     {
       "path": "vendor/src/utils/text.ts",

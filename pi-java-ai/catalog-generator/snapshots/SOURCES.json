@@ -1,12 +1,12 @@
 {
-  "anchor": "56cae782341c339d3bb820081f0f9425d8c5b1ec",
-  "generatedAt": "2026-11-02T07:47:46.212Z",
+  "anchor": "a00a5048d",
+  "generatedAt": "2026-11-21T00:33:24.438Z",
   "inputs": {
     "modelsDev": {
       "url": "https://models.dev/experimental/v2.0/api.json",
-      "fetchedAt": "2026-11-02T07:47:46.212Z",
-      "upstreamBytes": 10407077,
-      "upstreamSha256": "6e43d13f7f301b80c296d69f9d2aa792baab0aa8f5e98a8b3f322aebb8925a3f",
+      "fetchedAt": "2026-11-21T00:33:24.438Z",
+      "upstreamBytes": 12354888,
+      "upstreamSha256": "eef75679385ced830373070109fdb4f7925acce48fdfc22266e457782f08b909",
       "providerKeys": [
         "anthropic",
         "openai",
@@ -25,26 +25,26 @@
         "xai"
       ],
       "stored": "models-dev-v2.json",
-      "storedSha256": "764755548efcf1d32fce413d274ef39256c3b4a8046354cd15e87c370a5e2093"
+      "storedSha256": "4129e40f629bedb64a88cfcd1391515d91a30c62cdfa9278fb6dbff5b3c2640d"
     },
     "openrouter": {
       "url": "https://openrouter.ai/api/v1/models",
       "imageUrl": "https://openrouter.ai/api/v1/models?output_modalities=image",
-      "fetchedAt": "2026-11-02T07:47:46.212Z",
+      "fetchedAt": "2026-11-21T00:33:24.438Z",
       "stored": [
         "openrouter-models.json",
         "openrouter-images.json"
       ],
       "sha256": {
-        "openrouter-models.json": "a6f523cd41d93c3ada93b4dd91a4b4c65591b7969c330a520ac3bbc99f439365",
-        "openrouter-images.json": "f3a0f4e20cf7bc980deb211fe7c72e1d61e8a9f5a33d10998a4d20701ef87cf6"
+        "openrouter-models.json": "3bc8c7ab999fcd4b028595361435e5e8af34eee60af61682cca7bb5583dbea3b",
+        "openrouter-images.json": "8dd0f4c578fdeba2ffe24484919a7301c78b377e10dd22b201f2e375e2d25b14"
       }
     },
     "radius": {
       "url": "https://radius.pi.dev/v1/config",
-      "fetchedAt": "2026-11-02T07:47:46.212Z",
+      "fetchedAt": "2026-11-21T00:33:24.438Z",
       "stored": "radius-config.json",
-      "sha256": "7d59223c0d54152f0edbcd71907f1b16e36d9848583e72d41b6e0c2243739334"
+      "sha256": "845882c86dac8242b8a5beb0f4e225685314d498659fa2cef76a04a15a1fddfa"
     }
   }
 }

@@ -49,7 +49,7 @@ class BuiltinModelManifestTest {
         var manifest = manifest();
         assertThat(manifest.path("schemaVersion").asInt()).isEqualTo(6);
         // SOURCES.json#generatedAt：所有输入 fetchedAt 的最大值，不是生成命令的运行时刻。
-        var pinned = Instant.parse("2026-11-02T07:47:46.212Z");
+        var pinned = Instant.parse("2026-11-21T00:33:24.438Z");
         assertThat(BuiltinModelCatalogs.generatedAt()).isEqualTo(pinned);
         // ModelData 委托同一来源：远程 overlay 守卫比较的就是这个瞬间。
         assertThat(ModelData.generatedAt()).isEqualTo(pinned);

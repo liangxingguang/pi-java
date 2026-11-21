@@ -100,7 +100,8 @@ class CompletionsCompatWireTest {
     @Test
     void theInstructionRoleFollowsTheModelAndTheEndpoint() {
         var reasoning = builtIn(BuiltinModelCatalogs.catalog("openai"), "openai", "gpt-5");
-        var chat = builtIn(BuiltinModelCatalogs.catalog("deepseek"), "deepseek", "deepseek-flash");
+        // 换锚后 deepseek-flash 已是推理模型 ⇒ 非推理对照换到 ant-ling 的 Ling-2.6-flash。
+        var chat = builtIn(BuiltinModelCatalogs.catalog("ant-ling"), "ant-ling", "Ling-2.6-flash");
 
         // pi :1225 —— 推理模型 ＋ 标准端点 ⇒ developer 角色。
         assertThat(instructionIsDeveloper(build(reasoning, "https://api.openai.com/v1"))).isTrue();

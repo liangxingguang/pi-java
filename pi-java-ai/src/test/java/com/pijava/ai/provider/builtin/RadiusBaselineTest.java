@@ -18,7 +18,7 @@ class RadiusBaselineTest {
     void defaultGatewayStartsWithThePublicBaseline() {
         var models = new RadiusProvider().getModels();
 
-        assertThat(models).hasSize(28);
+        assertThat(models).hasSize(39);
         assertThat(models.getFirst().id().modelName()).isEqualTo("kimi-k3");
         assertThat(models).extracting(m -> m.id().modelName()).contains("balanced");
     }
@@ -28,7 +28,7 @@ class RadiusBaselineTest {
         var provider = new RadiusProvider(
             new RadiusGatewayClient("radius.pi.dev", null), Optional::empty);
 
-        assertThat(provider.getModels()).hasSize(28);
+        assertThat(provider.getModels()).hasSize(39);
     }
 
     @Test

@@ -18,9 +18,9 @@ class ImageModelCatalogTest {
     void carriesEveryGeneratedOpenRouterImageModel() {
         var catalog = BuiltinModelCatalogs.imageCatalog("openrouter");
 
-        assertThat(catalog.listModels()).hasSize(64);
+        assertThat(catalog.listModels()).hasSize(74);
         assertThat(catalog.listModels().getFirst().id().modelName())
-            .isEqualTo("sourceful/riverflow-v2.6-pro");
+            .isEqualTo("microsoft/mai-image-2.7-flash");
         assertThat(catalog.search("flux.2-flex")).isNotEmpty();
     }
 

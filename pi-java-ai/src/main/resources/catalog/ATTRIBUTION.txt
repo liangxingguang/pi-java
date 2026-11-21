@@ -12,5 +12,5 @@ Upstream data:
 - Radius public gateway catalog: https://radius.pi.dev/v1/config
 Raw input hashes and fetch times are pinned in catalog-generator/snapshots/SOURCES.json.
 
-Manifest: schemaVersion 6, generatedAt 2026-11-02T07:47:46.212Z.
+Manifest: schemaVersion 6, generatedAt 2026-11-21T00:33:24.438Z.
 Carried shards: 18.
