@@ -127,7 +127,7 @@
 - body 扩展点：`:222-224`（`addAdditionalBodyProperty`，已被 `fallbacks` 使用）；
 - 会话 id：`AnthropicMessagesApi:139-151,206-207,393-402`、`AnthropicStreamSupport:25-28`。
 
-**本稿只定边界**：threads 单独立稿（P4），需覆盖 create/continue 状态机、前缀哈希、上限、回退与清理、`disableContinuation` 开关，以及真实 provider 冒烟。**它是 L1 达 100% 的最后一环**，但不与 #1–#4 同批提交。
+**本稿只定边界**：threads 单独立稿，见 [`12-anthropic-threads-design.md`](12-anthropic-threads-design.md)（状态机、前缀哈希、上限、回退矩阵、`disableContinuation`、真实 provider 冒烟）。**它是 L1 达 100% 的最后一环**，不与 #1–#4 同批提交。
 
 ## 4. 夹具与验收
 

@@ -280,7 +280,7 @@ web 呈现层仍是 pi-java 独有，不计入 pi 分母。新 apps 不改变现
 | P1 schema 语义 | **完成** | `9cccfe23` |
 | P2 AI wire | **完成（余项转 L1 收口）** | `dc59f0c7`；P2b `734c7a21`；P2c `65857596`／`68eb84ef`／`14e90c8b`；Codex 专属形状不适用（R2 无该车道）；余项 B289–B292 转入 L1 收口批次 |
 | P3 AI 数据 | **完成** | `fca70024` `21ec26b0` `753bdc30` `d035ffa0`；分片 23／695 chat；26 个内置 provider |
-| P4 Anthropic threads | **未开始（并入 L1 收口）** | L1 达 100% 的最后一环（−3.0）；L 级，需独立设计稿＋faux 夹具＋真实 provider 冒烟 |
+| P4 Anthropic threads | **未开始（并入 L1 收口）** | L1 达 100% 的最后一环（−3.0）；设计稿见 [`12-anthropic-threads-design.md`](12-anthropic-threads-design.md)，需先拍板三个待决项 |
 | P5 coding-agent 工具语义 | **未开始（顺延）** | 在 L3 那一步做；对应 6 行／17 权重／−8.5，含 `B287` 接缝复核与 `resolveSchemaRef` |
 | P6 CLI/认证/设置 | 未开始 | 依赖 P5 |
 | P7 扩展/生命周期 | 未开始 | 依赖 P5；`render()` 契约需 P8 先行 |
