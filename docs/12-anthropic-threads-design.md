@@ -134,7 +134,7 @@ prepare(model, sessionId, params):
 | S7a builder 支持 | **完成（2026-11-22）** | `25e00d5b`：`ThreadRequest` 三态、continue 省略 `system`／`tools` 且只写尾部行、`messageCount` 按完整请求计；无车道调用点 ⇒ 行为未变 |
 | S7b 车道接入 | **完成（2026-11-22）** | 见下（哈希取源采纳方案 A） |
 | S8 回退矩阵 | **完成（2026-11-22）** | 见 §11.2 |
-| S9 开关 ＋ 冒烟 | 未开始 | — |
+| S9 开关 ＋ 冒烟 | **代码完成（2026-11-22）**；真实 provider 冒烟待人工 | 见 §11.3 |
 
 ### S7b 的阻塞点（实测，**已按方案 A 解除** —— 见 §11.1）
 
@@ -222,4 +222,24 @@ thread 都不重发；诊断 `anthropic_thread_fallback`（`details.reason = err
 诊断 reason=`thread_not_found` ＋ 以 `create` 完整重发（请求计数 +1）；无 code 的 400 文案含
 `thread` ⇒ 去字段重发 ＋ 置 `off` ＋ 第三轮不再带 `thread`；无关 400（`prompt is too long`）⇒
 不重发、直接出 `StreamError`。
+
+### 11.3 S9 的落地口径（2026-11-22，代码面）
+
+`disableContinuation`（pi `:908-909`，D-2 定为 `ApiOptions.extra` 键，与 `messageThreads` 同形，
+两种来源：`Boolean` 或线格字符串）由 `AnthropicStreamSupport.disableContinuationOf` 读成车道字段。
+车道把它与另外两件事分开判：
+
+```
+threadsSupported   = 保留期 ≠ none && 端点/compat 允许   → 决定 threads beta（pi :1116）
+threadSessionId    = threadsSupported && !disableContinuation ? sessionId : null  → 决定发不发 thread
+```
+
+⚠️ 开关**只管 `thread` 字段**：关掉之后仍照发 `message-threads` beta（pi 的两处判据就是分开的），
+所以「带 beta 但不带 thread」是正常请求，不是降级路径。
+
+**测试**（新增 1 例，`mvn test -pl pi-java-ai`：2241 全绿）：`disableContinuation=true` 两轮都
+无 `thread` 键（也不是 `create`），`anthropic-beta` 仍含 threads beta。
+
+**未做（需人工）**：真实 provider 冒烟 —— `api.anthropic.com` 单轮 `create` ＋ 一轮 `continue`，
+确认服务端接受 `previous_message_id`。本地无凭据、也不该进 CI。
 

@@ -66,6 +66,26 @@ final class AnthropicStreamSupport {
         return text.isEmpty() ? null : Boolean.parseBoolean(text);
     }
 
+    /**
+     * 从 {@code ApiOptions.extra} 读 {@code disableContinuation}（{@code docs/12} D-2）：
+     * {@code true} ⇒ 本轮**完全不发** {@code thread}（也不是 {@code create}，pi {@code :908-909}）。
+     *
+     * <p>与 {@link #threadsOf} 同两源同缺省：直给 {@link Boolean} 或线格字符串；非法／空串 ⇒
+     * {@code false}（即「没关」）。</p>
+     */
+    static boolean disableContinuationOf(ApiOptions options) {
+        Map<String, Object> extra = options.extra();
+        Object raw = extra == null ? null : extra.get("disableContinuation");
+        if (raw instanceof Boolean value) {
+            return value;
+        }
+        if (raw == null) {
+            return false;
+        }
+        var text = raw.toString().trim();
+        return !text.isEmpty() && Boolean.parseBoolean(text);
+    }
+
     /** B99 裁决③：从 ApiOptions.extra["headers"] 取名集合（无 ⇒ 空集）。 */
     static Set<String> extraHeaderNames(ApiOptions options) {
         Map<String, Object> extra = options.extra();

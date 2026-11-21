@@ -154,6 +154,8 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
         this.sessionId = AnthropicStreamSupport.sessionIdOf(options);
         // docs/12 S7b：threads 的 compat 替身（ModelCompat 无该字段，D-1 的窄差）。
         this.threadsOverride = AnthropicStreamSupport.threadsOf(options);
+        // docs/12 S9（pi :908-909）：会话级「不发 thread」开关（D-2 放 extra，不改记录元数）。
+        this.disableContinuation = AnthropicStreamSupport.disableContinuationOf(options);
         // docs/17（B248）：pi 请求面三钩（anthropic-messages.ts:640/657/664）。
         this.payloadHook = ProviderHooks.payloadHookOf(options);
         this.responseHook = ProviderHooks.responseHookOf(options);
@@ -221,6 +223,12 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
      */
     private final Boolean threadsOverride;
 
+    /**
+     * {@code true} ≙ 本轮不发 {@code thread}（pi {@code :908-909}，{@code docs/12} D-2）；
+     * ⚠️ 只关「发不发 thread」，**不关 threads beta**（beta 由 compat 决定，两处判据）。
+     */
+    private final boolean disableContinuation;
+
     /** A-14：初始请求获取的重试选项。 */
     private final ProviderRetry.Options providerRetry;
 
@@ -262,8 +270,11 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
             HttpResponseFor<StreamResponse<RawMessageStreamEvent>> rawResponse = null;
             // pi :890 —— 会话级记忆：本会话此前被拒过就整轮非 strict。
             boolean disablePreferredStrictTools = StrictToolLimitMemory.exceeded(sessionId);
-            // docs/12 S7b（pi :864-866 / :908-910）：threads 的会话号与「能不能走」是两件事。
-            var threadSessionId = threadSessionId(request);
+            // docs/12 S7b／S9（pi :864-866 / :908-910）：三件事分开判 ——
+            // threadsSupported 决定 threads beta；disableContinuation 只决定发不发 thread。
+            var threadsSession = threadSessionId(request);
+            final boolean threadsSupported = threadsSession != null;
+            final String threadSessionId = disableContinuation ? null : threadsSession;
             var provider = request.modelId() == null ? null : request.modelId().provider();
             AnthropicThreadWire.ThreadRequest sentThread = null;
             AnthropicRequestBuilder.BuiltParams fullBuilt = null;
@@ -273,7 +284,7 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
                 // 后切片」，本仓的 SDK 参数不可变、也不能删字段，故以重建对位；两次构造都无 I/O。
                 var probe = buildParams(request, affinitySessionId(), baseUrl,
                     effectiveHeaderNames, oauth, disablePreferredStrictTools, null,
-                    threadSessionId != null);
+                    threadsSupported);
                 sentThread = threadSessionId == null ? null
                     : AnthropicThreadRequests.prepare(threadSessionId, provider, baseUrl, probe);
                 fullBuilt = probe;
@@ -281,7 +292,8 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
                     : buildParams(request, affinitySessionId(), baseUrl, effectiveHeaderNames,
                         oauth, disablePreferredStrictTools, sentThread, true);
                 // docs/17（pi :639-643 逐字）：载荷构建后、HTTP 前；非 null 返回 ⇒ 替换。
-                var params = withPayloadHook(built.params(), request);
+                var params = AnthropicRequestSender.withPayloadHook(
+                    payloadHook, built.params(), request.model());
                 final boolean threadsOn = sentThread != null;
                 final boolean strictOff = disablePreferredStrictTools;
                 try {
@@ -290,9 +302,11 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
                     var sent = AnthropicRequestSender.sendWithThreadFallback(
                         client, providerRetry,
                         () -> params,
-                        thread -> withPayloadHook(buildParams(request, affinitySessionId(), baseUrl,
-                            effectiveHeaderNames, oauth, strictOff, thread, true).params(), request),
-                        () -> withPayloadHook(probe.params(), request),
+                        thread -> AnthropicRequestSender.withPayloadHook(payloadHook,
+                            buildParams(request, affinitySessionId(), baseUrl, effectiveHeaderNames,
+                                oauth, strictOff, thread, true).params(), request.model()),
+                        () -> AnthropicRequestSender.withPayloadHook(payloadHook, probe.params(),
+                            request.model()),
                         threadsOn ? sentThread : null, threadSessionId, builder);
                     rawResponse = sent.response();
                     if (!sent.threaded()) {
@@ -461,22 +475,6 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
         var resolved = CompatResolver.resolveCacheRetention(cacheRetention,
             cacheRetentionEnv());
         return resolved == CacheRetention.NONE ? null : sessionId;
-    }
-
-    /**
-     * docs/17（pi :639-643 逐字）：载荷构建后、HTTP 前；非 null 返回 ⇒ 替换。
-     *
-     * <p>抽成方法是因为 threads 的回退重发也要过它（pi 的 hook 只挂一次、之后两次重发复用同一个
-     * 已 hook 的 {@code params}；本仓要「重建 ＋ 再 hook」，故重发路径会多调一次 hook）。</p>
-     */
-    private MessageCreateParams withPayloadHook(MessageCreateParams params,
-                                                StreamRequest request) {
-        if (payloadHook == null) {
-            return params;
-        }
-        var next = payloadHook.onPayload(params, request.model());
-        return next == null ? params
-            : ProviderHooks.requirePayloadType(next, MessageCreateParams.class);
     }
 
     /** docs/12（pi :864-866）：本轮可走 threads 的会话号；{@code null} ≙ 不发 {@code thread}。 */

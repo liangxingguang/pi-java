@@ -10,6 +10,8 @@ import com.anthropic.errors.AnthropicServiceException;
 import com.anthropic.models.messages.MessageCreateParams;
 import com.anthropic.models.messages.RawMessageStreamEvent;
 
+import com.pijava.ai.api.ProviderHooks;
+import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.http.ProviderRetry;
 import com.pijava.ai.stream.StreamPartialBuilder;
 
@@ -79,6 +81,22 @@ final class AnthropicRequestSender {
             AnthropicThreadState.off(threadSessionId);
             return new Sent(response, false);
         }
+    }
+
+    /**
+     * docs/17（pi :639-643 逐字）：载荷构建后、HTTP 前；非 null 返回 ⇒ 替换。
+     *
+     * <p>抽到这里是因为 threads 的回退重发也要过它（pi 的 hook 只挂一次、之后两次重发复用同一个已
+     * hook 的 {@code params}；本仓要「重建 ＋ 再 hook」，故重发路径会多调一次 hook）。</p>
+     */
+    static MessageCreateParams withPayloadHook(ProviderHooks.PayloadHook hook,
+                                               MessageCreateParams params, ModelInfo model) {
+        if (hook == null) {
+            return params;
+        }
+        var next = hook.onPayload(params, model);
+        return next == null ? params
+            : ProviderHooks.requirePayloadType(next, MessageCreateParams.class);
     }
 
     /** 一次 HTTP 发送（含 {@code ProviderRetry}）。 */

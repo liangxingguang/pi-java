@@ -114,6 +114,27 @@ class AnthropicThreadsWireTest {
     }
 
     @Test
+    void disableContinuationSendsNoThreadAtAll() throws Exception {
+        try (var server = new RecordingHttpServer()) {
+            server.enqueue(success());
+            server.enqueue(success());
+            var extra = Map.<String, Object>of(
+                "messageThreads", true, "disableContinuation", true);
+
+            run(server.baseUrl(), conversation("base prompt", false), extra);
+            run(server.baseUrl(), conversation("base prompt", true), extra);
+
+            assertThat(server.requestCount()).isEqualTo(2);
+            // 关的是「发不发 thread」：连 create 都不发，但 rounds beta 仍照发（pi :1116 与
+            // :908 是两处判据）。
+            assertThat(server.bodies()).allSatisfy(body ->
+                assertThat(body).doesNotContain("\"thread\""));
+            assertThat(server.headers().getOrDefault("anthropic-beta", ""))
+                .contains(AnthropicBetaFeatures.MESSAGE_THREADS_BETA);
+        }
+    }
+
+    @Test
     void aRejectedContinueIsResentOnceAsANewThread() throws Exception {
         try (var server = new RecordingHttpServer()) {
             server.enqueue(success());
