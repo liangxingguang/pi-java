@@ -29,9 +29,13 @@ final class AnthropicRequestBuilder {
 
     /**
      * #101（pi {@code buildParams} 的返回形状）：请求参数 ＋ 本轮是否含有
-     * 「prefer 且实际 strict」的工具（运行时 400 降级的判据之一）。
+     * 「prefer 且实际 strict」的工具（运行时 400 降级的判据之一）＋ **完整逻辑请求的消息条数**
+     * （线程态记录用；`continue` 只发尾部，计数必须按完整请求算，pi {@code :473}）。
      */
-    record BuiltParams(MessageCreateParams params, boolean hasPreferredStrictTools) {}
+    record BuiltParams(MessageCreateParams params, boolean hasPreferredStrictTools,
+                       int messageCount) {}
+
+
 
     private AnthropicRequestBuilder() {
     }
@@ -65,12 +69,25 @@ final class AnthropicRequestBuilder {
                                    String affinitySessionId, String baseUrl,
                                    java.util.Set<String> effectiveHeaderNames,
                                    boolean oauth, boolean disablePreferredStrictTools) {
+        return buildParams(request, cacheSpec, affinitySessionId, baseUrl, effectiveHeaderNames,
+            oauth, disablePreferredStrictTools, null);
+    }
+
+    /** 线程形态：{@code null} ≙ 不发 {@code thread}；形态语义见 {@link AnthropicThreadWire}。 */
+    static BuiltParams buildParams(StreamRequest request,
+                                   Optional<CacheBreakpointSpec> cacheSpec,
+                                   String affinitySessionId, String baseUrl,
+                                   java.util.Set<String> effectiveHeaderNames,
+                                   boolean oauth, boolean disablePreferredStrictTools,
+                                   AnthropicThreadWire.ThreadRequest thread) {
         // 包 A7：车道的 compat 在这里**解析一次**（pi `getAnthropicCompat(model)` 的落点，
         // `anthropic-messages.ts:206`），其余读点全部改读它 —— 不再有第二处读 `model.compat()`。
         var compat = CompatResolver.forAnthropic(request.model(), baseUrl);
         // 包 A-01：断点规格（pi `:1041` 的 `getCacheControl` 返回值）在这里翻成 SDK 形状，
         // 一次算好、三处落点共用 —— pi 也是同一个 `cacheControl` 对象挂三处。
         var cacheControl = cacheSpec.map(AnthropicRequestBuilder::toCacheControl).orElse(null);
+        // 线程 continue 省略 system 与 tools（服务端保存），只发尾部消息（pi :376-382）。
+        boolean continuing = thread != null && thread.continuing();
         // pi `:1114`：工具那一处多一道门。⚠️ 这道门**只**管工具（`system` 与消息照挂）。
         var toolCacheControl = Boolean.TRUE.equals(compat.supportsCacheControlOnTools())
             ? cacheControl : null;
@@ -124,7 +141,7 @@ final class AnthropicRequestBuilder {
         var initialSystemMessage = Transcripts.getInitialSystemMessage(transcript.messages());
         var systemText = initialSystemMessage == null
                 ? "" : MessageTexts.getSystemMessageText(initialSystemMessage);
-        if (oauth) {
+        if (!continuing && oauth) {
             var systemBlocks = new ArrayList<TextBlockParam>();
             var prefixBlock = TextBlockParam.builder().text(ClaudeCodeNames.SYSTEM_PREFIX);
             if (cacheControl != null) {
@@ -140,7 +157,7 @@ final class AnthropicRequestBuilder {
                 systemBlocks.add(ownBlock.build());
             }
             builder.systemOfTextBlockParams(systemBlocks);
-        } else if (!systemText.isEmpty()) {
+        } else if (!continuing && !systemText.isEmpty()) {
             var systemBlock = TextBlockParam.builder().text(SanitizeUnicode.surrogates(systemText));
             if (cacheControl != null) {
                 systemBlock.cacheControl(cacheControl);
@@ -196,14 +213,17 @@ final class AnthropicRequestBuilder {
         String managedProvider = managed ? request.modelId().provider() : null;
         String activeEffort = managed
             ? AnthropicThinking.activeEffort(request.model(), request.reasoning()) : null;
-        boolean inlinePreferred = addMessages(builder, conversation, allowEmptySignature,
+        var messageResult = addMessages(builder, conversation, allowEmptySignature,
             nativeToolChanges, cacheControl, compat.supportsStrictTools(),
             eagerToolInputStreaming, managed, managedProvider, activeEffort, oauth,
-            disablePreferredStrictTools);
-        boolean topLevelPreferred = AnthropicToolWire.addTools(builder, transcript, initialTools,
-            nativeToolChanges, toolCacheControl, compat.supportsStrictTools(),
-            eagerToolInputStreaming, oauth, disablePreferredStrictTools);
-        boolean hasPreferredStrictTools = inlinePreferred | topLevelPreferred;
+            disablePreferredStrictTools, continuing ? thread.prefixCount() : 0);
+        // 线程 continue 不发 tools（服务端保存），pi :376-382 解构掉 tools 同式。
+        boolean topLevelPreferred = !continuing
+            && AnthropicToolWire.addTools(builder, transcript, initialTools,
+                nativeToolChanges, toolCacheControl, compat.supportsStrictTools(),
+                eagerToolInputStreaming, oauth, disablePreferredStrictTools);
+        boolean hasPreferredStrictTools = messageResult.hasPreferredStrictTools()
+            | topLevelPreferred;
 
         // pi :1104-1110 —— temperature 是**四重合取**：{@code temperature !== undefined} ＋
         // {@code !thinkingEnabled} ＋ {@code supportsMidConvoEffort !== true} ＋
@@ -232,7 +252,10 @@ final class AnthropicRequestBuilder {
                 request.modelId() == null ? null : request.modelId().provider(),
                 baseUrl)
             .forEach(builder::putAdditionalHeader);
-        return new BuiltParams(builder.build(), hasPreferredStrictTools);
+        // pi :357-359 / :376-382 —— 线程字段。continue 只换 thread，其余设置原样发送。
+        AnthropicThreadWire.apply(builder, thread);
+        return new BuiltParams(builder.build(), hasPreferredStrictTools,
+            messageResult.messageCount());
     }
 
     /**
@@ -257,14 +280,15 @@ final class AnthropicRequestBuilder {
      * {@code flushPendingSystemMessages()} <b>之后</b>，故转录末尾刷出的 held 系统消息
      * 会成为「最后一条」并吃下断点（探针 P10 实测，断点落在 {@code tool_addition} 上）。</p>
      */
-    private static boolean addMessages(MessageCreateParams.Builder builder,
+    private static AnthropicThreadWire.MessagesResult addMessages(
+                                       MessageCreateParams.Builder builder,
                                        List<Message> conversation,
                                        boolean allowEmptySignature, boolean nativeToolChanges,
                                        CacheControlEphemeral cacheControl,
                                        boolean supportsStrictTools, boolean eagerToolInputStreaming,
                                        boolean managed, String managedProvider,
                                        String activeEffort, boolean oauth,
-                                       boolean disablePreferredStrictTools) {
+                                       boolean disablePreferredStrictTools, int prefixCount) {
         boolean hasPreferredStrictTools = false;
         var rows = new ArrayList<Row>();
         var pendingSystem = new ArrayList<Row>();
@@ -362,10 +386,14 @@ final class AnthropicRequestBuilder {
                 markerOutputConfig(activeEffort)));
         }
 
-        for (var row : rows) {
-            builder.addMessage(row.toParam());
+        // 线程 continue：只写 prefixCount 之后的尾行（pi 的 `messages.slice(prefixCount)`）。
+        // 断点在上方对**完整** rows 已挂好，尾部切片自然带着自己那份标记，与 pi 同式。
+        int messageCount = rows.size();
+        int from = Math.min(prefixCount, messageCount);
+        for (int i = from; i < messageCount; i++) {
+            builder.addMessage(rows.get(i).toParam());
         }
-        return hasPreferredStrictTools;
+        return new AnthropicThreadWire.MessagesResult(hasPreferredStrictTools, messageCount);
     }
 
     /**
