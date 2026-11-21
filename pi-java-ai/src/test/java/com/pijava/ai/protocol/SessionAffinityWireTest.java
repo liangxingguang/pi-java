@@ -225,6 +225,9 @@ class SessionAffinityWireTest {
         var captured = send(options(extra(null)),
             model("fireworks-responses", "gpt", compat(null, null, null)));
         assertThat(captured.headers()).containsEntry("x-client-request-id", SID);
+        // v1.6.0（pi #11793）：responses 的 openai 形会话头改带连字符。
+        assertThat(captured.headers()).containsEntry("session-id", SID);
+        assertThat(captured.headers()).doesNotContainKey("session_id");
         assertThat(captured.headers()).doesNotContainKey("x-session-affinity");
         assertThat(captured.body.path("prompt_cache_key").asText()).isEqualTo(SID);
     }

@@ -18,8 +18,14 @@ public final class SessionAffinityHeaders {
 
     /** openrouter 形头。 */
     public static final String X_SESSION_ID = "x-session-id";
-    /** openai 形会话头。 */
+    /** openai 形会话头（completions 车道）。 */
     public static final String SESSION_ID = "session_id";
+    /**
+     * responses 车道的 openai 形会话头（v1.6.0，pi #11793）：带连字符 ——
+     * nginx 的 {@code underscores_in_headers off} 与部分 Envoy 配置会静默丢弃
+     * 带下划线的头。completions 车道**仍是** {@code session_id}（pi 一字未动）。
+     */
+    public static final String SESSION_DASH_ID = "session-id";
     public static final String X_CLIENT_REQUEST_ID = "x-client-request-id";
 
     /** openai 形会话头里的 x-session-affinity（completions 车道专用）。 */
@@ -93,7 +99,7 @@ public final class SessionAffinityHeaders {
      * x-session-affinity）：
      * <pre>
      * openrouter       → x-session-id
-     * openai           → session_id + x-client-request-id
+     * openai           → session-id + x-client-request-id
      * openai-nosession → x-client-request-id
      * </pre>
      */
@@ -110,7 +116,7 @@ public final class SessionAffinityHeaders {
         switch (effective) {
             case OPENROUTER -> headers.put(X_SESSION_ID, sessionId);
             case OPENAI -> {
-                headers.put(SESSION_ID, sessionId);
+                headers.put(SESSION_DASH_ID, sessionId);
                 headers.put(X_CLIENT_REQUEST_ID, sessionId);
             }
             case OPENAI_NOSESSION -> headers.put(X_CLIENT_REQUEST_ID, sessionId);

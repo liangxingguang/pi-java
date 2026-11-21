@@ -64,10 +64,19 @@ public final class SimpleOptions {
 
     private SimpleOptions() {}
 
-    /** pi {@code simple-options.ts:12} —— 夹取时的安全余量。 */
+    /** pi {@code simple-options.ts:18} —— 夹取时的固定安全余量。 */
     public static final int CONTEXT_SAFETY_TOKENS = 4096;
 
-    /** pi {@code simple-options.ts:13}。 */
+    /** pi {@code simple-options.ts:21}（v1.6.0 #11712）：输入 token 的过估比例余量。 */
+    public static final double CONTEXT_SAFETY_RATIO = 0.15;
+
+    /**
+     * pi {@code simple-options.ts:25}（v1.6.0 #11712）：只有当比例余量仍能留下这么多输出时
+     * 才保留它；否则退回固定余量并把输出封顶到这个值。
+     */
+    public static final int MIN_OUTPUT_WITH_RATIO_MARGIN = 32768;
+
+    /** pi {@code simple-options.ts:26}。 */
     public static final int MIN_MAX_TOKENS = 1;
 
     /**
@@ -87,18 +96,29 @@ public final class SimpleOptions {
     public static final int NO_MODEL_CAP_FALLBACK = 4096;
 
     /**
-     * pi {@code simple-options.ts:15-19} {@code clampMaxTokensToContext}。
+     * pi {@code simple-options.ts:15-36}（v1.6.0 #11712）{@code clampMaxTokensToContext}。
      *
      * <pre>{@code
      * if (model.contextWindow <= 0) return Math.max(1, maxTokens);
-     * const available = model.contextWindow - estimateContextTokens(context).tokens - 4096;
-     * return Math.min(maxTokens, Math.max(1, available));
+     * const input = estimateContextTokens(context).tokens;
+     * const margin = Math.max(4096, Math.ceil(input * 0.15));
+     * let room = model.contextWindow - input - margin;
+     * if (room < 32768) {
+     *     room = Math.min(32768, model.contextWindow - input - 4096);
+     * }
+     * return Math.min(maxTokens, Math.max(1, room));
      * }</pre>
      *
      * <p>java 的 {@code ModelInfo.maxInputTokens} <b>就是</b> pi 的 {@code contextWindow}
      * （单位 token，javadoc 明写），{@code <= 0} 同样是「未知」哨兵（目录未命中）。</p>
      *
-     * <p>⚠️ 一处不可避免的取整：pi 的 {@code available} 是 JS 的 number，可以带小数
+     * <p>★ 15% 余量的来历：OpenRouter 用自己的分词器在路由前校验
+     * {@code input + max_tokens ≤ 窗口}，散文输入最多多算 12% ⇒ 旧的固定 4096 余量
+     * 会让输出上限贴近窗口的模型（如 DeepSeek flash）吃 400，pi 再当成上下文溢出去压缩
+     * （#10497）。15% 余量只在它能留下 ≥32768 输出时才保留；否则退回固定 4096 余量，
+     * 输出按 32768 封顶 —— 让 OpenRouter 的过估还能撑一阵再压缩。</p>
+     *
+     * <p>⚠️ 一处不可避免的取整：pi 的 {@code room} 是 JS 的 number，可以带小数
      * （{@code estimateContextTokens} 的结果就是小数），于是 pi 可能发出
      * {@code max_tokens: 12000.5}；java 的 SDK 只收整数 ⇒ 这里取 {@code floor}
      * <b>保守</b>方向。只在「可用余量非整数」时差至多 1。</p>
@@ -108,8 +128,14 @@ public final class SimpleOptions {
         if (contextWindow <= 0) {
             return Math.max(MIN_MAX_TOKENS, maxTokens);
         }
-        var available = contextWindow - Estimate.estimateContextTokens(transcript).tokens() - CONTEXT_SAFETY_TOKENS;
-        return (int) Math.floor(Math.clamp(available, MIN_MAX_TOKENS, maxTokens));
+        var input = Estimate.estimateContextTokens(transcript).tokens();
+        var margin = Math.max(CONTEXT_SAFETY_TOKENS, Math.ceil(input * CONTEXT_SAFETY_RATIO));
+        var room = contextWindow - input - margin;
+        if (room < MIN_OUTPUT_WITH_RATIO_MARGIN) {
+            room = Math.min(MIN_OUTPUT_WITH_RATIO_MARGIN,
+                contextWindow - input - CONTEXT_SAFETY_TOKENS);
+        }
+        return (int) Math.floor(Math.clamp(room, MIN_MAX_TOKENS, maxTokens));
     }
 
     /**

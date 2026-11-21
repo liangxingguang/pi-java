@@ -135,6 +135,26 @@ class OpenAICompletionsApiUsageTest {
     }
 
     @Test
+    void reasoningTokensFallBackToTheTopLevelField() throws Exception {
+        // v1.6.0（pi :1549-1552，Copilot #12110）：GitHub Copilot 把推理 token 报在顶层。
+        var usage = lastUsage(collect(stream(usageChunk(
+            "{\"prompt_tokens\":10,\"completion_tokens\":50,\"reasoning_tokens\":17}"))));
+
+        assertThat(usage.reasoning()).isEqualTo(17.0);
+    }
+
+    @Test
+    void nestedReasoningWinsOverTheTopLevelField() throws Exception {
+        // `||` 链：嵌套非 0 不再回落。
+        var usage = lastUsage(collect(stream(usageChunk(
+            "{\"prompt_tokens\":10,\"completion_tokens\":50,"
+                + "\"completion_tokens_details\":{\"reasoning_tokens\":33},"
+                + "\"reasoning_tokens\":17}"))));
+
+        assertThat(usage.reasoning()).isEqualTo(33.0);
+    }
+
+    @Test
     void reasoningDefaultsToZeroRatherThanAbsent() throws Exception {
         // pi：`rawUsage.completion_tokens_details?.reasoning_tokens || 0` ⇒ 本车道 reasoning
         // **恒为数字**（与 Anthropic 车道的「不报就 null」相反）

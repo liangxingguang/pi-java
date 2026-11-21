@@ -84,7 +84,14 @@ final class OpenAICompletionsUsage {
 
         double input = Math.max(0, promptTokens - cacheReadTokens - cacheWriteTokens);
         double outputTokens = number(raw.get("completion_tokens"));
-        double reasoning = number(nested(raw, "completion_tokens_details", "reasoning_tokens"));
+        // v1.6.0（pi :1549-1552，Copilot #12110）：GitHub Copilot 把推理 token 报在
+        // usage 顶层（`reasoning_tokens`）。pi 是 `nested || raw.reasoning_tokens || 0`
+        // —— **`||` 而非 `??`**：嵌套值为 0 时继续回落顶层。
+        double nestedReasoning = number(nested(raw, "completion_tokens_details",
+            "reasoning_tokens"));
+        double reasoning = nestedReasoning != 0
+            ? nestedReasoning
+            : number(raw.get("reasoning_tokens"));
         double totalTokens = input + outputTokens + cacheReadTokens + cacheWriteTokens;
 
         var usage = new Usage(input, outputTokens, cacheReadTokens, cacheWriteTokens,

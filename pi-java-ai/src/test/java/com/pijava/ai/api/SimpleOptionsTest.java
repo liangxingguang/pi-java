@@ -21,7 +21,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /**
  * 包 A-10：请求侧选项解析 —— pi {@code simple-options.ts:15-52} 的可观察半边。
  *
- * <p>四条语义各一组：<b>回落</b>（缺席 ⇒ 模型上限）、<b>夹取</b>（上下文窗口 − 已占 − 4096）、
+ * <p>四条语义各一组：<b>回落</b>（缺席 ⇒ 模型上限）、<b>夹取</b>（上下文窗口 − 已占 − 余量，
+ * v1.6.0 起余量取 {@code max(4096, ceil(输入×15%))}）、
  * <b>未知窗口不夹</b>（{@code contextWindow <= 0} 是哨兵）、<b>目录未命中的兜底</b>
  * （{@code 原 docs/57 §6 R4}，**刻意偏差**）。</p>
  *
@@ -136,6 +137,31 @@ class SimpleOptionsTest {
 
         assertThat(SimpleOptions.resolveMaxTokens(model(10_000, 8_000), transcript, -1))
             .isEqualTo(2904);
+    }
+
+    /**
+     * v1.6.0（pi #11712）：大窗口下余量改按**输入占比** 15% 计算 ——
+     * 输入 30000 token（105000 字符）、窗口 100000 ⇒ 余量 4500，余量后
+     * {@code 100000 − 30000 − 4500 = 65500} ≥ 32768 ⇒ 保留比例余量。
+     * 旧的固定 4096 会给出 65904。
+     */
+    @Test
+    void largeInputUsesTheFifteenPercentMargin() {
+        var transcript = new TranscriptContext(List.of(user("x".repeat(105_000))));
+        assertThat(SimpleOptions.clampMaxTokensToContext(model(100_000, 64_000), transcript, 66_000))
+            .isEqualTo(65_500);
+    }
+
+    /**
+     * v1.6.0（pi #11712）：比例余量会让输出低于 32768 时，退回固定 4096 余量并把输出
+     * **封顶在 32768**（输入 150000 token、窗口 200000 ⇒ 固定余量还有 45904，
+     * 但只取 32768）。
+     */
+    @Test
+    void ratioMarginFallbackCapsOutputAtThirtyTwoK() {
+        var transcript = new TranscriptContext(List.of(user("x".repeat(525_000))));
+        assertThat(SimpleOptions.clampMaxTokensToContext(model(200_000, 64_000), transcript, 64_000))
+            .isEqualTo(32_768);
     }
 
     // ── resolveRequest（漏斗的那一跳）──────────────────────────────────

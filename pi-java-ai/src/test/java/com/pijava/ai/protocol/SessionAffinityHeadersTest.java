@@ -99,7 +99,7 @@ class SessionAffinityHeadersTest {
     void responsesShapesUnchanged() {
         assertThat(SessionAffinityHeaders.responses(SID,
             SessionAffinityFormat.OPENAI, "x", "http://y"))
-            .containsOnlyKeys("session_id", "x-client-request-id");
+            .containsOnlyKeys("session-id", "x-client-request-id");
         assertThat(SessionAffinityHeaders.responses(SID,
             SessionAffinityFormat.OPENAI_NOSESSION, "x", "http://y"))
             .containsOnlyKeys("x-client-request-id");
