@@ -301,10 +301,15 @@
 
 ## 目标锚点 `a00a5048d` 预审计（2026-11-21）
 
-- **L0 投影：35.5/36 ≈ 98.6%**（旧锚点正式读数 36/36＝100%）。
-- **T9**（in-memory span 时间戳，w1）由「对齐」降为「存疑」：新锚点 `memory.ts:116,175,274`
-  要求 `telemetryNow()` 微秒级墙钟并写入 `startedMs`/`endedMs`；Java `InMemoryTelemetryContext`
-  与快照均无这些字段（`InMemoryTelemetryContext.java:177-186`、`RecordedTelemetrySpan.java:19-30`）。
+- **L0 当前读数：36/36＝100%**（旧锚点正式读数 36/36＝100%；2026-11-21 预审计曾投影 35.5/36≈98.6%，差额已按 T9 补齐后回补）。
+- **T9**（in-memory span 时间戳，w1）：**已对齐（2026-11-22）**。pi 的公开面只有
+  `telemetryNow()`（`index.ts:469` 导出；`memory.ts:116-122` 微秒取整、10ms 容差锚定）；
+  `startedMs`/`endedMs` 只出现在内部 `MutableRecordedTelemetrySpan`（`memory.ts:70-72`）与
+  `StoredSpan` 契约（`index.ts:41-43`），**pi 的 `RecordedTelemetrySpan`（`memory.ts:38-53`）并不暴露
+  这两个字段**。故 Java 快照没有它们是同形，不是缺口；真正缺失的是公开时钟。
+  已补 `TelemetryClock.now()`（`TelemetryClock.java:1-49`）并钉三性质——墙钟对齐、微秒取整、
+  同进程单调（`TelemetryClockTest`，2 例）。
+  预审计原判「快照无 `startedMs`/`endedMs`」作废：该判断把内部可变类型当成了公开契约。
 - **T20**（`renderTrace` 的 C0/C1/DEL `\uXXXX` 转义）维持 R5/w0：Java 无 `renderTrace` 消费者，
   不新增分母；20 条 R5 结论不变。
 - 正式行级重判归 P12；投影口径见 [`../05-module-alignment-map.md` §1.2](../05-module-alignment-map.md)。
