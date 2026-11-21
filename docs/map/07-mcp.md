@@ -228,4 +228,8 @@ MCP 层无未结计分项。9 条转出行随各自层（L1／L5／平台方言�
 - **新增 1 个 w1 单元**：`PipeTransport`（调用方启动程序的 MCP stdio 帧，共享行读取器）——Java 无等价实现。
 - **8 个原满分单元重判**：#22 stdio 关闭序列/进程树(w1)、#25 Streamable HTTP POST/GET JSON 分支(w2)、#26 SSE 消费/续接(w2)、#36 OAuth 刷新(w2)、#37 OAuth 回调(w1)、#42 sign-in 拆分(w2)、#67 `mcp list`(w2)、#68 login/logout(w2)。主要缺口：JSON `maxMessageBytes`/body 取消、`refreshOnly`/重定向 URI 校验/可中止刷新锁、两段式 sign-in、CLI provider token 与 `/login <provider>` 提示。
 - 已等价：回调 `closeAllConnections`（`HttpServer.stop(0)`）、CR-only/CRLF SSE、8KiB 错误体长度、工具命名/输入 schema/20KB 截断/配置校验。
-- P9 未开始，故本层全部是「重判损失」而非「新增未实施」；正式行级重判归 P12。口径见 [`../05-module-alignment-map.md` §1.2](../05-module-alignment-map.md)。
+- **落地面（2026-11-22 起，P9 逐阶段）**：S1 关闭序列 `02b6bf59`、S2 按块行读取 `db9f8646`、
+  S3 JSON 限长与 body 取消 `d80b326f`（`#22`／`#25`／`#26` 代码面已补）。S4–S7（OAuth 刷新、
+  两段式 sign-in、CLI provider token、`PipeTransport`）未落地，故**本层读数仍按投影 115.0/123**，
+  阶段清单见 [`../13-mcp-p9-design.md`](../13-mcp-p9-design.md) §8。正式行级重判归 P12。口径见
+  [`../05-module-alignment-map.md` §1.2](../05-module-alignment-map.md)。

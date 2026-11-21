@@ -210,4 +210,12 @@ Java（`coding-agent/subcommand/McpCommand.java` + `McpListCommand.java`）：`M
 
 ## 8. 实施记录
 
-（按阶段追加：日期、提交号、落地要点、测试数变化。）
+| 阶段 | 日期 | 提交 | 落地要点 | 测试 |
+|---|---|---|---|---|
+| S1 `#22` | 2026-11-22 | `02b6bf59` | 关闭三段式：关 stdin → `min(500ms, closeTimeout)` 宽限 → SIGTERM 等价 → 再 `closeTimeout` → SIGKILL；**关 stdin 前抓进程树快照**（父进程一退 `descendants()` 就空），父已退也给后代补一刀；`liveProcessGroups` 等价（JVM shutdown hook） | `McpStdioTest` +`aServerIgnoringStdinIsTerminatedAfterTheGracePeriod`（旧实现必 >2000ms，现 ~520ms）；既有 stubborn 用例仍绿 |
+| S2 `#22b` | 2026-11-22 | `db9f8646` | `StdioLineFrames.pump` 改按 8 KiB 块扫描 `\n`，未完成尾巴按块留存、换行时只 join 一次；`maxMessageBytes` 与 CRLF 语义不变 | 新增 `StdioLineFramesTest` 5 例（跨块重组、多帧＋CRLF、2 MiB 单行、超限、EOF 残帧） |
+| S3 `#25`/`#26` | 2026-11-22 | `d80b326f` | JSON 分支读 `maxMessageBytes`（超限抛 `MCP JSON response exceeds N bytes`）；错误体改 `readBodyText`：只读摘录并**关流取消剩余**（原实现读 8 KiB 后不关流） | 新增 `StreamableHttpBodyLimitsTest` 3 例（超限失败＋流关闭、限内投递、20 KB 错误体截断＋流关闭） |
+
+> 模块测试：`pi-java-mcp` 289 → **292** 全绿；`pi-java-coding-agent` 的 MCP 相关 241 例全绿（S1 改动经
+> `McpServerConnection` 的关闭路径覆盖）。**读数暂不动**：按 `docs/04` §0，逐层收口时才三处同步，
+> 现仍记 L2 = 115.0/123（投影）；S4–S7 落地后统一重算。
