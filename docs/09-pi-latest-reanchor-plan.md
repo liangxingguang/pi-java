@@ -9,7 +9,12 @@
 > - P2 首批已完成：`dc59f0c7 feat(ai): align v1.6.0 retry patterns and instruction role`。
 > - P2b 已完成：`734c7a21 feat(ai): support v1.6.0 prompt cache key mode and assistant/tools compat keys`
 >   （三个新 compat 键贯穿 ModelCompat／models.json／四条车道解析与读点；响应车道 `disabled` 生效）。
-> - P2 余项（Codex/Copilot/Mistral 等既有形状复核）与 P3 之后未开始。
+> - P2c 已完成（2026-11-21）：`65857596`（token 上限 15% 余量、responses `session-id`、Copilot 顶层 reasoning tokens）、
+>   `68eb84ef`（Mistral strict 显式 opt-in）、`14e90c8b`（`openai_input_transformations` 诊断）。
+> - P2 余项结论：Codex 专属形状（developer item／`max_output_tokens`／`configuration_update`／WS 60 分钟）
+>   **不适用** —— pi-java 无 `openai-codex-responses` 车道（R5 范围外）；共享的 responses 部分已逐项核对
+>   （`max_output_tokens ≥16`、显式 prompt cache、亲和头）。Copilot 的 strict/reasoning 两条已落；
+>   剩余分类器（Microsoft-Decision-1）按计划属 R5。P3 之后未开始。
 >
 > 术语释义：
 > - **锚点**：pi 的一个固定 git 提交，pi-java 以它作为行为对照基准，取证只走 `git show <sha>:<path>`。
