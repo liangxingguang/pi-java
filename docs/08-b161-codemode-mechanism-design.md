@@ -30,7 +30,7 @@
 2. 模型可见文本（工具描述、结果头、错误、globals 帮助、settings 描述）按原文引用，作为 Java 断言依据。
 3. Java 侧只消费既有公开面；新增面单独列在 §6，并逐条说明是否属于模型可见面。
 4. 本包**不进入 `docs/05` 对齐分母**，因此不以逐字计分，但仍以 pi 行为作为默认证口径；差异登记窄差。
-5. 不实现 Cloudflare/remote/inline/确定性运行；不实现 `models.classify` / `models.generateImages`（Java 无 classifier/图像生成 API，D233）。
+5. 不实现 Cloudflare/remote/inline/确定性运行；不实现 `models.classify` / `models.generateImages`（classifier 无对位〔D233〕；provider 级图像生成已有 `ImageApi`，但脚本面按 R5 不暴露）。
 
 ## 1. 问题定义
 
@@ -190,13 +190,13 @@
 
 ### 2.3 `models` 命名空间：v1 不做
 
-> 【场景】pi 的工具描述与 `docs/codemode.md` 都包含 `models.*`（目录、classifier、图像生成）。Java 无 `findOfType`/`classify`（D233），也无 `generateImages`。
+> 【场景】pi 的工具描述与 `docs/codemode.md` 都包含 `models.*`（目录、classifier、图像生成）。Java 无 `findOfType`/`classify`（D233）；provider 级图像生成已具备（`OpenRouterImagesApi`／`OpenAIImagesApi`），但 codemode 脚本面不暴露。
 >
 > 【决定】v1 以 `models = false` 构造工具：不声明 `models`，脚本调用 `models.*` 得到 `models is not defined`。`docs/codemode.md` 的 Models 一节保留但标注「pi-java 暂不可用」。
 >
 > 【风险/代价】
 > - [模型可见] 描述少一行 `models` 提示；与 pi 默认 `models: true` 有差。登记窄差。
-> - 使用 classify/图像模型的脚本不能运行；若未来 Java 补 classifier/图像 API，再开 B 包接入。
+> - 使用 classify 的脚本不能运行；provider 级图像生成虽已具备，脚本面仍不可用，若未来把它接进 `models` 命名空间需另开 B 包；classifier 仍需新实现。
 
 ### 2.4 host 接缝：`prepareLoadout`（拟新增 B288）
 
@@ -675,7 +675,7 @@ RED-first；每个新增类先落夹具。分组：
 | F1 | R5 是否按 §2.1 改为「codemode 能力版、不进分母」？ | 建议同意 |
 | F2 | 引擎是否按 §2.2 选型：Endive 1.1.0（保真、+0.95 MB、需 ABI 绑定）优先，GraalJS（+64 MB、零绑定）兜底，Chicory 备选？ | 建议同意；Endive 机制已实测，B0 只剩 Java 绑定与 OOM 边界；若绑定超预算回落 GraalJS |
 | F3 | 是否批准 B288 `prepareLoadout` 接缝以对位 `mode`/内联目录？ | 建议批准；否则降级并登 D265 |
-| F4 | `models` 命名空间 v1 是否直接不做？ | 建议不做（Java 无 classifier/图像 API） |
+| F4 | `models` 命名空间 v1 是否直接不做？ | 建议不做（classifier 无对位；provider 级 `ImageApi` 已具备，脚本面按 R5 不暴露） |
 | F5 | web 模式是否默认允许 codemode？ | 建议与 CLI 同策略（本地单用户默认可用，可经工具选择关闭）；多租户/远程部署默认关闭或接进程后端 |
 
 ## 11. 台账回填计划（闭环时）
