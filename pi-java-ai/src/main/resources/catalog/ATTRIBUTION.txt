@@ -3,7 +3,7 @@ pi-java-ai/catalog-generator/generate-java-catalog.ts.
 
 The generation rules are copied verbatim from pi
 https://github.com/earendil-works/pi (MIT License, Copyright (c) 2025 Mario Zechner),
-at anchor 56cae782341c339d3bb820081f0f9425d8c5b1ec (packages/ai/catalog/).
+at anchor a00a5048d (packages/ai/catalog/).
 See catalog-generator/VENDOR.json for per-file sha256 hashes.
 
 Upstream data:
@@ -12,5 +12,5 @@ Upstream data:
 - Radius public gateway catalog: https://radius.pi.dev/v1/config
 Raw input hashes and fetch times are pinned in catalog-generator/snapshots/SOURCES.json.
 
-Manifest: schemaVersion 6, generatedAt 2026-11-21T00:33:24.438Z.
-Carried shards: 18.
+Manifest: schemaVersion 6, generatedAt 2026-11-21T11:10:24.345Z.
+Carried shards: 23.

@@ -49,11 +49,16 @@ import moonshotai from "./vendor/catalog/providers/moonshotai.ts";
 import moonshotaiCn from "./vendor/catalog/providers/moonshotai-cn.ts";
 import openai from "./vendor/catalog/providers/openai.ts";
 import openrouter from "./vendor/catalog/providers/openrouter.ts";
+import qwenTokenPlan from "./vendor/catalog/providers/qwen-token-plan.ts";
 import qwenTokenPlanCn from "./vendor/catalog/providers/qwen-token-plan-cn.ts";
+import qwenTokenPlanIndividual from "./vendor/catalog/providers/qwen-token-plan-individual.ts";
+import qwenTokenPlanIndividualCn from "./vendor/catalog/providers/qwen-token-plan-individual-cn.ts";
 import radius from "./vendor/catalog/providers/radius.ts";
 import xai from "./vendor/catalog/providers/xai.ts";
 import xiaomi from "./vendor/catalog/providers/xiaomi.ts";
 import xiaomiTokenPlanCn from "./vendor/catalog/providers/xiaomi-token-plan-cn.ts";
+import xiaomiTokenPlanAms from "./vendor/catalog/providers/xiaomi-token-plan-ams.ts";
+import xiaomiTokenPlanSgp from "./vendor/catalog/providers/xiaomi-token-plan-sgp.ts";
 import zai from "./vendor/catalog/providers/zai.ts";
 import zaiCodingCn from "./vendor/catalog/providers/zai-coding-cn.ts";
 
@@ -62,21 +67,23 @@ const SNAPSHOT_DIR = join(HERE, "snapshots");
 const RESOURCE_DIR = resolve(HERE, "../src/main/resources/catalog");
 const SOURCES_FILE = "SOURCES.json";
 
-/** The 18 providers pi-java registers that carry generated data. */
+/** The 23 providers pi-java registers that carry generated data. */
 const PROVIDER_IDS = [
 	"anthropic", "openai", "google", "deepseek", "mistral",
 	"moonshotai", "moonshotai-cn", "zai", "zai-coding-cn",
-	"qwen-token-plan-cn", "xiaomi", "xiaomi-token-plan-cn",
+	"qwen-token-plan", "qwen-token-plan-cn",
+	"qwen-token-plan-individual", "qwen-token-plan-individual-cn",
+	"xiaomi", "xiaomi-token-plan-cn", "xiaomi-token-plan-ams", "xiaomi-token-plan-sgp",
 	"minimax", "minimax-cn", "ant-ling", "openrouter", "xai", "radius",
 ] as const;
 
-/** models.dev provider keys read by those 18 definitions (verified from vendor sources). */
+/** models.dev provider keys read by those 23 definitions (verified from vendor sources). */
 const MODELS_DEV_PROVIDER_KEYS = [
 	"anthropic", "openai", "google", "mistral",
 	"moonshotai", "moonshotai-cn",
 	"zai", "zai-coding-plan", "zhipuai-coding-plan",
-	"alibaba-token-plan-cn",
-	"xiaomi", "xiaomi-token-plan-cn",
+	"alibaba-token-plan", "alibaba-token-plan-cn",
+	"xiaomi", "xiaomi-token-plan-cn", "xiaomi-token-plan-ams", "xiaomi-token-plan-sgp",
 	"minimax", "minimax-cn", "xai",
 ] as const;
 
@@ -87,7 +94,8 @@ const RADIUS_CONFIG_URL = "https://radius.pi.dev/v1/config";
 const PROVIDERS: readonly ProviderDefinition[] = [
 	anthropic, openai, google, deepseek, mistral,
 	moonshotai, moonshotaiCn, zai, zaiCodingCn,
-	qwenTokenPlanCn, xiaomi, xiaomiTokenPlanCn,
+	qwenTokenPlan, qwenTokenPlanCn, qwenTokenPlanIndividual, qwenTokenPlanIndividualCn,
+	xiaomi, xiaomiTokenPlanCn, xiaomiTokenPlanAms, xiaomiTokenPlanSgp,
 	minimax, minimaxCn, antLing, openrouter, xai, radius,
 ];
 
@@ -222,7 +230,7 @@ interface GeneratedCatalog {
 	counts: Record<string, { chat: number; image: number }>;
 }
 
-/** Build the 18 shards and the manifest. Classifier entries are dropped (R5). */
+/** Build the 23 shards and the manifest. Classifier entries are dropped (R5). */
 function buildJavaCatalog(inputs: GeneratorInputs): GeneratedCatalog {
 	const catalogs = buildCatalog(PROVIDERS, catalogSources(inputs), true);
 	const shards: Record<string, Record<string, Record<string, unknown>>> = {};
@@ -258,7 +266,7 @@ function attributions(generated: GeneratedCatalog): string {
 		"",
 		"The generation rules are copied verbatim from pi",
 		"https://github.com/earendil-works/pi (MIT License, Copyright (c) 2025 Mario Zechner),",
-		"at anchor 56cae782341c339d3bb820081f0f9425d8c5b1ec (packages/ai/catalog/).",
+		"at anchor a00a5048d (packages/ai/catalog/).",
 		"See catalog-generator/VENDOR.json for per-file sha256 hashes.",
 		"",
 		"Upstream data:",

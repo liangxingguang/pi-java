@@ -24,8 +24,8 @@ import com.pijava.ai.model.ModelId;
 import com.pijava.ai.provider.ModelsJsonSchema.ModelDef;
 
 /**
- * 内置模型目录的数据面 —— 由 {@code catalog-generator/} 从 pi {@code 56cae7823}
- * 的规则生成的 18 个分片（{@code resources/catalog/*.json}，见同目录
+ * 内置模型目录的数据面 —— 由 {@code catalog-generator/} 从 pi {@code a00a5048d}
+ * 的规则生成的 23 个分片（{@code resources/catalog/*.json}，见同目录
  * {@code ATTRIBUTION.txt}）的装载器，对齐 pi 的 {@code flattenChatModelCatalog} /
  * {@code flattenImageModelCatalog}（{@code model-catalog.ts:41-63}）。
  *
@@ -48,11 +48,13 @@ import com.pijava.ai.provider.ModelsJsonSchema.ModelDef;
  */
 public final class BuiltinModelCatalogs {
 
-    /** 携带的 18 个分片（＝已注册主流 provider 中 pi 有生成数据者；ollama 无分片）。 */
+    /** 携带的 23 个分片（＝已注册主流 provider 中 pi 有生成数据者；ollama 无分片）。 */
     static final List<String> SHARD_IDS = List.of(
         "anthropic", "openai", "google", "deepseek", "mistral",
         "moonshotai", "moonshotai-cn", "zai", "zai-coding-cn",
-        "qwen-token-plan-cn", "xiaomi", "xiaomi-token-plan-cn",
+        "qwen-token-plan", "qwen-token-plan-cn",
+        "qwen-token-plan-individual", "qwen-token-plan-individual-cn",
+        "xiaomi", "xiaomi-token-plan-cn", "xiaomi-token-plan-ams", "xiaomi-token-plan-sgp",
         "minimax", "minimax-cn", "ant-ling", "openrouter", "xai", "radius");
 
     private static final Set<String> SHARD_ID_SET = Set.copyOf(SHARD_IDS);

@@ -107,6 +107,16 @@
       "sha256": "83ab7caab42b3e6a1c0443ff04f770b2b8922af0ead62a6c22f6d13e6b1a32da"
     },
     {
+      "path": "vendor/catalog/providers/qwen-token-plan-individual.ts",
+      "source": "packages/ai/catalog/providers/qwen-token-plan-individual.ts",
+      "sha256": "dec3c7bad705601a7bd4c7b6777f02f726072ae8ee3e9ddbdca28fcf97e33dd7"
+    },
+    {
+      "path": "vendor/catalog/providers/qwen-token-plan-individual-cn.ts",
+      "source": "packages/ai/catalog/providers/qwen-token-plan-individual-cn.ts",
+      "sha256": "be506f94e908fe51e62c949c901201003274b5611cebd69deba3fbcfc7a0c46e"
+    },
+    {
       "path": "vendor/catalog/providers/radius.ts",
       "source": "packages/ai/catalog/providers/radius.ts",
       "sha256": "0ee6db47ce94d1ff0f592dcdafc9f8e5c4cfb60f31a3cd8fb5b137e3826ddc91"
@@ -120,6 +130,16 @@
       "path": "vendor/catalog/providers/xiaomi-token-plan-cn.ts",
       "source": "packages/ai/catalog/providers/xiaomi-token-plan-cn.ts",
       "sha256": "90ecb7dbb8944de3a95588bb72c1a73fa9c554d55a91d596386400e6aa88b98e"
+    },
+    {
+      "path": "vendor/catalog/providers/xiaomi-token-plan-ams.ts",
+      "source": "packages/ai/catalog/providers/xiaomi-token-plan-ams.ts",
+      "sha256": "aaee6ae9d411b205cfc7b137f46b50690d22e4b89a0539e48115c76d9dbf66a2"
+    },
+    {
+      "path": "vendor/catalog/providers/xiaomi-token-plan-sgp.ts",
+      "source": "packages/ai/catalog/providers/xiaomi-token-plan-sgp.ts",
+      "sha256": "7ba76a6c320f58348b6aa46248e9fd9ee96a93ddf34dec9ac6081bd8effc10ab"
     },
     {
       "path": "vendor/catalog/providers/xiaomi.ts",

@@ -41,7 +41,7 @@ the diff before committing: the snapshot is what makes generation reproducible.
   - `openrouter-models.json` / `openrouter-images.json` are the raw listings.
   - `radius-config.json` is the raw public `/v1/config` response.
 - `generate-java-catalog.ts` — the repo-specific driver: loads snapshots,
-  instantiates the 18 provider definitions Java registers, writes chat + image
+  instantiates the 23 provider definitions Java registers, writes chat + image
   entries (classifier entries are dropped), and emits `.manifest.json`.
 
 ## Rules
@@ -49,6 +49,6 @@ the diff before committing: the snapshot is what makes generation reproducible.
 1. `SOURCES.json#generatedAt` is the maximum input `fetchedAt`, not the time
    the generation command ran; the same snapshots always produce the same
    manifest.
-2. The manifest lists only the 18 shards that are actually carried.
+2. The manifest lists only the 23 shards that are actually carried.
 3. `--check` exits non-zero and names stale files when resources differ.
 4. `ATTRIBUTION.txt` is rewritten together with the shards.

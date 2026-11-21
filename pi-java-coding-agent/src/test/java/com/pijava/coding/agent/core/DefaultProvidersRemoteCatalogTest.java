@@ -20,6 +20,19 @@ class DefaultProvidersRemoteCatalogTest {
     }
 
     @Test
+    void wrapsTheTokenPlanProvidersToo() {
+        var registry = DefaultProviders.defaultProviders("http://127.0.0.1:1");
+
+        // docs/11：pi 对 radius 之外的内置 provider 一律包装，新 Token Plan 五件同此。
+        for (String name : new String[] {"qwen-token-plan", "qwen-token-plan-individual",
+                "qwen-token-plan-individual-cn", "xiaomi-token-plan-ams", "xiaomi-token-plan-sgp"}) {
+            assertThat(registry.get(name).orElseThrow())
+                .as(name)
+                .isInstanceOf(RemoteCatalogProvider.class);
+        }
+    }
+
+    @Test
     void openrouterUsesThePersonalizedWrapper() {
         var registry = DefaultProviders.defaultProviders("http://127.0.0.1:1");
 

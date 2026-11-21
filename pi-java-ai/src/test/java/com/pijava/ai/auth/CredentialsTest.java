@@ -44,6 +44,21 @@ class CredentialsTest {
     }
 
     @Test
+    void fallbackEnvKeyReportsTheMatchedVariableName() {
+        // docs/11 A2：链首 QWEN_TOKEN_PLAN_TEAM_API_KEY 缺席，回落键命中。
+        var env = new EnvApiKeyResolver(name ->
+            "QWEN_TOKEN_PLAN_API_KEY".equals(name) ? "shared-key" : null);
+        var profiles = new AuthProfileManager(tmp.resolve("profiles.json"));
+        var file = new FileCredentialStore(tmp.resolve("auth.json"));
+
+        var credential = Credentials.resolveCredential("qwen-token-plan", profiles, env, file)
+            .orElseThrow();
+
+        assertThat(credential.value()).isEqualTo("shared-key");
+        assertThat(credential.source()).isEqualTo("env:QWEN_TOKEN_PLAN_API_KEY");
+    }
+
+    @Test
     void noProfileUsesDefault() {
         var profiles = new AuthProfileManager(tmp.resolve("profiles.json"));
         var file = new FileCredentialStore(tmp.resolve("auth.json"));

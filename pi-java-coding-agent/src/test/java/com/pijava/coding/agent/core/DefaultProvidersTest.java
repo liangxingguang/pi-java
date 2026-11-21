@@ -69,10 +69,13 @@ class DefaultProvidersTest {
         assertThat(names).contains(
             "anthropic", "openai", "google", "deepseek", "mistral",
             "moonshotai-cn", "moonshotai", "zai-coding-cn", "zai",
-            "qwen-token-plan-cn", "xiaomi", "xiaomi-token-plan-cn",
+            "qwen-token-plan", "qwen-token-plan-cn",
+            "qwen-token-plan-individual", "qwen-token-plan-individual-cn",
+            "xiaomi", "xiaomi-token-plan-cn",
+            "xiaomi-token-plan-ams", "xiaomi-token-plan-sgp",
             "minimax-cn", "minimax", "ant-ling", "ollama",
             "openrouter", "openrouter-images");
-        assertThat(names).hasSizeGreaterThanOrEqualTo(18);
+        assertThat(names).hasSizeGreaterThanOrEqualTo(26);
     }
 
     @Test

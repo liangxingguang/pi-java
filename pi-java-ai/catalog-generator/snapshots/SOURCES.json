@@ -1,12 +1,12 @@
 {
   "anchor": "a00a5048d",
-  "generatedAt": "2026-11-21T00:33:24.438Z",
+  "generatedAt": "2026-11-21T11:10:24.345Z",
   "inputs": {
     "modelsDev": {
       "url": "https://models.dev/experimental/v2.0/api.json",
-      "fetchedAt": "2026-11-21T00:33:24.438Z",
-      "upstreamBytes": 12354888,
-      "upstreamSha256": "eef75679385ced830373070109fdb4f7925acce48fdfc22266e457782f08b909",
+      "fetchedAt": "2026-11-21T11:10:24.345Z",
+      "upstreamBytes": 12343209,
+      "upstreamSha256": "0748ff8dedff04bd1a865e5a49513386d0467373773d702e70a93f647136ff61",
       "providerKeys": [
         "anthropic",
         "openai",
@@ -17,15 +17,18 @@
         "zai",
         "zai-coding-plan",
         "zhipuai-coding-plan",
+        "alibaba-token-plan",
         "alibaba-token-plan-cn",
         "xiaomi",
         "xiaomi-token-plan-cn",
+        "xiaomi-token-plan-ams",
+        "xiaomi-token-plan-sgp",
         "minimax",
         "minimax-cn",
         "xai"
       ],
       "stored": "models-dev-v2.json",
-      "storedSha256": "4129e40f629bedb64a88cfcd1391515d91a30c62cdfa9278fb6dbff5b3c2640d"
+      "storedSha256": "101992593e707f94a83b93268b2d6023db2471c7e8d6b68a746e65a58de92b60"
     },
     "openrouter": {
       "url": "https://openrouter.ai/api/v1/models",

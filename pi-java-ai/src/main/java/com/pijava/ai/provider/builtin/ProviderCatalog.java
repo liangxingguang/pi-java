@@ -18,7 +18,7 @@ import com.pijava.ai.provider.Provider;
  * Built-in Provider catalog — the 5 Phase 1 providers, the 11
  * Phase 6 China-focused additions, the OpenRouter images provider,
  * the OpenRouter chat provider (包 A-02), plus the xai provider
- * (包 44；批 31 加 Radius；20 total).
+ * (包 44；批 31 加 Radius；docs/11 加 5 个 Token Plan provider；26 total).
  */
 public final class ProviderCatalog {
 
@@ -36,9 +36,14 @@ public final class ProviderCatalog {
         providers.add(new MoonshotAiProvider());
         providers.add(new ZaiCodingCnProvider());
         providers.add(new ZaiProvider());
+        providers.add(new QwenTokenPlanProvider());
         providers.add(new QwenTokenPlanCnProvider());
+        providers.add(new QwenTokenPlanIndividualProvider());
+        providers.add(new QwenTokenPlanIndividualCnProvider());
         providers.add(new XiaomiProvider());
         providers.add(new XiaomiTokenPlanCnProvider());
+        providers.add(new XiaomiTokenPlanAmsProvider());
+        providers.add(new XiaomiTokenPlanSgpProvider());
         providers.add(new MiniMaxCnProvider());
         providers.add(new MiniMaxProvider());
         providers.add(new AntLingProvider());

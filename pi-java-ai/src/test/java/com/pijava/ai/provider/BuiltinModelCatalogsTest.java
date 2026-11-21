@@ -45,9 +45,14 @@ class BuiltinModelCatalogsTest {
             Map.entry("moonshotai-cn", 6),
             Map.entry("zai", 7),
             Map.entry("zai-coding-cn", 4),
+            Map.entry("qwen-token-plan", 20),
             Map.entry("qwen-token-plan-cn", 20),
+            Map.entry("qwen-token-plan-individual", 13),
+            Map.entry("qwen-token-plan-individual-cn", 13),
             Map.entry("xiaomi", 3),
             Map.entry("xiaomi-token-plan-cn", 2),
+            Map.entry("xiaomi-token-plan-ams", 2),
+            Map.entry("xiaomi-token-plan-sgp", 2),
             Map.entry("minimax", 4),
             Map.entry("minimax-cn", 4),
             Map.entry("ant-ling", 3),
@@ -60,7 +65,7 @@ class BuiltinModelCatalogsTest {
             assertThat(actual).as("%s chat count", e.getKey()).isEqualTo(e.getValue());
             total += actual;
         }
-        assertThat(total).as("18 shards carry 645 chat models").isEqualTo(645);
+        assertThat(total).as("23 shards carry 695 chat models").isEqualTo(695);
     }
 
     @Test
@@ -80,9 +85,9 @@ class BuiltinModelCatalogsTest {
 
     @Test
     void aggregateCatalogAddsImagesAndOllama() {
-        // 645 chat（含 radius 39）+ 74 OpenRouter image models + 2 ollama
-        // + 2 OpenAI image models（gpt-image-1 / dall-e-3）= 723。
-        assertThat(ProviderCatalog.allModels().listModels()).hasSize(723);
+        // 695 chat（含 radius 39）+ 74 OpenRouter image models + 2 ollama
+        // + 2 OpenAI image models（gpt-image-1 / dall-e-3）= 773。
+        assertThat(ProviderCatalog.allModels().listModels()).hasSize(773);
     }
 
     @Test
@@ -293,9 +298,12 @@ class BuiltinModelCatalogsTest {
         assertThatThrownBy(() -> BuiltinModelCatalogs.catalog("amazon-bedrock"))
             .isInstanceOf(IllegalArgumentException.class)
             .hasMessageContaining("not a builtin catalog provider");
-        // 未列名 id 的模型不造：只有 18 家可装载。
+        // 未列名 id 的模型不造：只有 23 家可装载。
         assertThat(BuiltinModelCatalogs.shardIds())
-            .doesNotContain("amazon-bedrock", "azure", "vercel-ai-gateway");
+            .doesNotContain("amazon-bedrock", "azure", "vercel-ai-gateway")
+            .contains("qwen-token-plan", "qwen-token-plan-individual",
+                "qwen-token-plan-individual-cn", "xiaomi-token-plan-ams",
+                "xiaomi-token-plan-sgp");
     }
 
     @Test

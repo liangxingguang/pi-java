@@ -9,10 +9,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ProviderRegistryTest {
 
     @Test
-    void loadBuiltinProvidersRegistersTwentyOne() {
+    void loadBuiltinProvidersRegistersTwentySix() {
         var registry = ProviderRegistry.create();
-        assertThat(registry.loadBuiltinProviders()).isEqualTo(21);
-        assertThat(registry.listAll()).hasSize(21);
+        assertThat(registry.loadBuiltinProviders()).isEqualTo(26);
+        assertThat(registry.listAll()).hasSize(26);
         assertThat(registry.get("minimax-cn")).isPresent();
         assertThat(registry.get("ollama")).isPresent();
         assertThat(registry.get("openrouter")).isPresent();
@@ -20,6 +20,11 @@ class ProviderRegistryTest {
         assertThat(registry.get("openai-images")).isPresent();
         assertThat(registry.get("xai")).isPresent();
         assertThat(registry.get("radius")).isPresent();
+        assertThat(registry.get("qwen-token-plan")).isPresent();
+        assertThat(registry.get("qwen-token-plan-individual")).isPresent();
+        assertThat(registry.get("qwen-token-plan-individual-cn")).isPresent();
+        assertThat(registry.get("xiaomi-token-plan-ams")).isPresent();
+        assertThat(registry.get("xiaomi-token-plan-sgp")).isPresent();
     }
 
     @Test

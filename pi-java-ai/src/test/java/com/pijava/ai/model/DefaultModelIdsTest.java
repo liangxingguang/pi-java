@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * 批 3a T6：pi {@code defaultModelPerProvider}（model-resolver.ts:16-58）的 17 provider
+ * 批 3a T6：pi {@code defaultModelPerProvider}（model-resolver.ts:16-58）的 22 provider
  * 防回归切片。分片首条不保证是默认模型（google 首条是 deep-research 预览模型），
  * 故裸 provider 引用必须走常量表；换数据时默认 id 缺席要在本测试变红，而不是静默回退首条。
  */
@@ -30,14 +30,19 @@ class DefaultModelIdsTest {
             Map.entry("moonshotai-cn", "kimi-k2.7-code"),
             Map.entry("zai", "glm-5.3"),
             Map.entry("zai-coding-cn", "glm-5.3"),
+            Map.entry("qwen-token-plan", "qwen3.8-max"),
             Map.entry("qwen-token-plan-cn", "qwen3.8-max"),
+            Map.entry("qwen-token-plan-individual", "qwen3.8-max"),
+            Map.entry("qwen-token-plan-individual-cn", "qwen3.8-max"),
             Map.entry("xiaomi", "mimo-v2.6-pro"),
             Map.entry("xiaomi-token-plan-cn", "mimo-v2.6-pro"),
+            Map.entry("xiaomi-token-plan-ams", "mimo-v2.6-pro"),
+            Map.entry("xiaomi-token-plan-sgp", "mimo-v2.6-pro"),
             Map.entry("ant-ling", "Ring-2.6-1T"),
             Map.entry("openrouter", "moonshotai/kimi-k2.7-code"));
         assertThat(DefaultModelIds.forProvider("ollama")).as("ollama has no pi default").isEmpty();
-        // 表内容与 pi 逐字一致（17 键）。
-        assertThat(expected).hasSize(17);
+        // 表内容与 pi 逐字一致（22 键）。
+        assertThat(expected).hasSize(22);
         for (var e : expected.entrySet()) {
             assertThat(DefaultModelIds.forProvider(e.getKey())).contains(e.getValue());
         }

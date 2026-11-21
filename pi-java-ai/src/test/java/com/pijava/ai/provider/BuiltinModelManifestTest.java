@@ -35,7 +35,7 @@ class BuiltinModelManifestTest {
     @Test
     void everyCarriedShardMatchesItsManifestSha256() throws Exception {
         var files = manifest().path("files");
-        assertThat(files.size()).as("manifest lists only the 18 carried shards").isEqualTo(18);
+        assertThat(files.size()).as("manifest lists only the 23 carried shards").isEqualTo(23);
         for (var shard : BuiltinModelCatalogs.shardIds()) {
             var name = shard + ".json";
             var expected = files.path(name).asText("");
@@ -49,7 +49,7 @@ class BuiltinModelManifestTest {
         var manifest = manifest();
         assertThat(manifest.path("schemaVersion").asInt()).isEqualTo(6);
         // SOURCES.json#generatedAt：所有输入 fetchedAt 的最大值，不是生成命令的运行时刻。
-        var pinned = Instant.parse("2026-11-21T00:33:24.438Z");
+        var pinned = Instant.parse("2026-11-21T11:10:24.345Z");
         assertThat(BuiltinModelCatalogs.generatedAt()).isEqualTo(pinned);
         // ModelData 委托同一来源：远程 overlay 守卫比较的就是这个瞬间。
         assertThat(ModelData.generatedAt()).isEqualTo(pinned);
@@ -57,7 +57,7 @@ class BuiltinModelManifestTest {
 
     @Test
     void nonCarriedShardsAreAbsentFromTheClasspath() {
-        // manifest 只列携带的 18 个分片；未注册的 provider 必须缺席。
+        // manifest 只列携带的 23 个分片；未注册的 provider 必须缺席。
         for (var absent : List.of("amazon-bedrock.json", "azure.json", "vercel-ai-gateway.json",
                 "google-vertex.json", "openai-codex.json")) {
             assertThat(BuiltinModelManifestTest.class.getResourceAsStream("/catalog/" + absent))
