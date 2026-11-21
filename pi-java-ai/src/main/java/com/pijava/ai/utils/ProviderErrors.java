@@ -67,6 +67,59 @@ public final class ProviderErrors {
         return new Normalized(status, body, message == null ? "" : message, carries);
     }
 
+    /** pi {@code MAX_CAUSE_DEPTH}（error-body.ts:69）：cause 链最多追 5 层。 */
+    public static final int MAX_CAUSE_DEPTH = 5;
+
+    /**
+     * pi {@code withCauseDetail(error)}（error-body.ts:68-82）：把 {@code cause} 链最深层的信息
+     * 追加到错误文本后。
+     *
+     * <p>pi 只在「既无 status 又无 body」的连接级失败上启用（{@code normalizeProviderError:49}），
+     * Anthropic 车道另直接调用（{@code anthropic-messages.ts:1170}）。规则逐条：走 {@code cause}
+     * 最多 {@link #MAX_CAUSE_DEPTH} 层取最深；detail 取该层 {@code message}（空则取类简单名）、
+     * trim；原串已包含 detail 时不重复追加；拼接为 {@code "<message>: <detail>"}（message 为空
+     * 则只留 detail）。</p>
+     *
+     * <p><b>方言</b>：pi 还会在 detail 后补 {@code " (code)"}（undici 的 {@code ECONNREFUSED}）；
+     * Java 异常链没有统一 {@code code} 字段，该尾巴不虚构。</p>
+     */
+    public static String withCauseDetail(Throwable error) {
+        return withCauseDetail(error == null ? "" : errorMessageOf(error), error);
+    }
+
+    /** {@link #withCauseDetail(Throwable)} 的显式文案版。 */
+    public static String withCauseDetail(String message, Throwable error) {
+        String base = message == null ? "" : message;
+        Throwable deepest = null;
+        Throwable current = error == null ? null : error.getCause();
+        for (int depth = 0; depth < MAX_CAUSE_DEPTH && current != null; depth++) {
+            deepest = current;
+            current = current.getCause();
+        }
+        if (deepest == null) {
+            return base;
+        }
+        String detail = causeDetailOf(deepest);
+        if (detail.isEmpty() || base.contains(detail)) {
+            return base;
+        }
+        return base.isEmpty() ? detail : base + ": " + detail;
+    }
+
+    /**
+     * 把 {@link #withCauseDetail} 的文本套成新异常、原异常留作 cause：pi 只改
+     * {@code errorMessage}，而 Java 的终局文本由 {@code Throwable} 派生（{@code StreamEvent.textOf}）。
+     * 无 cause 可补时原样返回，异常身份不变。
+     */
+    public static Throwable detailed(Throwable error) {
+        if (error == null) {
+            return null;
+        }
+        String original = errorMessageOf(error);
+        String detailed = withCauseDetail(original, error);
+        return detailed.equals(original) ? error : new IllegalStateException(detailed, error);
+    }
+
     /**
      * pi {@code formatProviderError(norm)}（无前缀车道：completions/images）。
      */
@@ -127,7 +180,8 @@ public final class ProviderErrors {
             return normalize(service.statusCode(), bodyText, message);
         }
         String message = error.getMessage() != null ? error.getMessage() : error.toString();
-        return normalize(null, null, message);
+        // pi normalizeProviderError:49 —— 无 status 无 body 的连接级失败补最深 cause。
+        return normalize(null, null, withCauseDetail(message, error));
     }
 
     /**
@@ -323,6 +377,20 @@ public final class ProviderErrors {
         Map.entry(511, "Network Authentication Required"));
 
     // ── 内部 ──────────────────────────────────────────────────────────────
+
+    /** pi 侧 {@code error.message} 恒为串；Java 可为 null，故回落 {@code toString()}。 */
+    private static String errorMessageOf(Throwable error) {
+        String message = error.getMessage();
+        return message != null ? message : error.toString();
+    }
+
+    /** pi {@code deepest.message || deepest.name} 的 Java 对位（name 用简单类名）。 */
+    private static String causeDetailOf(Throwable deepest) {
+        String message = deepest.getMessage();
+        String detail = message != null && !message.isBlank()
+            ? message.trim() : deepest.getClass().getSimpleName();
+        return detail.trim();
+    }
 
     /** body trim、空体缺席、截断（次序照 pi：trim/空判在截长之前）。 */
     private static String cleanBody(String rawBody) {

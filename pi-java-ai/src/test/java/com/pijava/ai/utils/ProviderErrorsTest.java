@@ -220,4 +220,65 @@ class ProviderErrorsTest {
         assertThat(ProviderErrors.reasonPhrase(500)).isEqualTo("Internal Server Error");
         assertThat(ProviderErrors.reasonPhrase(599)).isEmpty();
     }
+
+    // ── withCauseDetail（B289，pi error-body.ts:68-82）──────────────────────
+
+    /** 连接级失败：最深 cause 的 message 追到文案后（pi 的两层 undici 形状）。 */
+    @Test
+    void withCauseDetailAppendsDeepestCause() {
+        var error = new RuntimeException("Connection error.",
+            new IllegalStateException("fetch failed",
+                new java.net.ConnectException("Connection refused")));
+
+        assertThat(ProviderErrors.withCauseDetail(error))
+            .isEqualTo("Connection error.: Connection refused");
+    }
+
+    /** cause 链最多追 5 层：第 6 层是上限，更深的不参与（pi MAX_CAUSE_DEPTH）。 */
+    @Test
+    void withCauseDetailStopsAtFiveLevels() {
+        Throwable error = new IllegalStateException("level-7");
+        for (int level = 6; level >= 1; level--) {
+            error = new IllegalStateException("level-" + level, error);
+        }
+
+        assertThat(ProviderErrors.withCauseDetail(error)).isEqualTo("level-1: level-6");
+    }
+
+    /** 文案已含 detail ⇒ 不重复追加（pi 的 {@code message.includes(detail)}）。 */
+    @Test
+    void withCauseDetailSkipsAlreadyPresentDetail() {
+        var error = new RuntimeException("Connection refused: retrying",
+            new java.net.ConnectException("Connection refused"));
+
+        assertThat(ProviderErrors.withCauseDetail(error)).isEqualTo("Connection refused: retrying");
+    }
+
+    /** 无 cause ⇒ 原样；{@link ProviderErrors#detailed} 连异常身份也不换。 */
+    @Test
+    void withCauseDetailWithoutCauseKeepsMessageAndIdentity() {
+        var error = new IllegalStateException("plain");
+
+        assertThat(ProviderErrors.withCauseDetail(error)).isEqualTo("plain");
+        assertThat(ProviderErrors.detailed(error)).isSameAs(error);
+    }
+
+    /** 有 cause ⇒ {@code detailed} 换载体但保留原异常作 cause（pi 只改 errorMessage）。 */
+    @Test
+    void detailedWrapsWithOriginalCause() {
+        var root = new java.net.ConnectException("Connection refused");
+        var error = new RuntimeException("Connection error.", root);
+
+        assertThat(ProviderErrors.detailed(error))
+            .hasMessage("Connection error.: Connection refused")
+            .hasCause(error);
+    }
+
+    /** cause 的 message 为空 ⇒ 回落类简单名（pi {@code deepest.message || deepest.name}）。 */
+    @Test
+    void withCauseDetailFallsBackToCauseClassName() {
+        var error = new RuntimeException("outer", new NullPointerException());
+
+        assertThat(ProviderErrors.withCauseDetail(error)).isEqualTo("outer: NullPointerException");
+    }
 }

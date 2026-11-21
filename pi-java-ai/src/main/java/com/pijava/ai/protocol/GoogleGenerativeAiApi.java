@@ -9,6 +9,7 @@ import java.util.concurrent.SubmissionPublisher;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.genai.Client;
 import com.google.genai.ResponseStream;
+import com.google.genai.errors.ApiException;
 import com.google.genai.types.Content;
 import com.google.genai.types.FunctionCall;
 import com.google.genai.types.GenerateContentConfig;
@@ -35,6 +36,7 @@ import com.pijava.ai.model.CostCalculator;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.stream.StreamPartialBuilder;
 import com.pijava.ai.stream.ToolCallSlotKey;
+import com.pijava.ai.utils.ProviderErrors;
 import com.pijava.ai.utils.SanitizeUnicode;
 
 /**
@@ -336,7 +338,9 @@ public final class GoogleGenerativeAiApi extends AbstractChatApi {
         } catch (Exception e) {
             // pi 的 catch（:285-290）只发一条 error 就 `stream.end()` ⇒ 一条流**只有一个**
             // 终局事件；上面的 throw 落在这里，`emitDone` 不会被发出去。
-            publisher.submit(builder.emitError(StopReason.ERROR, e));
+            // 连接级失败（非 ApiException，无 status/body）补最深 cause（pi error-body.ts:49）。
+            publisher.submit(builder.emitError(StopReason.ERROR,
+                e instanceof ApiException ? e : ProviderErrors.detailed(e)));
         }
     }
 

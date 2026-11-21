@@ -26,6 +26,7 @@ import com.pijava.ai.message.StopReason;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.stream.StreamPartialBuilder;
 import com.pijava.ai.utils.OpenRouterBilling;
+import com.pijava.ai.utils.ProviderErrors;
 
 /**
  * Anthropic Messages API adapter using the official {@code anthropic-java} SDK.
@@ -305,7 +306,8 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
             }
             AnthropicStreamSupport.submitTail(builder, publisher, stop, responseExtras);
         } catch (Exception e) {
-            publisher.submit(builder.emitError(StopReason.ERROR, e));
+            // pi anthropic-messages.ts:1170 —— errorMessage 一律过 withCauseDetail。
+            publisher.submit(builder.emitError(StopReason.ERROR, ProviderErrors.detailed(e)));
         }
     }
 
