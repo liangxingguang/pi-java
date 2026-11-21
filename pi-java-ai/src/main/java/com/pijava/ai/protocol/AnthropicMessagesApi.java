@@ -25,6 +25,7 @@ import com.pijava.ai.http.ProviderRetry;
 import com.pijava.ai.message.StopReason;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.ai.stream.StreamPartialBuilder;
+import com.pijava.ai.api.StrictToolLimitMemory;
 import com.pijava.ai.utils.OpenRouterBilling;
 import com.pijava.ai.utils.ProviderErrors;
 
@@ -247,7 +248,8 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
             // #101（pi :692）：start 移到请求成功之后 —— 失败路径只发 StreamError。
             com.anthropic.core.http.HttpResponseFor<StreamResponse<RawMessageStreamEvent>>
                 rawResponse = null;
-            boolean disablePreferredStrictTools = false;
+            // pi :890 —— 会话级记忆：本会话此前被拒过就整轮非 strict。
+            boolean disablePreferredStrictTools = StrictToolLimitMemory.exceeded(sessionId);
             for (;;) {
                 var built = buildParams(request, affinitySessionId(), baseUrl,
                     effectiveHeaderNames, oauth, disablePreferredStrictTools);
@@ -271,6 +273,8 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
                         throw error;
                     }
                     disablePreferredStrictTools = true;
+                    // pi :932 —— 记到会话上：后续请求不再试 strict（切回会丢 prompt cache）。
+                    StrictToolLimitMemory.mark(sessionId);
                     builder.appendDiagnostic(
                         AnthropicStrictFallback.diagnostic(error.getMessage()));
                 }

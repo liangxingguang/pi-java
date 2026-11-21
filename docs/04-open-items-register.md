@@ -44,7 +44,6 @@ Chord plugin 已按 R5 决定不做，不再是待拍板项。
 | B156 | `ModelCompat` 逐组件重建存在漏字段风险；新增组件时必须同时检查构造点和 `withPartial` 类重建点。 | L1 AI |
 | E5-31 | 扩展 UI 仍有 working 指示器、终端输入、补全、编辑器替换等 TUI 成员未收口；与 D′ 旧行去重重测。 | L7 TUI |
 | B287 | 文件工具 operations 接缝未对位（B286 的姊妹缺口）：`read`/`write` 走 `ToolContext.fs()` 但工厂不可注入，`edit` 混用 NIO 与 `fs`，`grep`/`find`/`ls` 直接 NIO ⇒ Docker/SSH 类文件后端无法只替换文件工具。范围与 pi `ReadOperations`/`WriteOperations`/`EditOperations` 对位（D243 同族）。**后续路线（用户 2026-11-20 决定）**：先补本项，再写 SSH 扩展提供远程 bash + 文件工具；不迁移 chord/env/durable，详细设计后续完善。 | L3 agent-core |
-| B290 | strict 工具降级未全落：新锚点要求「无类型节点且无 anyOf/enum ⇒ `prefer` 发非 strict、`require` 本地抛错」并按会话记忆 strict 超限（`strict-tool-limits.ts:34-48`）；Java 只有 `prefer/require` 关键字分支，无逐节点判据与会话记忆。 | L1 AI |
 | B291 | lazy 初始化取消映射缺失：pi `api/lazy.ts:83` 在初始化期间被取消时返回 `stopReason: aborted`；Java 的 setup 异常直接冒泡出循环，不翻译终局。 | L1 AI |
 | B292 | `refreshModelsAuth` 未对位：pi 对内置 provider 跳过 OAuth 刷新、签出时只告警不失败；Java `RefreshModelsContext` 只有 offline 相，无「内置 provider 跳过」分支。新锚点 P0 预审计发现（`docs/05` §1.2）。 | L1 AI |
 

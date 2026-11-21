@@ -14,6 +14,7 @@ import com.pijava.ai.api.JsonSchemaSampling;
 import com.pijava.ai.api.ProviderHooks;
 import com.pijava.ai.api.StreamRequest;
 import com.pijava.ai.api.StrictMode;
+import com.pijava.ai.api.StrictToolLimitMemory;
 import com.pijava.ai.api.ToolDefinition;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.ContentBlock;
@@ -141,6 +142,38 @@ class AnthropicStrictFallbackTest {
             assertThat(events).anyMatch(e -> e instanceof StreamEvent.StreamError);
             var error = last(events, StreamEvent.StreamError.class);
             assertThat(error.error().getMessage()).contains("Too many strict tools");
+        }
+    }
+
+    /**
+     * pi {@code strict-tool-limits.ts} 的跨请求语义：本会话被拒过一次后，**下一轮请求直接
+     * 发非 strict**，且不再产生降级诊断（:890 初值 / :932 记账）。
+     */
+    @Test
+    void aSessionThatExceededStrictLimitsStartsNonStrictOnTheNextRequest() throws Exception {
+        try (var server = new RecordingHttpServer()) {
+            server.enqueue(new RecordingHttpServer.Response(
+                400, Map.of("Content-Type", "application/json"),
+                STRICT_LIMIT_ERROR.getBytes(StandardCharsets.UTF_8)));
+            server.enqueue(new RecordingHttpServer.Response(
+                200, Map.of("Content-Type", "text/event-stream"), SUCCESS_SSE));
+            server.enqueue(new RecordingHttpServer.Response(
+                200, Map.of("Content-Type", "text/event-stream"), SUCCESS_SSE));
+            var session = Map.<String, Object>of("sessionId", "s-strict-limit");
+
+            run(server.baseUrl(), tool(new JsonSchemaSampling(StrictMode.PREFER)), session);
+            assertThat(server.requestCount()).isEqualTo(2);
+            assertThat(server.bodies().get(0)).contains("\"strict\":true");
+
+            var second = run(server.baseUrl(), tool(new JsonSchemaSampling(StrictMode.PREFER)),
+                session);
+
+            assertThat(server.requestCount()).as("第二轮只发一次，不再试 strict").isEqualTo(3);
+            assertThat(server.bodies().get(2)).doesNotContain("\"strict\":true");
+            assertThat(last(second, StreamEvent.StreamDone.class).partial().diagnostics())
+                .isNullOrEmpty();
+        } finally {
+            StrictToolLimitMemory.clear(null);
         }
     }
 
