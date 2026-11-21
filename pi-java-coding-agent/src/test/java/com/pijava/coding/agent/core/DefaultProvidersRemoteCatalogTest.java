@@ -42,11 +42,13 @@ class DefaultProvidersRemoteCatalogTest {
     }
 
     @Test
-    void doesNotWrapTheImagesProvider() {
+    void doesNotWrapTheImagesProviders() {
         var registry = DefaultProviders.defaultProviders("http://127.0.0.1:1");
 
-        assertThat(registry.get("openrouter-images").orElseThrow())
-            .isNotInstanceOf(RemoteCatalogProvider.class)
-            .isNotInstanceOf(PersonalizedCatalogProvider.class);
+        for (String name : new String[] {"openrouter-images", "openai-images"}) {
+            assertThat(registry.get(name).orElseThrow())
+                .isNotInstanceOf(RemoteCatalogProvider.class)
+                .isNotInstanceOf(PersonalizedCatalogProvider.class);
+        }
     }
 }

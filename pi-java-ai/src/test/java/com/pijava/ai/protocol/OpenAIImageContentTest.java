@@ -46,6 +46,12 @@ class OpenAIImageContentTest {
     private static final ModelInfo NON_VISION = new ModelInfo(TARGET, "GPT-5",
             Set.of(ModelCapability.TEXT, ModelCapability.TOOL_USE),
             200_000, 16_384, false, PricingInfo.UNKNOWN);
+    private static final ModelId<?> DEEPSEEK_VISION =
+            ModelId.of("deepseek", "deepseek-flash");
+    private static final ModelInfo DEEPSEEK = new ModelInfo(DEEPSEEK_VISION,
+            "DeepSeek V4.1 Flash",
+            Set.of(ModelCapability.TEXT, ModelCapability.IMAGE_INPUT),
+            1_000_000, 384_000, false, PricingInfo.UNKNOWN);
 
     private static ContentBlock image() {
         return new ContentBlock.ImageContent("image/png", PNG_B64);
@@ -106,6 +112,16 @@ class OpenAIImageContentTest {
      * <b>红</b> pi {@code :1267}：user 有图分支只判 {@code content.length === 0}，
      * **不过滤**空文本块 —— 与 Anthropic 的 user 分支（过滤）刻意不同。
      */
+    /** DeepSeek V4.1 Flash 走 OpenAI-completions 车道，图片同样落成 data URL。 */
+    @Test
+    void deepseekVisionImagesBecomeImageUrlParts() {
+        var request = new StreamRequest(DEEPSEEK, null,
+            user(new ContentBlock.TextContent("what is this"), image()), List.of(), -1, -1);
+        assertThat(render(OpenAICompletionsMessageConverter.buildParams(
+            request, "openai-completions", null)))
+            .containsExactly("user_text:what is this", "user_image:" + DATA_URL);
+    }
+
     @Test
     void userBlankTextPartsAreNotFiltered() {
         assertThat(render(build(VISION, user(new ContentBlock.TextContent("   "), image()))))

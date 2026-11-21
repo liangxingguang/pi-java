@@ -25,11 +25,11 @@ class ProviderCatalogConformanceTest {
         "moonshotai-cn", "moonshotai", "zai-coding-cn", "zai",
         "qwen-token-plan-cn", "xiaomi", "xiaomi-token-plan-cn",
         "minimax-cn", "minimax", "ant-ling", "ollama",
-        "openrouter", "openrouter-images", "xai", "radius"
+        "openrouter", "openrouter-images", "openai-images", "xai", "radius"
     };
 
     @Test
-    void catalogContainsTwentyProviders() {
+    void catalogContainsTwentyOneProviders() {
         var names = ProviderCatalog.all().stream().map(Provider::name).toList();
         assertThat(names).containsExactly(EXPECTED_NAMES);
     }

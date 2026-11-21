@@ -45,6 +45,7 @@ public final class ProviderCatalog {
         providers.add(new OllamaProvider());
         providers.add(new OpenRouterProvider());
         providers.add(new OpenRouterImagesProvider());
+        providers.add(new OpenAIImagesProvider());
         providers.add(new XaiProvider());
         providers.add(new RadiusProvider());
         return List.copyOf(providers);

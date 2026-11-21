@@ -21,7 +21,7 @@ final class CatalogProviderWiring {
      * 不对应 {@code /api/models/providers/<id>}。
      */
     private static final Set<String> REMOTE_CATALOG_EXCLUDED =
-        Set.of("openrouter-images", "radius");
+        Set.of("openrouter-images", "openai-images", "radius");
 
     private CatalogProviderWiring() {}
 

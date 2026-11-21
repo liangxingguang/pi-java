@@ -5,6 +5,7 @@ import java.util.List;
 
 import com.pijava.ai.catalog.InputLimits;
 import com.pijava.ai.catalog.ModelInfo;
+import com.pijava.ai.model.ModelId;
 import com.pijava.ai.provider.ModelsJsonSchema.Cost;
 import com.pijava.ai.provider.ModelsJsonSchema.ImageLimitsDef;
 import com.pijava.ai.provider.ModelsJsonSchema.InputLimitsDef;
@@ -46,6 +47,17 @@ class ModelInputLimitsWireTest {
         assertThat(parsed.images().maxPerRequest()).isEqualTo(600);
         assertThat(parsed.images().maxPerMessage()).isNull();
         var resize = parsed.images().resize();
+        assertThat(resize.maxWidth()).isEqualTo(2000);
+        assertThat(resize.maxHeight()).isEqualTo(2000);
+        assertThat(resize.maxBytes()).isEqualTo(4_718_592);
+        assertThat(resize.jpegQuality()).isEqualTo(80);
+    }
+
+    @Test
+    void deepseekFlashResizeLimitsComeFromTheShard() {
+        var flash = BuiltinModelCatalogs.catalog("deepseek")
+            .find(ModelId.of("deepseek", "deepseek-flash")).orElseThrow();
+        var resize = flash.inputLimits().images().resize();
         assertThat(resize.maxWidth()).isEqualTo(2000);
         assertThat(resize.maxHeight()).isEqualTo(2000);
         assertThat(resize.maxBytes()).isEqualTo(4_718_592);

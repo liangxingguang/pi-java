@@ -9,14 +9,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 class ProviderRegistryTest {
 
     @Test
-    void loadBuiltinProvidersRegistersTwenty() {
+    void loadBuiltinProvidersRegistersTwentyOne() {
         var registry = ProviderRegistry.create();
-        assertThat(registry.loadBuiltinProviders()).isEqualTo(20);
-        assertThat(registry.listAll()).hasSize(20);
+        assertThat(registry.loadBuiltinProviders()).isEqualTo(21);
+        assertThat(registry.listAll()).hasSize(21);
         assertThat(registry.get("minimax-cn")).isPresent();
         assertThat(registry.get("ollama")).isPresent();
         assertThat(registry.get("openrouter")).isPresent();
         assertThat(registry.get("openrouter-images")).isPresent();
+        assertThat(registry.get("openai-images")).isPresent();
         assertThat(registry.get("xai")).isPresent();
         assertThat(registry.get("radius")).isPresent();
     }

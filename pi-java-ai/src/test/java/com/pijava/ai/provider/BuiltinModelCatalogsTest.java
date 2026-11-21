@@ -71,9 +71,18 @@ class BuiltinModelCatalogsTest {
     }
 
     @Test
+    void deepseekFlashCarriesImageInputFromShard() {
+        var flash = model("deepseek", "deepseek-flash");
+        assertThat(flash.supportsImageInput()).isTrue();
+        assertThat(flash.capabilities()).contains(ModelCapability.IMAGE_INPUT);
+        assertThat(model("deepseek", "deepseek-v4-pro").supportsImageInput()).isFalse();
+    }
+
+    @Test
     void aggregateCatalogAddsImagesAndOllama() {
-        // 645 chat（含 radius 39）+ 74 OpenRouter image models + 2 ollama = 721。
-        assertThat(ProviderCatalog.allModels().listModels()).hasSize(721);
+        // 645 chat（含 radius 39）+ 74 OpenRouter image models + 2 ollama
+        // + 2 OpenAI image models（gpt-image-1 / dall-e-3）= 723。
+        assertThat(ProviderCatalog.allModels().listModels()).hasSize(723);
     }
 
     @Test
