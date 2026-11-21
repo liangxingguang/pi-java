@@ -18,7 +18,8 @@
 >   分支**，原稿「strict/reasoning 两条」中的 strict 属误记；剩余分类器（Microsoft-Decision-1）
 >   按计划属 R5。
 > - P2 余项审计补充（2026-11-21）：新锚点 `error-body.ts:60` 的 **`withCauseDetail`（最深
->   cause＋code 追加到错误文本）Java 无等价实现**，已登记 [`docs/04` B289](04-open-items-register.md)；
+>   cause＋code 追加到错误文本）Java 无等价实现**，编号 B289（⚠️ 实际未进 `docs/04` §1 台账，
+>   已在 L1 收口时直接落地：`49336f70`）；
 >   strict 工具「无类型节点降级＋按会话记忆超限」与 lazy 初始化取消映射 `stopReason: aborted`
 >   也仍未落，归 P2 余项/P5。
 > - P3 部分完成（2026-11-21）：`fca70024`（catalog 规则按 `a00a5048d` 重新 vendor、上游快照重取、
@@ -70,7 +71,7 @@
 3. **`env`／`chord`／`durable`／`apps/p2`／`apps/p2-mac`／`apps/p3` 继续出分母**。它们不在 `coding-agent`／`agent`／`ai`／`tui` 的依赖链上；建议把 `env` 和 apps 明确写进 R5 清单。
 4. **codemode 沙箱仍出分母**，但 `tool_search` 用到的 `resolveSchemaRef`（跟随本地 `$ref`）必须在 Java 侧单独实现，不能随沙箱一起跳过。
 5. **规模**：锚点以来 818 个提交、3,463 个文件、+461,742/−41,486 行；剔除 R5 与 apps 后，八个在册包的 `src` 变更约 **15,700 行**（其中新包 schema 4,852 行）。
-6. **排期顺序**：先换锚重测（P0），再跨层 schema 语义（P1），然后 AI wire（P2/P3）、coding-agent（P4–P7）、TUI（P8）、MCP/agent/session（P9/P10）、telemetry/evals/examples（P11），最后收尾（P12）。Anthropic message threads 单独成包，可延后。
+6. **排期顺序**：先换锚重测（P0），再跨层 schema 语义（P1），然后 AI wire（P2/P3）、coding-agent（P4–P7）、TUI（P8）、MCP/agent/session（P9/P10）、telemetry/evals/examples（P11），最后收尾（P12）。Anthropic message threads 单独成包，可延后（**2026-11-22 已随 L1 收口完成**）。
 7. **最大风险**：`pi-schema` 完整方言、Anthropic message threads、TUI 渲染缓存契约、pi 的移动速度。
 
 ## 1. 锚点与差异规模
@@ -137,7 +138,7 @@
 
 ## 3. 分层差异
 
-**完成度总览**（数据源：`docs/05` §1 正式读数与 §1.2 预审计投影；本表只作进度视图，数值以 `docs/05` 为准。Δ 按表内两位小数读数相减）：
+**完成度总览**（数据源：`docs/05` §1 正式读数与 §1.2 新读数；本表只作进度视图，数值以 `docs/05` 与各层地图为准。Δ 按表内两位小数读数相减，取正式−投影）：
 
 | 层 | 正式读数（`56cae7823`） | 目标锚点投影（`a00a5048d`） | **当前（2026-11-22）** | Δ | 主要缺口 | 归属包 |
 |---|---:|---:|---:|---:|---|---|
@@ -313,7 +314,7 @@ P5 仍顺延到 L3 那一步，不再作为下一包。
 | **P1 schema 语义（跨层）** | Java 侧实现 pi-schema 兼容的「强制转换＋校验＋错误模型」：点路径、`Validation failed for tool "..."`、悬空 `$ref` 本地拒绝、标准 format；`agent-core` 的 `ToolArgumentsValidator` 改为委托。 | P0 | 夹具覆盖 coercion 与错误文本；工具参数失败逐字对齐；L1/L3/L5 共用一套校验 |
 | **P2 AI wire 一批** | 重试与错误原因（含 v1.6.0 的 525/网关/流内错误）、stop reason、`session-id`、指令角色（developer 仅 api.openai.com）、Codex developer item／`max_output_tokens`／`configuration_update`、Copilot strict/reasoning、Mistral strict opt-in、OpenAI compat 开关、token 上限、`openai_input_transformations` 诊断。 | P1 | 请求体与错误文本夹具 |
 | **P3 AI 数据一批** | 模型目录与默认值：GPT-6.2 Astra/Sol、Qwen 网关/Individual CN/env 键、Fable 5.2、GLM 5.3、DeepSeek v4.1、Anthropic Opus 5.5、models.dev v2。 | P2 | vendor 目录重生成；默认模型断言 |
-| **P4 Anthropic threads（可选延后）** | 单独设计 thread 创建/续接、前缀哈希、上限、回退、清理与 `disableContinuation`。 | P1、P2 | faux／夹具；真实 provider 冒烟另行安排 |
+| **P4 Anthropic threads（已完成 2026-11-22，见上表）** | 单独设计 thread 创建/续接、前缀哈希、上限、回退、清理与 `disableContinuation`。 | P1、P2 | faux／夹具 ＋ `RecordingHttpServer` 两轮观测；真实 provider 冒烟经裁决豁免 |
 | **P5 coding-agent 工具语义** | `find`/`grep`/`read`/`edit`/`bash`/`pi.exec`/截断；`grep` 的 `readFile` 废弃与 `createReadStream`；`tool_search` 的 `resolveSchemaRef`（脱沙箱）。 | P1 | 工具输出与错误夹具；B287 operations 接缝复核 |
 | **P6 coding-agent CLI/认证/设置** | `pi auth login/logout`、伙伴 Provider 排序、`cacheWarming=idle` 与合并提示、`pi update` 版本摘要、模型默认值接线。 | P5 | CLI 参数与进程退出；settings 默认值 |
 | **P7 coding-agent 扩展/生命周期** | `render()` 只读契约、Markdown transformer 面、`blocked`、扩展更新日志、session_start/diagnostics/RPC shutdown、overlay 清理、系统提示收紧。 | P5、P8（TUI 契约） | 扩展夹具；模型提示逐字 |
@@ -333,7 +334,7 @@ P5 仍顺延到 L3 那一步，不再作为下一包。
 2. P1 必须最先写码：它同时改 AI 和 agent 的工具调用路径，后续所有工具夹具都依赖它的错误文本。
 3. P5 的 `find`／`grep`／`read` 是模型每轮都可能触发的工具，排在扩展 API 和 UI 之前。
 4. TUI 放在 coding-agent 之后，因为 `render()` 只读契约横跨两层，先定 coding-agent 侧消费点再改 TUI 更省返工。
-5. Anthropic threads 是唯一会改请求生命周期的 L 级功能，单独设计、允许延后。
+5. Anthropic threads 是唯一会改请求生命周期的 L 级功能，单独设计、允许延后（**已于 2026-11-22 完成**）。
 
 ## 5. 风险
 
@@ -341,7 +342,7 @@ P5 仍顺延到 L3 那一步，不再作为下一包。
 |---|---|---|
 | pi 移动快 | 20 天 818 个提交；本轮刚重新拉取就从 edfe6b2ef 前进到 a00a5048d；锚点一松就再次漂移 | P0 冻结 SHA；本轮期间不追 main；后续按版本另开换锚周期 |
 | pi-schema 完整方言 | `$ref`、相对 `$id`、format、coercion 边角多；完整移植成本高 | 先做模型可见行为；用 pi 夹具逐条钉；Java 不移植构建器 API |
-| Anthropic message threads | 服务端续接、前缀哈希、回退与清理改动请求生命周期 | 独立设计稿；faux 夹具＋真实 provider 冒烟；可延后 |
+| Anthropic message threads | 服务端续接、前缀哈希、回退与清理改动请求生命周期 | 已按独立设计稿落地（[`12`](12-anthropic-threads-design.md)）；faux ＋ `RecordingHttpServer` 观测已绿，真实 provider 冒烟经裁决豁免 → **该风险已关闭** |
 | TUI 框架差异 | Java 用 TamboUI；D255–D257 已登记键位、全屏、SGR 面差异；新 `render()` 契约映射不同 | P8 单独设计；只对可见行为计分，框架面按既有 D 项 |
 | 旧 TUI 缺口被新差异掩盖 | 旧账面 73.4%，新锚点又加 API/性能项 | P0 先分列「旧缺口」与「新差异」；不混算 |
 | 平台面 | Windows/macOS 的 fd、PowerShell、SIGTSTP、终端能力差异 | 沿用 D 项口径；只对可观察行为判定 |
