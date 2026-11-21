@@ -17,8 +17,15 @@
 >   剩余分类器（Microsoft-Decision-1）按计划属 R5。
 > - P3 部分完成（2026-11-21）：`fca70024`（catalog 规则按 `a00a5048d` 重新 vendor、上游快照重取、
 >   18 分片重生成：645 chat／74 image，radius 基线 28→39）、`21ec26b0`（默认模型表同步：
->   Anthropic Opus 5.5、OpenAI GPT-6.2 Sol、Google gemini-4-argon 等）。**未做**：新增 provider
->   （Qwen Token Plan Individual／Individual CN、Xiaomi AMS/SGP 等）与 provider 级默认值的 Java 注册。
+>   Anthropic Opus 5.5、OpenAI GPT-6.2 Sol、Google gemini-4-argon 等）。
+> - P3 余项已完成（2026-11-21，`docs/11` 闭环）：`753bdc30`（多变量密钥回落链）、`d035ffa0`。
+>   Qwen Token Plan Team／Team CN／Individual／
+>   Individual CN 与 Xiaomi AMS／SGP 六个 provider 注册（共 26 个内置 provider）；`qwen-token-plan-cn`
+>   显示名、中国端点与密钥链按 `a00a5048d` 更新；`ProviderConfig` 支持多变量密钥回落链
+>   （`apiKeyEnvVars`），主人确认 `source` 记实际命中的变量；分片 18→23（645→695 chat）、
+>   默认模型表 17→22 键。生成器 `--check`／`--verify-vendor` 零差异。models.dev 快照只补进
+>   三个新上游键并保留既有 15 键原序（OpenRouter／Radius 快照不重取），故既有 18 个分片
+>   逐字节未变；新增分片首条顺序钉在提交快照上。
 > - P10 首批已完成（2026-11-21）：`87ae0bfe`（中止批次仍逐调用补 `Operation aborted`
 >   的 start/end/结果；准备相顶端中止门先于查找与钩子，pi #9986）。`streamProxy` 的
 >   `disableContinuation` 透传随 P4 message threads 一起做（threads 未实施，暂不适用）。

@@ -12,7 +12,7 @@
 - **D**：已登记的窄差。已用到 **D273**（codemode 原稿预占号无效）；新窄差从 **D274** 起，明细存于对应 `docs/map/`。
 - **F**：需要用户拍板的事项。
 - **R1**：pi 已删除的面，不为旧参照物补功能。
-- **R2**：Provider 只覆盖已批准的主流范围。
+- **R2**：Provider 只覆盖已批准的主流范围。Qwen／Xiaomi Token Plan 家族（团队／个人、国际／中国、AMS／SGP）已按 `docs/09` P3 余项纳入（26 个内置 provider）；其余长尾 provider 仍排除。
 - **R5**：codemode、durable、chord、pico3、micro 等面外子系统不做对齐、不进分母。
 - **模型可见面**：模型能读到的提示、工具声明、参数、结果和错误文本，优先逐字对齐。
 
