@@ -4,7 +4,7 @@
 
 ## 基准与口径
 
-- 基准：pi-java @ **`30abb76c`**（main，2026-11-04，docs/21＋docs/22 代码终态）；pi @ **`56cae782341c339d3bb820081f0f9425d8c5b1ec`**（2026-10-31）。
+- 证据盘点：pi 侧锚点 **`56cae782341c339d3bb820081f0f9425d8c5b1ec`**（2026-10-31，即 `CURRENT_PI_PIN`）；java 侧证据盘点点 **`30abb76c`**（main，2026-11-04，docs/21＋docs/22 批次终态提交——历史批次号，非有效链接）。`30abb76c` 是 pi-java HEAD 而非 pi 锚点（见 `ANCHOR.md` §「其他文档里的 SHA 怎么读」）；自该提交后 `pi-java-mcp` 零提交，故其行号仍有效；`pi-java-coding-agent` 集成面同期仅 `0be94973`（tool_search 分词）1 个提交，`subcommand/Mcp*` 零提交，落在被改文件的行按 P9／P12 复核。
 - 判定三档：**对齐** = pi 有 ∧ pi-java 有 ∧ 行为相同（读代码确认语义）；**缺失** = pi 有 ∧ pi-java 无（或差异有行为后果）；**存疑** = 形状/字节形态未逐字核对，或差异是刻意设计/跨模块/台账在册方言（子标签 **（形状）/（扩展）/（台账）**）。
 - 第四类记账 **转出（非本层）**：差异归属其它层或共享平台方言，行与证据保留在本图供追溯，但**权重 0、不进 MCP 分母**（docs/22 用户裁决）。
 - 所有证据为 `file:line`，两侧均已打开源码确认。**pi 侧一律 `git -C D:/workplaceForai/pi show 56cae7823:<path>` 取证，未读工作树。**
@@ -221,3 +221,11 @@ A：#5（B182，L5 配置子系统）、#6（B183，共享 JSON 解析方言）�
 ## 当前复核项
 
 MCP 层无未结计分项。9 条转出行随各自层（L1／L5／平台方言）的重测复核；本层不再维护。
+
+## 目标锚点 `a00a5048d` 预审计（2026-11-21）
+
+- **L2 投影：115.0/123 ≈ 93.5%**（旧锚点正式读数 122/122＝100%）。若 `PipeTransport` 按「仅被 R5 的 apps/p2、env 消费」出分母，则为 115.0/122≈94.3%。
+- **新增 1 个 w1 单元**：`PipeTransport`（调用方启动程序的 MCP stdio 帧，共享行读取器）——Java 无等价实现。
+- **8 个原满分单元重判**：#22 stdio 关闭序列/进程树(w1)、#25 Streamable HTTP POST/GET JSON 分支(w2)、#26 SSE 消费/续接(w2)、#36 OAuth 刷新(w2)、#37 OAuth 回调(w1)、#42 sign-in 拆分(w2)、#67 `mcp list`(w2)、#68 login/logout(w2)。主要缺口：JSON `maxMessageBytes`/body 取消、`refreshOnly`/重定向 URI 校验/可中止刷新锁、两段式 sign-in、CLI provider token 与 `/login <provider>` 提示。
+- 已等价：回调 `closeAllConnections`（`HttpServer.stop(0)`）、CR-only/CRLF SSE、8KiB 错误体长度、工具命名/输入 schema/20KB 截断/配置校验。
+- P9 未开始，故本层全部是「重判损失」而非「新增未实施」；正式行级重判归 P12。口径见 [`../05-module-alignment-map.md` §1.2](../05-module-alignment-map.md)。

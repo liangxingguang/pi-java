@@ -4,7 +4,7 @@
 >
 > **状态：计划已审核通过（2026-11-20）。** 目标锚点已写入 `docs/map/ANCHOR.md`；`CURRENT_PI_PIN` 仍未切换。
 >
-> **实施进度（2026-11-21）：**
+> **实施记录（按时间，2026-11-21 起）：** 阶段状态看 §4 开头的「进度」，分层完成度看 §3 开头的「完成度总览」。
 > - P1 已完成：`9cccfe23 feat(ai): validate tool arguments with pi-schema semantics`。
 > - P2 首批已完成：`dc59f0c7 feat(ai): align v1.6.0 retry patterns and instruction role`。
 > - P2b 已完成：`734c7a21 feat(ai): support v1.6.0 prompt cache key mode and assistant/tools compat keys`
@@ -13,8 +13,14 @@
 >   `68eb84ef`（Mistral strict 显式 opt-in）、`14e90c8b`（`openai_input_transformations` 诊断）。
 > - P2 余项结论：Codex 专属形状（developer item／`max_output_tokens`／`configuration_update`／WS 60 分钟）
 >   **不适用** —— pi-java 无 `openai-codex-responses` 车道（R5 范围外）；共享的 responses 部分已逐项核对
->   （`max_output_tokens ≥16`、显式 prompt cache、亲和头）。Copilot 的 strict/reasoning 两条已落；
->   剩余分类器（Microsoft-Decision-1）按计划属 R5。
+>   （`max_output_tokens ≥16`、显式 prompt cache、亲和头）。Copilot 的顶层 `reasoning_tokens`
+>   已落；**新锚点 `providers/github-copilot.ts` 的 diff 只有 classifier 与模型列表，没有 strict
+>   分支**，原稿「strict/reasoning 两条」中的 strict 属误记；剩余分类器（Microsoft-Decision-1）
+>   按计划属 R5。
+> - P2 余项审计补充（2026-11-21）：新锚点 `error-body.ts:60` 的 **`withCauseDetail`（最深
+>   cause＋code 追加到错误文本）Java 无等价实现**，已登记 [`docs/04` B289](04-open-items-register.md)；
+>   strict 工具「无类型节点降级＋按会话记忆超限」与 lazy 初始化取消映射 `stopReason: aborted`
+>   也仍未落，归 P2 余项/P5。
 > - P3 部分完成（2026-11-21）：`fca70024`（catalog 规则按 `a00a5048d` 重新 vendor、上游快照重取、
 >   18 分片重生成：645 chat／74 image，radius 基线 28→39）、`21ec26b0`（默认模型表同步：
 >   Anthropic Opus 5.5、OpenAI GPT-6.2 Sol、Google gemini-4-argon 等）。
@@ -26,12 +32,20 @@
 >   默认模型表 17→22 键。生成器 `--check`／`--verify-vendor` 零差异。models.dev 快照只补进
 >   三个新上游键并保留既有 15 键原序（OpenRouter／Radius 快照不重取），故既有 18 个分片
 >   逐字节未变；新增分片首条顺序钉在提交快照上。
-> - P10 首批已完成（2026-11-21）：`87ae0bfe`（中止批次仍逐调用补 `Operation aborted`
->   的 start/end/结果；准备相顶端中止门先于查找与钩子，pi #9986）。`streamProxy` 的
->   `disableContinuation` 透传随 P4 message threads 一起做（threads 未实施，暂不适用）。
+> - P0 预审计完成（2026-11-21）：五组只读取证按 `a00a5048d` 逐项重判（新单元／既有单元重判），
+>   投影读数已登记 [`docs/05` §1.2](05-module-alignment-map.md) 与各层地图（全仓约 **91.0%**，
+>   旧锚点正式读数 94.9%）。**不等同 P0 闭环**：正式逐行重判、编号／权重裁定与
+>   `CURRENT_PI_PIN` 切换仍归 P12。新发现的两处原稿偏差已在上方修正。
+> - P10 已完成（2026-11-21）：`87ae0bfe`（中止批次仍逐调用补 `Operation aborted`
+>   的 start/end/结果；准备相顶端中止门先于查找与钩子，pi #9986）。`streamProxy` 按 R5
+>   出分母（`docs/04` §5.1、`map/03` #68），不随 P4；Anthropic threads 仍归 P4。
 > - 另：`5ee385a8`（Gemini `CONTINUATION` 结束映射为 `length`，pi #12103/`f72f799a4`；
 >   Java SDK 无 `automaticContinuation` 开关，该 SDK 特性不存在）。
-> - P4 之后（P5–P9、P11–P12）未开始。
+> - P4 未开始；P5–P9、P11–P12 未开始。
+>
+> **现状速览（2026-11-22）**：全仓正式 **94.9%**，目标锚点投影 **91.0%**（区间 90.3%–91.1%）；13 个阶段中 4 个已完成（P1／P2／P3／P10），P0 完成预审计但正式重判归 P12。
+>
+> **排序裁决（2026-11-22，用户）**：**由底往上、逐层对齐，能对齐就先对齐**。因此不再按 P5→P8 的横向包序推进，改为**先把 L1 做到 100%**（B289–B292 ＋ cache 策略单元 ＋ P4 threads），再做 L2→L3→…；P5 顺延到 L3 收口时做。L0 的 2 个 S 级项（`telemetryNow`、`renderTrace` 转义）并入同批先清。设计与提交切分见 [`11-l1-ai-completion-design.md`](11-l1-ai-completion-design.md)。
 >
 > 术语释义：
 > - **锚点**：pi 的一个固定 git 提交，pi-java 以它作为行为对照基准，取证只走 `git show <sha>:<path>`。
@@ -110,9 +124,26 @@
 | F3 | `env`、apps 是否入 R5？ | 建议入 R5，并把「codemode 沙箱出分母、`resolveSchemaRef` 入册」写成同一行的例外说明。 |
 | F4 | Anthropic message threads 是否本周期实施？ | 建议单独设计、排在 P1/P2 之后；它改动请求生命周期，风险独立。若周期预算紧，可先登记 B 延后。 |
 | F5 | TUI 旧缺口（73.4%）与新差异如何排序？ | 先按新锚点重测，再把新差异分成「API 契约/性能」和「新 UI 能力」；旧 C5/C6 状态面与渲染长尾维持现有优先级，不因新锚点重新洗牌。 |
-| F6 | examples 是否按新锚点重清点？ | 是，但只复核，不重开已完成批次。新锚点 examples 只改了 18 个文件，其中 sandbox 已按 D232 出分母，plan-mode 已按 D237 出分母。 |
+| F6 | examples 是否按新锚点重清点？ | 是，但只复核，不重开已完成批次。新锚点 examples 只改动 18 个文件，其中 sandbox 已按 D232 出分母；**D237 只排除 overlay／game／mac，不排除 plan-mode；D244 只是注入式 runner 的窄差，不排除 subagent**——两件均被重写，严格重基线为 **86/88**，P11 补齐后回落 88/88。 |
 
 ## 3. 分层差异
+
+**完成度总览**（数据源：`docs/05` §1 正式读数与 §1.2 预审计投影；本表只作进度视图，数值以 `docs/05` 为准。Δ 按表内两位小数读数相减）：
+
+| 层 | 正式读数（`56cae7823`） | 目标锚点投影（`a00a5048d`） | Δ | 主要缺口 | 归属包 |
+|---|---:|---:|---:|---|---|
+| L0 telemetry | 36/36＝**100%** | 35.5/36＝**98.6%** | −1.4 | `telemetryNow` 微秒级 span 时间戳 | P11 |
+| L1 AI | 232/232＝**100%** | 237.5/246＝**96.5%** | −3.5 | Anthropic threads、`refreshModelsAuth`、`withCauseDetail`、strict 会话记忆、lazy 取消映射 | P2 余项／P4 |
+| L2 MCP | 122/122＝**100%** | 115.0/123＝**93.5%** | −6.5 | P9 整包：Pipe、stdio 关闭、HTTP 限长/取消、OAuth、CLI token | P9 |
+| L3 agent-core | 177/177＝**100%** | 169.5/178＝**95.2%** | −4.8 | find 锚定、read 流式、edit EOL、grep context、bash 超时文本、代理对截断 | P5 |
+| L4 session | 44/44＝**100%** | 44/44＝**100%** | 0 | 无 L4 行为变化 | P10（已复核） |
+| L5 coding-agent | 449.5/452＝**99.4%** | 439.5/462＝**95.1%** | −4.3 | auth login/logout、cwd 缺失流程、thinking level、`pi update` 分项、`cacheWarming` 默认、隐藏工具恢复 | P6／P7 |
+| L6 evals | 48.0/49＝**98.0%** | 48.0/49＝**98.0%** | 0 | 唯一存疑 #20（TUI 审计 oracle 形态差） | P11 |
+| L7 TUI/web | 179.0/244＝**73.4%** | 182.0/259＝**70.3%** | −3.1 | render 只读/缓存契约、Markdown 缓存与注释、全屏 O(viewport)、SIGTSTP、Mermaid | P7／P8 |
+| **全仓 L0–L7** | **1,287.5/1,356＝94.9%** | **1,271.0/1,397＝91.0%** | **−3.9** | 投影区间 90.3%–91.1% | — |
+| L8 examples（按件，不进加权） | 88/88＝**100%** | 86/88＝**97.7%** | −2 件 | plan-mode、subagent 在新锚点重写而 Java 仍旧行为 | P11 |
+
+> **怎么读这张表**：按**百分比跌幅** L2（−6.5）最大，其次 L3（−4.8）、L5（−4.3）；按**账面分数变化**则 L5 掉得最多（449.5→439.5，−10.0），L3 −7.5、L2 −7.0，而 L1（+5.5）与 L7（+3.0）因新增已实现单元反而上涨。L3 的损失集中在 6 行工具语义（17 权重／−8.5），这就是 P5 排在最前的原因；L7 的 73.4% 属旧账，新锚点只再加 15 权重。
 
 ### L0 telemetry（两项变化）
 
@@ -139,7 +170,7 @@ telemetry 的事件名和 schema 未变。`renderTrace` 的消费者历史上按
 | GitHub Copilot：strict false/true 分支、`reasoning_effort` 与 reasoning tokens、Microsoft-Decision-1 分类器 | `86918f9ee`、`0ec20e157`；`providers/github-copilot.ts:118-121` | 模型可见（wire）／分类器属 R5 | M |
 | Mistral 工具默认非 strict，`compat.supportsStrictMode` 才 strict | `2c2a77f9f`；`mistral-conversations.ts:534` | 模型可见（wire） | S |
 | 重试与错误文本：裸 socket 错误码、`Connection closed.`、回复开始后断流；连接底层原因附加到错误文本 | `4699b5b26`、`9b88b94e2`、`566344046`、`4c992154d`；`retry.ts:79-118`、`error-body.ts:60` | 模型可见（错误文本） | S |
-| v1.6.0 重试扩展：Cloudflare 525、网关 `provider is temporarily unavailable`／响应未完成／连接重置／生成失败、流内 Anthropic `api_error`、OpenRouter 空/提前停止、`finish_reason: "error"`、`admission ceiling`；backoff 后移除 abort listener | `a00a5048d`、`25190b72c`、`fb62c069b`、`51ba3ab5b`；`retry.ts` | 模型可见（错误文本） | S |
+| v1.6.0 重试扩展：Cloudflare 525、网关 `provider is temporarily unavailable`／响应未完成／连接重置／生成失败、流内 Anthropic `api_error`、OpenRouter 空/提前停止、`finish_reason: "error"`、`admission ceiling`；`backoff` 后移除 abort listener **N/A**（Java 无 `AbortSignal` 通道，D216） | `a00a5048d`、`25190b72c`、`fb62c069b`、`51ba3ab5b`；`retry.ts` | 模型可见（错误文本） | S |
 | `openai-completions` 指令角色：推理模型的系统消息只对 `api.openai.com` 发 `developer`，其他主机（Azure/OpenRouter 等）默认 `system`；`compat.supportsDeveloperRole` 可覆盖 | `b82477b7b`；`openai-completions.ts:1226,1641-1648,1706` | 模型可见（wire） | S |
 | Codex：`maxTokens` 作为 `max_output_tokens` 发送（最小 16），除非 `compat.supportsMaxOutputTokens: false`；thinking level 改走固定 `reasoning.effort` 的 `configuration_update`，保住提示缓存 | `fcc33744b`；`openai-codex-responses.ts:62-64,535,548,613` | 模型可见（wire） | M |
 | OpenAI Responses/Azure/Codex 新增 `openai_input_transformations` 诊断：列出被 API 丢弃的 reasoning 项及原因（`prefix_mismatch`、`organization_mismatch`；不记录 `turn_boundary`） | `03de604b8`；`openai-responses-shared.ts:831,850` | 诊断数据；coding-agent 转录提示 | M |
@@ -230,14 +261,36 @@ web 呈现层仍是 pi-java 独有，不计入 pi 分母。新 apps 不改变现
 两锚点间 examples 只有 18 个文件变化：
 
 - `extensions/sandbox/` 整个删除（该件已按 D232 出分母）。
-- `extensions/subagent/` 大幅重写（真子进程方案仍按 D244 出分母／降级）。
-- `plan-mode/` 修改（已按 D237 出分母）。
+- `extensions/subagent/` 563 行大幅重写（状态机／启动前中止／失败证据／`truncateHead`／`deliverAs` 变体）：D244 只记注入式 runner 的窄差，**不排除该件**，属分母内需重判。
+- `plan-mode/` 修改（thinking 块、最后一个 `Plan:` 头、整行编号步骤、`[DONE: 1]`／`Step N done` 变体、`allStepsComplete` 回落、`deliverAs: nextTurn`）：**D237 只排除 overlay／game／mac，不排除 plan-mode**，属分母内需重判。
 - 新增 `examples/tsconfig.json`；其余是 lockfile 与 README。
 - 注册表条数基本不变；不新增需要重开 W0–W8 的件。
+
+⇒ 严格重基线 **86/88≈97.7%**（口径见 `docs/07` §5）；P11 补齐这两件并保留 D235／D244 作窄差后回落 88/88。
 
 ## 4. 执行计划
 
 > 每个 P 是一个可独立编译、可独立审核的工作包。每个提交控制在 200–500 行，按 `feat/fix(module): ...` 提交。每包先设计稿、用户审核、再写码（`docs/00` 流程）。
+
+**进度（2026-11-22）**：按「由底往上、逐层对齐」裁决，**当前批次是 L1 收口**（先清 L0 的 2 个 S 级项，再 B289–B292 ＋ cache 策略单元，最后 P4 threads 收尾到 100%）。P5 顺延到 L3 那一步，不再作为下一包。
+
+| 阶段 | 状态 | 证据／剩余 |
+|---|---|---|
+| P0 换锚重测 | **预审计完成，正式未闭环** | `docs/05` §1.2（全仓 91.0%）；`CURRENT_PI_PIN` 未切；正式逐行重判归 P12 |
+| P1 schema 语义 | **完成** | `9cccfe23` |
+| P2 AI wire | **完成（余项转 L1 收口）** | `dc59f0c7`；P2b `734c7a21`；P2c `65857596`／`68eb84ef`／`14e90c8b`；Codex 专属形状不适用（R2 无该车道）；余项 B289–B292 转入 L1 收口批次 |
+| P3 AI 数据 | **完成** | `fca70024` `21ec26b0` `753bdc30` `d035ffa0`；分片 23／695 chat；26 个内置 provider |
+| P4 Anthropic threads | **未开始（并入 L1 收口）** | L1 达 100% 的最后一环（−3.0）；L 级，需独立设计稿＋faux 夹具＋真实 provider 冒烟 |
+| P5 coding-agent 工具语义 | **未开始（顺延）** | 在 L3 那一步做；对应 6 行／17 权重／−8.5，含 `B287` 接缝复核与 `resolveSchemaRef` |
+| P6 CLI/认证/设置 | 未开始 | 依赖 P5 |
+| P7 扩展/生命周期 | 未开始 | 依赖 P5；`render()` 契约需 P8 先行 |
+| P8 TUI | 未开始 | 旧缺口 73.4% 的 C5/C6 与渲染长尾在此收口 |
+| P9 MCP | 未开始 | 整包未动（`pi-java-mcp` 自 `30abb76c` 起零提交） |
+| P10 agent-core 中止 | **完成** | `87ae0bfe`；`streamProxy` 按 R5 出分母（`map/03` #68） |
+| P11 telemetry/evals/examples | 未开始 | L8 需补 plan-mode／subagent 才能维持 88/88 |
+| P12 收尾 | 未开始 | 切锚、回填 `docs/04`／`docs/05`、全量 verify |
+
+**排期与验收（原始计划表，状态以上表为准）**：
 
 | 阶段 | 内容 | 依赖 | 产出／验收 |
 |---|---|---|---|
@@ -261,7 +314,7 @@ web 呈现层仍是 pi-java 独有，不计入 pi 分母。新 apps 不改变现
 
 **排序理由**：
 
-1. 先做 P0，因为现有 95.2% 是按旧锚点算的，不先重测会把「新分母」和「旧缺口」混在一起。
+1. 先做 P0，因为现有 94.9% 是按旧锚点算的，不先重测会把「新分母」和「旧缺口」混在一起。
 2. P1 必须最先写码：它同时改 AI 和 agent 的工具调用路径，后续所有工具夹具都依赖它的错误文本。
 3. P5 的 `find`／`grep`／`read` 是模型每轮都可能触发的工具，排在扩展 API 和 UI 之前。
 4. TUI 放在 coding-agent 之后，因为 `render()` 只读契约横跨两层，先定 coding-agent 侧消费点再改 TUI 更省返工。

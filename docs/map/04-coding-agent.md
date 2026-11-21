@@ -577,3 +577,11 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 整块视图不再重复计分。examples 只在 E5-33 保留一个计分入口；扩展 UI 只在 E5-31 计分。JSON 主题、包管理、会话选择器等已有对应细单元，不再保留“整块全缺”的旧结论。
 
 旧基线最终量化快照见 docs/05；新基线分母须在逐行重测和去重后重新计算。
+
+## 目标锚点 `a00a5048d` 预审计（2026-11-21）
+
+- **L5 投影：439.5/462 ≈ 95.1%**（旧锚点正式读数 449.5/452＝99.45%）。区间 94.7%–95.6%。
+- **既有单元重开约 27 权重**：B-7 `auth login/logout`(2)、C-1/C-5/C-10/C-18/C-22（2+1+2+2+2）、E2-14(1)、E2-49(2)、E5-9(2)、E5-18(2)、E6-9(1)、E6-11(2)、E7-2(2)。预计 −8～−12 分；涉及 B、C、E2、E3、E5、E6、E7 域，A/D/E1/E4/G 不变。
+- **新增约 10 权重**：会话 cwd 缺失的 Continue/Fork/Cancel(2)、每提示前记 thinking level＋模型回退上报(2)、会话替换诊断/空闲 shutdown/信号关停(2)、llama 默认端口 9931(1)、dropped-reasoning 转录提示(1)、`pi update` 分项版本(1)、登录 URL 协议/控制字符清洗(1)。预审计中几乎全未实现。
+- **工具语义不计入本层**（find/grep/read/edit/bash/truncation 的损失已在 `map/03` 计入，避免重复）。
+- examples（E5-33）仍转出 L8；正式行级重判归 P12。口径见 [`../05-module-alignment-map.md` §1.2](../05-module-alignment-map.md)。

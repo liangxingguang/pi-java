@@ -320,3 +320,11 @@ pi 侧证据锚定 `agent/src/*` 或 `coding-agent/src/core/*`。
   `formatSkillInvocation` 已删）；java 按内联形状落 `SkillCommandExpansion`（裁决④）。
 - **#73 的对齐强度**：双向可读由合成夹具（`PiV3WireFormatTest` 等）保证，未拿真实 pi 进程跑往返；
   lane/record 方言行以 pi `custom` 条目挂载并链入树。
+
+## 目标锚点 `a00a5048d` 预审计（2026-11-21）
+
+- **L3 投影：169.5/178 ≈ 95.2%**（旧锚点正式读数 177/177＝100%）。区间 93.0%–95.2%（取决于 find/read/truncation 是部分还是缺失）。
+- **新增 1 个 w1 单元**：工具参数为任意 JSON Schema `Map`（pi 新锚点 `types.ts:469-497`），Java 已是该形状且运行时校验委托 pi-schema 兼容实现 ⇒ 对齐。
+- **既有单元重开 6 行（17 权重）**：`#2 read`(3)、`#4 edit`(3)、`#5 grep`(3)、`#1 bash`(3)、`#6 find`(2)、`#23 truncation`(3)。新锚点要求 find 锚定/`./` 剥离、read 流式、edit 保留未改行 EOL 并先算 diff、grep context 由 ripgrep 提供、bash 超时带退出码/时间、截断不切代理对；Java 均仍是旧行为，按部分对齐计 −8.5。
+- **P10 已核实**：中止批次逐调用补 `Operation aborted` 已在 `PiToolRunner`/`PiLoopTools` 落地；`streamProxy`（#68）仍作废/R5，`disableContinuation` 随 P4 threads。
+- 正式行级重判归 P12；口径见 [`../05-module-alignment-map.md` §1.2](../05-module-alignment-map.md)。

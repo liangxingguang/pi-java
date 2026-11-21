@@ -219,9 +219,10 @@ pi `scripts/` 是仓库自身构建/发布/校验工具，按 R5 **不进产品�
 **pi-java 实际存在的漂移预防机制（file:line，本仓工作树）**：
 
 0. **锚点漂移检测**（本仓独有）—— `docs/map/check-drift.sh` ＋ `docs/map/ANCHOR.md`：
-   `PI_PIN=ea448f454`；脚本比 **pi 本地 HEAD vs PI_PIN** 的提交距离（落后即退出 1），再从 7 份地图抽
+   `CURRENT_PI_PIN=56cae7823`、`TARGET_PI_PIN=a00a5048d`；脚本**优先比 TARGET**，无目标时退回 CURRENT，
+   比 **pi 本地 HEAD vs PIN** 的提交距离（落后即退出 1），再从 7 份地图抽
    `` `foo.ts:行号` `` 引用的 **basename**，按 pi 内同名文件数分两栏：**【确定】**（basename 唯一）／
-   **【可能】**（有同名文件，上界，如 `types.ts` 有 17 个同名）。本锚点实测 HEAD＝PI_PIN，报「✓ 无漂移」。
+   **【可能】**（有同名文件，上界，如 `types.ts` 有 17 个同名）。正式锚点闭环时实测 HEAD＝CURRENT_PI_PIN 报「✓ 无漂移」；换锚期间 TARGET 未闭环，报漂移属预期。
    限制：只圈范围，行号是否仍命中要人工核。
 1. **Checkstyle**（Maven `validate`，`failsOnError=true`）—— 根 `pom.xml:142-171`；
    规则 `LineLength max=120`（`checkstyle.xml:12-13`）、`FileLength max=500`（`:18-19`）。
@@ -294,3 +295,9 @@ pi `scripts/` 是仓库自身构建/发布/校验工具，按 R5 **不进产品�
 
 > #6 已按 docs/24 §1.5 改判「对齐（形状不同）」并登记 D218；S1 销号。
 > 评测域唯一存疑是 #20；其余 23 行全部对齐，**没有第二个缺口**。
+
+## 目标锚点 `a00a5048d` 预审计（2026-11-21）
+
+- **L4 session：44/44＝100%**，新锚点无 L4 行为变化（`packages/durable` 仍 R5 出分母，会话变更归 L5）。
+- **L6 evals：48.0/49≈98.0%**，`packages/evals/src` 零行为变化，唯一存疑 #20（TUI context-footer oracle）不变。
+- 正式行级重判归 P12；口径见 [`../05-module-alignment-map.md` §1.2](../05-module-alignment-map.md)。

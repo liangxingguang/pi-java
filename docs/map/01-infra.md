@@ -298,3 +298,13 @@
 | protocol | pi `e52de91d0` 删 `schemas.ts`（§0.2） | P22 P23 P24 P25 P27（＋P7/P14/P17 的旧形状） | **P1–P4**（framing/CBOR，pi 仍在且逐条相同）；**P11–P13 / P18 / P19 / P21**（**现 pi 有、pi-java 无**的真缺口） |
 | client | 同上（删 `session-handle.ts`） | C18 | C1–C17 全部（含 **C2/C4–C10/C12/C15/C16** 这些真缺口） |
 | server | 同上（删 `protocol.ts`/`sessions.ts`/`snapshots.ts`） | S17 / S18 的一部分 | S1–S16 / S19–S22（**全是现 pi 有、pi-java 无**的真缺口） |
+
+## 目标锚点 `a00a5048d` 预审计（2026-11-21）
+
+- **L0 投影：35.5/36 ≈ 98.6%**（旧锚点正式读数 36/36＝100%）。
+- **T9**（in-memory span 时间戳，w1）由「对齐」降为「存疑」：新锚点 `memory.ts:116,175,274`
+  要求 `telemetryNow()` 微秒级墙钟并写入 `startedMs`/`endedMs`；Java `InMemoryTelemetryContext`
+  与快照均无这些字段（`InMemoryTelemetryContext.java:177-186`、`RecordedTelemetrySpan.java:19-30`）。
+- **T20**（`renderTrace` 的 C0/C1/DEL `\uXXXX` 转义）维持 R5/w0：Java 无 `renderTrace` 消费者，
+  不新增分母；20 条 R5 结论不变。
+- 正式行级重判归 P12；投影口径见 [`../05-module-alignment-map.md` §1.2](../05-module-alignment-map.md)。
