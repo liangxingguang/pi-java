@@ -113,6 +113,82 @@ class AnthropicThreadsWireTest {
         }
     }
 
+    @Test
+    void aRejectedContinueIsResentOnceAsANewThread() throws Exception {
+        try (var server = new RecordingHttpServer()) {
+            server.enqueue(success());
+            // 第二轮：续线程被拒（旧线程没了）⇒ 以 create 完整重发一次。
+            server.enqueue(new RecordingHttpServer.Response(400,
+                Map.of("Content-Type", "application/json"),
+                "{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\","
+                    .concat("\"message\":\"thread not found\",\"details\":"
+                        + "{\"error_code\":\"thread_not_found\"}}}")
+                    .getBytes(StandardCharsets.UTF_8)));
+            server.enqueue(success());
+            var extra = Map.<String, Object>of("messageThreads", true);
+
+            run(server.baseUrl(), conversation("base prompt", false), extra);
+            var events = run(server.baseUrl(), conversation("base prompt", true), extra);
+
+            assertThat(server.requestCount()).isEqualTo(3);
+            var retried = server.bodies().get(2);
+            assertThat(retried).contains("\"thread\":{\"type\":\"create\"}");
+            assertThat(retried).as("create 重发要带完整请求").contains("\"system\"");
+            var diagnostic = diagnosticsOf(events).get(0);
+            assertThat(diagnostic.type()).isEqualTo("anthropic_thread_fallback");
+            assertThat(diagnostic.details().path("reason").asText())
+                .isEqualTo("thread_not_found");
+            assertThat(diagnostic.error().message()).contains("thread not found");
+        }
+    }
+
+    @Test
+    void aThreadShaped400DropsTheFieldAndTurnsThreadsOff() throws Exception {
+        try (var server = new RecordingHttpServer()) {
+            server.enqueue(success());
+            server.enqueue(threadUnsupported400());
+            server.enqueue(success());
+            server.enqueue(success());
+            var extra = Map.<String, Object>of("messageThreads", true);
+
+            run(server.baseUrl(), conversation("base prompt", false), extra);
+            var events = run(server.baseUrl(), conversation("base prompt", true), extra);
+
+            assertThat(server.requestCount()).isEqualTo(3);
+            var retried = server.bodies().get(2);
+            assertThat(retried).as("去 thread 重发").doesNotContain("\"thread\"");
+            assertThat(retried).as("仍是同一份完整请求").contains("\"system\"");
+            assertThat(diagnosticsOf(events).get(0).details().path("reason").asText())
+                .isEqualTo("400");
+
+            // off 是终局：第三轮连 create 都不发，也不带 threads beta。
+            run(server.baseUrl(), conversation("base prompt", false), extra);
+            assertThat(server.requestCount()).isEqualTo(4);
+            assertThat(server.bodies().get(3)).doesNotContain("\"thread\"");
+            assertThat(AnthropicThreadState.get(SESSION)).isEmpty();
+            assertThat(AnthropicThreadState.isOff(SESSION)).isTrue();
+        }
+    }
+
+    @Test
+    void anUnrelatedRejectionIsNotResent() throws Exception {
+        try (var server = new RecordingHttpServer()) {
+            server.enqueue(success());
+            server.enqueue(new RecordingHttpServer.Response(400,
+                Map.of("Content-Type", "application/json"),
+                "{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\","
+                    .concat("\"message\":\"prompt is too long\"}}")
+                    .getBytes(StandardCharsets.UTF_8)));
+            var extra = Map.<String, Object>of("messageThreads", true);
+
+            run(server.baseUrl(), conversation("base prompt", false), extra);
+            var events = run(server.baseUrl(), conversation("base prompt", true), extra);
+
+            assertThat(server.requestCount()).isEqualTo(2);
+            assertThat(events).anyMatch(e -> e instanceof StreamEvent.StreamError);
+        }
+    }
+
     // ── Fixtures ────────────────────────────────────────────────────────
 
     /**
@@ -134,7 +210,8 @@ class AnthropicThreadsWireTest {
         return List.copyOf(messages);
     }
 
-    private static void run(String baseUrl, List<Message> messages, Map<String, Object> extra) {
+    private static List<StreamEvent> run(String baseUrl, List<Message> messages,
+                                         Map<String, Object> extra) {
         var settings = new java.util.LinkedHashMap<String, Object>(extra);
         settings.put("sessionId", SESSION);
         var api = new AnthropicMessagesApi(
@@ -142,14 +219,37 @@ class AnthropicThreadsWireTest {
             "ANTHROPIC_API_KEY");
         var request = new StreamRequest(ModelId.of("anthropic", "claude-sonnet-5"), null,
             messages, List.of(), -1, -1);
+        var events = new ArrayList<StreamEvent>();
         try (var iter = api.streamBlocking(request, ApiOptions.defaults())) {
             while (iter.hasNext()) {
                 // 消费到底：记账发生在流尾之后。
-                if (iter.next() instanceof StreamEvent.StreamError error) {
-                    throw new AssertionError("unexpected stream error", error.error());
+                var event = iter.next();
+                events.add(event);
+                if (event instanceof StreamEvent.StreamError error) {
+                    return events;
                 }
             }
         }
+        return events;
+    }
+
+    /** 最后一条终局事件里的诊断（S8：{@code anthropic_thread_fallback}）。 */
+    private static java.util.List<com.pijava.ai.message.AssistantMessageDiagnostic> diagnosticsOf(
+            List<StreamEvent> events) {
+        return events.stream()
+            .filter(e -> e instanceof StreamEvent.StreamDone)
+            .map(e -> (StreamEvent.StreamDone) e)
+            .reduce((first, second) -> second)
+            .orElseThrow()
+            .partial().diagnostics();
+    }
+
+    /** 没有 code 的 400：pi 的第二支靠「400 ＋ 文案含 thread」识别。 */
+    private static RecordingHttpServer.Response threadUnsupported400() {
+        return new RecordingHttpServer.Response(400, Map.of("Content-Type", "application/json"),
+            "{\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\","
+                .concat("\"message\":\"thread: Extra inputs are not permitted\"}}")
+                .getBytes(StandardCharsets.UTF_8));
     }
 
     private static RecordingHttpServer.Response success() {

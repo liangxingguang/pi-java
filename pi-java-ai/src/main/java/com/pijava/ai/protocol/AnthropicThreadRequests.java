@@ -116,6 +116,40 @@ final class AnthropicThreadRequests {
             replyId));
     }
 
+    /**
+     * 本轮可以走 threads 的会话号（pi {@code :864-866} 的 {@code cacheSessionId} 门）；
+     * {@code null} ≙ 本轮不发 {@code thread}（但可能仍照发 threads beta）。
+     *
+     * <p>⚠️ 与亲和头那道 Bearer 门**不是同一道**：它只属于亲和头（pi {@code :992-1031}），
+     * threads 用的是同一个 {@code cacheSessionId}（{@code :625}），OAuth 车道同样要能续线程。</p>
+     */
+    static String sessionOf(Boolean override, String sessionId, boolean retentionNone,
+                            StreamRequest request, String baseUrl) {
+        if (retentionNone) {
+            return null;
+        }
+        var provider = request.modelId() == null ? null : request.modelId().provider();
+        return supported(override, provider, baseUrl) ? sessionId : null;
+    }
+
+    /**
+     * 本轮终局助手消息 ＋ 身份（pi 的 {@code output}）—— 记账要用它算回复行指纹。
+     *
+     * <p>身份盖法与 {@link AbstractChatApi} 的事件出口同式（{@code apiName} ／ {@code request}
+     * 的 provider 与 model）：{@code transformMessages} 的 assistant 分支按「同 api／同 provider／
+     * 同 model」分岔，不盖章会算出与下一轮不同的指纹；再经 {@code fromPartial} 投成转录层的
+     * {@link Message.AssistantMessage}（pi 的 {@code output} 本来就是那个形状）。</p>
+     */
+    static Message.AssistantMessage replyMessage(
+            com.pijava.ai.message.AssistantMessage snapshot, StreamRequest request,
+            String apiName) {
+        var identified = snapshot.withIdentity(apiName,
+            request.model() == null ? null : request.modelId().provider(),
+            request.model() == null ? null : request.modelId().modelName(),
+            java.time.Instant.now());
+        return Message.AssistantMessage.fromPartial(identified);
+    }
+
     /** 前缀哈希（设置半边 ＋ 前 {@code prefixCount} 行指纹）。 */
     private static String prefixHash(String provider, String baseUrl,
                                      AnthropicRequestBuilder.BuiltParams full, int prefixCount) {

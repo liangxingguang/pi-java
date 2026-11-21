@@ -3,10 +3,14 @@ package com.pijava.ai.protocol;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.SubmissionPublisher;
+import java.util.function.Function;
+import java.util.function.Supplier;
 
 import com.anthropic.client.AnthropicClient;
 import com.anthropic.client.okhttp.AnthropicOkHttpClient;
+import com.anthropic.core.http.HttpResponseFor;
 import com.anthropic.core.http.StreamResponse;
+import com.anthropic.errors.AnthropicServiceException;
 import com.anthropic.models.messages.MessageCreateParams;
 import com.anthropic.models.messages.RawMessageDeltaEvent;
 import com.anthropic.models.messages.RawMessageStreamEvent;
@@ -255,8 +259,7 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
             // #101（pi :649-689）：请求获取循环。只有「prefer 工具＋尚未开始流＋400＋
             // invalid_request_error＋工具上限文案」才把该轮改为非 strict 重试一次。
             // #101（pi :692）：start 移到请求成功之后 —— 失败路径只发 StreamError。
-            com.anthropic.core.http.HttpResponseFor<StreamResponse<RawMessageStreamEvent>>
-                rawResponse = null;
+            HttpResponseFor<StreamResponse<RawMessageStreamEvent>> rawResponse = null;
             // pi :890 —— 会话级记忆：本会话此前被拒过就整轮非 strict。
             boolean disablePreferredStrictTools = StrictToolLimitMemory.exceeded(sessionId);
             // docs/12 S7b（pi :864-866 / :908-910）：threads 的会话号与「能不能走」是两件事。
@@ -277,21 +280,27 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
                 var built = sentThread == null ? probe
                     : buildParams(request, affinitySessionId(), baseUrl, effectiveHeaderNames,
                         oauth, disablePreferredStrictTools, sentThread, true);
-                var params = built.params();
                 // docs/17（pi :639-643 逐字）：载荷构建后、HTTP 前；非 null 返回 ⇒ 替换。
-                if (payloadHook != null) {
-                    var next = payloadHook.onPayload(params, request.model());
-                    if (next != null) {
-                        params = ProviderHooks.requirePayloadType(next, MessageCreateParams.class);
-                    }
-                }
-                final var finalParams = params; // 替换臂后 lambda 捕获需要 effectively final
+                var params = withPayloadHook(built.params(), request);
+                final boolean threadsOn = sentThread != null;
+                final boolean strictOff = disablePreferredStrictTools;
                 try {
-                    rawResponse = ProviderRetry.retry(
-                        () -> client.withRawResponse().messages().createStreaming(finalParams),
-                        ProviderRetry::ofAnthropic, providerRetry);
+                    // docs/12 S8：threads 的重发在**同一轮**内（pi sendThreadRequest :401-443），
+                    // strict 降级在它外面 —— 重发失败仍会走下面的 strict 判。
+                    var sent = AnthropicRequestSender.sendWithThreadFallback(
+                        client, providerRetry,
+                        () -> params,
+                        thread -> withPayloadHook(buildParams(request, affinitySessionId(), baseUrl,
+                            effectiveHeaderNames, oauth, strictOff, thread, true).params(), request),
+                        () -> withPayloadHook(probe.params(), request),
+                        threadsOn ? sentThread : null, threadSessionId, builder);
+                    rawResponse = sent.response();
+                    if (!sent.threaded()) {
+                        // 去 thread 的那次成功：本轮没有线程可记（pi :445 的 `if (thread)`）。
+                        sentThread = null;
+                    }
                     break;
-                } catch (com.anthropic.errors.AnthropicServiceException error) {
+                } catch (AnthropicServiceException error) {
                     if (!shouldFallbackToNonStrict(error, built.hasPreferredStrictTools(),
                             disablePreferredStrictTools)) {
                         throw error;
@@ -338,7 +347,8 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
             if (sentThread != null && !stop.errored
                     && stop.reason != StopReason.PENDING && stop.reason != StopReason.ERROR) {
                 AnthropicThreadRequests.record(threadSessionId, provider, baseUrl, request,
-                    fullBuilt, replyMessage(builder.snapshot(), request),
+                    fullBuilt,
+                    AnthropicThreadRequests.replyMessage(builder.snapshot(), request, apiName()),
                     oauth, requestCompat != null && requestCompat.allowEmptySignature());
             }
         } catch (Exception e) {
@@ -409,7 +419,7 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
      * 对位 pi 的 {@code options.signal?.aborted}（车道层无可传信号，宿主层承担中断）。
      */
     private static boolean shouldFallbackToNonStrict(
-            com.anthropic.errors.AnthropicServiceException error,
+            AnthropicServiceException error,
             boolean hasPreferredStrictTools, boolean disablePreferredStrictTools) {
         return !Thread.currentThread().isInterrupted()
             && !disablePreferredStrictTools
@@ -454,39 +464,27 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
     }
 
     /**
-     * docs/12 S7b（pi :864-866）：可以走 threads 的会话号；{@code null} ≙ 本轮不发
-     * {@code thread}（也仍可能照发 threads beta —— 见 {@link AnthropicBetaFeatures}）。
+     * docs/17（pi :639-643 逐字）：载荷构建后、HTTP 前；非 null 返回 ⇒ 替换。
      *
-     * <p>⚠️ 与 {@link #affinitySessionId()} 刻意不同：那道 Bearer 门只属于亲和头
-     * （pi :992-1031），threads 用的是同一个 {@code cacheSessionId}（{@code :625}），
-     * OAuth 车道同样要能续线程。</p>
+     * <p>抽成方法是因为 threads 的回退重发也要过它（pi 的 hook 只挂一次、之后两次重发复用同一个
+     * 已 hook 的 {@code params}；本仓要「重建 ＋ 再 hook」，故重发路径会多调一次 hook）。</p>
      */
-    private String threadSessionId(StreamRequest request) {
-        var resolved = CompatResolver.resolveCacheRetention(cacheRetention, cacheRetentionEnv());
-        if (resolved == CacheRetention.NONE) {
-            return null;
+    private MessageCreateParams withPayloadHook(MessageCreateParams params,
+                                                StreamRequest request) {
+        if (payloadHook == null) {
+            return params;
         }
-        var provider = request.modelId() == null ? null : request.modelId().provider();
-        return AnthropicThreadRequests.supported(threadsOverride, provider, baseUrl)
-            ? sessionId : null;
+        var next = payloadHook.onPayload(params, request.model());
+        return next == null ? params
+            : ProviderHooks.requirePayloadType(next, MessageCreateParams.class);
     }
 
-    /**
-     * 本轮终局助手消息 ＋ 身份（pi 的 {@code output}）—— 线程记账要用它算回复行指纹。
-     *
-     * <p>身份盖法与 {@link AbstractChatApi} 的事件出口同式（{@code apiName()} ／
-     * {@code request} 的 provider 与 model）：{@code transformMessages} 的 assistant 分支按
-     * 「同 api／同 provider／同 model」分岔，不盖章会算出与下一轮不同的指纹；再经
-     * {@code fromPartial} 投成转录层的 {@link Message.AssistantMessage}（pi 的 {@code output}
-     * 本来就是那个形状）。</p>
-     */
-    private Message.AssistantMessage replyMessage(
-            com.pijava.ai.message.AssistantMessage snapshot, StreamRequest request) {
-        var identified = snapshot.withIdentity(apiName(),
-            request.model() == null ? null : request.modelId().provider(),
-            request.model() == null ? null : request.modelId().modelName(),
-            java.time.Instant.now());
-        return Message.AssistantMessage.fromPartial(identified);
+    /** docs/12（pi :864-866）：本轮可走 threads 的会话号；{@code null} ≙ 不发 {@code thread}。 */
+    private String threadSessionId(StreamRequest request) {
+        var resolved = CompatResolver.resolveCacheRetention(cacheRetention, cacheRetentionEnv());
+        return AnthropicThreadRequests.sessionOf(threadsOverride, sessionId,
+            resolved == CacheRetention.NONE, request, baseUrl);
     }
+
 
 }

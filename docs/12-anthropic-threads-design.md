@@ -133,7 +133,7 @@ prepare(model, sessionId, params):
 | S6 状态 ＋ 哈希 | **完成（2026-11-22）** | `177acc36`：`AnthropicThreadState`（单次消费／`off`／10k／清理）＋ `AnthropicThreadHash`（删 `cache_control`、字符串 content 归一）＋ 7 例 |
 | S7a builder 支持 | **完成（2026-11-22）** | `25e00d5b`：`ThreadRequest` 三态、continue 省略 `system`／`tools` 且只写尾部行、`messageCount` 按完整请求计；无车道调用点 ⇒ 行为未变 |
 | S7b 车道接入 | **完成（2026-11-22）** | 见下（哈希取源采纳方案 A） |
-| S8 回退矩阵 | 未开始 | — |
+| S8 回退矩阵 | **完成（2026-11-22）** | 见 §11.2 |
 | S9 开关 ＋ 冒烟 | 未开始 | — |
 
 ### S7b 的阻塞点（实测，**已按方案 A 解除** —— 见 §11.1）
@@ -197,4 +197,29 @@ A 拍板后：S7b（车道接入 ＋ 两轮 `RecordingHttpServer` 观测）→ S
 `AnthropicThreadRequestsTest`（开关推导、create／continue／off、单次可续、回退模型不记）、
 `AnthropicThreadsWireTest`（首轮 create ＋ beta、次轮只发新增且省略 system／tools、
 system 变更回落 create、白名单外不发 thread）。
+
+### 11.2 S8 的落地口径（2026-11-22）
+
+**分流矩阵**：`AnthropicThreadFallback.classify` 三段判，逐字对位 pi `:414-433` —— 四个
+`NEW_THREAD_ERRORS` ⇒ `NEW_THREAD`；`thread_unsupported_request` 或「无 code ＋ 400 ＋ 文案含
+`thread`」⇒ `DROP_THREAD`；其余 ⇒ `NONE`（原样抛）。`error_code` 从
+`AnthropicServiceException.body().convert(Object.class)` 走 `error.details.error_code` 取，
+**只认字符串**（pi 的 `typeof code === "string"`）；体不是 JSON 或形状不同一律视为无 code。
+
+**执行**：`AnthropicRequestSender.sendWithThreadFallback`（抽出去守 500 行）—— 中止或本轮没发
+thread 都不重发；诊断 `anthropic_thread_fallback`（`details.reason = error_code ?? status`）在
+重发**之前**追加；`create` 重发用「完整请求 ＋ create」，去 thread 重发用「probe（完整请求）＋ hook」，
+`off` 只在去 thread 那次**成功**之后置（pi `:440-442`）。`Sent.threaded=false` 时清掉
+`sentThread` ⇒ 本轮不记账（pi `:445` 的 `if (thread)`）。
+
+**顺序**：threads 重发在**同一轮**内、strict 降级在它外层（pi 同式）；重发仍走
+`ProviderRetry`，但重发本身不消耗 `maxRetries`（它是请求级重发，不是重试链上的一次）。
+
+**与 pi 的一处差异（已知且有意）**：pi 的 payload hook 只调一次、两次重发复用同一个已 hook 的
+`params`；本仓的重发要**重建**参数（SDK 参数不可变），故重发路径会**再调一次** hook。
+
+**测试**（新增 3 例，`mvn test -pl pi-java-ai`：2240 全绿）：`thread_not_found` 续线程被拒 ⇒
+诊断 reason=`thread_not_found` ＋ 以 `create` 完整重发（请求计数 +1）；无 code 的 400 文案含
+`thread` ⇒ 去字段重发 ＋ 置 `off` ＋ 第三轮不再带 `thread`；无关 400（`prompt is too long`）⇒
+不重发、直接出 `StreamError`。
 
