@@ -172,6 +172,43 @@ public final class Credentials {
         return "anthropic".equals(provider) ? AuthKind.API_KEY : AuthKind.BEARER;
     }
 
+    /**
+     * pi {@code ModelRuntime.checkProviderAuth}（{@code models.ts:692-712}）的「已配置」判定：
+     * 只问凭证**是否存在**，**不刷新 OAuth**。{@code refreshModelsAuth="configured"} 的网络相
+     * 靠它决定是否跑（{@code models.ts:648-651}），因此这里不能走 {@link #resolveCredential}。
+     *
+     * @param provider provider 名
+     * @return 已配置（env／文件／stored OAuth／federation 任一存在）即 true
+     */
+    public static boolean isConfigured(String provider) {
+        return isConfigured(provider, new AuthProfileManager(), new EnvApiKeyResolver(),
+            new FileCredentialStore(), new OAuthCredentialStore());
+    }
+
+    static boolean isConfigured(String provider, AuthProfileManager profiles,
+                                EnvApiKeyResolver env, FileCredentialStore file,
+                                OAuthCredentialStore oauth) {
+        var profile = profiles.activeProfile(provider);
+        if (profile.isPresent()
+            && (env.resolveApiKey(provider, profile.get()).isPresent()
+                || file.resolveApiKey(provider, profile.get()).isPresent())) {
+            return true;
+        }
+        if (oauth.resolve(provider).isPresent()) {
+            return true;
+        }
+        for (var token : TOKEN_ENV_VARS.getOrDefault(provider, List.of())) {
+            if (env.resolveEnv(token.name()).isPresent()) {
+                return true;
+            }
+        }
+        if (env.resolveApiKeyMatch(provider).isPresent()
+            || file.resolveApiKey(provider).isPresent()) {
+            return true;
+        }
+        return resolveFederation(provider, env).isPresent();
+    }
+
     /** 该 provider 的 API key 环境变量名（仅用于 source 文案，取不到时回落 provider 名）。 */
     private static String providerEnvVar(String provider) {
         var name = ENV_NAMES.envVarName(provider);

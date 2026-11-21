@@ -99,6 +99,12 @@ public final class RemoteCatalogProvider implements Provider {
 
     @Override public String name() { return delegate.name(); }
 
+    /**
+     * pi {@code remote-catalog-provider.ts:127}：目录由 pi.dev 提供 ⇒ 网络相只在 provider
+     * 已配置时跑，且不刷新 OAuth（{@code models.ts:648-651}）。
+     */
+    @Override public RefreshModelsAuth refreshModelsAuth() { return RefreshModelsAuth.CONFIGURED; }
+
     @Override public String displayName() { return delegate.displayName(); }
 
     @Override public Set<Class<? extends ProviderApi>> supportedApis() {

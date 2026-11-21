@@ -11,6 +11,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.function.Function;
+import java.util.function.Predicate;
 
 import com.pijava.ai.AbortSignal;
 import com.pijava.ai.auth.Credentials;
@@ -42,6 +43,7 @@ public final class ModelCatalogRefresh {
     private final ModelsStore store;
     private final CatalogRefreshCoordinator coordinator;
     private final Function<String, Optional<RecordedCredential>> credentials;
+    private final Predicate<String> configured;
 
     public ModelCatalogRefresh(ModelsStore store) {
         this(store, Credentials::resolveCredential);
@@ -53,10 +55,21 @@ public final class ModelCatalogRefresh {
      */
     public ModelCatalogRefresh(ModelsStore store,
                                Function<String, Optional<RecordedCredential>> credentials) {
+        this(store, credentials, Credentials::isConfigured);
+    }
+
+    /**
+     * 注入「已配置」判定的形态（B292）：{@code refreshModelsAuth="configured"} 的 provider
+     * 只在已配置时跑网络相，且不解析凭证（pi {@code models.ts:648-651}）。
+     */
+    public ModelCatalogRefresh(ModelsStore store,
+                               Function<String, Optional<RecordedCredential>> credentials,
+                               Predicate<String> configured) {
         this.store = store;
         this.coordinator = new CatalogRefreshCoordinator(store);
         this.credentials = credentials == null
             ? provider -> Optional.empty() : credentials;
+        this.configured = configured == null ? provider -> false : configured;
     }
 
     /** 两阶段刷新；{@code allowNetwork=false} 时只有离线相。 */
@@ -146,9 +159,17 @@ public final class ModelCatalogRefresh {
         var stored = store.read(provider.name());
         com.pijava.ai.catalog.CatalogPublisherPort publish =
             publication -> coordinator.publish(provider.name(), generation, publication);
+        // B292（pi models.ts:648-651）："configured" 相只在已配置时跑，且 OAuth 永不刷新。
+        boolean configuredAuth =
+            provider.refreshModelsAuth() == Provider.RefreshModelsAuth.CONFIGURED;
+        if (allowNetwork && configuredAuth && !configured.test(provider.name())) {
+            return;
+        }
+        var credential = allowNetwork && !configuredAuth
+            ? credentials.apply(provider.name()) : Optional.<RecordedCredential>empty();
         var context = allowNetwork
             ? RefreshModelsContext.online(stored, publish, force,
-                credentials.apply(provider.name()), provider.baseUrl(), signal)
+                credential, provider.baseUrl(), signal)
             : RefreshModelsContext.offline(stored, publish);
         provider.refreshModels(context);
     }

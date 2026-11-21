@@ -60,6 +60,28 @@ public interface Provider {
         // static provider: nothing to refresh
     }
 
+    /** pi {@code Provider.refreshModelsAuth}（{@code models.ts:198-204}）的两种取值。 */
+    enum RefreshModelsAuth {
+        /** 默认：网络相需要**生效凭证**（stored OAuth 过期会先刷新）。 */
+        CREDENTIAL,
+
+        /**
+         * 目录由 provider 之外的源提供（如 pi.dev）：网络相**只在 provider 已配置时**跑，
+         * 且 **OAuth 永不刷新**，{@code context.credential} 恒为空。
+         */
+        CONFIGURED
+    }
+
+    /**
+     * 网络刷新相需要什么（pi {@code Provider.refreshModelsAuth}，{@code models.ts:198-204}）。
+     *
+     * <p>默认 {@link RefreshModelsAuth#CREDENTIAL}；远程目录 provider 覆写为
+     * {@link RefreshModelsAuth#CONFIGURED}。这是 default 方法 ⇒ 扩展实现无须改动。</p>
+     */
+    default RefreshModelsAuth refreshModelsAuth() {
+        return RefreshModelsAuth.CREDENTIAL;
+    }
+
     /**
      * 注册时生效的 provider baseUrl（pi {@code Provider.baseUrl}）；{@code null} 表示
      * 该 provider 没有固定端点。刷新上下文用它给 {@code /models/user} 之类的

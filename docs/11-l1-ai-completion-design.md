@@ -95,7 +95,7 @@
 
 - `RefreshModelsContext`（`:36-49`）现只有 `offline()`／`online()`，缺 `configured` 相。
 - `ModelCatalogRefresh.runOne`（`:143-153`）改为三态：`CONFIGURED` → 只做认证检查（不调 `credentials.apply`）；`CREDENTIAL` → 现状；`OFFLINE` → 现状。
-- **内置判定源**：`Provider` 接口（`Provider.java:23-81`）无 builtin 标记，`ProviderRegistry.loadBuiltinProviders()`（`:71-78`）只注册。方案：在 `ProviderCatalog`/registry 侧维护 `Set<String> builtinIds`，由 `loadBuiltinProviders` 同时登记；`ModelCatalogRefresh` 读取该集合决定 `CONFIGURED`。**不改** `Provider` 接口（避免破坏扩展作者面）。
+- **实现定稿（2026-11-22）**：不给 registry 加 `builtinIds`，改为在 `Provider` 上加 **default 方法** `refreshModelsAuth()`（返回 `CREDENTIAL`／`CONFIGURED` 枚举），由 `RemoteCatalogProvider` 覆写为 `CONFIGURED`。default 方法对扩展作者**二进制与源码兼容**，比隐藏的 registry 集合更贴合 pi 的「provider 自己声明」语义；`ModelCatalogRefresh` 的三参构造注入 `Predicate<String>` 以便测试。
 - 失败语义：`configured` 相失败只记 warning、不 fail 整次刷新（对齐 B292 的「签出时只告警不失败」）。
 
 **夹具**：`ModelCatalogRefreshTest`（coding-agent）新增：内置 provider + 过期 OAuth → **零刷新调用**（用计数型 fake credential resolver）+ warning 记账 + 其余 provider 继续；自定义 provider 行为不变。

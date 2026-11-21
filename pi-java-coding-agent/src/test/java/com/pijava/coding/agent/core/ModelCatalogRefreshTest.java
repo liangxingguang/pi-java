@@ -164,6 +164,67 @@ class ModelCatalogRefreshTest {
         assertThat(ModelCatalogRefresh.offlineMode(args(true), null)).isTrue();
     }
 
+    /** B292：声明 configured 相的 provider（pi 远程目录包装的同形）。 */
+    private static final class ConfiguredAuthProvider implements Provider {
+        private final List<RefreshModelsContext> seen;
+
+        private ConfiguredAuthProvider(List<RefreshModelsContext> seen) {
+            this.seen = seen;
+        }
+
+        @Override public String name() { return "pi"; }
+        @Override public String displayName() { return "pi"; }
+        @Override public Set<Class<? extends ProviderApi>> supportedApis() { return Set.of(); }
+        @Override public <T extends ProviderApi> T createApi(
+                Class<T> apiType, ApiOptions options) {
+            throw new UnsupportedOperationException();
+        }
+        @Override public ModelCatalog builtinModels() { return ModelCatalog.empty(); }
+
+        @Override
+        public RefreshModelsAuth refreshModelsAuth() {
+            return RefreshModelsAuth.CONFIGURED;
+        }
+
+        @Override
+        public void refreshModels(RefreshModelsContext context) {
+            seen.add(context);
+        }
+    }
+
+    /** 未配置 ⇒ 网络相跳过，且绝不解析凭证（pi models.ts:648-651）。 */
+    @Test
+    void configuredAuthProviderSkipsOnlinePhaseWhenNotConfigured() {
+        var seen = new CopyOnWriteArrayList<RefreshModelsContext>();
+        var refresh = new ModelCatalogRefresh(new InMemoryModelsStore(),
+            name -> {
+                throw new IllegalStateException("credential must not be resolved");
+            },
+            name -> false);
+
+        refresh.refresh(List.of(new ConfiguredAuthProvider(seen)), true, false);
+
+        assertThat(seen).hasSize(1);
+        assertThat(seen.get(0).allowNetwork()).isFalse();
+    }
+
+    /** 已配置 ⇒ 网络相照跑，但 context.credential 为空（OAuth 不刷新）。 */
+    @Test
+    void configuredAuthProviderOnlinePhaseCarriesNoCredential() {
+        var seen = new CopyOnWriteArrayList<RefreshModelsContext>();
+        var refresh = new ModelCatalogRefresh(new InMemoryModelsStore(),
+            name -> {
+                throw new IllegalStateException("credential must not be resolved");
+            },
+            name -> true);
+
+        refresh.refresh(List.of(new ConfiguredAuthProvider(seen)), true, false);
+
+        assertThat(seen).hasSize(2);
+        assertThat(seen.get(1).allowNetwork()).isTrue();
+        assertThat(seen.get(1).credential()).isEmpty();
+    }
+
     private static Args args(boolean offline) {
         return com.pijava.coding.agent.cli.ArgsParser.parse(
             offline ? new String[] {"--offline"} : new String[0]);
