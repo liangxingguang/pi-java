@@ -19,7 +19,12 @@
 >   18 分片重生成：645 chat／74 image，radius 基线 28→39）、`21ec26b0`（默认模型表同步：
 >   Anthropic Opus 5.5、OpenAI GPT-6.2 Sol、Google gemini-4-argon 等）。**未做**：新增 provider
 >   （Qwen Token Plan Individual／Individual CN、Xiaomi AMS/SGP 等）与 provider 级默认值的 Java 注册。
-> - P4 之后未开始。
+> - P10 首批已完成（2026-11-21）：`87ae0bfe`（中止批次仍逐调用补 `Operation aborted`
+>   的 start/end/结果；准备相顶端中止门先于查找与钩子，pi #9986）。`streamProxy` 的
+>   `disableContinuation` 透传随 P4 message threads 一起做（threads 未实施，暂不适用）。
+> - 另：`5ee385a8`（Gemini `CONTINUATION` 结束映射为 `length`，pi #12103/`f72f799a4`；
+>   Java SDK 无 `automaticContinuation` 开关，该 SDK 特性不存在）。
+> - P4 之后（P5–P9、P11–P12）未开始。
 >
 > 术语释义：
 > - **锚点**：pi 的一个固定 git 提交，pi-java 以它作为行为对照基准，取证只走 `git show <sha>:<path>`。
