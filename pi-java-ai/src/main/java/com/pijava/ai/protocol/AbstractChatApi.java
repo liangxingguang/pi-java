@@ -18,6 +18,7 @@ import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.Message;
 import com.pijava.ai.message.StopReason;
 import com.pijava.ai.stream.StreamEvent;
+import com.pijava.ai.stream.StreamFailures;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -155,7 +156,7 @@ public abstract class AbstractChatApi implements ChatApi {
             @Override public void onNext(StreamEvent e) { queue.offer(e); }
             @Override public void onError(Throwable t) {
                 queue.offer(StreamEvent.StreamError.settle(
-                    StopReason.ERROR, t,
+                    StreamFailures.reasonFor(t), t,
                     timed(identityBase(request, netTimestamp), startNano)));
             }
             @Override public void onComplete() {
