@@ -39,8 +39,13 @@ final class AnthropicThreadWire {
         }
     }
 
-    /** 消息侧结果：是否含 preferred-strict 工具 ＋ **完整**逻辑请求的消息条数。 */
-    record MessagesResult(boolean hasPreferredStrictTools, int messageCount) {
+    /**
+     * 消息侧结果：是否含 preferred-strict 工具 ＋ **完整**逻辑请求的消息条数 ＋
+     * **断点前**的逐行指纹（线程前缀哈希的原料，{@code cache_control} 尚未挂上，
+     * 故标记搬移不会改变指纹）。
+     */
+    record MessagesResult(boolean hasPreferredStrictTools, int messageCount,
+                          java.util.List<String> rowKeys) {
     }
 
     /**

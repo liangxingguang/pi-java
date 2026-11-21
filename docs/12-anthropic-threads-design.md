@@ -132,11 +132,11 @@ prepare(model, sessionId, params):
 |---|---|---|
 | S6 状态 ＋ 哈希 | **完成（2026-11-22）** | `177acc36`：`AnthropicThreadState`（单次消费／`off`／10k／清理）＋ `AnthropicThreadHash`（删 `cache_control`、字符串 content 归一）＋ 7 例 |
 | S7a builder 支持 | **完成（2026-11-22）** | `25e00d5b`：`ThreadRequest` 三态、continue 省略 `system`／`tools` 且只写尾部行、`messageCount` 按完整请求计；无车道调用点 ⇒ 行为未变 |
-| S7b 车道接入 | **阻塞：哈希取源待定** | 见下 |
+| S7b 车道接入 | **完成（2026-11-22）** | 见下（哈希取源采纳方案 A） |
 | S8 回退矩阵 | 未开始 | — |
 | S9 开关 ＋ 冒烟 | 未开始 | — |
 
-### S7b 的阻塞点（实测）
+### S7b 的阻塞点（实测，**已按方案 A 解除** —— 见 §11.1）
 
 pi 的 `hashThreadPrefix` 哈希的是**已构造的请求对象**（`params` 与 `params.messages`）。Java 侧实测：
 `ObjectMappers.jsonMapper().valueToTree(built.params())` 返回 **`{}`** —— 稳定 SDK 的 params 无法反序列化回
@@ -160,4 +160,41 @@ JSON（其自定义序列化只在写线上生效）。因此「哈希线上报�
 ## 11. 后续
 
 A 拍板后：S7b（车道接入 ＋ 两轮 `RecordingHttpServer` 观测）→ S8（回退矩阵）→ S9（开关与冒烟）。
+
+### 11.1 S7b 的落地口径（2026-11-22，采纳方案 A）
+
+**哈希取源**：`AnthropicRequestBuilder` 在 `applyConversationCacheBreakpoint` **之前**采集逐行指纹
+（`AnthropicConversationWire.Row#key()`），连同设置签名（`settingsKey`：SDK `toString()` 的逐字段
+投影 ＋ betas）存进 `BuiltParams`／`MessagesResult`；`AnthropicThreadRequests` 用
+`AnthropicThreadHash.ofRows` 合成前缀哈希。`cache_control` 从未进过指纹 ⇒ 标记搬移不再误判。
+
+**为什么指纹里没有 `cache_control` 也不违背 pi**：pi 的归一化本来就是「删掉 `cache_control`」；
+本仓把它提前到「采集时机」这一层实现，等价且更省事。`system`／`tools` 那两处 pi 是**保留**标记的，
+这里不计入 —— 代价只有一次服务端 `thread_fingerprint_mismatch`，由 S8 的新线程兜住。
+
+**单位统一**：`prefixCount` 与哈希同为「行」口径（S7a 的 `messageCount` 本来就是完整请求的行数），
+故无需设计稿 §10 里那条「转录口径 ↔ 行口径」的换算。
+
+**记账**：`record()` 取「完整请求的 rowKeys ＋ 回复的逐行指纹」；回复先盖 identity 再
+`transformMessages`（`transformMessages` 的 assistant 分支按「同 api／同 provider／同 model」分岔，
+不盖章会算出与下一轮不同的指纹），`responseModel` 有值或 `responseId` 缺失则不记。
+
+**登记的窄差（不阻塞 S8，但需要读者知道）**：
+
+1. **compat 字段缺席**（D-1）：`supportsMessageThreads` 不进 `ModelCompat`；explicit 值走
+   `ApiOptions.extra["messageThreads"]`（Boolean 或线格字符串），缺席时按端点推导 ——
+   无 baseUrl 覆盖时认 provider 名 `anthropic`，有覆盖时要求命中 `api.anthropic.com`。
+   ⚠️ 比 pi **更保守一层**（pi 只判 `model.baseUrl`）：中转站默认不开，正是 pi 注释点名的风险。
+2. **两次构造**：`continue` 要删 `system`／`tools` 并切片行，而 SDK 参数不可变、字段不能删 ⇒
+   先建「不发 thread」的 probe 取哈希原料，再按判定重建。两次都是纯本地构造（无 I/O）。
+3. **payloadHook 在 prepare 之后**：pi 是「先 hook 再切片」，本仓无法切 SDK 参数，故 hook 收到的
+   已是最终形态；hook 若替换载荷，行指纹仍是替换前的（与 pi 的「哈希 hook 后参数」有差）。
+4. **strict 降级与 threads 的次序**：pi 的 strict 降级在 prepare 之后重来一轮（状态已 consume ⇒
+   第二轮变 `create`），本仓同式；`ProviderRetry` 的重试不重新 prepare（与 pi 一样不消耗状态）。
+
+**测试**（新增 14 例，`mvn test -pl pi-java-ai`：2237 全绿）：`AnthropicThreadFingerprintTest`
+（断点前后指纹一致、设置签名稳定、系统变更只动设置半边、对话增长保持前缀）、
+`AnthropicThreadRequestsTest`（开关推导、create／continue／off、单次可续、回退模型不记）、
+`AnthropicThreadsWireTest`（首轮 create ＋ beta、次轮只发新增且省略 system／tools、
+system 变更回落 create、白名单外不发 thread）。
 

@@ -52,6 +52,32 @@ public final class AnthropicThreadHash {
         return ShortHash.of(settings.toString() + conversation.toString());
     }
 
+    /**
+     * 线程前缀哈希（Java 口径）：对**断点前**的逐行指纹取前缀，与设置签名一起做短哈希。
+     *
+     * <p>为什么不哈希线上 JSON：稳定 SDK 的 {@code MessageCreateParams} 无法反序列化回 JSON
+     * （{@code valueToTree} 返回空对象，实测），而 {@code MessageParam.toString()} 里的块会带
+     * 上 {@code cache_control}——标记会移动，直接哈希它会让每轮都判「前缀变了」。故取
+     * **挂断点之前**的行指纹：同一份前缀在两次请求里字符串相同，标记搬移与字符串/块形态差异
+     * 都不参与。</p>
+     *
+     * @param provider   provider 名（pi {@code model.provider}）
+     * @param baseUrl    有效端点；null 视为空串
+     * @param settings   设置签名（model／system／tools／thinking／betas 等，由构造期给出）
+     * @param rowKeys    断点前的逐行指纹
+     * @param prefixCount 取前多少行；0 表示取全部
+     * @return {@link ShortHash} 的短哈希
+     */
+    public static String ofRows(String provider, String baseUrl, String settings,
+                                java.util.List<String> rowKeys, int prefixCount) {
+        int count = prefixCount <= 0
+            ? rowKeys.size() : Math.min(prefixCount, rowKeys.size());
+        return ShortHash.of((provider == null ? "" : provider)
+            + "|" + (baseUrl == null ? "" : baseUrl)
+            + "|" + (settings == null ? "" : settings)
+            + "|" + String.join("\n", rowKeys.subList(0, count)));
+    }
+
     /** 归一化后的消息数组（深拷贝，不改入参）。 */
     static JsonNode normalized(JsonNode messages) {
         return normalize(messages);

@@ -45,6 +45,27 @@ final class AnthropicStreamSupport {
         return CacheRetention.parse(raw == null ? null : raw.toString());
     }
 
+    /**
+     * 从 {@code ApiOptions.extra} 读 {@code messageThreads} —— threads 的 compat 替身
+     * （{@code docs/12} 的 D-1：{@code ModelCompat} 不加字段，explicit 值经 extra 过桥）。
+     *
+     * <p>两种来源都认：直接 {@link Boolean}（内代码／测试）或线格字符串（{@code models.json}／
+     * CLI）。<b>缺席 ⇒ {@code null}</b>（≙ pi 的 {@code compat?.supportsMessageThreads} 未配置），
+     * 由端点推导接住 —— 与 {@link #retentionOf} 的「非法值落成缺席」同式。</p>
+     */
+    static Boolean threadsOf(ApiOptions options) {
+        Map<String, Object> extra = options.extra();
+        Object raw = extra == null ? null : extra.get("messageThreads");
+        if (raw instanceof Boolean value) {
+            return value;
+        }
+        if (raw == null) {
+            return null;
+        }
+        var text = raw.toString().trim();
+        return text.isEmpty() ? null : Boolean.parseBoolean(text);
+    }
+
     /** B99 裁决③：从 ApiOptions.extra["headers"] 取名集合（无 ⇒ 空集）。 */
     static Set<String> extraHeaderNames(ApiOptions options) {
         Map<String, Object> extra = options.extra();

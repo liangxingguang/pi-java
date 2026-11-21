@@ -38,6 +38,9 @@ final class AnthropicBetaFeatures {
     private static final String SERVER_SIDE_FALLBACK_BETA =
         "server-side-fallback-2026-07-01";
 
+    /** pi {@code :196}：message threads 的自证 beta（{@code thread} 字段要它才被接受）。 */
+    static final String MESSAGE_THREADS_BETA = "message-threads-2026-08-12";
+
     /**
      * @param request              本次请求（模型能力/reasoning 门用）
      * @param compat               解析后的 anthropic compat
@@ -46,12 +49,14 @@ final class AnthropicBetaFeatures {
      * @param eagerToolInputStreaming 端点是否支 eager 工具输入流
      * @param allowedFallbackModels compat 的许可回退模型（B98 门）
      * @param nativeToolChanges    原生中途工具增删三条件门
+     * @param messageThreads       会话可走 threads（pi {@code :1116}；与「本轮发不发
+     *                             {@code thread}」分读 —— 会话被判 {@code "off"} 后仍要发）
      */
     static List<String> assemble(StreamRequest request, ModelCompat compat, boolean oauth,
                                  List<ToolDefinition> currentTools,
                                  boolean eagerToolInputStreaming,
                                  List<AllowedFallbackModel> allowedFallbackModels,
-                                 boolean nativeToolChanges) {
+                                 boolean nativeToolChanges, boolean messageThreads) {
         var betas = new ArrayList<String>();
         if (oauth) {
             betas.addAll(ClaudeCodeNames.OAUTH_BETAS);
@@ -80,6 +85,9 @@ final class AnthropicBetaFeatures {
         }
         if (nativeToolChanges) {
             betas.add(INLINE_TOOLS_BETA);
+        }
+        if (messageThreads) {
+            betas.add(MESSAGE_THREADS_BETA);
         }
         return betas;
     }
