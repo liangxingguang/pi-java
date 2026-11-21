@@ -150,14 +150,18 @@ class ConstrainedSamplingWireTest {
     }
 
     @Test
-    void mistralLaneConvertsSchemaAndSendsStrict() throws Exception {
+    void mistralLaneSendsNonStrictByDefault() throws Exception {
+        // v1.6.0（pi #12148）：strict 是显式 opt-in（compat.supportsStrictMode ?? false）；
+        // 缺省发 strict:false 且 schema 不转换（Mistral Large 4 带 strict:true 会沉默数分钟）。
+        // 显式 opt-in 的线格由 MistralToolStrictWireTest 钉住。
         try (var server = new RecordingHttpServer()) {
             var api = new MistralConversationsApi(options(server));
             drain(api, request(ModelInfo.minimal(ModelId.of("mistral", "mistral-large"))));
 
             var fn = MAPPER.readTree(server.body()).path("tools").get(0).path("function");
-            assertThat(fn.path("strict").asBoolean()).isTrue();
-            assertStrictSchema(fn.path("parameters"));
+            assertThat(fn.path("strict").asBoolean()).isFalse();
+            assertThat(fn.path("parameters").path("additionalProperties").isMissingNode())
+                .as("strict:false ⇒ 普通 schema，不做 strict 转换").isTrue();
         }
     }
 

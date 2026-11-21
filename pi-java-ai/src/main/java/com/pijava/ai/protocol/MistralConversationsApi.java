@@ -268,7 +268,12 @@ public final class MistralConversationsApi extends AbstractChatApi {
 
         var tools = Transcripts.getCurrentTools(transcript.messages());
         if (!tools.isEmpty()) {
-            body.put("tools", toMistralTools(tools));
+            // v1.6.0（pi :531-534）：strict 显式 opt-in，缺省 false —— 读**raw** compat，
+            // 与 pi 的 `model.compat?.supportsStrictMode` 同源（Mistral 无 getCompat）。
+            boolean mistralStrict = request.model() != null
+                && request.model().compat() != null
+                && Boolean.TRUE.equals(request.model().compat().supportsStrictMode());
+            body.put("tools", toMistralTools(tools, mistralStrict));
         }
         if (request.maxTokens() > 0) {
             body.put("max_tokens", request.maxTokens());
@@ -326,8 +331,9 @@ public final class MistralConversationsApi extends AbstractChatApi {
         return CacheRetention.parse(raw == null ? null : raw.toString());
     }
 
-    private List<Map<String, Object>> toMistralTools(List<ToolDefinition> definitions) {
-        return MistralTools.toTools(definitions);
+    private List<Map<String, Object>> toMistralTools(List<ToolDefinition> definitions,
+                                                     boolean supportsStrictMode) {
+        return MistralTools.toTools(definitions, supportsStrictMode);
     }
 
     private static String resolveApiKey(ApiOptions options) {
