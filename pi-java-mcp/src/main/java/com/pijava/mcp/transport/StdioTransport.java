@@ -16,6 +16,9 @@ public final class StdioTransport extends AbstractMcpTransport {
 
     private static final long DEFAULT_CLOSE_TIMEOUT_MS = 2_000;
 
+    /** pi {@code STDIN_CLOSE_GRACE_MS}：关 stdin 之后、SIGTERM 之前给服务器自己退的时间。 */
+    private static final long STDIN_CLOSE_GRACE_MS = 500;
+
     private final StdioTransportOptions options;
     private final Object lock = new Object();
     private @Nullable Process process;
@@ -52,6 +55,8 @@ public final class StdioTransport extends AbstractMcpTransport {
             process = launched.process();
             stdin = launched.stdin();
             started = true;
+            // pi 的 liveProcessGroups：宿主意外退出时兜底清理还活着的服务器树。
+            StdioProcess.register(java.util.List.of(launched.process().toHandle()));
         }
         Thread.startVirtualThread(this::stdoutPump);
         Thread.startVirtualThread(this::stderrPump);
@@ -78,12 +83,16 @@ public final class StdioTransport extends AbstractMcpTransport {
     @Override
     public void close() {
         Process child;
+        java.util.List<ProcessHandle> tree;
         synchronized (lock) {
             if (closing || closed) {
                 return;
             }
             closing = true;
             child = process;
+            // ⚠️ 快照必须在关 stdin **之前**抓：服务器一退，它的后代就被重新挂到别的父下，
+            // descendants() 再也找不到（pi 用进程组解决的正是这件事）。
+            tree = child == null ? java.util.List.of() : StdioProcess.snapshotTree(child);
             if (stdin != null) {
                 try {
                     stdin.close();
@@ -91,18 +100,34 @@ public final class StdioTransport extends AbstractMcpTransport {
                 }
             }
         }
-        long timeout = options.closeTimeoutMs() > 0
-                ? options.closeTimeoutMs() : DEFAULT_CLOSE_TIMEOUT_MS;
         if (child != null) {
-            try {
-                child.waitFor(timeout, java.util.concurrent.TimeUnit.MILLISECONDS);
-                StdioProcess.terminateTree(child, timeout);
-                StdioProcess.killTree(child);
-            } catch (InterruptedException error) {
-                Thread.currentThread().interrupt();
-            }
+            long timeout = options.closeTimeoutMs() > 0
+                    ? options.closeTimeoutMs() : DEFAULT_CLOSE_TIMEOUT_MS;
+            closeTree(child, tree, timeout);
         }
         waitUntilClosed();
+    }
+
+    /**
+     * pi {@code stdio.ts:172-205} 的三段式关闭：关 stdin 后先给
+     * {@code min(500ms, closeTimeout)} 宽限让合作型服务器自己退，超时才 SIGTERM 等价杀树，
+     * 再超时才 SIGKILL。旧实现是「白等满 closeTimeout 再杀」，且父进程一旦退出就忘了后代。
+     */
+    private void closeTree(Process child, java.util.List<ProcessHandle> tree, long closeTimeout) {
+        long grace = Math.min(STDIN_CLOSE_GRACE_MS, closeTimeout);
+        try {
+            if (child.waitFor(grace, java.util.concurrent.TimeUnit.MILLISECONDS)) {
+                // 父进程自己退了：后代可能还握着管道（pi 在 close 事件里仍要补一刀 SIGTERM）。
+                StdioProcess.terminate(tree, 0);
+                return;
+            }
+            if (StdioProcess.terminate(tree, closeTimeout)) {
+                return;
+            }
+            StdioProcess.kill(tree, closeTimeout);
+        } catch (InterruptedException error) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     private void waitUntilClosed() {
@@ -184,6 +209,7 @@ public final class StdioTransport extends AbstractMcpTransport {
         synchronized (lock) {
             process = null;
         }
+        StdioProcess.unregister(child.toHandle());
         if (exitCode != 0) {
             var tail = stderrTail.text();
             var firstLine = tail.isBlank() ? "" : tail.lines().findFirst().orElse("");

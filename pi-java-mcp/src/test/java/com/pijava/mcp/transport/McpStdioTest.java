@@ -6,6 +6,7 @@ import com.pijava.mcp.TestAwait;
 import com.pijava.mcp.McpClient;
 import com.pijava.mcp.McpClientOptions;
 import com.pijava.mcp.McpRequestOptions;
+import com.pijava.mcp.fixture.IgnoresStdinFixtureServer;
 import com.pijava.mcp.fixture.StdioFixtureServer;
 import com.pijava.mcp.fixture.StubbornFixtureServer;
 import com.pijava.mcp.protocol.content.CallToolResult;
@@ -51,6 +52,26 @@ class McpStdioTest {
 
         client.close();
         assertThat(client.connectionState()).isEqualTo("closed");
+    }
+
+    @Test
+    void aServerIgnoringStdinIsTerminatedAfterTheGracePeriod() throws Exception {
+        // docs/13 S1：pi 是「关 stdin → min(500ms, closeTimeout) 宽限 → SIGTERM」，
+        // 旧实现是「白等满 closeTimeout」。closeTimeout=2s 时两者差 1.5s，足以区分。
+        var options = new StdioTransportOptions(javaBin(), List.of(
+                "-cp", System.getProperty("java.class.path"),
+                IgnoresStdinFixtureServer.class.getName()),
+                null, null, true, StdioTransportOptions.Stderr.PIPE, 64 * 1024, 2_000);
+        var transport = new StdioTransport(options);
+        transport.start();
+        Thread.sleep(300);
+
+        var started = System.nanoTime();
+        transport.close();
+        var elapsedMs = (System.nanoTime() - started) / 1_000_000;
+
+        assertThat(elapsedMs).isLessThan(1_500);
+        assertThat(transport.pid()).as("进程已不在").isEqualTo(-1);
     }
 
     @Test
