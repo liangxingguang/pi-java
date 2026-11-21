@@ -1,10 +1,13 @@
 # 12 - Anthropic message threads 设计稿（L1 #113，最后一环）
 
-> 【背景摘要】`docs/11` 的 D6。L1 现为 **242.5/246＝98.6%**，唯一剩余缺口是 #113（w3，−3.0）；
-> 补齐即 **246/246＝100%**。threads 改的是请求生命周期与重发语义，属 L 级，故单独立稿。
+> 【背景摘要】`docs/11` 的 D6。#113（w3，−3.0）是 L1 在预审计里的最大缺口；补齐后 L1 为
+> **245.5/246＝99.8%**（余 cache 策略单元的 0.5 属模块归属，随 L5 迁移收口）。
+> threads 改的是请求生命周期与重发语义，属 L 级，故单独立稿。
 >
 > 锚点：pi `a00a5048d`（2026-11-20）。证据全部在 `packages/ai/src/api/anthropic-messages.ts`
-> （`git -C D:/workplaceForai/pi show a00a5048d:<path>`）。**本稿不改读数**，代码落地并重测后才动 `map/02`。
+> （`git -C D:/workplaceForai/pi show a00a5048d:<path>`）。读数出口在 [`map/02`](map/02-ai.md)：
+> 2026-11-22 按「代码落地 ＋ `mvn test -pl pi-java-ai` 全绿」收口（真机冒烟经用户裁决豁免），
+> 本稿只记设计与实施口径、不改分数。
 
 ## 1. pi 的语义（逐条）
 
@@ -132,9 +135,9 @@ prepare(model, sessionId, params):
 |---|---|---|
 | S6 状态 ＋ 哈希 | **完成（2026-11-22）** | `177acc36`：`AnthropicThreadState`（单次消费／`off`／10k／清理）＋ `AnthropicThreadHash`（删 `cache_control`、字符串 content 归一）＋ 7 例 |
 | S7a builder 支持 | **完成（2026-11-22）** | `25e00d5b`：`ThreadRequest` 三态、continue 省略 `system`／`tools` 且只写尾部行、`messageCount` 按完整请求计；无车道调用点 ⇒ 行为未变 |
-| S7b 车道接入 | **完成（2026-11-22）** | 见下（哈希取源采纳方案 A） |
-| S8 回退矩阵 | **完成（2026-11-22）** | 见 §11.2 |
-| S9 开关 ＋ 冒烟 | **代码完成（2026-11-22）**；真实 provider 冒烟待人工 | 见 §11.3 |
+| S7b 车道接入 | **完成（2026-11-22）** | `3f0ac7a6`，见 §11.1（哈希取源采纳方案 A） |
+| S8 回退矩阵 | **完成（2026-11-22）** | `ecf4c6f1`，见 §11.2 |
+| S9 开关 ＋ 冒烟 | **完成（2026-11-22）**；真机冒烟经用户裁决豁免 | `93b4bfe4`，见 §11.3 |
 
 ### S7b 的阻塞点（实测，**已按方案 A 解除** —— 见 §11.1）
 
@@ -240,6 +243,11 @@ threadSessionId    = threadsSupported && !disableContinuation ? sessionId : null
 **测试**（新增 1 例，`mvn test -pl pi-java-ai`：2241 全绿）：`disableContinuation=true` 两轮都
 无 `thread` 键（也不是 `create`），`anthropic-beta` 仍含 threads beta。
 
-**未做（需人工）**：真实 provider 冒烟 —— `api.anthropic.com` 单轮 `create` ＋ 一轮 `continue`，
-确认服务端接受 `previous_message_id`。本地无凭据、也不该进 CI。
+**真机冒烟：经用户裁决豁免（2026-11-22）**。原计划是 `api.anthropic.com` 单轮 `create` ＋ 一轮
+`continue` 确认服务端接受 `previous_message_id`；因本地无 Anthropic 凭据、也不该进 CI，用户明确
+「不验证了，直接认为已经做完」⇒ 以「代码落地 ＋ 2241 测试全绿 ＋ 回退矩阵有真机可替代的
+`RecordingHttpServer` 观测」收口，`#113` 在 `map/02` 记为对齐。
+⚠️ 遗留事实（不是待办，只是读者要知道）：`continue` 对真实 `api.anthropic.com` 的接受度只有
+线上才会被最终证实；万一服务端口径与 pi 锚点不同，本仓已有的兜底是 `NEW_THREAD_ERRORS` ⇒ 以
+`create` 重发（`AnthropicThreadFallback`），不会把错误暴露给用户。
 
