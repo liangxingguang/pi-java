@@ -117,7 +117,14 @@ public final class StreamableHttpTransport extends AbstractMcpTransport {
         }
         var type = response.contentType();
         if ("application/json".equals(type)) {
-            var parsed = com.pijava.mcp.McpJson.mapper().readValue(response.body(), Object.class);
+            // pi streamable-http.ts:307-313 —— JSON 也受 maxMessageBytes 约束，超限直接失败，
+            // 而不是把超大 body 整个读进内存再解析。
+            var maxBytes = maxMessageBytes();
+            var text = readBodyText(response, maxBytes);
+            if (text.truncated()) {
+                throw new IOException("MCP JSON response exceeds " + maxBytes + " bytes");
+            }
+            var parsed = com.pijava.mcp.McpJson.mapper().readValue(text.text(), Object.class);
             var items = parsed instanceof List<?> list ? list : List.of(parsed);
             for (var item : items) {
                 emitMessage(item);
@@ -245,13 +252,28 @@ public final class StreamableHttpTransport extends AbstractMcpTransport {
                 describeHttpFailure(response.status(), body), body);
     }
 
-    private static String readErrorBody(McpHttpResponse response) {
-        try {
-            var bytes = response.body().readNBytes(ERROR_BODY_BYTES);
-            return new String(bytes, java.nio.charset.StandardCharsets.UTF_8);
+    /** 读到的最多 {@code maxBytes}，以及是否因为超限停下（pi 的 {@code {text, truncated}}）。 */
+    private record BodyText(String text, boolean truncated) {
+    }
+
+    /**
+     * pi {@code readBodyText}：最多读 {@code maxBytes}，**读满即停**并关掉 body（关流即取消剩余传输），
+     * 所以超大响应不会被整个读进内存。错误体只留摘录、不因截断而失败。
+     */
+    private static BodyText readBodyText(McpHttpResponse response, int maxBytes) {
+        try (var body = response.body()) {
+            var bytes = body.readNBytes(maxBytes + 1);
+            boolean truncated = bytes.length > maxBytes;
+            int length = truncated ? maxBytes : bytes.length;
+            return new BodyText(new String(bytes, 0, length,
+                    java.nio.charset.StandardCharsets.UTF_8), truncated);
         } catch (IOException error) {
-            return "";
+            return new BodyText("", false);
         }
+    }
+
+    private static String readErrorBody(McpHttpResponse response) {
+        return readBodyText(response, ERROR_BODY_BYTES).text();
     }
 
     private static String describeHttpFailure(int status, String body) {
