@@ -27,41 +27,79 @@ final class StdioLineFrames {
     /** Pump frames from a stream until it ends. */
     static void pump(InputStream stream, int maxMessageBytes,
                      Consumer<byte[]> onLine, Consumer<Throwable> onError) {
+        var framer = new Framer(maxMessageBytes, onLine, onError);
         var chunk = new byte[CHUNK_BYTES];
-        // 尚未收到换行的那条消息：按块留着，换行时一次性 join（pi 的 stdoutChunks）。
-        var pending = new ArrayList<byte[]>();
-        long pendingBytes = 0;
         try {
             int read;
             while ((read = stream.read(chunk)) != -1) {
-                int start = 0;
-                while (true) {
-                    int newline = indexOf(chunk, start, read);
-                    if (newline < 0) {
-                        if (start < read) {
-                            var rest = Arrays.copyOfRange(chunk, start, read);
-                            pending.add(rest);
-                            pendingBytes += rest.length;
-                            if (pendingBytes > maxMessageBytes) {
-                                onError.accept(oversized(maxMessageBytes));
-                                return;
-                            }
-                        }
-                        break;
-                    }
-                    var frame = join(pending, pendingBytes, chunk, start, newline);
-                    pending.clear();
-                    pendingBytes = 0;
-                    onLine.accept(frame);
-                    start = newline + 1;
+                if (!framer.feed(chunk, read)) {
+                    return;
                 }
             }
+            framer.end();
+        } catch (IOException error) {
+            onError.accept(error);
+        }
+    }
+
+    /**
+     * The same framing fed chunk by chunk (pi {@code JsonRpcLineReader}), for transport whose output
+     * arrives as callbacks rather than from a stream.
+     */
+    static final class Framer {
+
+        private final int maxMessageBytes;
+        private final Consumer<byte[]> onLine;
+        private final Consumer<Throwable> onError;
+        /** 尚未收到换行的那条消息：按块留着，换行时一次性 join（pi 的 stdoutChunks）。 */
+        private final ArrayList<byte[]> pending = new ArrayList<>();
+        private long pendingBytes;
+
+        Framer(int maxMessageBytes, Consumer<byte[]> onLine, Consumer<Throwable> onError) {
+            this.maxMessageBytes = maxMessageBytes;
+            this.onLine = onLine;
+            this.onError = onError;
+        }
+
+        /**
+         * Take the first {@code length} bytes of {@code chunk}.
+         *
+         * @return {@code false} once the reader stopped, after reporting an oversized message
+         */
+        boolean feed(byte[] chunk, int length) {
+            int start = 0;
+            while (true) {
+                int newline = indexOf(chunk, start, length);
+                if (newline < 0) {
+                    if (start < length) {
+                        var rest = Arrays.copyOfRange(chunk, start, length);
+                        pending.add(rest);
+                        pendingBytes += rest.length;
+                        if (pendingBytes > maxMessageBytes) {
+                            pending.clear();
+                            pendingBytes = 0;
+                            onError.accept(oversized(maxMessageBytes));
+                            return false;
+                        }
+                    }
+                    return true;
+                }
+                var frame = join(pending, pendingBytes, chunk, start, newline);
+                pending.clear();
+                pendingBytes = 0;
+                onLine.accept(frame);
+                start = newline + 1;
+            }
+        }
+
+        /** Report a message that never got its newline. */
+        void end() {
             if (pendingBytes > 0) {
+                pending.clear();
+                pendingBytes = 0;
                 onError.accept(new IOException(
                         "MCP server closed with an incomplete JSON-RPC message"));
             }
-        } catch (IOException error) {
-            onError.accept(error);
         }
     }
 
