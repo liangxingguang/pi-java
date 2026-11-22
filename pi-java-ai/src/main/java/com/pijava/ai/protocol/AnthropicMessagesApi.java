@@ -355,9 +355,10 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
                     }
                 });
             }
-            AnthropicStreamSupport.submitTail(builder, publisher, stop, responseExtras);
-            // docs/12 S7b（pi :475）：只有本轮**真发过 thread** 且干净收尾才记账 ——
-            // pending／error／aborted 三支都在 submitTail 里转成终局错误事件。
+            // docs/12 S7b（pi :445-475 / :1151→:1166）：只有本轮**真发过 thread** 且干净
+            // 收尾才记账。⚠️ 必须**先记账再发终局**（pi 的顺序）：`streamBlocking` 的
+            // 消费端见到 done 就返回，若先发终局，下一轮请求可能在 `put` 之前就开始
+            // ⇒ 读到空状态而重开线程（并发偶发，测试曾抓出）。
             if (sentThread != null && !stop.errored
                     && stop.reason != StopReason.PENDING && stop.reason != StopReason.ERROR) {
                 AnthropicThreadRequests.record(threadSessionId, provider, baseUrl, request,
@@ -365,6 +366,7 @@ public final class AnthropicMessagesApi extends AbstractChatApi {
                     AnthropicThreadRequests.replyMessage(builder.snapshot(), request, apiName()),
                     oauth, requestCompat != null && requestCompat.allowEmptySignature());
             }
+            AnthropicStreamSupport.submitTail(builder, publisher, stop, responseExtras);
         } catch (Exception e) {
             // pi anthropic-messages.ts:1170 —— errorMessage 一律过 withCauseDetail。
             publisher.submit(builder.emitError(StopReason.ERROR, ProviderErrors.detailed(e)));
