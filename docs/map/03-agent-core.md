@@ -74,14 +74,14 @@ pi 工具定义现在**只有一处**：`packages/coding-agent/src/core/tools/`�
 
 | # | 工具 | pi 有 | java 有 | 判定 | 权重 | 证据（**新锚实读**） |
 |---|---|---|---|---|---|---|
-| 1 | `bash` | ✅ | ✅ | **对齐** | **3** | pi `{command, timeout?}`：无默认超时、上限 `2147483.647 s`、小数秒、三分支截断 notice（`Full output:` 行文）、非零退出 resolve `isError`（`core/tools/bash.ts:22,27-37,40-43,261-263,317-366`）。java **批 3（2026-10-17，原 docs/22（批 3 设计稿））**逐字：`BashTool.java`＋`ShellOptions.timeoutMillis` 毫秒粒度＋描述/schema/snippet 常量现算＋`pi-bash-*.log` 落盘；**B286（2026-11-19）** 暴露 `BashTool.create(..., ShellExecutor)`（pi `BashToolOptions.operations`，窄差 D240） |
-| 2 | `read` | ✅ | ✅ | **对齐** | **3** | pi `{path, offset?, limit?}`（`core/tools/read.ts:15-17`）；java 同（`ReadTool.java:31`）。图片经批 9 缩放管线（`ReadTool.java` readImage：归一/转换/省略/非视觉注记，vs pi `core/tools/read.ts:88-153`） |
+| 1 | `bash` | ✅ | ✅ | **对齐** | **3** | pi `{command, timeout?}`：无默认超时、上限 `2147483.647 s`、小数秒、三分支截断 notice（`Full output:` 行文）、非零退出 resolve `isError`、超时带 shell 提前退出事实（`core/tools/bash.ts:22,27-37,40-43,100-105,143-186,261-263,317-366,405-412`）。java **批 3** 逐字＋**P5（2026-11-22，docs/17）** `ShellResult.timeoutShellExit`（`ShellProcessEngine` 以 `Process.onExit` 记录 shell 自身退出时刻，`ShellToolSupport` 逐字追加「shell exited with code … after … seconds」）；**B286** 暴露 `BashTool.create(..., ShellExecutor)`（pi `BashToolOptions.operations`，窄差 D240）｜~~D6~~ 仍：无退出码分支 java 不可达 |
+| 2 | `read` | ✅ | ✅ | **对齐** | **3** | pi `{path, offset?, limit?}`、仅整型范围流式、`createReadStream` 只留展示行、描述末句、首行超限带大小、截断告示分 `truncatedBy`（`core/tools/read.ts:15-17,65,99-125,142-228,239,301-333`）；java 同（`ReadTool.java`）：**P5** 新增 `FileSystem.openRead`（默认回落 `readBinary`，真 FS 用 NIO 流）＋`StreamingLineSelector`（增量 UTF-8、只留 cap 内行、真实总数），整文件路径保留 JS `slice` 语义；图片经批 9 缩放管线（`ReadTool.java` readImage）＋头部嗅探只读 4100 字节 |
 | 3 | `write` | ✅ | ✅ | **对齐** | **3** | pi `{path, content}`（`core/tools/write.ts`）；java 同（`WriteTool.java:31`）＋ 同形状 `FileMutationQueue`（`WriteTool.java:29`） |
-| 4 | `edit` | ✅ | ✅ | **对齐** | **3** | pi `{path, edits:[{oldText,newText}]}`（`core/tools/edit.ts`）；java 同（`EditTool.java:39`） |
-| 5 | `grep` | ✅ | ✅ | **对齐** | **3** | pi 七参＋gitignore＋默认 100 匹配/50KB＋500 字行截＋`path:N:`/`path-N-` 两形＋告示序（`core/tools/grep.ts:22-32,78,86-318`）。java **批 3** 逐字：`GrepTool.java` 纯 Java 引擎（**裁决①**：不移植 rg 外壳/tools-manager 下载子系统）＋`ToolIgnoreFilter`（JGit 全语义，含 `**/` 零段 glob 翻译器）；窄差 D1–D3/D8。新锚 `core/tools/grep.ts:148-166`：`getFileLines` 只做 `\r\n→\n`，孤立 CR 留在行内（W3 已对齐）；`--no-config` 契约由纯 Java 引擎天然成立 |
-| 6 | `find` | ✅ | ✅（批 3 自 `glob` 改名） | **对齐** | **2** | pi `{pattern, path?, limit?}` 默认 1000，fd 语义：basename vs `--full-path`＋`**/` 前缀适配、目录入选、gitignore、`No files found matching pattern`（`core/tools/find.ts:26-41,201-213,261-299`）。java **批 3**：`FindTool.java`（full-path 模式对**绝对候选路径**匹配——java `**` 不吃零段，fd 本就匹配绝对路径）＋`ToolSetFactory` 注册序对齐 `createAllTools`；窄差 D5/D8 |
+| 4 | `edit` | ✅ | ✅ | **对齐** | **3** | pi schema/guidelines/描述＋`edits` 三形态归一＋写前算 diff＋**原文本拼接保未改行 EOL**（`core/tools/edit.ts:20-36,40-51,98-125,146-148,188-201`；`edit-diff.ts:21-61,203-235`）。java **P5**：`EditTool.prepareArguments` 归一 JSON 字符串/单对象/legacy；`EditDiff.widenReplacementsToLines`＋`applyReplacementsToOriginal`（新文本换行取替换起点行尾、孤立 CR 仅在无 LF 文件成立、缝上 CR+LF 不合并）；`LineDiff` 在写入前生成 |
+| 5 | `grep` | ✅ | ✅ | **对齐** | **3** | pi 七参＋gitignore＋默认 100 匹配/50KB＋500 字行截＋`path:N:`/`path-N-` 两形＋告示序＋**rg 事件语义**（窗口并集按行去重、limit 后只留尾窗口、窗口内再命中按上下文、只有另一命中证明 limit）+`./` 剥离（`core/tools/grep.ts:22-32,78,86-318,167-172,244-267`）。java **批 3** 纯 Java 引擎（**裁决①**），**P5** 按事件语义重写输出装配并复用共享 `GlobPattern`；行尾只剥一个 `\r`（孤立 CR 留行内）；窄差 D1–D3/D8 |
+| 6 | `find` | ✅ | ✅（批 3 自 `glob` 改名） | **对齐** | **2** | pi `{pattern, path?, limit?}` 默认 1000、fd/minimatch 语义：`max(1,…)`、Windows `\`→`/`、剥 `./`、smart case、**相对路径模式锚定搜索根**（`core/tools/find.ts:14-25,26-41,114,209-252,284-290`）。java **P5**：共享 `GlobPattern`（`**/` 零段、裸 `**` 跨段）＋`FindTool.normalizePattern`＋锚定/smart case＋第 N+1 条才置 limit（`ToolSetFactory` 注册序不变）；窄差 D5/D8（minimatch 扩展方言） |
 | 7 | `ls` | ✅ | ✅ | **对齐** | **2** | pi `{path?, limit?}` 默认 500、裸名大小写不敏感排序＋`/` 目录后缀＋dotfiles＋三错误文本＋`(empty directory)`（`core/tools/ls.ts:11-15,62,86-172`）。java **批 3** 参数集换血（`LsTool.java`：`recursive`→`limit`，`[DIR]/[FILE]`＋size 列全删）；窄差 D4 |
-| 8 | `powershell` | ✅ | ✅ | **对齐** | **1** | pi `core/tools/powershell.ts`，工具名进 `allToolNames`（`core/tools/index.ts:96-104`）。java **批 4（2026-10-18，docs/09）**：`PowerShellTool.java` 六面逐字（UTF8 前缀/包装命令/pwsh→powershell 解析/门禁错文）＋`PowerShellShellExecutor`＋进 `createAllTools`（8 件）；**默认不激活**（pi `DEFAULT_TOOL_NAMES` 恒四件同形），激活面随 **B236**（裁决③，docs/09 §13.3）——~~B243~~ 销号；**B286（2026-11-19）** 同缝暴露 `PowerShellTool.create(..., ShellExecutor)` |
+| 8 | `powershell` | ✅ | ✅ | **对齐** | **1** | pi `core/tools/powershell.ts:16,19-26,35,46-52`，工具名进 `allToolNames`（`core/tools/index.ts:96-104`）。java **批 4** 六面逐字（UTF8 前缀/包装命令/pwsh→powershell 解析/门禁错文）＋**P5** 5.1 原生退出码后缀（只对 `powershell.exe`、命令不以反引号结尾时追加，`pwsh.exe` 不加）＋`PowerShellShellExecutor`＋进 `createAllTools`；**默认不激活**（pi `DEFAULT_TOOL_NAMES` 恒四件同形，B236 裁决③）；**B286** 同缝暴露 `PowerShellTool.create(..., ShellExecutor)`——~~B243~~ 销号 |
 | 9 | `image`（读图处理器） | ✅ | ✅ | **对齐** | **1** | pi `core/tools/read.ts` + `utils/image-process.ts` + `utils/image-resize-core.ts` + `utils/mime.ts`；java **批 9（2026-10-16）**：`tool/image/{ImageProcessor,ImageResizer,ExifOrientation,WebpDimensions,ToolResultImages}.java`（ImageIO 替代 photon）＋ `PathUtils.detectImageMimeType` 加严（0xF7/aPNG/BMP 校验）＋ `PiToolRunner` after_tool 后统一归一；窄差见 原 docs/18 §5 |
 
 **Σ权重 21**（对齐 21.0 ／ 存疑 0 ／ 缺失 0 ＝ 21.0，**100%**；2026-10-18 批 4 powershell 对齐收尾，激活面随 B236）。
@@ -91,10 +91,10 @@ pi 工具定义现在**只有一处**：`packages/coding-agent/src/core/tools/`�
 > - **D2** gitignore 三件全读（grep 侧 rg 不读 `.fdignore`）；嵌套 git 仓库边界不停（pi `--no-require-git` 取舍 `find.ts:171-181`）；**搜索根之上的父 .gitignore 不读**（rg 上溯仓库根）（触发：嵌套仓库/父规则场景的可见误报）
 > - **D3** 二进制 NUL 嗅探（首 8 KiB 含 0x00 即跳过）近似 rg 默认；**grep 整文件入内存**（rg 流式，超大文本文件内存画像有别）（触发：二进制误中/超大文件案例）
 > - **D4** ls 排序：`toLowerCase(ROOT)` 码点序 vs pi `localeCompare`（ASCII 全等）（触发：非 ASCII 文件名排序差异被踩）
-> - **D5** find 绝对 glob（`/` 开头）的 Windows 分隔符不逐字 `[/\\]`；path 不存在错文采 custom-ops 形；**普通文件作 find 根 ⇒ 报错**（fd 会把该文件自身列入候选）（触发：Windows 绝对 pattern/文件根实测差异）
+> - **D5** find 绝对 glob（`/` 开头）的 Windows 分隔符不逐字 `[/\\]`；path 不存在错文采 custom-ops 形；**普通文件作 find 根 ⇒ 报错**（fd 会把该文件自身列入候选）。P5 已缩窄：`\`→`/` 归一、剥 `./`、相对模式锚定 fd 语义均落地（触发：Windows 绝对 pattern/文件根实测差异）
 > - **D6** bash `Command terminated without an exit code`（`bash.ts:354`）java 不可达（`ShellResult.exitCode` 恒 int）（结构性）
 > - **D7** fd/rg 遍历序 vs `Files.walkFileTree` 序——两侧都不保证顺序
-> - **D8** find 的 glob 在 Windows 大小写**不敏感**（NIO PathMatcher；fd smart-case）⇒ 过匹配；grep 走 globToRegex 大小写敏感不受影响（触发：大小写混排文件名场景）
+> - **D8** find/grep 的 minimatch 扩展方言（`+(a|b)`、嵌套花括号等）不逐字；主流 glob（`**/` 零段、smart case、字符类、支选）已由共享 `GlobPattern` 对齐（P5）（触发：模型使用扩展 glob 语法的实测差异）
 
 ---
 
@@ -127,7 +127,7 @@ pi 侧证据锚定 `agent/src/*` 或 `coding-agent/src/core/*`。
 | 20 | 上下文计量（用量优先 + 尾字符估算） | C | **对齐** | **3** | `core/compaction/compaction.ts:196-225`（`estimateProjectedContextTokens :227`） | `ContextUsageEstimator.java:129-134` | —— |
 | 21 | `getLastAssistantUsage` | C | **对齐** | **2** | `core/compaction/compaction.ts:166` | `ContextUsageEstimator.java:87`（`assistantUsageOf`） | —— |
 | 22 | `findCutPoint` / `findTurnStartIndex` | C | **对齐** | **2** | `core/compaction/compaction.ts:446,412` | `CompactionService.java:211,268-269`（调用 `:83`） | —— |
-| 23 | 输出截断（2000 行 / 头/尾两种） | C | **对齐** | **3** | pi `core/tools/truncate.ts:11-12` = **2000 行 / 50KB（51,200）**；read 描述 `core/tools/read.ts:96` | `TruncationUtils.java:18` = 2000 行 / **51,200**；BashTool/ReadTool 描述与四处注记全由常量现算，`BashUpdateEmitter` 快照同值（夹具钉两口径合一） | ~~B158~~ 销号（2026-10-17 批 agent-core-1） |
+| 23 | 输出截断（2000 行 / 头/尾两种） | C | **对齐** | **3** | pi `core/tools/truncate.ts:11-13,268-298` = **2000 行 / 50KB（51,200）**；read 描述 `core/tools/read.ts:239`；`sliceHead`/`sliceTail` 切口不劈代理对 | `TruncationUtils.java` = 2000 行 / **51,200**＋**P5** `sliceHead`/`sliceTail`（`truncateLine` 已用）；四处注记全由常量现算，`BashUpdateEmitter` 快照同值 | ~~B158~~ 销号（2026-10-17 批 agent-core-1） |
 | 24 | **branch summary 生成** | C | **转出（L4）** | 0 | 新锚 `core/compaction/branch-summarization.ts:302-360`：摘要请求携带 `thinkingLevel`（`269afc66a`）。按 docs/08 §5 归 L4，登记 **B272** | 旧证据：`core/compaction/branch-summarization.ts:108,195`；`BranchSummarization.java`（批 4）：公共祖先回溯、两遍扫、三态 Outcome、PREAMBLE/PROMPT 逐字 | 旧判对齐（批 4，~~B1~~ 销号）；转出后权重 0，不进分母 |
 | 25 | **会话树导航 `navigateTree`** | L | **对齐** | **1** | `core/agent-session.ts:3964-4156` | `AgentSession.navigateTree`（批 4）：双门错文逐字、目标=叶不动、user/custom 目标 叶=父＋editorText 回填、branchWithSummary/resetLeaf/moveLane 三分支、label 张贴、`replaceTranscript` 整体换上下文（pi `_refreshFinalizedContext`）；tree 扩展事件＋TUI 摘要流挂 **B245** | ~~B1 同族~~ 销号（2026-10-18 批 4） |
 | 26 | **per-model 压缩设置** | C | **对齐** | **3** | `core/settings-manager.ts:831-866`（`modelOverrides`，`getCompactionSettings(model)`） | `AgentSession.java:420`（`compactionResolver`）；`AgentHarness.java:136-140` 按车道当前模型现解析 | —— |
@@ -323,8 +323,8 @@ pi 侧证据锚定 `agent/src/*` 或 `coding-agent/src/core/*`。
 
 ## 目标锚点 `a00a5048d` 预审计（2026-11-21）
 
-- **L3 投影：169.5/178 ≈ 95.2%**（旧锚点正式读数 177/177＝100%）。区间 93.0%–95.2%（取决于 find/read/truncation 是部分还是缺失）。
+- **L3 投影：178/178 ＝ 100%**（P5 已把投影期重开的 6 行全部落地，见下方；旧锚点正式读数亦为 177/177＝100%）。
 - **新增 1 个 w1 单元**：工具参数为任意 JSON Schema `Map`（pi 新锚点 `types.ts:469-497`），Java 已是该形状且运行时校验委托 pi-schema 兼容实现 ⇒ 对齐。
-- **既有单元重开 6 行（17 权重）**：`#2 read`(3)、`#4 edit`(3)、`#5 grep`(3)、`#1 bash`(3)、`#6 find`(2)、`#23 truncation`(3)。新锚点要求 find 锚定/`./` 剥离、read 流式、edit 保留未改行 EOL 并先算 diff、grep context 由 ripgrep 提供、bash 超时带退出码/时间、截断不切代理对；Java 均仍是旧行为，按部分对齐计 −8.5。
+- **既有单元重开 6 行（17 权重）P5 已补齐**（2026-11-22，docs/17）：`#2 read`(3)、`#4 edit`(3)、`#5 grep`(3)、`#1 bash`(3)、`#6 find`(2)、`#23 truncation`(3)。find 锚定/`./` 剥离/smart case、read 流式、edit 保留未改行 EOL 并先算 diff、grep 事件语义、bash 超时带退出码/时间、截断不切代理对——全部对齐，−8.5 清零。
 - **P10 已核实**：中止批次逐调用补 `Operation aborted` 已在 `PiToolRunner`/`PiLoopTools` 落地；`streamProxy`（#68）仍作废/R5，`disableContinuation` 随 P4 threads。
 - 正式行级重判归 P12；口径见 [`../05-module-alignment-map.md` §1.2](../05-module-alignment-map.md)。

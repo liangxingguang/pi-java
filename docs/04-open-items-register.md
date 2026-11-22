@@ -14,6 +14,10 @@
 - **L1 #6 迁移（2026-11-22）**：缓存预热策略按 [`docs/16`](16-l1-cache-warming-policy-design.md) 迁入 `pi-java-ai`
   （`com.pijava.ai.api.CacheWarmingPolicy`），coding-agent 改为消费者；行为／数字／wire 不变，未新开 B／D 号，
   `map/02` 的 #6 改判对齐 ⇒ L1 **246/246＝100%**。
+- **L3 P5 收口（2026-11-22）**：内置工具六行（find／grep／read／edit／bash／截断）按
+  [`docs/17`](17-l3-tool-semantics-design.md) 落地新锚点语义（含 powershell 5.1 退出码后缀）；行为不变量
+  保持工具名／参数集／截断预算／临时文件机制，未新开 B／D 号，D1–D8 原样保留（D5/D8 的方言部分收窄），
+  `map/03` 六行改判对齐 ⇒ L3 **178/178＝100%**。
 - **F**：需要用户拍板的事项。
 - **R1**：pi 已删除的面，不为旧参照物补功能。
 - **R2**：Provider 只覆盖已批准的主流范围。Qwen／Xiaomi Token Plan 家族（团队／个人、国际／中国、AMS／SGP）已按 `docs/09` P3 余项纳入（26 个内置 provider）；其余长尾 provider 仍排除。
