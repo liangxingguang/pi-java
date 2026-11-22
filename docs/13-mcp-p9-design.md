@@ -218,6 +218,7 @@ Java（`coding-agent/subcommand/McpCommand.java` + `McpListCommand.java`）：`M
 | S4 `#36` | 2026-11-22 | `cd942ef` | `OAuthFlow` 增 `refreshOnly`：无 client 时直接 `REDIRECT`（不注册）、刷新失败后也 `REDIRECT`（不覆盖待完成登录的 `state`／PKCE verifier）；`invalid_client`／`unauthorized_client` 在 refreshOnly 下只在「存的就是这次用的 client」时才作废 client／tokens／discovery，非 refreshOnly 仍 `all`；换码前先校验 redirect URI 与授权请求一致（`flow.ts:386-400`）。`McpAuthProviders` 刷新传 `refreshOnly=true`；`settled()` 复核为已等价 | 新增 `McpOAuthRefreshTest` 3 例（无 client 不注册、`invalid_client` 只丢 client+tokens 而保住 `state`/verifier、`invalid_grant` 只丢 tokens）；`OAuthFlowTest` +3 例（refreshOnly 不注册、刷新失败不强推授权、换码 redirect URI 不一致先报错）；`AuthorizationServerFixture` 增 `REJECT_CLIENT`／`REJECT_REFRESH` 两模式 |
 | S5 `#37`/`#42` | 2026-11-22 | `f8349e5` | 两段式：`McpSignIn.start`（先 `refreshOnly` 刷新、`skipRefresh=true` 准备浏览器步）返回 `McpSignInStart`／纯数据 `McpSignInRedirect{authorizationUrl, redirectUrl, state, scope}`，`McpSignIn.complete` 校验 `response.state` 与存储的 `oauthState` 后再换码；`signIn` 保留为两半的封装。loopback 拆成 `McpLoopbackSignIn.listen/await/responseFromRedirectUrl`（https 回调路由可复用）。等刷新锁可中止：刷新跑在虚拟线程、调用侧只中止「等」，刷新照常落盘；`McpRefreshLockBusyError`（store 等锁超时抛）令 `start` 直接进浏览器步 | 新增 `McpLoopbackSignInTest` 10 例（含 `anAbortedSignalStopsTheWait`）、`McpSignInTwoStageTest` 5 例（纯数据、两半跑通、state 不符、被更新的登录顶掉、等锁中止后刷新仍执行）；`McpSignInTest` 14 → 5（纯逻辑）＋ `McpSignInEndToEndTest` 4 例仍绿 |
 | S6 `#67`／`#68` | 2026-11-22 | `e803730` | `McpCommand.Options` 增 `providerToken`，缺省读 `McpCommandSupport.providerTokens()`（先 `auth-oauth.json` 的 access token，再 `Credentials.resolveApiKey`＝`auth.json`＋env）；`McpCommandSupport.connection` 传进 `McpConnectionOptions.providerToken`，于是 `mcp list` 的 `auth.provider` 服务器能带 provider token 连上（此前恒 `null` ⇒ 必 `needs-auth`）。`McpListCommand` 报告增 `authProvider`（JSON 同名键在 `transport` 后），`needs-auth` 提示按 pi 切换；`mcp login/logout` 对 `auth.provider` 服务器改报 `pi-java auth <cmd> <provider>`（`cli.ts:285-291`） | `McpListCommandTest` +4（带 token 连上、提示切换、JSON 带 `authProvider`、无 provider 时仍打 `mcp login`）＋新夹具 `McpHttpFixture`（需 Bearer、否则 401 的 HTTP MCP 服务） |
+| S7 `PipeTransport` | 2026-11-22 | `e40eea1` | 新增 `transport/PipeTransport`：`McpPipe` 接缝（`write`／`closeStdin`／`close`／`exited`）＋`PipeOpener.open(PipeHandlers)`；`start` 在 `open` 期间被 `close` 时关掉刚起来的程序并抛 `McpConnectionClosedError`；`close` 与 pi 同序（关 stdin → 等 `exited` 至 `closeTimeoutMs` → `pipe.close()` → 等 `exited`）；`exited` 失败且非 `close` 引起则先 `emitError` 再 close；程序结束时 `framer.end()` 报未完成消息。`StdioLineFrames` 拆出可推入的 `Framer`，stdio 与 pipe 共用同一套拼帧 | 新 `PipeTransportTest` 13 例（分块解析、单行发送、未完成消息报错后 close、`exited` 失败先报错、启动即关闭、留驻进程被 kill、合作退出不 kill、已结束后不碰 stdin、发送失败、超限、stderr 尾＋分块回调、重复 start、无程序时 close 仍报 close）＋夹具 `PipeFixture`（内存管道＋可控 `exited`） |
 
 > S4 的两处**有意偏离**（`#36` 判据以外，不引入无用面）：
 > 1. 未加 pi `createMcpAuthProvider({redirectUrl})` 的应用侧 redirect 入口——production 调用方
@@ -240,6 +241,10 @@ Java（`coding-agent/subcommand/McpCommand.java` + `McpListCommand.java`）：`M
 > `McpCommand.Options.providerToken` 保留注入位供夹具用。`needs-auth` 提示只在文本里区分，`--json` 的
 > `authProvider` 仅在有 `auth.provider` 时出现。
 
-> 模块测试：`pi-java-mcp` 289 → 292（S1–S3）→ 298（S4）→ **304**（S5）全绿；`pi-java-coding-agent` 全量
-> **1998** 例全绿（其中 MCP 命令相关 229，含 S6 新增 4 例）。**读数暂不动**：按 `docs/04` §0，
-> 逐层收口时才三处同步，现仍记 L2 = 115.0/123（投影）；S7 落地后统一重算。
+> S7 的两处**收窄**（D1 判据以外）：`PipeTransport` 暂不接 `mcp.json`——pi 也没有对应配置形态，只由
+> env 集成直接构造工厂；`maxStderrBytes` 未做成选项（`StderrTail` 固定 64 KiB，与 pi 默认一致）。
+
+> 模块测试：`pi-java-mcp` 289 → 292（S1–S3）→ 298（S4）→ 304（S5）→ **317**（S7）全绿；
+> `pi-java-coding-agent` 全量 1998 例全绿（其中 MCP 命令相关 229）。七个阶段已全部落地，
+> **读数仍暂不动**：下一步按 `docs/04` §0 做 L2 收口——`map/07` 先改，再同步 `docs/05` §1.2 与
+> `docs/09` §3/§4。
