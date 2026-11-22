@@ -49,7 +49,9 @@
 > - L1 收口完成（2026-11-22）：B289 `49336f70`、B290 `6d393725`、B291 `c8df0315`、B292 `083d3552`；
 >   L0 的 `telemetryNow` 已由 `f0841d49` 回补。`map/02` 记 L1 **245.5/246＝99.8%**（余 cache 策略单元
 >   0.5，属模块归属，随 L5 迁移收口）。**复验补记**：strict 无类型节点判据与暖请求
->   `disableContinuation` 于当晚补入（[`14`](14-l1-residual-alignment-design.md)），读数不变。
+>   `disableContinuation` 于当晚补入（[`14`](14-l1-residual-alignment-design.md)）；第二次复验补
+>   #114 根 schema 白名单、`session-resources` 清理与线程记账顺序（[`15`](15-l1-residual-audit-followup-design.md)），
+>   读数不变。
 > - P9 已完成（2026-11-22，[`13-mcp-p9-design.md`](13-mcp-p9-design.md)）：9 项缺口拆成 S1–S7 并按阶段落地
 >   ——`02b6bf59`（关闭序列，#22）、`db9f8646`（按块行读取，#21／#22）、`d80b326f`（JSON 限长＋body 取消，
 >   #25／#26）、`cd942ef`（OAuth 刷新＋换码校验，#36）、`f8349e5`（两段式 sign-in＋loopback 拆分，#39／#42）、
