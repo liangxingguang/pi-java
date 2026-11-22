@@ -18,6 +18,11 @@
   [`docs/17`](17-l3-tool-semantics-design.md) 落地新锚点语义（含 powershell 5.1 退出码后缀）；行为不变量
   保持工具名／参数集／截断预算／临时文件机制，未新开 B／D 号，D1–D8 原样保留（D5/D8 的方言部分收窄），
   `map/03` 六行改判对齐 ⇒ L3 **178/178＝100%**。
+- **L4 复核（2026-11-22）**：存储后端 20 行按目标锚点 `a00a5048d` 复核（[`docs/18`](18-l4-session-recheck-design.md)）：
+  L4-R1 `buildSessionInfo` EOF 后补检查（#11956）、L4-R2 列表主体外层 catch、L4-R3 候选 stat 重试；
+  行为不变量（v3 线形／文件命名／惰性创建／fork 语义）不变，未新开 B／D 号，`map/06` 20 行判定不变
+  ⇒ L4 **44/44＝100%**。`session-cwd` 的 Continue/Fork/Cancel 与 `session-picker` 的 `flushStdout`
+  按归属留给 L5／L7，不影响 L4 读数。
 - **F**：需要用户拍板的事项。
 - **R1**：pi 已删除的面，不为旧参照物补功能。
 - **R2**：Provider 只覆盖已批准的主流范围。Qwen／Xiaomi Token Plan 家族（团队／个人、国际／中国、AMS／SGP）已按 `docs/09` P3 余项纳入（26 个内置 provider）；其余长尾 provider 仍排除。

@@ -4,11 +4,11 @@
 
 ## 基准与范围
 
-- **PI_PIN=56cae7823**（2026-10-31，`v1.4.0-265-g56cae7823`）；pi-java @ `51dc0f7c`（main，2026-11-05，L6 实施收口）。
-- 本图**存储后端** 20 行已按新锚点重测并随 docs/24 实施闭环；**评测域** 24 行已按新锚点重测并随 docs/26 实施闭环（2026-11-05，L6）。
+- **证据锚点＝`TARGET_PI_PIN=a00a5048d`**（2026-11-20）。存储后端 20 行已于 **2026-11-22** 按该锚点逐行复核并随 [`docs/18`](../18-l4-session-recheck-design.md) 收口；`CURRENT_PI_PIN` 仍是 `56cae7823`，切锚仍等七层全部重测（`ANCHOR.md` 完成条件）。java 侧证据见文末「L4 复核」段。
+- 本图**评测域** 24 行按 `56cae7823` 重测并随 docs/26 实施闭环（2026-11-05，L6）；目标锚点的评测复测归 P11，本图未改为新锚点评分。
 - 范围：`pi-java-session-backend-sqlite` ＋ `pi-java-agent-core` 的会话持久化面（主流对照 pi `coding-agent/src/core/session-manager.ts`）；`pi-java-evals` ↔ pi `packages/evals`；pi `packages/chord`（R5 不可达）；pi 仓库根 `scripts/` 与本仓 `docs/map/check-drift.sh`（口径外）。
 - 判定三档：**对齐** / **缺失** / **存疑**。每条给两侧 `file:line`。
-- 新锚点评测参照版本：`1.4.0`（`packages/evals/package.json` version 字段；旧锚点 `1.1.0`）。
+- 目标锚点评测参照版本：`1.6.0`（`packages/evals/package.json`；旧锚点 `1.4.0`）。
 
 ---
 
@@ -30,7 +30,7 @@ JSONL 主流互读与 [`03-agent-core.md`](03-agent-core.md) **#73** 使用同�
 
 | 后端 | pi 位置（`ea448f454`） | pi-java 位置（`edc8749d`） |
 |---|---|---|
-| **JSONL（主流）** | `packages/coding-agent/src/core/session-manager.ts`（`SessionManager`，头 `{type:"session", version:3}`，2,013 行） | 写线＝pi v3 形状：`agent-core/.../session/jsonl/PiV3Wire.java`（头/条目/合成行）；存储 `JsonlSessionStorage.java`；内部头记录仍名 `JsonlV4Header`，旧 `kind:"header"` 文件惰性迁移 |
+| **JSONL（主流）** | `packages/coding-agent/src/core/session-manager.ts`（`SessionManager`，头 `{type:"session", version:3}`，2,036 行） | 写线＝pi v3 形状：`agent-core/.../session/jsonl/PiV3Wire.java`（头/条目/合成行）；存储 `JsonlSessionStorage.java`；内部头记录仍名 `JsonlV4Header`，旧 `kind:"header"` 文件惰性迁移 |
 | **Memory（主流）** | `SessionManager.inMemory()`（同文件 `:1804`） | `agent-core/.../session/memory/MemorySessionStorage.java`（`:31`） |
 | **SQLite** | ❌ 无（`session-backends` 已删，从未上 `bin pi`） | `pi-java-session-backend-sqlite/`（2,924 行 main；**参照物不存在**，R1/R5 移出分母） |
 | **契约层** | `SessionManager` 的公开方法（无独立 `Storage`/`SessionRepo` 接口） | `agent-core/.../session/SessionStorage.java` ＋ `SessionRepository.java` |
@@ -51,7 +51,7 @@ Memory 后端，它是 coding-agent 的**进程内会话注册表**（`-c/-r/--f
 
 | 模块 | pi 路径 / 规模 | java（工作树） | 备注 |
 |---|---|---:|---|
-| 主流会话持久化 | `coding-agent/src/core/session-manager.ts` **2,013** 行 | jsonl 包 **2,539**（14 文件） | java 数含文件系统抽象/仓库层 |
+| 主流会话持久化 | `coding-agent/src/core/session-manager.ts` **2,036** 行 | jsonl 包 **2,539**（14 文件） | java 数含文件系统抽象/仓库层 |
 | SQLite 后端（main / test） | **不存在**（参照包已删） | **2,924 / 308** | R1＋R5 作废 |
 | 评测（src） | `packages/evals/src` **1,446** | **785** | pi src 两锚点间逐字节未变 |
 | 评测（test / eval 用例） | `test/` **815** ＋ `evals/*.eval.ts` **856** | **412** | — |
@@ -71,37 +71,42 @@ Memory 后端，它是 coding-agent 的**进程内会话注册表**（`-c/-r/--f
 
 ## 存储后端对齐（主流 `SessionManager`）
 
-判定基准（pi `56cae7823`）：`session-manager.ts` 的 `SessionManager` 公开面（2,030 行）。
+判定基准（pi `a00a5048d`）：`session-manager.ts` 的 `SessionManager` 公开面（2,036 行）。
 java 契约面：`SessionStorage.java`（`:19-93`）＋ `SessionRepository.java`（`:12-34`）。
-本层实施见 `docs/24`（W1–W4）；B271／B272 为 L3 转出行（权重 0），B273／B274 落在既有行，
-新增 B278 落 #2／#5／#18 的显式目录语义。
+本层实施见 `docs/24`（W1–W4）与 [`docs/18`](../18-l4-session-recheck-design.md)（2026-11-22 归属复核）；
+B271／B272 为 L3 转出行（权重 0），B273／B274 落在既有行，新增 B278 落 #2／#5／#18 的显式目录语义。
 
-| # | 权重 | 能力 | pi 证据（`56cae7823`） | java 证据（`9966a1f5`＋docs/24） | 判定 | 台账 |
+| # | 权重 | 能力 | pi 证据（`a00a5048d`） | java 证据（`9c398610`＋docs/18） | 判定 | 台账 |
 |---|---|---|---|---|---|---|
-| 1 | 2 | create 建会话 | `SessionManager.create:1765`／`newSession:1057`（写 header 行 `:1062-1070`） | `SessionRepository.create:18` | 对齐 | — |
-| 2 | 2 | list 列会话（扫描目录 → `SessionInfo[]`） | `static list:1915`／`listAll:1936-1942`；显式目录 cwd 过滤 `:1922,744-745` | `SessionRepository.list:27`；`JsonlSessionRepository.list:72-99`＋`cwdMatches`（B278） | 对齐 | B278 |
-| 3 | 1 | list 进度回调 ＋ 部分结果增量发布 ＋ `AbortSignal` ＋ 并发扫描 | `SessionListProgress:884-889`；节流 `:893`；`listSessionsFromDir:941-971`；信号 `:879/:911/:946/:971` | `RichSessionLister.java`（`onProgress`＋节流增量发布＋`AbortSignal`＋并发扫描＋B278 cwd 过滤） | 对齐 | — |
-| 4 | 2 | open 打开会话 | `static open:1776` | `SessionRepository.open:24` | 对齐 | — |
-| 5 | 2 | fork 分支会话 | `forkFrom:1825`／`createBranchedSession:1642`；单 fd 写 `:1868-1877` | `SessionRepository.fork:33`；`JsonlSessionStorage.fork` 单次写（B274 W4b） | 对齐 | B274 |
-| 6 | 2 | 分支创建 / 移动 | `branch:1589`／`resetLeaf:1601`／`branchWithSummary:1610`（树 + leaf 指针） | `SessionStorage.createLane:30`／`moveLane:33`；`TreeCompaction` 走 `navigateTree` 同序 | **对齐（形状不同）**：lane 是 Java 内部扩展，落线 `lane` 键被 pi 忽略 | **D218** |
-| 7 | 3 | 追加 entry（message / thinking_level_change / model_change / custom / custom_message / usage / context_edit） | `appendMessage:1214`、`appendThinkingLevelChange:1227`、`appendModelChange:1240`、`appendCustomEntry:1300`、`appendCustomMessageEntry:1349`；`_persist:1172`；失败回滚 `_appendEntry:1191-1206` | `SessionStorage.appendEntry:41`；`Entry` 9 变体；`JsonlSessionStorage.appendEntry` 文件成功后才提交内存（W4a 回归锁） | 对齐 | B274 |
-| 8 | 3 | compaction 条目 | `appendCompaction:1271`；`CompactionEntry:91-104`（`summary`/`firstKeptEntryId`/`tokensBefore`/`details?`/`usage?`/`fromHook?`/`systemMessage?`） | `Entry.Compaction` 十二组件齐（含 `systemMessage`）；`retainedTail` 为 pi 忽略键（D190） | 对齐 | — |
-| 9 | 3 | 分支摘要条目 | `branchWithSummary:1610`／`BranchSummaryEntry:106-118` | `Entry.BranchSummary:170-179`（含 `fromHook`） | 对齐 | B272 |
-| 10 | 3 | compaction-aware 上下文投影（含 provenance） | `buildContextEntries:476`／`buildSessionProjection:543`／`SessionProjection:216` | `ContextEntries.projectEntries`＋`ProjectedEntry` | 对齐（形状不同） | — |
-| 11 | 3 | **`context_edit` 条目（append-only 上下文改写）** | `ContextEditEntry:175-182`；`appendContextEdit:1370`；`projectContextEntry:519` | `Entry.ContextEdit`；`EntryJsonCodec`；`ContextEntries.applyEdit`；生产者＝压缩/遗漏恢复（`RecoveryOmissions`，B273 成对） | 对齐 | B273 |
-| 12 | 2 | 会话名 | `appendSessionInfo:1314`／`getSessionName:1328`（`SessionInfoEntry:142-147`） | `SessionStorage.getName/setName`；JSONL 原生 `session_info` | 对齐 | — |
-| 13 | 1 | entry 标签 | `getLabel:1442`／`appendLabelChange:1451`（`LabelEntry:135-141`） | `SessionStorage.getLabel/setLabel`；JSONL 原生 `label` | 对齐 | — |
-| 14 | 2 | usage 条目 ＋ 会话用量汇总 | `UsageEntry:80-90`；`appendUsage:1254` | `Entry.Usage` 九键＋审计扩展键；`SessionStats`／`UsageCostBreakdown` | 对齐 | — |
-| 15 | 3 | **JSONL 头部线格式** | `SessionHeader:43-56`；写点 `:1062-1070`；`CURRENT_SESSION_VERSION:41`；找头 `:1086` | `PiV3Wire.encodeHeader:75-94`；读 `:97-121` | 对齐 | — |
-| 16 | 3 | **JSONL 条目线格式** | 基字段 `SessionEntryBase:57-63`（无 `seq`）；`SessionEntry:183-197` | `PiV3Wire.encodeEntryLine`；`lane`／`retainedTail` 为 pi 忽略键（D190） | 对齐 | map/03 **#73** |
-| 17 | 2 | **JSONL 旧版本读取（v1→v2→v3）** | `migrateV1ToV2:287`／`migrateV2ToV3:316`／`migrateToCurrentVersion:337`；`_rewriteFile:1124-1133` | `LegacyPiVersionMigrator`＋`JsonlSessionStorage.load`；`PiV3Wire.parseHeader` 接受 1/2/3（D192–D194） | 对齐 | — |
-| 18 | 2 | JSONL 文件名 / 目录名 | `fileTimestamp:1079`；`getDefaultSessionDirPath:589-594` | `JsonlSessionRepository.sessionFileName:300-303`；`sessionDirectoryName:295-298`；显式目录平铺（B278） | 对齐 | B278 |
-| 19 | 2 | **会话文件惰性创建** | `_hasConversation:1166`；`_persist:1172-1190` | `JsonlSessionStorage.create`＋`pending`＋`flushIfConversationStarted`（D191） | 对齐 | — |
-| 20 | 1 | 内存后端 | `SessionManager.inMemory:1814` | `MemorySessionStorage:31`＋coding-agent `InMemorySessionRepository` | 对齐 | — |
+| 1 | 2 | create 建会话 | `SessionManager.create:1773`／`newSession:1065`（写 header 行 `:1071-1078`） | `SessionRepository.create:18` | 对齐 | — |
+| 2 | 2 | list 列会话（扫描目录 → `SessionInfo[]`） | `static list:1923`／`listAll:1944-1950`；显式目录 cwd 过滤 `:1930,745-746` | `SessionRepository.list:27`；`JsonlSessionRepository.list:72-99`＋`cwdMatches`（B278）；目录失败返回空（L4-R2） | 对齐 | B278 |
+| 3 | 1 | list 进度回调 ＋ 部分结果增量发布 ＋ `AbortSignal` ＋ 并发扫描 | `SessionListProgress:892-897`；节流 `:901`；`listSessionsFromDir:949-979`；信号 `:887/:919/:954/:979` | `RichSessionLister.java`（`onProgress`＋节流增量发布＋`AbortSignal`＋并发扫描＋B278 cwd 过滤；L4-R1 EOF 后补检查、L4-R2 错误吞噬、L4-R3 stat 重试） | 对齐 | — |
+| 4 | 2 | open 打开会话 | `static open:1784` | `SessionRepository.open:24` | 对齐 | — |
+| 5 | 2 | fork 分支会话 | `forkFrom:1833`／`createBranchedSession:1650`；单 fd 写 `:1876-1885` | `SessionRepository.fork:33`；`JsonlSessionStorage.fork` 单次写（B274 W4b） | 对齐 | B274 |
+| 6 | 2 | 分支创建 / 移动 | `branch:1597`／`resetLeaf:1609`／`branchWithSummary:1618`（树 + leaf 指针） | `SessionStorage.createLane:30`／`moveLane:33`；`TreeCompaction` 走 `navigateTree` 同序 | **对齐（形状不同）**：lane 是 Java 内部扩展，落线 `lane` 键被 pi 忽略 | **D218** |
+| 7 | 3 | 追加 entry（message / thinking_level_change / model_change / custom / custom_message / usage / context_edit） | `appendMessage:1222`、`appendThinkingLevelChange:1235`、`appendModelChange:1248`、`appendCustomEntry:1308`、`appendCustomMessageEntry:1357`；`_persist:1180`；失败回滚 `_appendEntry:1199-1214` | `SessionStorage.appendEntry:41`；`Entry` 9 变体；`JsonlSessionStorage.appendEntry` 文件成功后才提交内存（W4a 回归锁） | 对齐 | B274 |
+| 8 | 3 | compaction 条目 | `appendCompaction:1279`；`CompactionEntry:91-104`（`summary`/`firstKeptEntryId`/`tokensBefore`/`details?`/`usage?`/`fromHook?`/`systemMessage?`） | `Entry.Compaction` 十二组件齐（含 `systemMessage`）；`retainedTail` 为 pi 忽略键（D190） | 对齐 | — |
+| 9 | 3 | 分支摘要条目 | `branchWithSummary:1618`／`BranchSummaryEntry:106-118` | `Entry.BranchSummary:170-179`（含 `fromHook`） | 对齐 | B272 |
+| 10 | 3 | compaction-aware 上下文投影（含 provenance） | `buildContextEntries:476`／`buildSessionProjection:544`／`SessionProjection:216` | `ContextEntries.projectEntries`＋`ProjectedEntry` | 对齐（形状不同） | — |
+| 11 | 3 | **`context_edit` 条目（append-only 上下文改写）** | `ContextEditEntry:175-182`；`appendContextEdit:1378`；`projectContextEntry:520` | `Entry.ContextEdit`；`EntryJsonCodec`；`ContextEntries.applyEdit`；生产者＝压缩/遗漏恢复（`RecoveryOmissions`，B273 成对） | 对齐 | B273 |
+| 12 | 2 | 会话名 | `appendSessionInfo:1322`／`getSessionName:1336`（`SessionInfoEntry:142-147`） | `SessionStorage.getName/setName`；JSONL 原生 `session_info` | 对齐 | — |
+| 13 | 1 | entry 标签 | `getLabel:1450`／`appendLabelChange:1459`（`LabelEntry:135-141`） | `SessionStorage.getLabel/setLabel`；JSONL 原生 `label` | 对齐 | — |
+| 14 | 2 | usage 条目 ＋ 会话用量汇总 | `UsageEntry:80-90`；`appendUsage:1262` | `Entry.Usage` 九键＋审计扩展键；`SessionStats`／`UsageCostBreakdown` | 对齐 | — |
+| 15 | 3 | **JSONL 头部线格式** | `SessionHeader:43-56`；写点 `:1071-1078`；`CURRENT_SESSION_VERSION:41`；找头 `:1093-1096` | `PiV3Wire.encodeHeader:75-94`；读 `:97-121` | 对齐 | — |
+| 16 | 3 | **JSONL 条目线格式** | 基字段 `SessionEntryBase:57-63`（无 `seq`）；`SessionEntry:183-195` | `PiV3Wire.encodeEntryLine`；`lane`／`retainedTail` 为 pi 忽略键（D190） | 对齐 | map/03 **#73** |
+| 17 | 2 | **JSONL 旧版本读取（v1→v2→v3）** | `migrateV1ToV2:287`／`migrateV2ToV3:316`／`migrateToCurrentVersion:337`；`_rewriteFile:1132-1141` | `LegacyPiVersionMigrator`＋`JsonlSessionStorage.load`；`PiV3Wire.parseHeader` 接受 1/2/3（D192–D194） | 对齐 | — |
+| 18 | 2 | JSONL 文件名 / 目录名 | `fileTimestamp:1087`；`getDefaultSessionDirPath:590-595` | `JsonlSessionRepository.sessionFileName:300-303`；`sessionDirectoryName:295-298`；显式目录平铺（B278） | 对齐 | B278 |
+| 19 | 2 | **会话文件惰性创建** | `_hasConversation:1174`；`_persist:1180-1190` | `JsonlSessionStorage.create`＋`pending`＋`flushIfConversationStarted`（D191） | 对齐 | — |
+| 20 | 1 | 内存后端 | `SessionManager.inMemory:1822` | `MemorySessionStorage:31`＋coding-agent `InMemorySessionRepository` | 对齐 | — |
 
 **行数**：20 行 —— 对齐 **20** / 缺失 **0** / 存疑 **0**。
 **权重**：**Σ = 44**（20 行全部进分母）。
 **Σ(w×c) = 44.0** ⇒ **加权完成度 = 44.0/44 = 100%**。
+
+**L4 复核（2026-11-22，docs/18；代码提交 `9c398610`）**：`docs/09` P0 的「新锚点无 L4 行为变化」不成立。落到 #2／#3 的三处：
+**L4-R1** `buildSessionInfo` 循环后补检查（pi `:860`，#11956）；**L4-R2** 列表主体外层 catch
+（pi `:978-981`／`:2031-2034`，catch 后先转抛 abort 再返回空）；**L4-R3** 候选 stat 失败
+（`mtimeOf` 返回 `-1` 哨兵，`buildRichInfo` 按 pi `:806` 再试一次，仍失败则排除）。三处均**未新开 B／D 号**。
 
 **转出行（不重新计入分母）**：map/03 **#77**（恢复会话 active tools，w2）→ B271；
 map/03 **#24**（branch summary 生成，w1）→ B272。两者按 docs/24 W1／W2 实施并验证。

@@ -287,13 +287,25 @@ stat 失败被折成 `0` 并继续加载；pi 的对应行为是「候选无 sta
 
 | 步骤 | 内容 |
 |---|---|
-| 自验证 | `mvn test -pl pi-java-agent-core -am`（993 测＋新增 4 个用例）→ 全绿；`mvn test -pl pi-java-coding-agent -am` 全链全绿 |
+| 自验证 | `mvn test -pl pi-java-agent-core -am`（993 测＋新增 5 个用例）→ 全绿；`mvn test -pl pi-java-coding-agent -am` 全链全绿 |
 | 地图 | `map/06`：文件头基准改 `a00a5048d`／java 证据改本批 HEAD；20 行行号按 §6 重钉；#3 增补 R1–R3 说明；`docs/05` §1.2 的 L4 行保持 44/44 但补「已复核（docs/18）」 |
 | 计划视图 | `docs/09`「进度」段补 L4 完成；「现状速览」的下一步改为 L5 |
 | 台账 | `docs/04` §0 增一条 L4 复核说明：R1–R3 直接落地、**未新开 B／D 号**；D218／B273／B274／B278 原样保留 |
 | 提交 | ①`docs: design the L4 session recheck`（本稿）；②`fix(agent-core): align session list abort and stat semantics`（代码＋测试）；③`docs: close L4`（地图/台账回填） |
 
-## 9. 风险与遗留
+## 9. 实施记录（2026-11-22）
+
+- 代码＋测试：`9c398610 fix(agent-core): align session list abort and stat semantics`（`RichSessionLister` ＋ 新夹具 `RichSessionListRobustnessTest`）。
+- R1–R3 按 §4 落地；`RichSessionLister` 364 行（≤500），checkstyle `checkstyle:check` 退出 0。
+- 测试：`RichSessionListRobustnessTest` 5 个用例由红转绿；`mvn test -pl pi-java-agent-core -am` → **998 测，0 失败，0 错误，1 跳过**；`mvn test -pl pi-java-coding-agent -am` → **1,998 测，0 失败**。
+- 全量 `mvn clean verify -Dfrontend.skip=true`（2026-11-22，14:31）→ **BUILD SUCCESS，零 ERROR**（各模块合计 7,101 测）。首两轮被两条**既有** spotbugs 误报拦下（与 L4 改动无关）：`pi-java-ai` 的 `AnthropicStreamSupport.threadsOf` 三态 `Boolean`（`docs/12` 落地时未登记排除，补根 `spotbugs-exclude.xml` 条目）与 `pi-java-agent-core` 的 `PowerShellTool.wrapCommand`（`Path.getFileName()` 可空，补空值守卫）；两者随本批以 `967543bd fix(build): clear pre-existing spotbugs findings` 单独提交。
+- 变异探针（分别单跑，均按预期转红后恢复）：
+  1. 删 `throwIfAborted(signal)` 补检查 ⇒ `abortAfterLastLineStillThrows` 失败；
+  2. catch 改回直接 `throw e` ⇒ 两个 swallow 用例报错；
+  3. `mtimeOf` 哨兵改回 `0` ⇒ 两个 stat 用例失败。
+- `StepSignal` 的调用数断言为 `2+L+1` 成立：R2 的外层 catch 对 `SessionListAbortedException` 单列重抛，没有额外查询 `isAborted()`。
+
+## 10. 风险与遗留
 
 - **R2 的 catch 宽度**：`RuntimeException` 会吞掉真正的 bug；这是对齐 pi 的必然结果。若日后要诊断，只能在 catch 内记日志，不能改返回。
 - **map/03 的陈旧行号**：`map/03` 里 `session-manager.ts:1815`、`:943-965` 等证据来自更早锚点，L3 收口时未重钉。它不影响本批判定；是否顺带修正留待用户裁决（不纳入本批验收）。
