@@ -83,11 +83,52 @@ class EditDiffTest {
     }
 
     @Test
-    void lineEndingDetectionAndRestore() {
-        assertThat(EditDiff.detectLineEnding("a\r\nb")).isEqualTo("\r\n");
-        assertThat(EditDiff.detectLineEnding("a\nb")).isEqualTo("\n");
+    void normalizeToLFFoldsCrlfAndLoneCr() {
         assertThat(EditDiff.normalizeToLF("a\r\nb\r\nc")).isEqualTo("a\nb\nc");
-        assertThat(EditDiff.restoreLineEndings("a\nb", "\r\n")).isEqualTo("a\r\nb");
+        assertThat(EditDiff.normalizeToLF("a\rb")).isEqualTo("a\nb");
+    }
+
+    @Test
+    void applyReplacementsToOriginalKeepsUntouchedLineEndings() {
+        // edit-diff.ts:21-61：只重写被触及的范围，未改行的 CRLF/LF 原样保留。
+        String content = "a\r\nb\nc\r\n";
+        var applied = EditDiff.applyEditsToNormalizedContent(
+            EditDiff.normalizeToLF(content),
+            List.of(new EditDiff.Edit("b", "B")), "f.txt");
+        assertThat(EditDiff.applyReplacementsToOriginal(content, applied.replacements()))
+            .isEqualTo("a\r\nB\nc\r\n");
+    }
+
+    @Test
+    void newTextTakesTheLineEndingOfTheReplacedLine() {
+        // 新文本内部的 \n 取替换起点所在行的行尾：CRLF 文件里插入两行仍是 CRLF。
+        String content = "a\r\nb\r\nc";
+        var applied = EditDiff.applyEditsToNormalizedContent(
+            EditDiff.normalizeToLF(content),
+            List.of(new EditDiff.Edit("b", "B1\nB2")), "f.txt");
+        assertThat(EditDiff.applyReplacementsToOriginal(content, applied.replacements()))
+            .isEqualTo("a\r\nB1\r\nB2\r\nc");
+    }
+
+    @Test
+    void classicMacLoneCrIsTheLineEndingWhenNoLfExists() {
+        String content = "a\rb\rc";
+        var applied = EditDiff.applyEditsToNormalizedContent(
+            EditDiff.normalizeToLF(content),
+            List.of(new EditDiff.Edit("b", "B1\nB2")), "f.txt");
+        assertThat(EditDiff.applyReplacementsToOriginal(content, applied.replacements()))
+            .isEqualTo("a\rB1\rB2\rc");
+    }
+
+    @Test
+    void crAdjacentToInsertedLfDoesNotMergeIntoCrlf() {
+        // 缝上保留的孤立 CR 与插入文本开头的 LF 不能合并成 CRLF（pi push 补 LF）。
+        String content = "a\rb\nc";
+        var applied = EditDiff.applyEditsToNormalizedContent(
+            EditDiff.normalizeToLF(content),
+            List.of(new EditDiff.Edit("b", "\nZ")), "f.txt");
+        assertThat(EditDiff.applyReplacementsToOriginal(content, applied.replacements()))
+            .isEqualTo("a\r\n\nZ\nc");
     }
 
     @Test

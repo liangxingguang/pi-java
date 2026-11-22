@@ -21,8 +21,12 @@ final class EditDiff {
     record Edit(String oldText, String newText) {
     }
 
+    /** Replacement of {@code matchLength} characters at {@code matchIndex} with {@code newText}. */
+    record TextReplacement(int matchIndex, int matchLength, String newText) {
+    }
+
     /** Result of {@link #applyEditsToNormalizedContent}. */
-    record AppliedEdits(String baseContent, String newContent) {
+    record AppliedEdits(String baseContent, String newContent, List<TextReplacement> replacements) {
     }
 
     /** Result of {@link #fuzzyFindText}. */
@@ -45,24 +49,9 @@ final class EditDiff {
 
     // ── Line ending / BOM handling ──────────────────────────────────────
 
-    /** Detect {@code \r\n} vs {@code \n} from the first occurrence. */
-    static String detectLineEnding(String content) {
-        int crlfIdx = content.indexOf("\r\n");
-        int lfIdx = content.indexOf("\n");
-        if (lfIdx == -1 || crlfIdx == -1) {
-            return "\n";
-        }
-        return crlfIdx < lfIdx ? "\r\n" : "\n";
-    }
-
     /** Normalize {@code \r\n} and {@code \r} to {@code \n}. */
     static String normalizeToLF(String text) {
         return text.replace("\r\n", "\n").replace("\r", "\n");
-    }
-
-    /** Restore a normalized LF text to the detected line ending. */
-    static String restoreLineEndings(String text, String ending) {
-        return "\r\n".equals(ending) ? text.replace("\n", "\r\n") : text;
     }
 
     /** Strip a leading UTF-8 BOM, returning it separately. */
@@ -175,15 +164,19 @@ final class EditDiff {
         }
 
         String baseContent = normalizedContent;
-        String newContent = usedFuzzyMatch
-            ? applyReplacementsPreservingUnchangedLines(
-                normalizedContent, replacementBaseContent, matchedEdits)
-            : applyReplacements(replacementBaseContent, matchedEdits, 0);
+        // Fuzzy matches are widened to the lines they touch, so all replacements are offsets in
+        // baseContent and unchanged line blocks keep their bytes.
+        List<TextReplacement> replacements = usedFuzzyMatch
+            ? widenReplacementsToLines(normalizedContent, replacementBaseContent, matchedEdits)
+            : matchedEdits.stream()
+                .map(m -> new TextReplacement(m.matchIndex(), m.matchLength(), m.newText()))
+                .toList();
+        String newContent = applyReplacements(baseContent, replacements, 0);
 
         if (baseContent.equals(newContent)) {
             throw noChangeError(path, normalizedEdits.size());
         }
-        return new AppliedEdits(baseContent, newContent);
+        return new AppliedEdits(baseContent, newContent, replacements);
     }
 
     private static int countOccurrences(String content, String oldText) {
@@ -201,7 +194,8 @@ final class EditDiff {
 
     // ── Replacement application (reverse order + unchanged-line overlay) ─
 
-    private static String applyReplacements(String content, List<MatchedEdit> replacements, int offset) {
+    private static String applyReplacements(String content, List<TextReplacement> replacements,
+            int offset) {
         String result = content;
         for (int i = replacements.size() - 1; i >= 0; i--) {
             var replacement = replacements.get(i);
@@ -231,7 +225,7 @@ final class EditDiff {
         return spans;
     }
 
-    private static LineRange getReplacementLineRange(List<LineSpan> lines, MatchedEdit replacement) {
+    private static LineRange getReplacementLineRange(List<LineSpan> lines, TextReplacement replacement) {
         int replacementStart = replacement.matchIndex();
         int replacementEnd = replacement.matchIndex() + replacement.matchLength();
 
@@ -261,25 +255,28 @@ final class EditDiff {
     }
 
     /**
-     * Apply replacements matched against {@code baseContent} to
-     * {@code originalContent} while preserving unchanged line blocks from the
-     * original (used when fuzzy matching rewrote unchanged lines).
+     * Turn replacements matched against {@code baseContent} into replacements of
+     * {@code originalContent} that keep unchanged line blocks from the original
+     * (pi {@code widenReplacementsToLines}): each replacement is widened to the lines it
+     * touches, and those touched lines are rewritten from the normalized base.
      */
-    private static String applyReplacementsPreservingUnchangedLines(
+    private static List<TextReplacement> widenReplacementsToLines(
             String originalContent, String baseContent, List<MatchedEdit> replacements) {
-        var originalLines = splitLinesWithEndings(originalContent);
+        var originalLines = getLineSpans(originalContent);
         var baseLines = getLineSpans(baseContent);
         if (originalLines.size() != baseLines.size()) {
             throw new IllegalArgumentException(
                 "Cannot preserve unchanged lines because the base content has a different line count.");
         }
 
-        record Group(int startLine, int endLine, List<MatchedEdit> replacements) {
+        record Group(int startLine, int endLine, List<TextReplacement> replacements) {
         }
         var groups = new ArrayList<Group>();
         var sortedReplacements = new ArrayList<>(replacements);
         sortedReplacements.sort(Comparator.comparingInt(MatchedEdit::matchIndex));
-        for (var replacement : sortedReplacements) {
+        for (var matched : sortedReplacements) {
+            var replacement = new TextReplacement(matched.matchIndex(), matched.matchLength(),
+                matched.newText());
             var range = getReplacementLineRange(baseLines, replacement);
             if (!groups.isEmpty()) {
                 var current = groups.get(groups.size() - 1);
@@ -293,29 +290,101 @@ final class EditDiff {
             groups.add(new Group(range.startLine(), range.endLine(), List.of(replacement)));
         }
 
-        int originalLineIndex = 0;
-        var result = new StringBuilder();
+        var widened = new ArrayList<TextReplacement>();
         for (var group : groups) {
-            for (int k = originalLineIndex; k < group.startLine(); k++) {
-                result.append(originalLines.get(k));
-            }
+            var lineStart = originalLines.get(group.startLine());
+            var lineEnd = originalLines.get(group.endLine() - 1);
             int groupStartOffset = baseLines.get(group.startLine()).start();
             int groupEndOffset = baseLines.get(group.endLine() - 1).end();
-            result.append(applyReplacements(
-                baseContent.substring(groupStartOffset, groupEndOffset),
-                group.replacements(), groupStartOffset));
-            originalLineIndex = group.endLine();
+            widened.add(new TextReplacement(lineStart.start(), lineEnd.end() - lineStart.start(),
+                applyReplacements(baseContent.substring(groupStartOffset, groupEndOffset),
+                    group.replacements(), groupStartOffset)));
         }
-        for (int k = originalLineIndex; k < originalLines.size(); k++) {
-            result.append(originalLines.get(k));
-        }
-        return result.toString();
+        return widened;
     }
 
-    private static List<MatchedEdit> withAppended(List<MatchedEdit> list, MatchedEdit edit) {
+    private static List<TextReplacement> withAppended(List<TextReplacement> list,
+            TextReplacement edit) {
         var result = new ArrayList<>(list);
         result.add(edit);
         return result;
+    }
+
+    /**
+     * Apply replacements matched in {@code normalizeToLF(originalContent)} to {@code originalContent}
+     * itself: text outside the replaced ranges keeps its bytes, including line endings.
+     * Newlines in the new text take the line ending of the line where the range starts
+     * (pi {@code applyReplacementsToOriginal}，edit-diff.ts:21-61).
+     */
+    static String applyReplacementsToOriginal(String originalContent,
+            List<TextReplacement> replacements) {
+        var mapper = new CrlfMapper(originalContent);
+        var parts = new StringBuilder();
+        boolean endsWithCr = false;
+        int position = 0;
+        for (var replacement : replacements) {
+            int start = mapper.toOriginal(replacement.matchIndex());
+            endsWithCr = push(parts, endsWithCr,
+                originalContent.substring(position, start));
+            String ending = getLineEndingAt(originalContent, start);
+            String newText = "\n".equals(ending)
+                ? replacement.newText() : replacement.newText().replace("\n", ending);
+            endsWithCr = push(parts, endsWithCr, newText);
+            position = mapper.toOriginal(replacement.matchIndex() + replacement.matchLength());
+        }
+        push(parts, endsWithCr, originalContent.substring(position));
+        return parts.toString();
+    }
+
+    /**
+     * A CR before a seam and an LF after it would merge into one CRLF line break (for example
+     * a kept lone CR followed by inserted text starting with LF). Adding an LF keeps the line
+     * breaks the diff shows.
+     */
+    private static boolean push(StringBuilder out, boolean endsWithCr, String part) {
+        if (part.isEmpty()) {
+            return endsWithCr;
+        }
+        if (endsWithCr && part.charAt(0) == '\n') {
+            out.append('\n');
+        }
+        out.append(part);
+        return part.charAt(part.length() - 1) == '\r';
+    }
+
+    /**
+     * Line ending of the line containing {@code offset}: its own LF or CRLF, or that of the line
+     * before for an unterminated last line. A lone CR only counts in files without any LF.
+     */
+    private static String getLineEndingAt(String content, int offset) {
+        int lineFeed = content.indexOf('\n', offset);
+        if (lineFeed == -1) {
+            lineFeed = content.lastIndexOf('\n', offset);
+        }
+        if (lineFeed == -1) {
+            return content.indexOf('\r') >= 0 ? "\r" : "\n";
+        }
+        return lineFeed > 0 && content.charAt(lineFeed - 1) == '\r' ? "\r\n" : "\n";
+    }
+
+    /** Maps normalized offsets to original offsets: each LF of a CRLF shifts the offset by one. */
+    private static final class CrlfMapper {
+        private final String content;
+        private int crlfBefore;
+        private int nextCrlf;
+
+        CrlfMapper(String content) {
+            this.content = content;
+            this.nextCrlf = content.indexOf("\r\n");
+        }
+
+        int toOriginal(int offset) {
+            while (nextCrlf != -1 && nextCrlf - crlfBefore < offset) {
+                crlfBefore++;
+                nextCrlf = content.indexOf("\r\n", nextCrlf + 2);
+            }
+            return offset + crlfBefore;
+        }
     }
 
     // ── Error messages (pi text) ────────────────────────────────────────
