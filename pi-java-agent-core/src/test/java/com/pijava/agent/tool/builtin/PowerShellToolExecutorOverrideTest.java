@@ -36,8 +36,8 @@ class PowerShellToolExecutorOverrideTest {
             new BashTool.BashInput("Get-Date", Optional.empty()), null, null,
             contextThatMustNotRun());
 
-        // pi :35：覆盖执行器也收到经 exec 包装后的命令（UTF8 前缀照拼）。
-        assertThat(seen.get()).isEqualTo(PowerShellTool.UTF8_OUTPUT_PREFIX + "Get-Date");
+        // pi :35：覆盖执行器也收到经 exec 包装后的命令（UTF8 前缀；5.1 的退出码后缀随解析结果）。
+        assertThat(seen.get()).isEqualTo(PowerShellTool.wrapCommand("Get-Date"));
         assertThat(((ContentBlock.TextContent) result.content().get(0)).text())
             .isEqualTo("ps-out");
     }

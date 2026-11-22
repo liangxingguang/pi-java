@@ -27,6 +27,15 @@ public final class PowerShellTool {
     static final String UTF8_OUTPUT_PREFIX =
         "try { [Console]::OutputEncoding=[System.Text.Encoding]::UTF8 } catch {}\n";
 
+    /**
+     * Windows PowerShell 5.1 turns redirected native stderr into error records and sets
+     * {@code $?} false, so {@code git push 2>&1 | Select-Object -Last 3} exits 1 although git
+     * exited 0 (#8842); PowerShell 7 does not. pi powershell.ts:19-26 逐字。
+     */
+    static final String WINDOWS_POWERSHELL_EXIT_SUFFIX =
+        "\n;\nif ($?) { exit 0 }\nif (($LASTEXITCODE -eq 0) -and "
+            + "(\"$($Error[0].FullyQualifiedErrorId)\" -like \"NativeCommandError*\")) { exit 0 }\nexit 1";
+
     /** pi {@code powershellToolConfig}（powershell.ts:38-46）逐字。 */
     static final ShellToolConfig POWERSHELL_CONFIG = new ShellToolConfig(
         "powershell", "powershell", "PowerShell", "PS>",
@@ -58,8 +67,26 @@ public final class PowerShellTool {
             PowerShellTool::wrapCommand, executorOverride);
     }
 
-    /** pi :35 的 exec 包装：前置 UTF8 输出前缀。 */
+    /** pi :35/:46-52 的 exec 包装：UTF8 输出前缀 ＋ 视 shell 决定的退出码修正后缀。 */
     static String wrapCommand(String command) {
-        return UTF8_OUTPUT_PREFIX + command;
+        String shellName;
+        try {
+            shellName = java.nio.file.Path.of(
+                PowerShellShellExecutor.resolvePowerShell()).getFileName().toString();
+        } catch (java.io.IOException e) {
+            shellName = "";   // execute() reports the same error; do not fail while wrapping
+        }
+        return wrapCommand(command, shellName);
+    }
+
+    /**
+     * The wrap with an explicit shell file name, for tests: only
+     * {@code powershell.exe} gets the 5.1 exit-code suffix, and a final backtick keeps the
+     * user's last statement from continuing into the suffix.
+     */
+    static String wrapCommand(String command, String shellFileName) {
+        boolean addSuffix = "powershell.exe".equalsIgnoreCase(shellFileName)
+            && !command.endsWith("`");
+        return UTF8_OUTPUT_PREFIX + command + (addSuffix ? WINDOWS_POWERSHELL_EXIT_SUFFIX : "");
     }
 }

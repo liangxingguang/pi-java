@@ -23,13 +23,46 @@ public final class TruncationUtils {
 
     /**
      * pi {@code truncateLine}（truncate.ts:268-276）：超长截到 {@code maxChars}
-     * ＋ {@code "... [truncated]"}。JS slice 与 java substring 同为 UTF-16 单元。
+     * ＋ {@code "... [truncated]"}；切口不劈开代理对（见 {@link #sliceHead}）。
      */
     public static LineTruncation truncateLine(String line, int maxChars) {
         if (line.length() <= maxChars) {
             return new LineTruncation(line, false);
         }
-        return new LineTruncation(line.substring(0, maxChars) + "... [truncated]", true);
+        return new LineTruncation(sliceHead(line, maxChars) + "... [truncated]", true);
+    }
+
+    /**
+     * 前 {@code maxUnits} 个 UTF-16 单元，不劈开代理对（pi {@code sliceHead}，
+     * truncate.ts:282-289）：切点若落在高代理之后、低代理之前，把整个字符留在切口外。
+     */
+    public static String sliceHead(String text, int maxUnits) {
+        int end = Math.max(0, maxUnits);
+        if (end >= text.length()) {
+            return text;
+        }
+        int cut = end;
+        if (cut > 0 && Character.isHighSurrogate(text.charAt(cut - 1))
+                && Character.isLowSurrogate(text.charAt(cut))) {
+            cut--;
+        }
+        return text.substring(0, cut);
+    }
+
+    /**
+     * 后 {@code maxUnits} 个 UTF-16 单元，不劈开代理对（pi {@code sliceTail}，
+     * truncate.ts:293-299）。
+     */
+    public static String sliceTail(String text, int maxUnits) {
+        if (maxUnits <= 0) {
+            return "";
+        }
+        int start = Math.max(0, text.length() - maxUnits);
+        if (start > 0 && Character.isLowSurrogate(text.charAt(start))
+                && Character.isHighSurrogate(text.charAt(start - 1))) {
+            start++;
+        }
+        return text.substring(start);
     }
 
     /** What {@link #truncateLine} produced. */

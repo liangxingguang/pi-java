@@ -153,9 +153,17 @@ final class ShellToolSupport {
                     // pi bash.ts:337-366 三路收尾。
                     if (shellResult.timedOut()) {
                         var snap = formatOutput(config, shellResult.output(), "");
-                        throw new RuntimeException(appendStatus(snap.text(),
-                            "Command timed out after "
-                                + jsNumber(params.timeoutSeconds().orElseThrow()) + " seconds"));
+                        String status = "Command timed out after "
+                            + jsNumber(params.timeoutSeconds().orElseThrow()) + " seconds";
+                        var shellExit = shellResult.timeoutShellExit();
+                        if (shellExit != null) {
+                            // Both facts matter: the command's real result, and that its background
+                            // processes were still writing output when the timeout hit (#11613).
+                            status += ". The shell exited with code " + shellExit.exitCode()
+                                + " after " + jsNumber(shellExit.afterSeconds()) + " seconds, but "
+                                + "background processes it started kept writing output until the timeout.";
+                        }
+                        throw new RuntimeException(appendStatus(snap.text(), status));
                     }
                     var snap = formatOutput(config, shellResult.output(), "(no output)");
                     if (shellResult.exitCode() != 0) {

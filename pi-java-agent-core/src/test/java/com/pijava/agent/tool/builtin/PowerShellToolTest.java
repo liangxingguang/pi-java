@@ -51,8 +51,25 @@ class PowerShellToolTest {
         // pi :16,:35：exec 前置 UTF8 输出前缀（bash 不拼）。
         assertThat(PowerShellTool.UTF8_OUTPUT_PREFIX).isEqualTo(
             "try { [Console]::OutputEncoding=[System.Text.Encoding]::UTF8 } catch {}\n");
-        assertThat(PowerShellTool.wrapCommand("Get-Location")).isEqualTo(
+        assertThat(PowerShellTool.wrapCommand("Get-Location", "pwsh.exe")).isEqualTo(
             PowerShellTool.UTF8_OUTPUT_PREFIX + "Get-Location");
+    }
+
+    @Test
+    void exitSuffixOnlyForWindowsPowerShell51() {
+        // pi :46-52：powershell.exe 追加退出码修正后缀；pwsh.exe 不加。
+        assertThat(PowerShellTool.wrapCommand("git push 2>&1", "powershell.exe")).isEqualTo(
+            PowerShellTool.UTF8_OUTPUT_PREFIX + "git push 2>&1"
+                + PowerShellTool.WINDOWS_POWERSHELL_EXIT_SUFFIX);
+        assertThat(PowerShellTool.wrapCommand("git push 2>&1", "pwsh.exe")).isEqualTo(
+            PowerShellTool.UTF8_OUTPUT_PREFIX + "git push 2>&1");
+    }
+
+    @Test
+    void trailingBacktickKeepsTheCommandUnchanged() {
+        // 反引号结尾会把用户最后一条语句续进后缀（pi :49-50）。
+        assertThat(PowerShellTool.wrapCommand("Get-ChildItem |`", "powershell.exe")).isEqualTo(
+            PowerShellTool.UTF8_OUTPUT_PREFIX + "Get-ChildItem |`");
     }
 
     // ── 平台门（pi shell.ts:126-131 错文逐字）─────────────────────

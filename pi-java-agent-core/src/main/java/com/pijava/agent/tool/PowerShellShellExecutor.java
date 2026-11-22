@@ -28,7 +28,7 @@ public final class PowerShellShellExecutor implements ShellExecutor {
      * pi {@code getPowerShellConfig}（:124-135）：平台门在**执行时**（不在注册时），
      * 错文逐字。
      */
-    static String resolvePowerShell() throws IOException {
+    public static String resolvePowerShell() throws IOException {
         if (!DefaultShellExecutor.isWindows()) {
             throw new IOException("The powershell tool is only available on Windows.");
         }

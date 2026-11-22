@@ -49,6 +49,10 @@ final class ShellProcessEngine {
         pb.redirectErrorStream(true);
 
         var process = pb.start();
+        // The shell can exit while descendants keep the pipes open; record its own exit time so the
+        // timeout message can tell "shell gone, background still writing" apart (pi bash.ts:157-160）。
+        var exitNanos = new java.util.concurrent.atomic.AtomicLong(-1L);
+        process.onExit().thenAccept(p -> exitNanos.compareAndSet(-1L, System.nanoTime()));
         if (stdinTransport) {
             process.getOutputStream().write(command.getBytes(StandardCharsets.UTF_8));
             process.getOutputStream().close();
@@ -85,6 +89,7 @@ final class ShellProcessEngine {
 
             int exitCode;
             boolean timedOut = false;
+            ShellResult.TimeoutShellExit timeoutShellExit = null;
             try {
                 if (options.timeoutMillis().isPresent()) {
                     exitCode = future.get(options.timeoutMillis().getAsLong(), TimeUnit.MILLISECONDS);
@@ -93,6 +98,12 @@ final class ShellProcessEngine {
                 }
             } catch (TimeoutException e) {
                 timedOut = true;
+                long exitedAt = exitNanos.get();
+                if (exitedAt != -1L && !process.isAlive()) {
+                    long afterMs = Math.max(0L, exitedAt - startNanos) / 1_000_000L;
+                    timeoutShellExit = new ShellResult.TimeoutShellExit(
+                        process.exitValue(), Math.round(afterMs / 100.0) / 10.0);
+                }
                 process.destroyForcibly();
                 try {
                     exitCode = process.waitFor();
@@ -123,7 +134,8 @@ final class ShellProcessEngine {
                 timedOut,
                 false,  // truncation handled by the tool layer
                 outputLines,
-                outputStr.getBytes(StandardCharsets.UTF_8).length
+                outputStr.getBytes(StandardCharsets.UTF_8).length,
+                timeoutShellExit
             );
         }
     }

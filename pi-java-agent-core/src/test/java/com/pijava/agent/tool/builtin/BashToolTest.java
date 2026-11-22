@@ -104,6 +104,26 @@ class BashToolTest {
             .hasMessage("Command timed out after 0.5 seconds");
     }
 
+    @Test
+    void timeoutWithShellExitAddsTheShellCodeAndTime() {
+        // pi bash.ts:405-412：shell 已退出、后台进程还占着管道时报告两件事。
+        var result = new ShellResult("partial", 0, true, false, 1, 7,
+            new ShellResult.TimeoutShellExit(3, 2.5));
+        var context = context(captureShellOptions(result));
+
+        assertThatThrownBy(() -> BashTool.create().execute("id",
+                new BashTool.BashInput("sleep 99", Optional.of(30.0)), null, null, context))
+            .isInstanceOf(RuntimeException.class)
+            .hasMessage("partial\n\nCommand timed out after 30 seconds. The shell exited with "
+                + "code 3 after 2.5 seconds, but background processes it started kept writing "
+                + "output until the timeout.");
+    }
+
+    @Test
+    void shellResultWithoutShellExitLeavesTheComponentNull() {
+        assertThat(new ShellResult("ok", 0, false, false, 1, 2).timeoutShellExit()).isNull();
+    }
+
     // ── 截断 notice 三分支（pi bash.ts:317-330 逐字）──────────────
 
     @Test

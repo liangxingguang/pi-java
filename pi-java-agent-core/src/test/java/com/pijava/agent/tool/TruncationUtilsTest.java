@@ -6,6 +6,26 @@ import static org.assertj.core.api.Assertions.assertThat;
 class TruncationUtilsTest {
 
     @Test
+    void truncateLineLeavesNoLoneSurrogate() {
+        // 切口落在 emoji 代理对中间时把整个字符留在切口外（pi sliceHead，truncate.ts:282-289）。
+        String line = "ab😀cd";
+        var result = TruncationUtils.truncateLine(line, 3);   // 切点在第 3 单元（emoji 低代理）
+        assertThat(result.text()).isEqualTo("ab... [truncated]");
+        assertThat(result.wasTruncated()).isTrue();
+    }
+
+    @Test
+    void sliceHeadAndTailDoNotSplitSurrogatePairs() {
+        assertThat(TruncationUtils.sliceHead("ab😀cd", 3)).isEqualTo("ab");
+        assertThat(TruncationUtils.sliceHead("ab😀cd", 4)).isEqualTo("ab😀");
+        assertThat(TruncationUtils.sliceHead("ab😀cd", 0)).isEmpty();
+        assertThat(TruncationUtils.sliceHead("ab😀cd", 99)).isEqualTo("ab😀cd");
+        assertThat(TruncationUtils.sliceTail("ab😀cd", 4)).isEqualTo("😀cd");
+        assertThat(TruncationUtils.sliceTail("ab😀cd", 5)).isEqualTo("b😀cd");
+        assertThat(TruncationUtils.sliceTail("ab😀cd", 0)).isEmpty();
+    }
+
+    @Test
     void formatSizeBytes() {
         assertThat(TruncationUtils.formatSize(500)).isEqualTo("500B");
     }
