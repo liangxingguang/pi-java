@@ -204,7 +204,7 @@ public final class ExtensionResults {
      * "stop" 结束本轮保温直到下一个真实请求。
      */
     public record CacheWarmingDecisionEventResult(
-            com.pijava.coding.agent.core.CacheWarming.Action action) {}
+            com.pijava.ai.api.CacheWarmingPolicy.Action action) {}
 
     // ═══════════════════════════════════════════════════════════
     // 批 23（docs/34 T3）：project_trust 族（pi types.ts:685-700）

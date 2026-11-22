@@ -393,7 +393,7 @@ public sealed interface ExtensionEvent {
      */
     record CacheWarmingDecisionEvent(double warmCost, double missCost,
                                      double continuationProbability,
-                                     com.pijava.coding.agent.core.CacheWarming.Action action)
+                                     com.pijava.ai.api.CacheWarmingPolicy.Action action)
             implements ExtensionEvent {}
 
     // ═══════════════════════════════════════════════════════════

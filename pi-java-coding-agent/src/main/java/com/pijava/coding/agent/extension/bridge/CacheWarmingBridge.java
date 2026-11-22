@@ -2,7 +2,7 @@ package com.pijava.coding.agent.extension.bridge;
 
 import java.util.concurrent.atomic.AtomicReference;
 
-import com.pijava.coding.agent.core.CacheWarming;
+import com.pijava.ai.api.CacheWarmingPolicy;
 import com.pijava.coding.agent.extension.ExtensionContext;
 import com.pijava.coding.agent.extension.ExtensionEventBus;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.CacheWarmingDecisionEvent;
@@ -43,7 +43,7 @@ public final class CacheWarmingBridge {
      *
      * @return 最终动作；无覆写 ⇒ 事件自带的 pi 决策
      */
-    public CacheWarming.Action emitOrDefault(CacheWarmingDecisionEvent event) {
+    public CacheWarmingPolicy.Action emitOrDefault(CacheWarmingDecisionEvent event) {
         var bus = busRef.get();
         if (bus == null || !bus.hasHandlers(CACHE_WARMING_DECISION)) {
             return event.action();

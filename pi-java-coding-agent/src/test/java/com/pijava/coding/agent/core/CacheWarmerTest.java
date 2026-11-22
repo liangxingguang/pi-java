@@ -17,7 +17,7 @@ import com.pijava.agent.entry.Entry;
 import com.pijava.agent.harness.Context;
 import com.pijava.agent.harness.StreamOptions;
 import com.pijava.ai.Usage;
-import com.pijava.ai.catalog.CacheRetention;
+import com.pijava.ai.api.CacheWarmingPolicy;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.catalog.PromptCacheLifetimes;
 import com.pijava.ai.message.Message;
@@ -108,7 +108,7 @@ class CacheWarmerTest {
         /** 非 null ⇒ streamToFinal 改走它（阻塞/失败臂）。 */
         java.util.function.Function<ModelInfo, Message.AssistantMessage> result;
         /** 非 null ⇒ decide 改走它（覆写/veto/时钟推进臂）。 */
-        java.util.function.Function<CacheWarmingDecisionEvent, CacheWarming.Action> decideOverride;
+        java.util.function.Function<CacheWarmingDecisionEvent, CacheWarmingPolicy.Action> decideOverride;
 
         FakeRuntime() {
             warmer = new CacheWarmer(
@@ -167,36 +167,8 @@ class CacheWarmerTest {
     }
 
     // ── pi :127-145 eligibility/timing 矩阵 ─────────────────────────────
-
-    @Test
-    void derivesEligibilityAndTimingFromRetentionAndProviderBehavior() {
-        var noOptions = new StreamOptions(OptionalInt.empty(),
-            java.util.OptionalDouble.empty(), Optional.empty(), Optional.empty(),
-            Optional.empty(), null);
-        var longRetention = new StreamOptions(OptionalInt.empty(),
-            java.util.OptionalDouble.empty(), Optional.empty(),
-            Optional.of(CacheRetention.LONG), Optional.empty(), null);
-        var noRetention = new StreamOptions(OptionalInt.empty(),
-            java.util.OptionalDouble.empty(), Optional.empty(),
-            Optional.of(CacheRetention.NONE), Optional.empty(), null);
-        var openaiLongCache = withPromptCache(OPENAI, new PromptCacheLifetimes(300, 86_400));
-
-        assertThat(CacheWarmingEconomics.getPromptCacheTtlMs(ADAPTIVE, noOptions)).isEqualTo(300_000L);
-        assertThat(CacheWarmingEconomics.getPromptCacheTtlMs(ADAPTIVE, longRetention)).isEqualTo(3_600_000L);
-        assertThat(CacheWarmingEconomics.getPromptCacheTtlMs(ADAPTIVE, noRetention)).isNull();
-        assertThat(CacheWarmingEconomics.getPromptCacheTtlMs(openaiLongCache, longRetention))
-            .isEqualTo(86_400_000L);
-        assertThat(CacheWarmingEconomics.getPromptCacheTtlMs(UNKNOWN, noOptions)).isNull();
-
-        assertThat(CacheWarmingEconomics.getCacheWarmingDelayMs(300_000)).isEqualTo(270_000L);
-        assertThat(CacheWarmingEconomics.getCacheWarmingDelayMs(60_000)).isEqualTo(50_000L);
-        assertThat(CacheWarmingEconomics.getCacheWarmingDelayMs(10_000)).isNull();
-
-        assertThat(CacheWarmingEconomics.isReplayable(BUDGET, optionsWithReasoning())).isFalse();
-        assertThat(CacheWarmingEconomics.isReplayable(BUDGET, noOptions)).isTrue();
-        assertThat(CacheWarmingEconomics.isReplayable(ADAPTIVE, optionsWithReasoning())).isTrue();
-        assertThat(CacheWarmingEconomics.isReplayable(OPENAI, optionsWithReasoning())).isTrue();
-    }
+    // docs/16：TTL／延迟／可重放的纯函数断言已迁至 ai 的 CacheWarmingPolicyTest；
+    // 本文件只保留宿主侧的调度与状态机行为。
 
     // ── pi :147-180 replay 保 options＋二轮 schedule ────────────────────
 
@@ -220,7 +192,7 @@ class CacheWarmerTest {
         assertThat(fake.events).hasSize(1);
         var event = fake.events.get(0);
         assertThat(event.continuationProbability()).isEqualTo(1.0);
-        assertThat(event.action()).isEqualTo(CacheWarming.Action.WARM);
+        assertThat(event.action()).isEqualTo(CacheWarmingPolicy.Action.WARM);
         assertThat(event.missCost()).isCloseTo(0.575, within(1e-9));
         assertThat(event.warmCost()).isCloseTo(0.050025, within(1e-9));
 
@@ -253,7 +225,7 @@ class CacheWarmerTest {
         fake.decideOverride = event -> {
             // decide 期间时钟越过 deadline（pi :204-208 的 setSystemTime 对位）。
             fake.scheduler.advance(15_001);
-            return CacheWarming.Action.WARM;
+            return CacheWarmingPolicy.Action.WARM;
         };
         fake.warmer.start(request(), () -> true);
         fake.scheduler.advance(270_000);
@@ -276,13 +248,13 @@ class CacheWarmerTest {
         assertThat(stopped.state()).isEqualTo("inactive");
         assertThat(stopped.reason()).isEqualTo("expected savings below threshold");
         assertThat(stopped.decision()).isNotNull();
-        assertThat(stopped.decision().action()).isEqualTo(CacheWarming.Action.STOP);
+        assertThat(stopped.decision().action()).isEqualTo(CacheWarmingPolicy.Action.STOP);
         assertThat(stopped.decision().economicsAvailable()).isTrue();
         assertThat(stopped.extensionOverride()).isEqualTo(Boolean.FALSE);
 
         var forced = new FakeRuntime();
         forced.branch = branchWithPrompt(5_000);
-        forced.decideOverride = event -> CacheWarming.Action.WARM;
+        forced.decideOverride = event -> CacheWarmingPolicy.Action.WARM;
         forced.warmer.start(request(), () -> true);
         forced.scheduler.advance(270_000);
         assertThat(forced.calls).hasSize(1);
@@ -291,7 +263,7 @@ class CacheWarmerTest {
         forced.warmer.cancel();
 
         var vetoed = new FakeRuntime();
-        vetoed.decideOverride = event -> CacheWarming.Action.STOP;
+        vetoed.decideOverride = event -> CacheWarmingPolicy.Action.STOP;
         vetoed.warmer.start(request(), () -> true);
         vetoed.scheduler.advance(270_000);
         assertThat(vetoed.calls).isEmpty();
@@ -392,8 +364,8 @@ class CacheWarmerTest {
 
     @Test
     void formatsStatusAndUsageEntries() {
-        var decision = new CacheWarming.Decision("idle", 0.013, 0.621, 0.6, 0.36, true,
-            CacheWarming.Action.WARM);
+        var decision = new CacheWarmingPolicy.Decision(CacheWarmingPolicy.Phase.IDLE,
+            0.013, 0.621, 0.6, 0.36, true, CacheWarmingPolicy.Action.WARM);
         var status = new CacheWarming.Status("scheduled", null, 222_000L, decision, null);
         assertThat(CacheWarmingFormatting.formatStatus(status, 0)).isEqualTo(
             "Decision in 3m 42s (60% continuation probability,"

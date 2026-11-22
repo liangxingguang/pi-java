@@ -3,6 +3,7 @@ package com.pijava.coding.agent.core;
 import java.util.Locale;
 
 import com.pijava.agent.entry.Entry;
+import com.pijava.ai.api.CacheWarmingPolicy;
 
 /**
  * 批 13（docs/24 T1）：pi {@code cache-warmer.ts:403-453} 的格式化函数族
@@ -21,18 +22,19 @@ public final class CacheWarmingFormatting {
     }
 
     /** pi :407-416。 */
-    private static String formatEconomics(CacheWarming.Decision decision) {
+    private static String formatEconomics(CacheWarmingPolicy.Decision decision) {
         if (!decision.economicsAvailable()) {
             return "cache economics unavailable";
         }
         var probability = Math.round(decision.continuationProbability() * 100);
-        var probabilityText = "streaming".equals(decision.phase())
+        var probabilityText = decision.phase() == CacheWarmingPolicy.Phase.STREAMING
             ? probability + "% continuation probability while agent is running"
             : probability + "% continuation probability";
-        var comparison = decision.action() == CacheWarming.Action.WARM ? ">=" : "<";
+        var comparison = decision.action() == CacheWarmingPolicy.Action.WARM ? ">=" : "<";
         return probabilityText + ", expected savings " + formatDollars(decision.expectedSavings())
             + " " + comparison + " $"
-            + String.format(Locale.ROOT, "%.3f", CacheWarmer.MINIMUM_EXPECTED_SAVINGS);
+            + String.format(Locale.ROOT, "%.3f",
+                CacheWarmingPolicy.MINIMUM_EXPECTED_SAVINGS);
     }
 
     /** pi :418-430。 */

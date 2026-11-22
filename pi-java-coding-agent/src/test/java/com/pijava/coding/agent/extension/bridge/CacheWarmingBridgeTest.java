@@ -7,7 +7,7 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
-import com.pijava.coding.agent.core.CacheWarming;
+import com.pijava.ai.api.CacheWarmingPolicy;
 import com.pijava.coding.agent.extension.ExtensionError;
 import com.pijava.coding.agent.extension.ExtensionEventBus;
 import com.pijava.coding.agent.extension.event.ExtensionEvent.CacheWarmingDecisionEvent;
@@ -22,7 +22,7 @@ import com.pijava.coding.agent.extension.event.ExtensionResults.CacheWarmingDeci
  */
 class CacheWarmingBridgeTest {
 
-    private static CacheWarmingDecisionEvent event(CacheWarming.Action action) {
+    private static CacheWarmingDecisionEvent event(CacheWarmingPolicy.Action action) {
         return new CacheWarmingDecisionEvent(0.05, 0.5, 0.15, action);
     }
 
@@ -31,14 +31,14 @@ class CacheWarmingBridgeTest {
     void usesTheLastExtensionOverride() {
         var bus = new ExtensionEventBus();
         bus.on("ext-a", ExtensionEventSpec.CACHE_WARMING_DECISION,
-            (event, ctx) -> new CacheWarmingDecisionEventResult(CacheWarming.Action.WARM));
+            (event, ctx) -> new CacheWarmingDecisionEventResult(CacheWarmingPolicy.Action.WARM));
         bus.on("ext-b", ExtensionEventSpec.CACHE_WARMING_DECISION,
-            (event, ctx) -> new CacheWarmingDecisionEventResult(CacheWarming.Action.STOP));
+            (event, ctx) -> new CacheWarmingDecisionEventResult(CacheWarmingPolicy.Action.STOP));
         var bridge = new CacheWarmingBridge();
         bridge.install(bus, null);
 
-        assertThat(bridge.emitOrDefault(event(CacheWarming.Action.WARM)))
-            .isEqualTo(CacheWarming.Action.STOP);
+        assertThat(bridge.emitOrDefault(event(CacheWarmingPolicy.Action.WARM)))
+            .isEqualTo(CacheWarmingPolicy.Action.STOP);
     }
 
     /** 处理器抛错 ⇒ emitError＋继续（决策由后续处理器照常推进）。 */
@@ -52,12 +52,12 @@ class CacheWarmingBridgeTest {
                 throw new IllegalStateException("boom");
             });
         bus.on("ext-good", ExtensionEventSpec.CACHE_WARMING_DECISION,
-            (event, ctx) -> new CacheWarmingDecisionEventResult(CacheWarming.Action.STOP));
+            (event, ctx) -> new CacheWarmingDecisionEventResult(CacheWarmingPolicy.Action.STOP));
         var bridge = new CacheWarmingBridge();
         bridge.install(bus, null);
 
-        assertThat(bridge.emitOrDefault(event(CacheWarming.Action.WARM)))
-            .isEqualTo(CacheWarming.Action.STOP);
+        assertThat(bridge.emitOrDefault(event(CacheWarmingPolicy.Action.WARM)))
+            .isEqualTo(CacheWarmingPolicy.Action.STOP);
         assertThat(errors).hasSize(1);
         assertThat(errors.get(0).extensionName()).isEqualTo("ext-bad");
     }
@@ -75,8 +75,8 @@ class CacheWarmingBridgeTest {
         var bridge = new CacheWarmingBridge();
         bridge.install(bus, null);
 
-        assertThat(bridge.emitOrDefault(event(CacheWarming.Action.WARM)))
-            .isEqualTo(CacheWarming.Action.WARM);
+        assertThat(bridge.emitOrDefault(event(CacheWarmingPolicy.Action.WARM)))
+            .isEqualTo(CacheWarmingPolicy.Action.WARM);
         assertThat(errors).hasSize(1);
     }
 
@@ -88,18 +88,18 @@ class CacheWarmingBridgeTest {
             (event, ctx) -> new CacheWarmingDecisionEventResult(null));
         var bridge = new CacheWarmingBridge();
         bridge.install(bus, null);
-        assertThat(bridge.emitOrDefault(event(CacheWarming.Action.STOP)))
-            .isEqualTo(CacheWarming.Action.STOP);
+        assertThat(bridge.emitOrDefault(event(CacheWarmingPolicy.Action.STOP)))
+            .isEqualTo(CacheWarmingPolicy.Action.STOP);
 
         // 无订阅 ⇒ 事件自带 action（pi sdk.ts:338）。
         var empty = new CacheWarmingBridge();
         empty.install(new ExtensionEventBus(), null);
-        assertThat(empty.emitOrDefault(event(CacheWarming.Action.WARM)))
-            .isEqualTo(CacheWarming.Action.WARM);
+        assertThat(empty.emitOrDefault(event(CacheWarmingPolicy.Action.WARM)))
+            .isEqualTo(CacheWarmingPolicy.Action.WARM);
 
         // 未安装（--no-extensions 臂）⇒ 同。
         var bare = new CacheWarmingBridge();
-        assertThat(bare.emitOrDefault(event(CacheWarming.Action.STOP)))
-            .isEqualTo(CacheWarming.Action.STOP);
+        assertThat(bare.emitOrDefault(event(CacheWarmingPolicy.Action.STOP)))
+            .isEqualTo(CacheWarmingPolicy.Action.STOP);
     }
 }

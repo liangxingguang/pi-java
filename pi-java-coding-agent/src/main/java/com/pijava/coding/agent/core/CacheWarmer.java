@@ -12,6 +12,7 @@ import com.pijava.agent.entry.Entry;
 import com.pijava.agent.harness.Context;
 import com.pijava.agent.harness.StreamOptions;
 import com.pijava.ai.Usage;
+import com.pijava.ai.api.CacheWarmingPolicy;
 import com.pijava.ai.catalog.CacheRetention;
 import com.pijava.ai.catalog.ModelInfo;
 import com.pijava.ai.message.Message;
@@ -43,14 +44,8 @@ import com.pijava.coding.agent.extension.event.ExtensionEvent.CacheWarmingDecisi
  */
 public final class CacheWarmer {
 
-    /** pi :16——streaming 阶段安全窗：自发起请求起不超过一小时。 */
-    static final long MAX_WARMING_AGE_MS = 60 * 60_000L;
-    /** pi :18——idle 阶段安全窗（估计可靠性随年龄下降）。 */
-    static final long MAX_IDLE_WARMING_AGE_MS = 30 * 60_000L;
-    /** pi :20——期望节省下限（美元）。 */
-    static final double MINIMUM_EXPECTED_SAVINGS = 0.05;
-    /** pi :26——idle 期间真实请求先到的概率（pi 实测常量，每会话估计并不更优）。 */
-    static final double IDLE_CONTINUATION_PROBABILITY = 0.15;
+    // 四个策略常量与三个纯函数在 ai 的 {@link CacheWarmingPolicy}（docs/16，pi
+    // packages/ai/src/cache-warming.ts:16-58）；本类是宿主调度半边（pi core/cache-warmer.ts）。
 
     /** pi {@code ModelRuntime.streamSimple} 的 java 形（暖重放专用车道调用）。 */
     @FunctionalInterface
@@ -99,7 +94,7 @@ public final class CacheWarmer {
     @FunctionalInterface
     public interface DecideHook {
         /** 返回最终动作；覆写语义由装配侧（{@code CacheWarmingBridge}）实现。 */
-        CacheWarming.Action decide(CacheWarmingDecisionEvent event);
+        CacheWarmingPolicy.Action decide(CacheWarmingDecisionEvent event);
     }
 
     private final WarmStreamFn warmStream;
@@ -134,7 +129,7 @@ public final class CacheWarmer {
             null, null, null);
     }
 
-    // ── 三纯函数（pi :29-58）在 {@link CacheWarmingEconomics}（≤500 行规拆分）──
+    // ── 三纯函数（pi :29-58）在 ai 的 {@link CacheWarmingPolicy}（docs/16）──
 
     // ── 状态读口（pi :186-202）───────────────────────────────────────
 
@@ -179,11 +174,12 @@ public final class CacheWarmer {
         }
         var info = modelInfo.apply(request.model())
             .orElseGet(() -> ModelInfo.minimal(request.model()));
-        if (!CacheWarmingEconomics.isReplayable(info, options)) {
+        if (!CacheWarmingPolicy.isReplayable(info, options.reasoning().isPresent())) {
             stop("request cannot be replayed safely");
             return;
         }
-        var ttlMs = CacheWarmingEconomics.getPromptCacheTtlMs(info, options);
+        var ttlMs = CacheWarmingPolicy.promptCacheTtlMs(info, options.cacheRetention(),
+            System.getenv("PI_CACHE_RETENTION"));
         if (ttlMs == null) {
             stop(options.cacheRetention().isPresent()
                     && options.cacheRetention().get() == CacheRetention.NONE
@@ -191,7 +187,7 @@ public final class CacheWarmer {
                 : "cache lifetime unavailable");
             return;
         }
-        var delayMs = CacheWarmingEconomics.getCacheWarmingDelayMs(ttlMs);
+        var delayMs = CacheWarmingPolicy.delayMs(ttlMs);
         if (delayMs == null) {
             stop("cache lifetime unavailable");
             return;
@@ -213,8 +209,8 @@ public final class CacheWarmer {
             stop("agent run settled");
             return;
         }
-        active.phase = "idle";
-        var deadline = active.startedAt + MAX_IDLE_WARMING_AGE_MS;
+        active.phase = CacheWarmingPolicy.Phase.IDLE;
+        var deadline = active.startedAt + CacheWarmingPolicy.MAX_IDLE_AGE_MS;
         if (active.nextWarmAt > deadline || nowMs.getAsLong() >= deadline) {
             stop("30-minute idle safety limit reached");
         }
@@ -258,7 +254,8 @@ public final class CacheWarmer {
     }
 
     /** pi :279-282（携决策臂——停止的那次决策留给 {@code /session} 展示）。 */
-    private void stop(String reason, CacheWarming.Decision decision, boolean extensionOverride) {
+    private void stop(String reason, CacheWarmingPolicy.Decision decision,
+                      boolean extensionOverride) {
         clearRun();
         this.inactive = new CacheWarming.Status("inactive", reason, null, decision,
             extensionOverride);
@@ -272,10 +269,10 @@ public final class CacheWarmer {
         // 计时器可能在休眠/事件循环阻塞后迟到：预留一半的原到期余量给延迟与派发；
         // 迟到的刷新很可能是一笔全价 cache write，而不是 warm。
         active.refreshDeadlineAt = active.nextWarmAt + (active.ttlMs - active.delayMs) / 2;
-        var deadline = active.startedAt + ("idle".equals(active.phase)
-            ? MAX_IDLE_WARMING_AGE_MS : MAX_WARMING_AGE_MS);
+        var deadline = active.startedAt + (active.phase == CacheWarmingPolicy.Phase.IDLE
+            ? CacheWarmingPolicy.MAX_IDLE_AGE_MS : CacheWarmingPolicy.MAX_AGE_MS);
         if (active.nextWarmAt > deadline || now >= deadline) {
-            stop("idle".equals(active.phase)
+            stop(active.phase == CacheWarmingPolicy.Phase.IDLE
                 ? "30-minute idle safety limit reached" : "one-hour safety limit reached");
             return;
         }
@@ -315,7 +312,7 @@ public final class CacheWarmer {
             return;
         }
         var extensionOverride = action != decision.action();
-        if (action == CacheWarming.Action.STOP) {
+        if (action == CacheWarmingPolicy.Action.STOP) {
             var reason = extensionOverride
                 ? "stopped by extension"
                 : decision.economicsAvailable()
@@ -361,7 +358,8 @@ public final class CacheWarmer {
      * {@code disableContinuation: true} 在暖路径请求面落地（{@code DefaultProviders.warmStreamFnFor}）。
      */
     private static StreamOptions withWarmOverrides(StreamOptions options) {
-        return new StreamOptions(OptionalInt.of(1), options.temperature(),
+        return new StreamOptions(OptionalInt.of(
+            CacheWarmingPolicy.WARM_REQUEST_OPTIONS.maxTokens()), options.temperature(),
             options.reasoning(), options.cacheRetention(), options.sessionId(),
             options.thinkingBudgets());
     }
@@ -399,7 +397,7 @@ public final class CacheWarmer {
         if ("off".equals(mode)) {
             return "cache warming disabled";
         }
-        if ("streaming".equals(mode) && "idle".equals(active.phase)) {
+        if ("streaming".equals(mode) && active.phase == CacheWarmingPolicy.Phase.IDLE) {
             return "agent run settled";
         }
         return null;
@@ -419,8 +417,8 @@ public final class CacheWarmer {
 
     // ── 经济学 ──────────────────────────────────────────────────────
 
-    /** pi :378-400（本体在 {@link CacheWarmingEconomics}——≤500 行规拆分，评审 I2）。 */
-    private CacheWarming.Decision evaluate(ActiveRun active) {
+    /** pi :378-400（宿主适配在 {@link CacheWarmingEconomics}，决策在 ai 的 {@link CacheWarmingPolicy}）。 */
+    private CacheWarmingPolicy.Decision evaluate(ActiveRun active) {
         return CacheWarmingEconomics.evaluate(modelInfo, active.request.model(),
             sessionAccess.getBranch(), active.phase);
     }
@@ -436,7 +434,7 @@ public final class CacheWarmer {
         final long startedAt;
         final AbortHandle abort = new AbortHandle();
         volatile long refreshDeadlineAt;
-        volatile String phase = "streaming";
+        volatile CacheWarmingPolicy.Phase phase = CacheWarmingPolicy.Phase.STREAMING;
         volatile long nextWarmAt;
         volatile boolean extensionOverride;
         volatile WarmScheduler.Cancellable timer;

@@ -281,10 +281,7 @@ public final class DefaultProviders {
             options.identity(), options.env());
     }
 
-    /**
-     * 暖请求的 maxRetries 覆盖（pi cache-warmer.ts:332-338 的 {@code maxRetries: 0}）。
-     * 包可见是为了夹具：docs/13 §3.7 的重建点之一。
-     */
+    /** 暖请求的 maxRetries 覆盖（pi cache-warmer.ts:332-338 的 {@code maxRetries: 0}）；夹具可见。 */
     static ApiOptions withMaxRetries(ApiOptions options, int maxRetries) {
         return new ApiOptions(options.baseUrl(), options.apiKey(), options.timeout(),
             maxRetries, options.extra(), options.authKind(), options.telemetry(),
@@ -316,12 +313,13 @@ public final class DefaultProviders {
             });
             // pi cache-warming.ts:76-79：暖重放重复上一请求，不改写会话的 Anthropic
             // thread 状态（extra 通道见 AnthropicStreamSupport.disableContinuationOf）。
+            var warm = com.pijava.ai.api.CacheWarmingPolicy.WARM_REQUEST_OPTIONS;
             var extra = requestExtra(options, sessionId);
-            extra.put("disableContinuation", true);
+            extra.put("disableContinuation", warm.disableContinuation());
             var resolved = apiOptions(args, model.provider(), settings,
                 Credentials::resolveCredential, extra);
-            // ①：maxRetries 钉 0（authKind 与 telemetry 保真；docs/13 §3.7）。
-            resolved = withMaxRetries(resolved, 0);
+            // ①：maxRetries 钉 0（docs/13 §3.7）；三项覆盖值唯一真源 = ai 的 WARM_REQUEST_OPTIONS。
+            resolved = withMaxRetries(resolved, warm.maxRetries());
             return streamBlocking(provider, model, context, options, resolved, bridge,
                 settings, true, sessionId);
         };
