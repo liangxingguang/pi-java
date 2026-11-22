@@ -1,21 +1,22 @@
 package com.pijava.agent.tool.builtin;
 import com.pijava.ai.AbortSignal;
 
+import java.io.File;
 import java.io.IOException;
-import java.nio.file.FileSystems;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.PathMatcher;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 
 import com.pijava.agent.tool.AgentTool;
 import com.pijava.agent.tool.ExecutionMode;
+import com.pijava.agent.tool.GlobPattern;
 import com.pijava.agent.tool.PathUtils;
 import com.pijava.agent.tool.ToolContext;
 import com.pijava.agent.tool.ToolResult;
@@ -29,10 +30,11 @@ import com.pijava.ai.message.ContentBlock;
  * （anchor ea448f454，批 3/docs/22 §3；由旧 {@code GlobTool} 改名＋参数集换血）。
  *
  * <p>Schema 三参（pattern/path/limit）、描述、snippet、相对路径输出、告示逐字。
- * fd 语义：无 {@code /} 的 pattern 匹配 basename；含 {@code /} ⇒ full-path 模式
- * ＋ {@code **&#47;} 前缀适配（find.ts:201-213），对<b>绝对候选路径</b>匹配
- * （java {@code **} 不匹配零段，相对路径会漏根下直接命中——fd 本就匹配绝对路径）。
- * 目录与文件都入选（fd 无 --type）。引擎是纯 Java（裁决①）；方言差见 docs/22 §5.4 D5。</p>
+ * fd 语义（find.ts:209-252）：Windows 先归一 {@code \} 并把开头的 {@code ./} 剥掉；
+ * 无 {@code /} 的 pattern 匹配 basename，大小写按 smart case；含 {@code /} 的
+ * <b>相对</b> pattern 锚定搜索根（{@code src/*.ts} 不吃 {@code pkg/src/b.ts}），
+ * 绝对 pattern 匹配绝对路径。目录与文件都入选（fd 无 --type）。
+ * 引擎是纯 Java（裁决①）；方言差见 docs/22 §5.4 D5。</p>
  */
 public final class FindTool {
     /** pi {@code DEFAULT_LIMIT}（find.ts:41）。 */
@@ -69,7 +71,8 @@ public final class FindTool {
                     "type", "object",
                     "properties", Map.of(
                         "pattern", Map.of("type", "string",
-                            "description", "Glob pattern to match files, e.g. '*.ts', '**/*.json', or 'src/**/*.spec.ts'"),
+                            "description", "Glob pattern relative to the search directory, e.g. "
+                                + "'src/**/*.ts'. Without '/', e.g. '*.ts', it matches file names at any depth"),
                         "path", Map.of("type", "string",
                             "description", "Directory to search in (default: current directory)"),
                         "limit", Map.of("type", "number",
@@ -109,79 +112,88 @@ public final class FindTool {
         if (!Files.isDirectory(root)) {
             throw new IllegalArgumentException("Not a directory: " + searchPath);
         }
-        // pi find.ts:112：limit ?? DEFAULT_LIMIT，无 max(1,…) —— 0/负值 ⇒ 空结果，照抄。
-        int effectiveLimit = params.limit().orElse(DEFAULT_LIMIT);
+        // fd treats --max-results 0 as unlimited, so a limit below 1 means 1（find.ts:114）。
+        int effectiveLimit = Math.max(1, params.limit().orElse(DEFAULT_LIMIT));
 
-        // fd --glob 语义（find.ts:204-213）：默认匹配 basename；含 "/" ⇒ --full-path
-        // 且未锚定时补 "**/" 前缀，对绝对候选路径匹配。
-        String p = params.pattern();
-        boolean fullPath = p.contains("/");
-        String eff = p;
-        if (fullPath && !p.startsWith("/") && !p.startsWith("**/") && !p.equals("**")) {
-            eff = "**/" + p;
-        }
-        final PathMatcher matcher = FileSystems.getDefault().getPathMatcher("glob:" + eff);
+        // fd 语义（find.ts:209-252）：pattern 预处理 + smart case + 锚定。
+        String pattern = normalizePattern(params.pattern(), File.separatorChar == '\\');
+        boolean isPathPattern = pattern.contains("/");
+        boolean ignoreCase = pattern.equals(pattern.toLowerCase(Locale.ROOT));
+        boolean isRelativePathPattern = isPathPattern && !isAbsolutePattern(pattern);
+        final GlobPattern matcher = GlobPattern.compile(pattern, ignoreCase);
 
-        var ignore = new ToolIgnoreFilter(root);
-        var results = new ArrayList<String>();
-        try {
-            Files.walkFileTree(root, new SimpleFileVisitor<>() {
-                @Override
-                public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
-                    Path dirName = dir.getFileName();
-                    if (dirName != null && dirName.toString().equals(".git")) {
+        final var ignore = new ToolIgnoreFilter(root);
+        final var results = new ArrayList<String>();
+
+        class Walker extends SimpleFileVisitor<Path> {
+            private boolean limitReached;
+
+            @Override
+            public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
+                Path dirName = dir.getFileName();
+                if (dirName != null && dirName.toString().equals(".git")) {
+                    return FileVisitResult.SKIP_SUBTREE;
+                }
+                if (!dir.equals(root)) {
+                    if (ignore.isIgnored(rel(dir), true)) {
                         return FileVisitResult.SKIP_SUBTREE;
                     }
-                    if (!dir.equals(root)) {
-                        if (ignore.isIgnored(rel(dir), true)) {
-                            return FileVisitResult.SKIP_SUBTREE;
-                        }
-                        // fd 无 --type：目录也入选（find.ts:201 注释；输出不带尾分隔符）。
-                        if (matches(dir)) {
-                            add(rel(dir));
-                        }
+                    // fd 无 --type：目录也入选（输出不带尾分隔符）。
+                    if (matches(dir)) {
+                        add(rel(dir));
                     }
-                    ignore.push(dir);
-                    return FileVisitResult.CONTINUE;
                 }
+                ignore.push(dir);
+                return FileVisitResult.CONTINUE;
+            }
 
-                @Override
-                public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
-                    if (!ignore.isIgnored(rel(file), false) && matches(file)) {
-                        add(rel(file));
-                    }
-                    return FileVisitResult.CONTINUE;
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
+                if (!ignore.isIgnored(rel(file), false) && matches(file)) {
+                    add(rel(file));
                 }
+                return FileVisitResult.CONTINUE;
+            }
 
-                @Override
-                public FileVisitResult postVisitDirectory(Path dir, IOException exc) {
-                    ignore.pop();
-                    return FileVisitResult.CONTINUE;
-                }
+            @Override
+            public FileVisitResult postVisitDirectory(Path dir, IOException exc) {
+                ignore.pop();
+                return FileVisitResult.CONTINUE;
+            }
 
-                private void add(String relPath) {
-                    if (results.size() >= effectiveLimit) {
-                        throw new LimitReached();   // ≙ fd --max-results 提前终止
-                    }
-                    results.add(relPath);
+            private void add(String relPath) {
+                // One result past the limit tells "exactly N" apart from "more than N"（#7121）。
+                if (results.size() >= effectiveLimit) {
+                    limitReached = true;
+                    throw new LimitReached();
                 }
+                results.add(relPath);
+            }
 
-                private boolean matches(Path candidate) {
-                    return fullPath
-                        ? matcher.matches(candidate.toAbsolutePath().normalize())
-                        : matcher.matches(candidate.getFileName());
+            private boolean matches(Path candidate) {
+                if (!isPathPattern) {
+                    Path name = candidate.getFileName();
+                    return name != null && matcher.matches(name.toString());
                 }
+                String target = isRelativePathPattern
+                    ? rel(candidate)
+                    : ToolIgnoreFilter.toPosix(candidate.toAbsolutePath().normalize());
+                return matcher.matches(target);
+            }
 
-                private String rel(Path candidate) {
-                    return ToolIgnoreFilter.toPosix(root.relativize(candidate));
-                }
-            });
+            private String rel(Path candidate) {
+                return ToolIgnoreFilter.toPosix(root.relativize(candidate));
+            }
+        }
+
+        var walker = new Walker();
+        try {
+            Files.walkFileTree(root, walker);
         } catch (LimitReached e) {
             // 达 limit 提前终止（fd --max-results 对位），结果即终局。
         }
 
-        // pi find.ts:275：relativized.length >= effectiveLimit。
-        boolean resultLimitReached = results.size() >= effectiveLimit;
+        boolean resultLimitReached = walker.limitReached;
         if (results.isEmpty()) {
             return ToolResult.success("No files found matching pattern"); // find.ts:261 逐字
         }
@@ -209,6 +221,26 @@ public final class FindTool {
             : new FindDetails(truncation.truncated() ? truncation : null, limitDetail);
         return new ToolResult<>(List.of(new ContentBlock.TextContent(output)),
             details, null, false, List.of());
+    }
+
+    /**
+     * fd 的 pattern 预处理（find.ts:209-212）：Windows 上 {@code \} 是路径分隔符，先归一成
+     * {@code /}；fd 的 full path 不含 {@code ./}，所以开头的一或多段 {@code ./} 剥掉。
+     * 包内可见以便夹具在不依赖平台时验证两个分支。
+     */
+    static String normalizePattern(String pattern, boolean windows) {
+        String p = windows ? pattern.replace('\\', '/') : pattern;
+        while (p.startsWith("./")) {
+            p = p.substring(2);
+        }
+        return p;
+    }
+
+    /** {@code path.isAbsolute} 的 glob 版：POSIX 根或 {@code C:/} 盘符。 */
+    private static boolean isAbsolutePattern(String pattern) {
+        return pattern.startsWith("/")
+            || (pattern.length() >= 3 && Character.isLetter(pattern.charAt(0))
+                && pattern.charAt(1) == ':' && pattern.charAt(2) == '/');
     }
 
     /** 达 limit 提前终止遍历的控制流信号（fd --max-results 对位）。 */

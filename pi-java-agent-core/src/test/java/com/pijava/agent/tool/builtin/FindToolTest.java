@@ -57,7 +57,8 @@ class FindToolTest {
         var p = (Map<String, Map<String, Object>>) schema.get("properties");
         assertThat(p.keySet()).containsExactlyInAnyOrder("pattern", "path", "limit");
         assertThat(p.get("pattern").get("description")).isEqualTo(
-            "Glob pattern to match files, e.g. '*.ts', '**/*.json', or 'src/**/*.spec.ts'");
+            "Glob pattern relative to the search directory, e.g. 'src/**/*.ts'. "
+                + "Without '/', e.g. '*.ts', it matches file names at any depth");
         assertThat(p.get("path").get("description"))
             .isEqualTo("Directory to search in (default: current directory)");
         assertThat(p.get("limit").get("description"))
@@ -88,19 +89,68 @@ class FindToolTest {
     }
 
     @Test
-    void slashPatternGetsStarStarPrefixLikeFdFullPath() throws Exception {
-        // fd --full-path ⇒ 'sub/*.txt' 变 '**/sub/*.txt'，任意深度都中。
-        Files.createDirectories(tmp.resolve("sub"));
-        Files.createDirectories(tmp.resolve("deep/sub"));
-        Files.writeString(tmp.resolve("sub/a.txt"), "a");
-        Files.writeString(tmp.resolve("deep/sub/b.txt"), "b");
-        Files.writeString(tmp.resolve("z.txt"), "c");
+    void relativePathPatternIsAnchoredAtSearchRoot() throws Exception {
+        // find.ts:240-250：'src/*.ts' 只中根下 src/，不中 pkg/src/（grep glob 同 #12066）。
+        Files.createDirectories(tmp.resolve("src"));
+        Files.createDirectories(tmp.resolve("pkg/src"));
+        Files.writeString(tmp.resolve("src/a.ts"), "a");
+        Files.writeString(tmp.resolve("pkg/src/b.ts"), "b");
 
-        var result = find(input("sub/*.txt"));
+        var result = find(input("src/*.ts"));
+
+        assertThat(linesOf(result)).containsExactly("src/a.ts");
+    }
+
+    @Test
+    void leadingDoubleStarPathPatternMatchesAnyDepth() throws Exception {
+        // '**/src/*.ts' 同时中根下与嵌套的 src/。
+        Files.createDirectories(tmp.resolve("src"));
+        Files.createDirectories(tmp.resolve("pkg/src"));
+        Files.writeString(tmp.resolve("src/a.ts"), "a");
+        Files.writeString(tmp.resolve("pkg/src/b.ts"), "b");
+
+        var result = find(input("**/src/*.ts"));
 
         assertThat(linesOf(result))
-            .containsExactlyInAnyOrder("sub/a.txt", "deep/sub/b.txt");
+            .containsExactlyInAnyOrder("src/a.ts", "pkg/src/b.ts");
     }
+
+    @Test
+    void leadingDotSlashIsStripped() throws Exception {
+        // fd 的 full path 不含 "./"，不剥就一条都中不了（find.ts:211）。
+        Files.createDirectories(tmp.resolve("src"));
+        Files.writeString(tmp.resolve("src/a.ts"), "a");
+
+        var result = find(input("./src/*.ts"));
+
+        assertThat(linesOf(result)).containsExactly("src/a.ts");
+    }
+
+    @Test
+    void repeatedDotSlashPrefixesAreStripped() {
+        assertThat(FindTool.normalizePattern("././src/*.ts", false)).isEqualTo("src/*.ts");
+        assertThat(FindTool.normalizePattern("src/./a.ts", false)).isEqualTo("src/./a.ts");
+    }
+
+    @Test
+    void backslashesNormalizeOnWindowsOnly() {
+        // find.ts:209：Win32 上 '\' 是路径分隔符；POSIX 上 '\' 保持 glob 转义。
+        assertThat(FindTool.normalizePattern("src\\*.ts", true)).isEqualTo("src/*.ts");
+        assertThat(FindTool.normalizePattern("src\\*.ts", false)).isEqualTo("src\\*.ts");
+    }
+
+    @Test
+    void allLowercasePatternMatchesCaseInsensitively() throws Exception {
+        // fd smart case：全小写 pattern 忽略大小写。
+        Files.writeString(tmp.resolve("A.TXT"), "a");
+
+        var result = find(input("*.txt"));
+
+        assertThat(textOf(result)).isEqualTo("A.TXT");
+    }
+
+    // smart case 的大小写敏感分支在大小写不敏感的文件系统上无法用文件验证，
+    // 由 GlobPatternTest 直接在匹配器上钉住。
 
     @Test
     void doubleStarSlashPatternIsUsedAsIs() throws Exception {
@@ -182,13 +232,27 @@ class FindToolTest {
     }
 
     @Test
-    void limitZeroYieldsEmptyResultMessage() throws Exception {
-        // pi find.ts:112 无 max(1,…)；fd --max-results 0 ⇒ 无输出 ⇒ 空结果文案。
+    void limitZeroClampsToOne() throws Exception {
+        // find.ts:114：fd 把 --max-results 0 当无限，所以 1 以下都算 1。
         Files.writeString(tmp.resolve("a.txt"), "1");
 
         var result = find(new FindTool.FindInput("*.txt", Optional.empty(), Optional.of(0)));
 
-        assertThat(textOf(result)).isEqualTo("No files found matching pattern");
+        assertThat(textOf(result)).isEqualTo("a.txt");
+        assertThat(result.details()).isNull();
+    }
+
+    @Test
+    void exactlyLimitMatchesDoesNotReportLimitReached() throws Exception {
+        // 恰好 N 条 ≠ 被截断：第 N+1 条候选出现才置 resultLimitReached（#7121）。
+        Files.writeString(tmp.resolve("a.txt"), "1");
+        Files.writeString(tmp.resolve("b.txt"), "2");
+        Files.writeString(tmp.resolve("c.txt"), "3");
+
+        var result = find(new FindTool.FindInput("*.txt", Optional.empty(), Optional.of(3)));
+
+        assertThat(linesOf(result)).hasSize(3);
+        assertThat(textOf(result)).doesNotContain("results limit reached");
         assertThat(result.details()).isNull();
     }
 
