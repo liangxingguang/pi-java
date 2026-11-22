@@ -106,6 +106,8 @@ final class RunStarter {
         if (onStarted != null) {
             onStarted.run();
         }
+        // pi :1979 `_recordSelection`：运行起点按分支补记虚拟选型（W4）。
+        SessionSelectionRecorder.record(owner);
 
         var queue = new LinkedBlockingQueue<Optional<StreamEvent>>();
         var entriesFuture = new CompletableFuture<List<Entry>>();

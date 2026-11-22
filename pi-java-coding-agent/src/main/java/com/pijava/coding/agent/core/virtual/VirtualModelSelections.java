@@ -13,9 +13,8 @@ import com.pijava.coding.agent.core.Json;
  * Branch-scan helpers over session entries — pi {@code virtual-models.ts} 的
  * {@code findLatestResponse}/{@code getVirtualModelState} 对位。
  *
- * <p>{@code getBranchSelection} 不落：它的唯一消费者是 pi 的 resume 选型恢复
- * （sdk.ts:217-231），java 的 resume 不从分支恢复模型（存量方言）——无消费者
- * 不接线（B65 先例），随未来「resume 接分支选型」批一并落地（docs/04 挂账）。</p>
+ * <p>L5 W4 起 {@link #getBranchSelection} 落地，消费者是 resume 选型恢复
+ * （{@link com.pijava.coding.agent.core.SessionSelectionRestore}，pi sdk.ts:217-231）。</p>
  */
 public final class VirtualModelSelections {
 
@@ -31,6 +30,58 @@ public final class VirtualModelSelections {
                     && assistant.stopReason() != StopReason.ERROR
                     && assistant.stopReason() != StopReason.ABORTED) {
                 return assistant;
+            }
+        }
+        return null;
+    }
+
+    /** The model selection a session branch records (pi {@code {provider, modelId}}). */
+    public record Selection(String provider, String modelId) {}
+
+    /**
+     * The model selection a session branch records (pi {@code getBranchSelection}).
+     *
+     * <p>A virtual {@code model_change} holds until the next {@code model_change},
+     * because responses name the physical models it routed to. Otherwise the latest
+     * physical response wins. A virtual model that is no longer registered does not
+     * hold, so the selection falls back to the physical model that answered last.</p>
+     *
+     * @param branch       tree-root-to-leaf entry path
+     * @param modelExists  whether the catalog/runtime knows the model
+     * @param isVirtual    whether the model is a registered virtual model
+     */
+    public static Selection getBranchSelection(java.util.List<Entry> branch,
+                                               java.util.function.Predicate<com.pijava.ai.model.ModelId<?>> modelExists,
+                                               java.util.function.Predicate<com.pijava.ai.model.ModelId<?>> isVirtual) {
+        for (var i = branch.size() - 1; i >= 0; i--) {
+            var entry = branch.get(i);
+            if (entry instanceof Entry.ModelChange change) {
+                return new Selection(change.provider(), change.modelId());
+            }
+            if (entry instanceof Entry.Message message
+                    && message.message() instanceof Message.AssistantMessage assistant
+                    && assistant.provider() != null && assistant.model() != null
+                    && !isVirtual.test(com.pijava.ai.model.ModelId.of(
+                        assistant.provider(), assistant.model()))) {
+                var response = new Selection(assistant.provider(), assistant.model());
+                var change = findLastModelChange(branch, i);
+                if (change != null) {
+                    var changeId = com.pijava.ai.model.ModelId.of(
+                        change.provider(), change.modelId());
+                    if (modelExists.test(changeId) && isVirtual.test(changeId)) {
+                        return change;
+                    }
+                }
+                return response;
+            }
+        }
+        return null;
+    }
+
+    private static Selection findLastModelChange(java.util.List<Entry> branch, int before) {
+        for (var i = before - 1; i >= 0; i--) {
+            if (branch.get(i) instanceof Entry.ModelChange change) {
+                return new Selection(change.provider(), change.modelId());
             }
         }
         return null;

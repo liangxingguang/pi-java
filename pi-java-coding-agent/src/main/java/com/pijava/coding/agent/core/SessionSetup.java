@@ -238,6 +238,9 @@ final class SessionSetup {
         } else {
             resolved = SessionPersistence.resolveInMemory(session, args);
         }
+        // L5 W4（pi sdk.ts:209-270）：分支记录的模型/思考档恢复——仅存量会话且
+        // 无显式 --model/--thinking 时生效；失败走 warning 诊断。
+        SessionSelectionRestore.apply(resolved, args);
         // 批 20（B32，pi main.ts:709-715）：--name 写 session_info（解析后无条件臂）。
         if (applyInitialName) {
             SessionPersistence.applyInitialName(resolved, args);

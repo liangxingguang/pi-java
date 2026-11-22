@@ -126,6 +126,16 @@ final class RunLifecycle {
     }
 
     /**
+     * Seed the lane's recorded thinking label without appending an entry (L5 W4):
+     * resume compares the clamped branch value with the live level, so the clamped
+     * value is what counts as "already recorded".
+     */
+    void seedRecordedThinking(String laneName, String label) {
+        var lane = ctx.requireLane(laneName);
+        lane.recordedThinking = label;
+    }
+
+    /**
      * 模型切换的 entry（pi {@code agent-session.ts:1687}）。
      *
      * <p>pi 在 {@code setModel} 里**无条件**追加 —— 变更判定只作用于 {@code model_select}

@@ -31,6 +31,30 @@ abstract class HarnessPromptAndToolAccessors extends HarnessBootstrap {
         lane.model = model;
         runLifecycle.recordModelChange(AgentHarness.DEFAULT_LANE, model);
     }
+
+    /**
+     * Switch the lane's model without appending a {@code model_change} entry.
+     *
+     * <p>pi 的 resume 选型恢复（{@code sdk.ts:217-231}）直接采用分支记录，
+     * 不写 entry；只有运行起点的 {@code _recordModelSelection} 在条件命中时才补写。
+     * 供会话层恢复路径使用（L5 W4）。</p>
+     */
+    public void setModelWithoutRecord(ModelId<?> model) {
+        if (closed) throw new HarnessClosedException();
+        lane.model = model;
+    }
+
+    /**
+     * Seed the lane's "last recorded thinking level" without writing an entry.
+     *
+     * <p>pi 的 {@code _recordThinkingLevel} 按<b>当前模型 clamp 后</b>的分支值比较；
+     * 恢复路径用本方法把该有效值回填，运行起点便不会为一次已记录的级别再写一条
+     * （L5 W4）。</p>
+     */
+    public void seedRecordedThinking(String label) {
+        if (closed) throw new HarnessClosedException();
+        runLifecycle.seedRecordedThinking(AgentHarness.DEFAULT_LANE, label);
+    }
     public ModelThinkingLevel getThinkingLevel() { return lane.thinkingLevel; }
     /** Set the thinking level used for subsequent LLM calls（变更时才写 entry，见 §4.1）. */
     public void setThinkingLevel(ModelThinkingLevel level) {
