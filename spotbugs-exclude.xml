@@ -39,4 +39,14 @@
         <Method name="beforeSettle"/>
         <Bug pattern="NP_BOOLEAN_RETURN_NULL"/>
     </Match>
+
+    <!-- docs/12：`threadsOf` 的返回是刻意的三态 —— TRUE/FALSE 是线程开关，
+         null 是「extra 未配置」（≙ pi 的 `compat?.supportsMessageThreads` 未设），
+         由端点推导接住；null 从不当「假」用。NP_BOOLEAN_RETURN_NULL 是误报
+         （与 B144 同形）。 -->
+    <Match>
+        <Class name="com.pijava.ai.protocol.AnthropicStreamSupport"/>
+        <Method name="threadsOf"/>
+        <Bug pattern="NP_BOOLEAN_RETURN_NULL"/>
+    </Match>
 </FindBugsFilter>

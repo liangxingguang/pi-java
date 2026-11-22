@@ -71,8 +71,9 @@ public final class PowerShellTool {
     static String wrapCommand(String command) {
         String shellName;
         try {
-            shellName = java.nio.file.Path.of(
-                PowerShellShellExecutor.resolvePowerShell()).getFileName().toString();
+            var fileName = java.nio.file.Path.of(
+                PowerShellShellExecutor.resolvePowerShell()).getFileName();
+            shellName = fileName == null ? "" : fileName.toString();
         } catch (java.io.IOException e) {
             shellName = "";   // execute() reports the same error; do not fail while wrapping
         }
