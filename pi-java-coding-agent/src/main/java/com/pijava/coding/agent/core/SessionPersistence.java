@@ -78,6 +78,26 @@ final class SessionPersistence {
     /** Attach an already-opened session（⓪ 路径快道/常规道/fork 臂共用，docs/16 提为包可见）。 */
     static void attachOpened(AgentSession owner, Session<?> opened,
                              SessionMetadata metadata) {
+        // L5 W3（pi main.ts:739-760）：存量会话的 cwd 已不存在 ⇒ 交互三臂/
+        // 非交互错误。只对 JSONL 生效（SQLite 无 cwd 语义）。
+        var cwdIssue = SessionCwd.issueFor(metadata, System.getProperty("user.dir"));
+        if (cwdIssue != null) {
+            var choice = owner.sessionCwdPrompter() == null ? null
+                : owner.sessionCwdPrompter().prompt(cwdIssue);
+            if (owner.sessionCwdPrompter() == null) {
+                throw SessionResolutionExit.error(SessionCwd.formatPrompt(cwdIssue));
+            }
+            if (choice == null || choice == SessionCwd.Choice.CANCEL) {
+                throw SessionResolutionExit.plain(0, "");
+            }
+            if (choice == SessionCwd.Choice.FORK) {
+                opened.close();
+                var forked = owner.persistentRepository().fork(
+                    metadata, new ForkOptions.Tree(), cwdIssue.fallbackCwd());
+                attachOpened(owner, forked, forked.getMetadata());
+                return;
+            }
+        }
         // docs/16（B252 §3.7）：原地 attach 关旧 storage —— 先 persistPending（未落盘
         // 写入不丢），再关 JDBC/文件句柄。恒等跳过两臂：同一对象（fork 臂 copy.session
         // 已先置好）；同一会话 id（attach 经 handle.open 重开**同一文件**的另一视图 —

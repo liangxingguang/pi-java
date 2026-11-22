@@ -169,13 +169,12 @@ public final class AgentSession implements AutoCloseable {
     /** 委托 {@link AgentSessionFactory}。 */
     public static AgentSession create(Args args) { return AgentSessionFactory.create(args); }
     /** 委托 {@link AgentSessionFactory}。 */
-    public static AgentSession create(Args args, ExtensionUI ui, String mode) {
-        return AgentSessionFactory.create(args, ui, mode);
-    }
-    /** 委托 {@link AgentSessionFactory}。 */
+    public static AgentSession create(Args args, ExtensionUI ui, String mode) { return AgentSessionFactory.create(args, ui, mode); }
+    /** 委托 {@link AgentSessionFactory}；末参是 L5 W3 的缺失 cwd 选择器。 */
     public static AgentSession create(Args args, ExtensionUI ui, String mode,
-                                      ProjectTrustPrompter prompter) {
-        return AgentSessionFactory.create(args, ui, mode, prompter);
+                                      ProjectTrustPrompter prompter,
+                                      SessionCwdPrompter cwdPrompter) {
+        return AgentSessionFactory.create(args, ui, mode, prompter, cwdPrompter);
     }
     /** 委托 {@link AgentSessionFactory}。 */
     public static AgentSession createReplacing(Args args, String previousSessionId) {
@@ -187,10 +186,7 @@ public final class AgentSession implements AutoCloseable {
         return AgentSessionFactory.createReplacing(args, previousSessionId, parentSession);
     }
     /** 委托 {@link AgentSessionFactory}。 */
-    public static AgentSession create(Args args, ProviderRegistry providers,
-                                      ToolContext toolContext) {
-        return AgentSessionFactory.create(args, providers, toolContext);
-    }
+    public static AgentSession create(Args args, ProviderRegistry providers, ToolContext toolContext) { return AgentSessionFactory.create(args, providers, toolContext); }
     static AgentSession create(Args args, InMemorySessionRepository repository) {
         return AgentSessionFactory.create(args, repository);
     }
@@ -476,6 +472,9 @@ public final class AgentSession implements AutoCloseable {
     PromptPipeline prompts() { return prompts; }
     TreeCompaction tree() { return tree; }
     SessionDiscoveryFork discovery() { return discovery; }
+
+    SessionCwdPrompter sessionCwdPrompter() { return discovery.sessionCwdPrompter; }
+    public void sessionCwdPrompter(SessionCwdPrompter p) { discovery.sessionCwdPrompter = p; }
     SessionMessagingLifecycle messaging() { return messaging; }
     ExtensionLoading extensions() { return extensions; }
     SessionDataViews views() { return views; }

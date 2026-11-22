@@ -64,10 +64,11 @@ public final class Main {
         } catch (SessionResolutionExit e) {
             // 批 14（docs/25 T6c，裁决②）：会话解析的干净结局——pi 的
             // console.error("Error: <msg>") exit 1 / console.log(<msg>) exit 0 对位。
+            var message = e.getMessage();
             if (e.errorPrefix()) {
-                System.err.println("Error: " + e.getMessage());
-            } else {
-                System.out.println(e.getMessage());
+                System.err.println("Error: " + message);
+            } else if (message != null && !message.isEmpty()) {
+                System.out.println(message);
             }
             return e.code();
         }

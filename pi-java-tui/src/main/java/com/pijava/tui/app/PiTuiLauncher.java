@@ -52,7 +52,10 @@ public final class PiTuiLauncher {
         // 批 23（docs/34 T3）：启动信任弹窗缝——pi 的 interactive 信任提示
         //（project-trust.ts 弹窗臂）在会话装配期经启动壳弹出（先于聊天 UI）。
         var session = AgentSession.create(args, extensionUI, "tui",
-            TrustPromptRunner::prompt);
+            TrustPromptRunner::prompt, SessionCwdPromptRunner::prompt);
+        // 启动选择器只在会话解析前可用；会话内 /resume 由 TUI 选择器处理，
+        // 这里清除避免主 UI 运行期再弹裸终端选择器。
+        session.sessionCwdPrompter(null);
         sessionRef.set(session);
         var mode = new InteractiveMode(session);
         // Windows Terminal/ConPTY send about one raw event per wheel notch

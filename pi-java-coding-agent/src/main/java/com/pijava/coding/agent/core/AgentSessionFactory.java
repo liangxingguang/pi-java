@@ -109,7 +109,7 @@ final class AgentSessionFactory {
      * @param mode pi {@code ExtensionMode}（{@code "tui"} 等；null ⇒ "print"）
      */
     static AgentSession create(Args args, ExtensionUI ui, String mode) {
-        return create(args, null, ui, mode, null);
+        return create(args, null, ui, mode, null, null);
     }
 
     /**
@@ -119,12 +119,20 @@ final class AgentSessionFactory {
      */
     static AgentSession create(Args args, ExtensionUI ui, String mode,
                                ProjectTrustPrompter prompter) {
-        return create(args, null, ui, mode, prompter);
+        return create(args, ui, mode, prompter, null);
+    }
+
+    /** L5 W3：带缺失会话 cwd 选择器的交互启动入口。 */
+    static AgentSession create(Args args, ExtensionUI ui, String mode,
+                               ProjectTrustPrompter prompter,
+                               SessionCwdPrompter cwdPrompter) {
+        return create(args, null, ui, mode, prompter, cwdPrompter);
     }
 
     private static AgentSession create(Args args, SessionStartInfo startInfo,
                                        ExtensionUI ui, String mode,
-                                       ProjectTrustPrompter prompter) {
+                                       ProjectTrustPrompter prompter,
+                                       SessionCwdPrompter cwdPrompter) {
         var settings = SettingsManager.load(args.projectTrustOverride());
         // 批 23（T3）：信任七级链先于 settings 消费（pi main.ts:740-777 序对位）。
         var trustWarnings = ProjectTrustSetup.apply(args, settings, prompter);
@@ -142,7 +150,7 @@ final class AgentSessionFactory {
                 Map.of(),
                 new DefaultShellExecutor(effective.shellPath),
                 new DefaultFileSystem()),
-            settings, startInfo, ui, mode);
+            settings, startInfo, ui, mode, cwdPrompter);
         attachTrustWarnings(session, trustWarnings);
         return session;
     }
@@ -256,7 +264,7 @@ final class AgentSessionFactory {
                                        SessionStartInfo startInfo) {
         // 初始装配路：--name 写回开启（pi main.ts:709 一次性语义）。
         return create(args, handle, providers, toolContext, settings, startInfo,
-            ExtensionUI.noop(), "print", null, true);
+            ExtensionUI.noop(), "print", null, null, true);
     }
 
     /** 批 20（B257）：带 {@code parentSessionId} 的形态（RPC new_session）。 */
@@ -269,7 +277,7 @@ final class AgentSessionFactory {
                                        String parentSessionId) {
         // 评审回补（I-2）：createReplacing 专属链——替换会话不重放 --name。
         return create(args, handle, providers, toolContext, settings, startInfo,
-            ExtensionUI.noop(), "print", parentSessionId, false);
+            ExtensionUI.noop(), "print", null, parentSessionId, false);
     }
 
     /** 批 17（T7）：带扩展 UI/mode 的持久仓装配（TUI 构造期注入路径）。 */
@@ -279,9 +287,10 @@ final class AgentSessionFactory {
                                        ToolContext toolContext,
                                        SettingsManager settings,
                                        SessionStartInfo startInfo,
-                                       ExtensionUI ui, String mode) {
+                                       ExtensionUI ui, String mode,
+                                       SessionCwdPrompter cwdPrompter) {
         return create(args, handle, providers, toolContext, settings, startInfo, ui, mode,
-            null, true);
+            cwdPrompter, null, true);
     }
 
     /**
@@ -296,10 +305,12 @@ final class AgentSessionFactory {
                                        SettingsManager settings,
                                        SessionStartInfo startInfo,
                                        ExtensionUI ui, String mode,
+                                       SessionCwdPrompter cwdPrompter,
                                        String parentSessionId, boolean applyInitialName) {
         var session = assemble(args, settings, providers, toolContext,
             handle, handle.repository(), resumeLike(args), startInfo, ui, mode);
         session.persistentRepository(handle);
+        session.sessionCwdPrompter(cwdPrompter);
         return SessionSetup.resolveSession(session, args, parentSessionId, applyInitialName);
     }
 

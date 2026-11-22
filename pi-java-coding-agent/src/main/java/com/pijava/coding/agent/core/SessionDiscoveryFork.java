@@ -34,6 +34,8 @@ final class SessionDiscoveryFork {
     // docs/16（T1）：装配期的**原始** ToolContext（图片策略/PI_* 晚绑定包装之前）——
     // fork 重建会话时 wireSession 的原料（pi createRuntime 重装配 cwd 绑定服务对位）。
     private ToolContext baseToolContext;
+    /** L5 W3：启动期缺失会话 cwd 的选择器（null ⇒ 非交互错误臂）。 */
+    SessionCwdPrompter sessionCwdPrompter;
 
     SessionDiscoveryFork(AgentSession owner) {
         this.owner = owner;
@@ -93,9 +95,7 @@ final class SessionDiscoveryFork {
      * JSONL 臂透传 {@code listRich} 的渐进发布（partial 快照逐条映射为
      * {@link SessionSummary}）；其它后端退化臂＝一次性全量＋无中间回调。
      */
-    List<SessionSummary> listSessionsSummary(
-            String cwd, SessionSummaryProgress progress,
-            com.pijava.ai.AbortSignal signal) {
+    List<SessionSummary> listSessionsSummary(String cwd, SessionSummaryProgress progress, com.pijava.ai.AbortSignal signal) {
         if (owner.persistentRepository() == null) {
             return List.of();
         }
