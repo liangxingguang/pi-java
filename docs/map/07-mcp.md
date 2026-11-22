@@ -4,7 +4,7 @@
 
 ## 基准与口径
 
-- 证据盘点：pi 侧锚点 **`56cae782341c339d3bb820081f0f9425d8c5b1ec`**（2026-10-31，即 `CURRENT_PI_PIN`）；java 侧证据盘点点 **`30abb76c`**（main，2026-11-04，docs/21＋docs/22 批次终态提交——历史批次号，非有效链接）。`30abb76c` 是 pi-java HEAD 而非 pi 锚点（见 `ANCHOR.md` §「其他文档里的 SHA 怎么读」）；自该提交后 `pi-java-mcp` 零提交，故其行号仍有效；`pi-java-coding-agent` 集成面同期仅 `0be94973`（tool_search 分词）1 个提交，`subcommand/Mcp*` 零提交，落在被改文件的行按 P9／P12 复核。
+- 证据盘点：pi 侧锚点 **`a00a5048dfae964fe89dce593215d0c3d275017c`**（2026-11-20，即 `TARGET_PI_PIN`）。L2 已于 **2026-11-22** 按该锚点逐行重判并收口；`CURRENT_PI_PIN` 仍是 `56cae7823`，切锚要等七层全部重测（`ANCHOR.md` §完成条件）。java 侧证据 = 2026-11-22 的 P9 七阶段收口（`02b6bf59`→`e40eea14`，逐阶段号见文末「重判结论」）。旧锚点证据保留作对照，凡与新锚点冲突以本图为准。
 - 判定三档：**对齐** = pi 有 ∧ pi-java 有 ∧ 行为相同（读代码确认语义）；**缺失** = pi 有 ∧ pi-java 无（或差异有行为后果）；**存疑** = 形状/字节形态未逐字核对，或差异是刻意设计/跨模块/台账在册方言（子标签 **（形状）/（扩展）/（台账）**）。
 - 第四类记账 **转出（非本层）**：差异归属其它层或共享平台方言，行与证据保留在本图供追溯，但**权重 0、不进 MCP 分母**（docs/22 用户裁决）。
 - 所有证据为 `file:line`，两侧均已打开源码确认。**pi 侧一律 `git -C D:/workplaceForai/pi show 56cae7823:<path>` 取证，未读工作树。**
@@ -17,20 +17,19 @@
 
 | 模块 | pi 路径 | pi LOC | java LOC | 文件 pi→java |
 |---|---|---:|---:|---|
-| SDK 主源码 | `packages/mcp/src` | **3,287** | `pi-java-mcp` **11,141** | 18 → 147 |
-| SDK 测试 | `packages/mcp/test` | **1,690** | `pi-java-mcp/src/test` **6,980** | 8 → 46（`@Test` **286**） |
-| 集成面主源码 | `coding-agent/src/extensions/mcp/**` ＋ `core/mcp-servers.ts` | **4,677** | coding-agent `extension/mcp/**` ＋ `subcommand/Mcp*`＋`BrowserLauncher` **5,875** | 12 → 34 |
-| 集成面测试 | `coding-agent/test/mcp-*.ts`（5 个）＋`mcp-conformance`（4 件） | **2,533** | coding-agent `…/mcp`＋`subcommand/Mcp*` 测试 **3,964** | 9 → 23（`@Test` **226**） |
+| SDK 主源码 | `packages/mcp/src` | **4,372** | `pi-java-mcp` **11,940** | 28 → 152 |
+| SDK 测试 | `packages/mcp/test` | **3,181** | `pi-java-mcp/src/test` **7,906** | 19 → 55（`@Test` **317**） |
+| 集成面主源码 | `coding-agent/src/extensions/mcp/**` ＋ `core/mcp-servers.ts` | **3,957** | coding-agent `extension/mcp/**` ＋ `subcommand/Mcp*`＋`BrowserLauncher` **5,844** | 12 → 34 |
+| 集成面测试 | `coding-agent/test/mcp-*.ts`（5 个）＋`suite` 内 3 个＋`mcp-conformance`（4 件） | **4,075** | coding-agent `…/mcp`＋`subcommand/Mcp*` 测试 **3,911** | 13 → 23（`@Test` **229**） |
 
-> pi 集成面 12 文件：`extensions/mcp/{index 1347, cli 625, oauth 579, runtime 454, tools 391, resources 339,
-> config 243, ui 268, log 69, 两个 .lazy 各 2}` ＋ `core/mcp-servers.ts 358`（新锚点实测）。
+> 规模按 2026-11-22 的目标锚点 `a00a5048d` 与 P9 收口后的工作树实测（pi 侧 `git show <sha>:<path>` 数行；
+> java 侧数 `src/{main,test}` 下对应目录的全部 `.java`）。
 > java 文件数远多是「一件一类」风格所致（pi 单文件多导出），非规模差。
-> 本图只数 MCP 命名测试文件：SDK **286** ＋ 集成 **226** ＝ **512** 个 `@Test`，可 `grep -c @Test` 复算。
+> 本图只数 MCP 命名测试文件：SDK **317** ＋ 集成 **229** ＝ **546** 个 `@Test`，可 `grep -c @Test` 复算。
 
-pi SDK 逐文件（`packages/mcp/src`）：`client.ts` 621 · `transports/streamable-http.ts` 522 ·
-`oauth/flow.ts` 485 · `transports/stdio.ts` 216 · `oauth/discovery.ts` 215 · `oauth/types.ts` 215 ·
-`oauth/callback.ts` 164 · `oauth/provider.ts` 168 · `protocol/content.ts` 118 · `protocol/jsonrpc.ts` 113 ·
-`protocol/types.ts` 131 · `transports/in-memory.ts` 51 · `transports/transport.ts` 64 · 其余 5 文件 204。
+pi SDK 新锚点新增的主要件：`transports/pipe.ts`（PipeTransport，见 #96）、`oauth/sign-in.ts` 与
+`oauth/loopback.ts`（两段式 sign-in 拆分，见 #37／#42）；两侧对位与逐段判据见
+[`../13-mcp-p9-design.md`](../13-mcp-p9-design.md) §2。
 
 ---
 
@@ -70,16 +69,17 @@ pi SDK 逐文件（`packages/mcp/src`）：`client.ts` 621 · `transports/stream
 | # | 能力单元 | 类别 | pi 证据 | java 证据 | 判定 | 权重 | 台账 |
 |---|---|---|---|---|---|---|---|
 | 21 | stdio：cross-spawn、换行帧、消息字节上限、stderr 64KB ring、不完整消息/退出报错 | 传输 | `transports/stdio.ts:78-200` | `transport/StdioTransport.java`；`StdioLineFrames.java`；`StdioProcess.java` | 对齐 | 2 | — |
-| 22 | stdio 关闭序列（stdin end→500ms grace→SIGTERM→2s→SIGKILL）＋进程树（Win taskkill / 负 pid） | 传输 | `stdio.ts:33-44,153-176` | `StdioTransport.java:94-105`；`StdioProcess.java:64-73`（`descendants()`） | 对齐 | 1 | — |
+| 22 | stdio 关闭序列（stdin end→500ms grace→SIGTERM→2s→SIGKILL）＋进程树（Win taskkill / 负 pid） | 传输 | `transports/stdio.ts:33-44,153-205` | `transport/StdioTransport.java:83-150`（`closeTree` 三段式：`min(500ms, closeTimeout)` 宽限 → `terminate` → `kill`；父进程退了仍补刀后代）；`StdioProcess.java:64-140` | 对齐（P9-S1 `02b6bf59`） | 1 | — |
 | 23 | stdio `cwd`（相对路径相对会话目录解析） | 传输 | `stdio.ts:88`；`runtime.ts:97-121` | `StdioProcess.java:29`；`runtime/McpDefaultTransport.java:60` | 对齐 | 2 | B199（已修） |
 | 24 | `!cmd` 两层壳：先 `settings.shellPath`、ENOENT 回落默认 | 传输 | `resolve-config-value.ts`（settings 壳注入） | coding `extension/mcp/ShellPathCommandRunner.java`（批 24：两段式——配置壳优先、spawn 失败回落 `JdkShellRunner`；经 `McpConnectionOptions.resolver` 注入会话内连接） | 对齐 | 1 | ~~B188~~（批 24） |
-| 25 | Streamable HTTP：POST/GET、`Mcp-Session-Id`、404 session expired、405 无 GET、DELETE 1s、`send(message,{signal})` | 传输 | `transports/streamable-http.ts:231-245,295-305` | `transport/http/StreamableHttpTransport.java:154`（每次派发前 `if (signal.isAborted()) throw McpAbortError`） | 对齐（W3） | 2 | B201（已修） |
-| 26 | SSE 流消费＋`Last-Event-ID` 断线续 GET 流＋408/429/5xx 退避重试 | 传输 | `streamable-http.ts:35-100,366-497` | `http/SseStreamConsumer.java`；`http/StreamableHttpStreams.java` | 对齐 | 2 | — |
+| 25 | Streamable HTTP：POST/GET、`Mcp-Session-Id`、404 session expired、405 无 GET、DELETE 1s、`send(message,{signal})`、JSON 分支限长 | 传输 | `transports/streamable-http.ts:231-245,295-305`（JSON `maxMessageBytes`＋超限取消 body） | `transport/http/StreamableHttpTransport.java`（JSON 分支按 `maxMessageBytes` 限长，超限抛 `MCP JSON response exceeds N bytes`）；`http/JdkMcpHttpFetch.java:readBodyText`（分块读、超限即停并取消剩余）；`StreamableHttpTransport.java:154`（派发前 `isAborted`） | 对齐（P9-S3 `d80b326f`；W3） | 2 | B201（已修） |
+| 26 | SSE 流消费＋`Last-Event-ID` 断线续 GET 流＋408/429/5xx 退避重试 | 传输 | `streamable-http.ts:35-100,366-497`（body 取消与限长同 S3 口径） | `http/SseStreamConsumer.java`；`http/StreamableHttpStreams.java`；错误体同一 `readBodyText`（8 KiB 摘录＋取消剩余） | 对齐（P9-S3 `d80b326f`） | 2 | — |
 | 27 | `isTransientError` 网络错分类 | 传输 | `extensions/mcp/runtime.ts:70-75`（HTTP 408/429/5xx≠501 或 `TypeError`） | `McpConnectionSupport.java:112-121`（状态判同；网络类是 `IOException`，宽于 `TypeError`） | 转出（非本层：平台异常分类方言） | 0 | B190（docs/22 裁决） |
 | 28 | OAuth/AS 请求 15s 边界（unresponsive AS 不持刷新锁） | 传输 | `extensions/mcp/oauth.ts:51` | `runtime/TimedMcpFetch.java:13`（外包一层，未扩 Fetch 接口；W3 补 send signal 后整条对齐） | 对齐 | 1 | ~~B194~~（docs/21 销） |
 | 29 | `connectOnce` 只列工具；`hasResources` 取 capability（连接期不枚举资源） | 传输 | `runtime.ts:359-390` | `McpConnector.java:80` 只 `listTools`；`McpServerConnection.java:50,113`（`hasResources` 布尔） | 对齐（W4） | 1 | ~~B196~~（docs/21 销） |
 | 30 | WHATWG `new URL` 归一（主机小写/默认端口/补尾斜杠）＋相对引用拒绝 | 传输 | 各处 `new URL`/`URL.canParse` | `runtime/WebUrls.java`；`responseFromRedirectUrl` 已挡 scheme | 转出（非本层：平台 URL 归一方言） | 0 | B191/B197（docs/22 裁决） |
 | 31 | `McpFetch` 抽象（可换 fetch）＋JDK http client 实现 | 传输 | `auth-provider.ts` | `McpFetch.java`；`JdkMcpFetch.java`；`transport/http/JdkMcpHttpFetch.java` | 对齐 | 1 | — |
+| 96 | `PipeTransport`：把调用方启动的程序当 MCP stdio（`McpPipe` 接缝、`close`＝关 stdin→等 `exited`→kill、`exited` 失败先报错再 close） | 传输 | `transports/pipe.ts:1-137` | `transport/PipeTransport.java`（`Options`／`McpPipe`／`PipeHandlers`／`PipeOpener`）；`StdioLineFrames.Framer` 与 stdio 共用拼帧 | 对齐（P9-S7 `e40eea1`） | 1 | — |
 
 ## D. OAuth（MCP 10.x：PKCE 授权码＋DCR，无设备流）
 
@@ -92,13 +92,13 @@ pi SDK 逐文件（`packages/mcp/src`）：`client.ts` 621 · `transports/stream
 | 33 | AS 元数据（RFC 8414 ＋ OIDC discovery 多候选）＋`authServerMetadataUrl` 受信覆盖 | OAuth | `discovery.ts` | `OAuthDiscovery.java:93-100,168` | 对齐 | 1 | — |
 | 34 | PKCE S256（WebCrypto verifier/challenge；服务器不支持 S256 即拒） | OAuth | `oauth/flow.ts:163-199` | `oauth/OAuthPkce.java`；`OAuthFlow.java` | 对齐 | 2 | — |
 | 35 | 动态客户端注册（DCR）＋`clientInformation` 持久化/读回 | OAuth | `flow.ts:246`；`oauth/provider.ts` | `oauth/OAuthProviders.java`；`OAuthClientProvider.java`；`OAuthTokenRequests.java:95` | 对齐 | 2 | — |
-| 36 | 授权码交换、令牌刷新、`stepUpScope`（insufficient_scope 合并 scope，SEP-2350） | OAuth | `flow.ts:277-316,452-468` | `OAuthFlow.java:90-117`；`runtime/McpAuthProviders.java:179-254` | 对齐 | 2 | — |
+| 36 | 授权码交换、令牌刷新、`stepUpScope`（insufficient_scope 合并 scope，SEP-2350）＋`refreshOnly`（刷新不注册 client、失败不强推授权）＋换码前 redirect URI 校验 | OAuth | `flow.ts:277-316,386-400,452-478` | `oauth/OAuthFlow.java`（`refreshOnly` 早退；`invalid_client` 仅在「存的就是本次用的 client」时作废；换码前比对 redirect URI）；`runtime/McpAuthProviders.java:179-254`（刷新传 `refreshOnly=true`） | 对齐（P9-S4 `cd942ef`） | 2 | — |
 | 37 | `mcp-auth.json` 存储（server+URL 键、legacy key、进程间刷新锁、stale 接管）＋整文件锁读修复 | OAuth | `extensions/mcp/oauth.ts:141-230` | `runtime/McpOAuthCredentialStore.java`；`runtime/FileAuthJsonBackend.java:74-88` | 对齐 | 1 | B215（已修） |
 | 38 | `mcp-auth.json` 字节形态（`extension` 嵌套、null≡undefined 省略） | OAuth | `oauth.ts:116-130` | `oauth/OAuthClientInformation.java:24` | 转出（非本层：共享 JSON 序列化方言） | 0 | B193（docs/22 裁决） |
-| 39 | loopback 回调服务器（free port/固定端口/固定 URI，RFC 8252） | OAuth | `oauth/callback.ts` | `oauth/OAuthCallbackServer.java`；`runtime/McpCallbackSettings.java` | 对齐 | 2 | — |
+| 39 | loopback 回调服务器（free port/固定端口/固定 URI，RFC 8252）＋等待／粘贴两条来路的竞速 | OAuth | `oauth/callback.ts`；`oauth/loopback.ts:73-137` | `oauth/OAuthCallbackServer.java`；`runtime/McpCallbackSettings.java`；`runtime/McpLoopbackSignIn.java`（`listen`／`await`／`responseFromRedirectUrl`） | 对齐（P9-S5 `f8349e5`） | 2 | — |
 | 40 | 回调成功/失败页 HTML/CSS | OAuth | `oauth/callback.ts`（内嵌页） | `pi-java-ai/.../utils/OAuthPage.java`（共享件） | 转出（非本层：L1 ai 共享 OAuthPage） | 0 | B198（docs/22 裁决） |
 | 41 | redirect 等待：TTY 判定＋readline 与 abort 竞速＋手工粘贴 URL | OAuth | `oauth.ts:396-470` | `subcommand/McpRedirectPrompt.java`；`runtime/McpSignIn.java:232-265` | 转出（非本层：JVM 平台方言） | 0 | B212（docs/22 裁决） |
-| 42 | `signInMcpServer` 编排（challenge、300s 默认超时、取消即 cancelled） | OAuth | `oauth.ts:473-558` | `runtime/McpSignIn.java:77`；`McpSignInCancelledError.java` | 对齐 | 2 | — |
+| 42 | `signInMcpServer` 编排（challenge、300s 默认超时、取消即 cancelled）＋两段式 `start`／`complete` | OAuth | `oauth.ts:473-558`；`oauth/sign-in.ts:76-211` | `runtime/McpSignIn.java`（`start`／`complete`／`signIn` 封装；先 `refreshOnly` 刷新再浏览器步）；`McpSignInRedirect`／`McpSignInStart.java`；`McpSignInCancelledError.java` | 对齐（P9-S5 `f8349e5`） | 2 | — |
 | 43 | `clientRegistration` 三值＋`auto` 决策树（pi.dev Client ID Metadata Document） | OAuth | `core/mcp-servers.ts:112-125,136-146`；`oauth.ts:250-330,504-530` | `runtime/McpOAuthSettings.java:62,84`（`auto` 决策树；改名 build 恒回落 DCR、显式 `cimd` 才申请文档）；`McpClientMetadataDocuments.java:25`（拉 pi.dev 托管文档） | 转出（非本层：OAuth 身份托管基础设施） | 0 | B192（W5 补齐 auto；docs/22 裁决） |
 | 44 | `auth.provider`：用 pi provider token 代替 OAuth（ReadThroughProvider） | OAuth | `index.ts:307`（`modelRegistry.getApiKeyForProvider`） | `McpServerConnection.java:78-83`；批 24 会话臂注入生产源（`McpLifecycle` providerToken＝OAuth 凭证优先/回落 api key，每请求现读） | 对齐 | 1 | ~~B189~~（批 24 会话臂；CLI 臂先齐） |
 | 45 | `WWW-Authenticate` challenge 解析（resource_metadata_url/scope/error） | OAuth | `flow.ts:452`；`oauth/errors.ts` | `oauth/WwwAuthenticate.java`；`McpAuthProviders.java:179` | 对齐 | 1 | — |
@@ -134,8 +134,8 @@ pi SDK 逐文件（`packages/mcp/src`）：`client.ts` 621 · `transports/stream
 |---|---|---|---|---|---|---|---|
 | 65 | `add`（stdio/http、12 个已知选项含 `--oauth-client-registration`、`--` 透传、http/stdio 误配门、替换后检查提示） | CLI | `extensions/mcp/cli.ts:303-420` | `subcommand/McpAddRemoveCommand.java:40,59,96`（新选项 http-only） | 对齐（W5） | 2 | — |
 | 66 | `remove [-l]`（存在性/作用域不符提示） | CLI | `cli.ts:396-435` | `McpAddRemoveCommand.java:161-201` | 对齐 | 2 | — |
-| 67 | `list [--json]`（状态/工具数/错误聚合，失败 exit 1，JSON 两空格；`resources?: true`、人类行 `offers resources`） | CLI | `cli.ts:100-108,465-545` | `subcommand/McpListCommand.java:59-170`（无 templates/数量） | 对齐（W4） | 2 | — |
-| 68 | `login <server> [-l] [--timeout 300]` ＋ `logout`（作用域提示、拼错建议、连接探测 OAuth、凭证删除） | CLI | `cli.ts:220-265` | `subcommand/McpCommand.java:143-220`（Levenshtein ≤2 建议） | 对齐（W6） | 2 | — |
+| 67 | `list [--json]`（状态/工具数/错误聚合，失败 exit 1，JSON 两空格；`resources?: true`、人类行 `offers resources`）＋`auth.provider` 服务器带 provider token 连接、报告带 `authProvider` | CLI | `cli.ts:100-108,465-545`（`authProvider`、provider token 注入、`/login <provider>` 提示） | `subcommand/McpListCommand.java`（`ServerReport.authProvider`、JSON 同名键、提示文案切换）；`McpCommandSupport.providerTokens`／`authProvider`；`McpCommand.Options.providerToken` | 对齐（P9-S6 `e803730`；W4） | 2 | — |
+| 68 | `login <server> [-l] [--timeout 300]` ＋ `logout`（作用域提示、拼错建议、连接探测 OAuth、凭证删除；`auth.provider` 服务器指向 `auth <cmd> <provider>`） | CLI | `cli.ts:220-265,285-291` | `subcommand/McpCommand.java:143-220`（Levenshtein ≤2 建议；`authProvider` 前置拒绝） | 对齐（P9-S6 `e803730`；W6） | 2 | — |
 | 69 | 自建选项解析「收够 N 个位置参数即停止」透传 | CLI | `cli.ts:144-182` | `subcommand/McpCliOptions.java:62-109` | 对齐（picocli 不能表达，手写复刻） | 1 | B210 |
 | 70 | 开浏览器（Desktop→平台命令→静默失败；headless 提示访问 URL） | CLI | `utils/open-browser.ts` | `subcommand/BrowserLauncher.java` | 对齐（pi-java 新增件） | 1 | B211 |
 | 71 | 文案命名（`pi`→`pi-java`、`.pi`→`.pi-java`、去 chalk 着色） | CLI | `cli.ts:33-76`；`cli/args.ts:294` | `subcommand/McpCliHelp.java`；`cli/HelpText.java`（W6 补 `mcp <command>` 行；内容同 pi、仅改名） | 转出（非本层：全仓品牌改名方言） | 0 | B213（docs/22 裁决） |
@@ -181,24 +181,24 @@ pi SDK 逐文件（`packages/mcp/src`）：`client.ts` 621 · `transports/stream
 
 ---
 
-## 加权汇总（新锚点 `56cae7823`）
+## 加权汇总（目标锚点 `a00a5048d`）
 
 | 域 | Σ权重 | Σ(w×系数) | 加权完成度 | 未加权完成度 |
 |---|---:|---:|---:|---:|
 | A 配置（12 计分＋2 转出） | 18 | **18.0** | **100%（满分域）** | 100%（12/12） |
 | B 协议/客户端（7） | 13 | **13.0** | **100%（满分域）** | 100%（7/7） |
-| C 传输（9 计分＋2 转出） | 13 | **13.0** | **100%（满分域）** | 100%（9/9） |
+| C 传输（10 计分＋2 转出） | 14 | **14.0** | **100%（满分域）** | 100%（10/10） |
 | D OAuth（11 计分＋4 转出） | 17 | **17.0** | **100%（满分域）** | 100%（11/11） |
 | E 工具/资源/结果（19） | 27 | **27.0** | **100%（满分域）** | 100%（19/19） |
 | F CLI（7 计分＋1 转出） | 11 | **11.0** | **100%（满分域）** | 100%（7/7） |
 | G 接线（17） | 23 | **23.0** | **100%（满分域）** | 100%（17/17） |
-| **模块合计（82 计分＋9 转出）** | **122** | **122.0** | **100%** | **100%（82/82）** |
+| **模块合计（83 计分＋9 转出）** | **123** | **123.0** | **100%** | **100%（83/83）** |
 
-**新锚点模块合计**：Σ权重 **122** ／ Σ(w×c) **122.0** ／ **加权完成度 = 100%**（未加权 82/82＝100%；对齐 82／存疑 0／缺失 0）。
+**目标锚点模块合计**：Σ权重 **123** ／ Σ(w×c) **123.0** ／ **加权完成度 = 100%**（未加权 83/83＝100%；对齐 83／存疑 0／缺失 0）。分母比旧锚点 +1，来自新增单元 #96 `PipeTransport`（w1）。
 数字可复算：`grep -E '^\| [0-9]+ \|' docs/map/07-mcp.md` 取判定列（7）与权重列（8），**只计权重 > 0 的行**（`转出（非本层）` 行权重 0，不进分母）。
-历史读数：旧基线（`ea448f454`）93.8%（121.0/129）；docs/21 收口时的新锚点读数 96.18%（126.0/131）。docs/22（2026-11-04 用户裁决）把 9 条跨层/共享方言转出 MCP 分母，并在同一包内补齐 #85。
+历史读数：旧基线（`ea448f454`）93.8%（121.0/129）；docs/21 收口时的新锚点读数 96.18%（126.0/131）；`56cae7823` 正式读数 122/122＝100%。docs/22（2026-11-04 用户裁决）把 9 条跨层/共享方言转出 MCP 分母，并在同一包内补齐 #85。
 
-**权重 3 只有 1 条（#15 initialize 协商），已对齐**。计分母缺失 0 条；#94/#95 为 docs/21 新增的两条 w1 单元（W7／W8）。
+**权重 3 只有 1 条（#15 initialize 协商），已对齐**。计分母缺失 0 条；#94/#95 为 docs/21 新增的两条 w1 单元（W7／W8），#96 为目标锚点新增（P9-S7）。
 
 ### 缺失的权重分布（计分母 0 条）
 
@@ -222,14 +222,22 @@ A：#5（B182，L5 配置子系统）、#6（B183，共享 JSON 解析方言）�
 
 MCP 层无未结计分项。9 条转出行随各自层（L1／L5／平台方言）的重测复核；本层不再维护。
 
-## 目标锚点 `a00a5048d` 预审计（2026-11-21）
+## 目标锚点 `a00a5048d` 重判结论（2026-11-22，L2 收口）
 
-- **L2 投影：115.0/123 ≈ 93.5%**（旧锚点正式读数 122/122＝100%）。若 `PipeTransport` 按「仅被 R5 的 apps/p2、env 消费」出分母，则为 115.0/122≈94.3%。
-- **新增 1 个 w1 单元**：`PipeTransport`（调用方启动程序的 MCP stdio 帧，共享行读取器）——Java 无等价实现。
-- **8 个原满分单元重判**：#22 stdio 关闭序列/进程树(w1)、#25 Streamable HTTP POST/GET JSON 分支(w2)、#26 SSE 消费/续接(w2)、#36 OAuth 刷新(w2)、#37 OAuth 回调(w1)、#42 sign-in 拆分(w2)、#67 `mcp list`(w2)、#68 login/logout(w2)。主要缺口：JSON `maxMessageBytes`/body 取消、`refreshOnly`/重定向 URI 校验/可中止刷新锁、两段式 sign-in、CLI provider token 与 `/login <provider>` 提示。
-- 已等价：回调 `closeAllConnections`（`HttpServer.stop(0)`）、CR-only/CRLF SSE、8KiB 错误体长度、工具命名/输入 schema/20KB 截断/配置校验。
-- **落地面（2026-11-22 起，P9 逐阶段）**：S1 关闭序列 `02b6bf59`、S2 按块行读取 `db9f8646`、
-  S3 JSON 限长与 body 取消 `d80b326f`（`#22`／`#25`／`#26` 代码面已补）。S4–S7（OAuth 刷新、
-  两段式 sign-in、CLI provider token、`PipeTransport`）未落地，故**本层读数仍按投影 115.0/123**，
-  阶段清单见 [`../13-mcp-p9-design.md`](../13-mcp-p9-design.md) §8。正式行级重判归 P12。口径见
-  [`../05-module-alignment-map.md` §1.2](../05-module-alignment-map.md)。
+- **L2 读数：123/123 ＝ 100%**。旧锚点正式读数 122/122；预审计投影 115.0/123≈93.5%。分母 +1 是新增
+  单元 #96 `PipeTransport`（w1，按 `docs/13` D1 计入分母，未走「仅被 R5 消费则出分母」的排除），
+  8 个原满分单元重判后全部回到对齐，无降级存疑项。
+- **逐阶段落地**：S1 关闭序列 `02b6bf59`（#22）、S2 按块行读取 `db9f8646`（#21/#22 共用拼帧）、
+  S3 JSON 限长与 body 取消 `d80b326f`（#25/#26）、S4 OAuth 刷新与换码校验 `cd942ef`（#36）、
+  S5 两段式 sign-in ＋ loopback 拆分 `f8349e5`（#39/#42）、S6 CLI provider token `e803730`（#67/#68）、
+  S7 `PipeTransport` `e40eea1`（#96）。设计与逐阶段判据见
+  [`../13-mcp-p9-design.md`](../13-mcp-p9-design.md) §4／§8。
+- **预审计编号笔误的更正**：预审计写作「#37 OAuth 回调(w1)」，实际对位的是 D 组 **#39**（loopback 回调服务器，
+  w2）与 **#42**（sign-in 编排，w2）；#37 是 `mcp-auth.json` 存储，本批未改。本图按实际行记账，
+  分母与合计不受影响。
+- 已等价的复核结论保留：回调 `closeAllConnections`（`HttpServer.stop(0)`）、CR-only/CRLF SSE、
+  8 KiB 错误体长度、工具命名/输入 schema/20 KB 截断/配置校验。
+- **`CURRENT_PI_PIN` 未切换**：按 `ANCHOR.md` §完成条件，需七层全部按目标锚点重测后才切；L2 是第 3 层
+  （L0／L1 之后）。切锚、全仓发布与 `mcp list` 的逐行复核归 P12。汇总视图见
+  [`../05-module-alignment-map.md` §1.2](../05-module-alignment-map.md)、进度视图见
+  [`../09-pi-latest-reanchor-plan.md`](../09-pi-latest-reanchor-plan.md) §3。

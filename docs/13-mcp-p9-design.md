@@ -4,6 +4,7 @@
 > `map/07` 在目标锚点 `a00a5048d` 下的投影是 **115.0/123 ≈ 93.5%**，唯一缺口就是 P9 整包：
 > 1 个新增单元（`PipeTransport`）＋ 8 个原满分单元重判，扣 **−6.5**。
 > 本稿把这 9 项拆成 7 个可独立实施的 S 阶段，给出 pi 证据（只读 `a00a5048d`）、Java 落点、夹具与提交切分。
+> **【状态】S1–S7 已于 2026-11-22 全部落地，L2 收口读数 123/123＝100%**（逐阶段提交与复核见 §8）。
 > **本稿不改读数**；收口后由 `map/07` 先记、`docs/05` §1.2 与 `docs/09` §3 同步（三处一起改，见 `docs/04` §0）。
 >
 > 证据取法：`git -C D:/workplaceForai/pi show a00a5048d:<path>`。
@@ -16,7 +17,7 @@
 | 25 | Streamable HTTP POST/GET JSON 分支 | w2 | 部分 | JSON 分支无 `maxMessageBytes`、超限不取消 body；错误体只截 8 KiB 但读完整 | S3 |
 | 26 | SSE 消费／续接 | w2 | 部分 | 续接（`Last-Event-ID`）已在；差在 body 取消与限长口径统一 | S3 |
 | 36 | OAuth 刷新 | w2 | 部分 | 有单飞＋文件锁＋stale 比对；缺 `refreshOnly`（刷新不注册 client）、刷新锁不可中止、`settled()` | S4 |
-| 37 | OAuth 回调 | w1 | 部分 | `HttpServer.stop(0)` 等价已具；差在 loopback 监听被拆成独立件、重定向 URI 校验口径 | S5 |
+| 39 | loopback 回调服务器 | w2 | 部分 | `HttpServer.stop(0)` 等价已具；差在 loopback 监听被拆成独立件、重定向 URI 校验口径 | S5 |
 | 42 | sign-in 拆分 | w2 | 部分 | 单调用 `McpSignIn.signIn`；缺 `start`／`complete` 两段式与 `McpSignInRedirect` 数据 | S5 |
 | 67 | `mcp list` | w2 | 部分 | 不传 provider token；`needs-auth` 只提示 `mcp login <name>` | S6 |
 | 68 | login／logout | w2 | 部分 | 同上；缺 `/login <provider>` 提示 | S6 |
@@ -117,6 +118,8 @@ Java（`coding-agent/subcommand/McpCommand.java` + `McpListCommand.java`）：`M
 | D5 | `#26` 是否还有代码要改 | 实施 S3 时逐条比；若 `SseStreamConsumer` 已等价，只登记复核结论（`map/07` 行改判），不动代码 | 是否含代码 |
 
 **默认口径（未回复则按建议执行）**：D1 做、D2 两段、D3 公开、D4 auth.json、D5 按实测。
+实施即按默认口径执行（D1 计入分母 ⇒ 123；D4 的 token 来源按 Java 凭证布局取 `auth-oauth.json`／`auth.json`／env，
+见 §8 S6 注）。
 
 ## 4. 实施阶段
 
@@ -129,6 +132,10 @@ Java（`coding-agent/subcommand/McpCommand.java` + `McpListCommand.java`）：`M
 - 夹具：`StubbornFixtureServer`（忽略 stdin 关闭且派生孙进程）＋ 新断言「`close()` 在
   `500ms + closeTimeout` 内返回」「孙进程存活数归零」。
 - 不追求毫秒级断言：只断言**顺序**（先请求退出、超时后才强杀）与**总时长上界**。
+- 实现偏离（已落地，见 §8）：没有单独的 `terminateTreeIfExited`，改为**关 stdin 前抓进程树快照**
+  （`StdioProcess.snapshotTree` 先收 `descendants()`、服务器本身排最后，再配 `awaitAll` 等待），
+  父进程先退也能给后代补一刀；
+  对外行为等价，工厂类名不变。
 
 ### S2 `#22b` 行读取改为按块扫描（w1 同上单元）
 
@@ -155,7 +162,7 @@ Java（`coding-agent/subcommand/McpCommand.java` + `McpListCommand.java`）：`M
   `McpSignInCancelledError` 的等价物），**已发出的刷新不取消**。
 - 夹具：`ScriptedMcpFetch` 加「刷新期间不得调用 register」断言；锁竞争用例断言可中止。
 
-### S5 `#37`／`#42` 两段式 sign-in ＋ loopback 拆分（w2）
+### S5 `#39`／`#42` 两段式 sign-in ＋ loopback 拆分（w2）
 
 - `McpSignIn` 拆为 `start(Options) → McpSignInStart`（`authorized` ／ `redirect` 数据记录
   `{authorizationUrl, redirectUrl, state, scope}`）与 `complete(Options, McpAuthorizationResponse)`；
@@ -216,7 +223,7 @@ Java（`coding-agent/subcommand/McpCommand.java` + `McpListCommand.java`）：`M
 | S2 `#22b` | 2026-11-22 | `db9f8646` | `StdioLineFrames.pump` 改按 8 KiB 块扫描 `\n`，未完成尾巴按块留存、换行时只 join 一次；`maxMessageBytes` 与 CRLF 语义不变 | 新增 `StdioLineFramesTest` 5 例（跨块重组、多帧＋CRLF、2 MiB 单行、超限、EOF 残帧） |
 | S3 `#25`/`#26` | 2026-11-22 | `d80b326f` | JSON 分支读 `maxMessageBytes`（超限抛 `MCP JSON response exceeds N bytes`）；错误体改 `readBodyText`：只读摘录并**关流取消剩余**（原实现读 8 KiB 后不关流） | 新增 `StreamableHttpBodyLimitsTest` 3 例（超限失败＋流关闭、限内投递、20 KB 错误体截断＋流关闭） |
 | S4 `#36` | 2026-11-22 | `cd942ef` | `OAuthFlow` 增 `refreshOnly`：无 client 时直接 `REDIRECT`（不注册）、刷新失败后也 `REDIRECT`（不覆盖待完成登录的 `state`／PKCE verifier）；`invalid_client`／`unauthorized_client` 在 refreshOnly 下只在「存的就是这次用的 client」时才作废 client／tokens／discovery，非 refreshOnly 仍 `all`；换码前先校验 redirect URI 与授权请求一致（`flow.ts:386-400`）。`McpAuthProviders` 刷新传 `refreshOnly=true`；`settled()` 复核为已等价 | 新增 `McpOAuthRefreshTest` 3 例（无 client 不注册、`invalid_client` 只丢 client+tokens 而保住 `state`/verifier、`invalid_grant` 只丢 tokens）；`OAuthFlowTest` +3 例（refreshOnly 不注册、刷新失败不强推授权、换码 redirect URI 不一致先报错）；`AuthorizationServerFixture` 增 `REJECT_CLIENT`／`REJECT_REFRESH` 两模式 |
-| S5 `#37`/`#42` | 2026-11-22 | `f8349e5` | 两段式：`McpSignIn.start`（先 `refreshOnly` 刷新、`skipRefresh=true` 准备浏览器步）返回 `McpSignInStart`／纯数据 `McpSignInRedirect{authorizationUrl, redirectUrl, state, scope}`，`McpSignIn.complete` 校验 `response.state` 与存储的 `oauthState` 后再换码；`signIn` 保留为两半的封装。loopback 拆成 `McpLoopbackSignIn.listen/await/responseFromRedirectUrl`（https 回调路由可复用）。等刷新锁可中止：刷新跑在虚拟线程、调用侧只中止「等」，刷新照常落盘；`McpRefreshLockBusyError`（store 等锁超时抛）令 `start` 直接进浏览器步 | 新增 `McpLoopbackSignInTest` 10 例（含 `anAbortedSignalStopsTheWait`）、`McpSignInTwoStageTest` 5 例（纯数据、两半跑通、state 不符、被更新的登录顶掉、等锁中止后刷新仍执行）；`McpSignInTest` 14 → 5（纯逻辑）＋ `McpSignInEndToEndTest` 4 例仍绿 |
+| S5 `#39`/`#42` | 2026-11-22 | `f8349e5` | 两段式：`McpSignIn.start`（先 `refreshOnly` 刷新、`skipRefresh=true` 准备浏览器步）返回 `McpSignInStart`／纯数据 `McpSignInRedirect{authorizationUrl, redirectUrl, state, scope}`，`McpSignIn.complete` 校验 `response.state` 与存储的 `oauthState` 后再换码；`signIn` 保留为两半的封装。loopback 拆成 `McpLoopbackSignIn.listen/await/responseFromRedirectUrl`（https 回调路由可复用）。等刷新锁可中止：刷新跑在虚拟线程、调用侧只中止「等」，刷新照常落盘；`McpRefreshLockBusyError`（store 等锁超时抛）令 `start` 直接进浏览器步 | 新增 `McpLoopbackSignInTest` 10 例（含 `anAbortedSignalStopsTheWait`）、`McpSignInTwoStageTest` 5 例（纯数据、两半跑通、state 不符、被更新的登录顶掉、等锁中止后刷新仍执行）；`McpSignInTest` 14 → 5（纯逻辑）＋ `McpSignInEndToEndTest` 4 例仍绿 |
 | S6 `#67`／`#68` | 2026-11-22 | `e803730` | `McpCommand.Options` 增 `providerToken`，缺省读 `McpCommandSupport.providerTokens()`（先 `auth-oauth.json` 的 access token，再 `Credentials.resolveApiKey`＝`auth.json`＋env）；`McpCommandSupport.connection` 传进 `McpConnectionOptions.providerToken`，于是 `mcp list` 的 `auth.provider` 服务器能带 provider token 连上（此前恒 `null` ⇒ 必 `needs-auth`）。`McpListCommand` 报告增 `authProvider`（JSON 同名键在 `transport` 后），`needs-auth` 提示按 pi 切换；`mcp login/logout` 对 `auth.provider` 服务器改报 `pi-java auth <cmd> <provider>`（`cli.ts:285-291`） | `McpListCommandTest` +4（带 token 连上、提示切换、JSON 带 `authProvider`、无 provider 时仍打 `mcp login`）＋新夹具 `McpHttpFixture`（需 Bearer、否则 401 的 HTTP MCP 服务） |
 | S7 `PipeTransport` | 2026-11-22 | `e40eea1` | 新增 `transport/PipeTransport`：`McpPipe` 接缝（`write`／`closeStdin`／`close`／`exited`）＋`PipeOpener.open(PipeHandlers)`；`start` 在 `open` 期间被 `close` 时关掉刚起来的程序并抛 `McpConnectionClosedError`；`close` 与 pi 同序（关 stdin → 等 `exited` 至 `closeTimeoutMs` → `pipe.close()` → 等 `exited`）；`exited` 失败且非 `close` 引起则先 `emitError` 再 close；程序结束时 `framer.end()` 报未完成消息。`StdioLineFrames` 拆出可推入的 `Framer`，stdio 与 pipe 共用同一套拼帧 | 新 `PipeTransportTest` 13 例（分块解析、单行发送、未完成消息报错后 close、`exited` 失败先报错、启动即关闭、留驻进程被 kill、合作退出不 kill、已结束后不碰 stdin、发送失败、超限、stderr 尾＋分块回调、重复 start、无程序时 close 仍报 close）＋夹具 `PipeFixture`（内存管道＋可控 `exited`） |
 
@@ -245,6 +252,10 @@ Java（`coding-agent/subcommand/McpCommand.java` + `McpListCommand.java`）：`M
 > env 集成直接构造工厂；`maxStderrBytes` 未做成选项（`StderrTail` 固定 64 KiB，与 pi 默认一致）。
 
 > 模块测试：`pi-java-mcp` 289 → 292（S1–S3）→ 298（S4）→ 304（S5）→ **317**（S7）全绿；
-> `pi-java-coding-agent` 全量 1998 例全绿（其中 MCP 命令相关 229）。七个阶段已全部落地，
-> **读数仍暂不动**：下一步按 `docs/04` §0 做 L2 收口——`map/07` 先改，再同步 `docs/05` §1.2 与
-> `docs/09` §3/§4。
+> `pi-java-coding-agent` 全量 1998 例全绿（其中 MCP 命令相关 229）。七个阶段已全部落地。
+>
+> **L2 收口已完成（2026-11-22）**：`map/07` 记 **123/123＝100%**（见其「重判结论」段），
+> `docs/05` §1.2 与 `docs/09` §3/§4 已同步（`docs/04` §0 的三处一起改）。复核口径（2026-11-22 实跑）：
+> `pi-java-mcp` 40 个测试类 **317/317** 全绿，其中 P9 相关 `PipeTransportTest` 13、`McpLoopbackSignInTest` 10、
+> `McpSignInTwoStageTest` 5、`StdioLineFramesTest` 5、`McpOAuthRefreshTest` 3、`StreamableHttpBodyLimitsTest` 3、
+> `McpStdioTest` 3；`pi-java-coding-agent` 的 `McpListCommandTest` **18/18** 全绿。
