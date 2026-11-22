@@ -47,11 +47,13 @@ public final class ReadTool {
                 return List.of("Use read to examine files instead of cat or sed.");
             }
             @Override public String description() {
+                // pi read.ts:239 逐字，末句为整文件接力提示。
                 return "Read the contents of a file. Supports text files and images (jpg, png, gif, webp, bmp). "
                     + "Images are sent as attachments. "
                     + "For text files, output is truncated to " + TruncationUtils.DEFAULT_MAX_LINES
                     + " lines or " + (TruncationUtils.DEFAULT_MAX_BYTES / 1024)
-                    + "KB (whichever is hit first). Use offset/limit for large files.";
+                    + "KB (whichever is hit first). Use offset/limit for large files. "
+                    + "When you need the full file, continue with offset until complete.";
             }
             @Override
             public Map<String, Object> inputSchema() {
@@ -92,55 +94,71 @@ public final class ReadTool {
                     AbortSignal signal, ToolUpdateCallback<ReadDetails> onUpdate,
                     ToolContext context) throws Exception {
                 String absolutePath = PathUtils.resolveToolPath(context, params.path());
-                byte[] bytes = context.fs().readBinary(absolutePath);
 
-                // Check if it's an image
-                var mimeType = PathUtils.detectImageMimeType(bytes);
+                // Sniff the image header only; text files are not loaded whole before reading.
+                var mimeType = PathUtils.detectImageMimeType(context.fs(), absolutePath);
                 if (mimeType.isPresent()) {
-                    return readImage(bytes, mimeType.get(), context);
+                    return readImage(context.fs().readBinary(absolutePath), mimeType.get(), context);
                 }
 
-                // Text file
+                // Text file. Integral ranges (all Java ints) stream; a negative limit keeps the
+                // whole-file path so the array slicing semantics stay the same.
                 int offset = params.offset().orElse(1);
                 int startLine = Math.max(0, offset - 1);
-                String text = new String(bytes, StandardCharsets.UTF_8);
-                var allLines = List.of(text.split("\n", -1));
-
-                if (startLine >= allLines.size()) {
-                    throw new IllegalArgumentException("Offset " + offset + " is beyond end of file ("
-                        + allLines.size() + " lines total)");
+                Integer limit = params.limit().orElse(null);
+                StreamingLineSelector.Selection selection;
+                if (limit == null || limit >= 0) {
+                    try (var in = context.fs().openRead(absolutePath)) {
+                        selection = StreamingLineSelector.select(in, startLine, limit, signal);
+                    }
+                } else {
+                    selection = selectFromBuffer(context.fs().readBinary(absolutePath),
+                        startLine, limit);
                 }
 
-                int endLine = params.limit().isPresent()
-                    ? Math.min(startLine + params.limit().get(), allLines.size())
-                    : allLines.size();
-                String selectedContent = String.join("\n", allLines.subList(startLine, endLine));
+                int totalFileLines = selection.totalFileLines();
+                if (startLine >= totalFileLines) {
+                    throw new IllegalArgumentException("Offset " + offset + " is beyond end of file ("
+                        + totalFileLines + " lines total)");
+                }
 
-                var truncation = TruncationUtils.truncateHead(selectedContent);
+                var truncation = selection.truncation();
+                int startDisplay = startLine + 1;
+                // pi read.ts:326-333: a user limit is honored before truncation notices.
+                Integer userLimitedLines = limit == null ? null
+                    : Math.min(startLine + limit, totalFileLines) - startLine;
                 String outputText;
                 ReadDetails details = null;
 
                 if (truncation.firstLineExceedsLimit()) {
-                    outputText = "[Line " + (startLine + 1) + " exceeds "
-                        + TruncationUtils.formatSize(TruncationUtils.DEFAULT_MAX_BYTES)
-                        + " limit. Use bash: sed -n '" + (startLine + 1) + "p' "
+                    outputText = "[Line " + startDisplay + " is "
+                        + TruncationUtils.formatSize(selection.firstLineBytes())
+                        + ", exceeds " + TruncationUtils.formatSize(TruncationUtils.DEFAULT_MAX_BYTES)
+                        + " limit. Use bash: sed -n '" + startDisplay + "p' "
                         + params.path() + " | head -c " + TruncationUtils.DEFAULT_MAX_BYTES + "]";
                     details = new ReadDetails(truncation);
                 } else if (truncation.truncated()) {
-                    int startDisplay = startLine + 1;
                     int endDisplay = startDisplay + truncation.outputLines() - 1;
                     int nextOffset = endDisplay + 1;
-                    outputText = truncation.content()
-                        + "\n\n[Showing lines " + startDisplay + "-" + endDisplay
-                        + " of " + allLines.size()
-                        + " (" + TruncationUtils.formatSize(TruncationUtils.DEFAULT_MAX_BYTES)
-                        + " limit). Use offset=" + nextOffset + " to continue.]";
+                    outputText = truncation.content();
+                    if ("lines".equals(truncation.truncatedBy())) {
+                        outputText += "\n\n[Showing lines " + startDisplay + "-" + endDisplay
+                            + " of " + totalFileLines + ". Use offset=" + nextOffset
+                            + " to continue.]";
+                    } else {
+                        outputText += "\n\n[Showing lines " + startDisplay + "-" + endDisplay
+                            + " of " + totalFileLines + " ("
+                            + TruncationUtils.formatSize(TruncationUtils.DEFAULT_MAX_BYTES)
+                            + " limit). Use offset=" + nextOffset + " to continue.]";
+                    }
                     details = new ReadDetails(truncation);
-                } else if (endLine < allLines.size()) {
-                    int remaining = allLines.size() - endLine;
+                } else if (userLimitedLines != null
+                        && startLine + userLimitedLines < totalFileLines) {
+                    int remaining = totalFileLines - (startLine + userLimitedLines);
+                    int nextOffset = startLine + userLimitedLines + 1;
                     outputText = truncation.content()
                         + "\n\n[" + remaining + " more lines in file. Use offset="
-                        + (endLine + 1) + " to continue.]";
+                        + nextOffset + " to continue.]";
                 } else {
                     outputText = truncation.content();
                 }
@@ -150,6 +168,29 @@ public final class ReadTool {
                     details, null, false, List.of());
             }
         };
+    }
+
+    /**
+     * 整文件路径（pi {@code selectLinesFromBuffer}，read.ts:132-140）：用 JS
+     * {@code slice(start, end)} 语义选中行（负 limit 也照 JS 解释），再走同一个
+     * {@code truncateHead}，与流式路径对拍。
+     */
+    private static StreamingLineSelector.Selection selectFromBuffer(byte[] bytes, int startLine,
+            int limit) {
+        String[] allLines = new String(bytes, StandardCharsets.UTF_8).split("\n", -1);
+        int endExclusive = Math.min(startLine + limit, allLines.length);
+        int from = Math.min(startLine, allLines.length);
+        int to = endExclusive < 0
+            ? Math.max(allLines.length + endExclusive, 0)
+            : Math.min(endExclusive, allLines.length);
+        if (to < from) {
+            to = from;
+        }
+        String selected = String.join("\n", List.of(allLines).subList(from, to));
+        var truncation = TruncationUtils.truncateHead(selected);
+        int firstLineBytes = truncation.firstLineExceedsLimit()
+            ? allLines[from].getBytes(StandardCharsets.UTF_8).length : 0;
+        return new StreamingLineSelector.Selection(truncation, allLines.length, firstLineBytes);
     }
 
     /**

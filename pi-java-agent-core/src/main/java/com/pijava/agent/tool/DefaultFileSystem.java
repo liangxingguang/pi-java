@@ -1,6 +1,7 @@
 package com.pijava.agent.tool;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
@@ -24,6 +25,11 @@ public class DefaultFileSystem implements FileSystem {
     @Override
     public byte[] readBinary(String path) throws IOException {
         return Files.readAllBytes(Path.of(path));
+    }
+
+    @Override
+    public InputStream openRead(String path) throws IOException {
+        return Files.newInputStream(Path.of(path));
     }
 
     @Override

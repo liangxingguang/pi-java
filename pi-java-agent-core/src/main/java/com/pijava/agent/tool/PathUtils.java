@@ -1,5 +1,6 @@
 package com.pijava.agent.tool;
 
+import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Base64;
 import java.util.Optional;
@@ -13,9 +14,9 @@ public final class PathUtils {
 
     /**
      * 图片嗅探的字节预算（pi {@code utils/mime.ts:5} {@code IMAGE_TYPE_SNIFF_BYTES}）：
-     * read 工具读全文件后取头部判定等价；嗅探只看这个前缀内的字节。
+     * 嗅探只看这个前缀内的字节（read 工具只读这么多，不必整文件）。
      */
-    private static final int IMAGE_TYPE_SNIFF_BYTES = 4100;
+    public static final int IMAGE_TYPE_SNIFF_BYTES = 4100;
     /** Magic bytes for image detection. */
     private static final byte[] PNG_SIG = {
         (byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A};
@@ -63,6 +64,17 @@ public final class PathUtils {
      *   <li>BMP：{@code BM} 之后还要过 {@link #isBmp} 结构校验。</li>
      * </ul>
      */
+    /**
+     * 嗅探磁盘文件的图片 MIME（pi {@code utils/mime.ts} {@code detectSupportedImageMimeTypeFromFile}）：
+     * 只经 {@link FileSystem#openRead} 读头部 {@value #IMAGE_TYPE_SNIFF_BYTES} 字节，
+     * 文本文件不必整文件载入即可判定。
+     */
+    public static Optional<String> detectImageMimeType(FileSystem fs, String path) throws IOException {
+        try (var in = fs.openRead(path)) {
+            return detectImageMimeType(in.readNBytes(IMAGE_TYPE_SNIFF_BYTES));
+        }
+    }
+
     public static Optional<String> detectImageMimeType(byte[] data) {
         if (data == null || data.length < 4) return Optional.empty();
         if (startsWith(data, JPEG_SIG)) {
