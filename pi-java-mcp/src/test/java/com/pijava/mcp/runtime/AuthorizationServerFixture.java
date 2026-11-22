@@ -47,7 +47,13 @@ final class AuthorizationServerFixture implements AutoCloseable {
         WRONG_ISSUER,
 
         /** The token endpoint expects a challenge that this verifier does not produce. */
-        WRONG_VERIFIER
+        WRONG_VERIFIER,
+
+        /** The token endpoint rejects the client of a refresh ({@code invalid_client}). */
+        REJECT_CLIENT,
+
+        /** The token endpoint rejects the refresh token ({@code invalid_grant}). */
+        REJECT_REFRESH
     }
 
     private static final String CODE = "test-code";
@@ -185,6 +191,14 @@ final class AuthorizationServerFixture implements AutoCloseable {
                 StandardCharsets.UTF_8));
         if ("refresh_token".equals(form.get("grant_type"))) {
             refreshes.incrementAndGet();
+            if (mode == Mode.REJECT_CLIENT) {
+                json(exchange, 400, Map.of("error", "invalid_client"));
+                return;
+            }
+            if (mode == Mode.REJECT_REFRESH) {
+                json(exchange, 400, Map.of("error", "invalid_grant"));
+                return;
+            }
             json(exchange, 200, Map.of(
                     "access_token", "refreshed-token",
                     "token_type", "Bearer",

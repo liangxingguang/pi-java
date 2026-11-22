@@ -21,11 +21,23 @@ public final class OAuthFlow {
     /** Run the flow, retrying once after invalidating rejected credentials. */
     public static OAuthFlowResult authorizeMcp(OAuthClientProvider provider, OAuthFlowOptions options)
             throws Exception {
+        var use = new FlowUse();
         try {
-            return runFlow(provider, options);
+            return runFlow(provider, options, use);
         } catch (OAuthError error) {
             if (List.of("invalid_client", "unauthorized_client").contains(error.code())) {
-                provider.invalidateCredentials("all");
+                if (options.refreshOnly()) {
+                    // pi flow.ts:468-478 —— 刷新失败时**不得**清掉用户正在进行的登录：只有当存储的 client
+                    // 仍是这次流程用的那个（期间没有别的登录写进新的）才作废它。
+                    var current = provider.clientInformation();
+                    if (current != null && Objects.equals(current.clientId(), use.storedClientId)) {
+                        provider.invalidateCredentials("client");
+                        provider.invalidateCredentials("tokens");
+                        provider.invalidateCredentials("discovery");
+                    }
+                } else {
+                    provider.invalidateCredentials("all");
+                }
                 return runFlow(provider, options);
             }
             if ("invalid_grant".equals(error.code())) {
@@ -36,8 +48,18 @@ public final class OAuthFlow {
         }
     }
 
+    /** What a flow used, for deciding what to invalidate after it failed (pi {@code FlowUse}). */
+    private static final class FlowUse {
+        private @Nullable String storedClientId;
+    }
+
     private static OAuthFlowResult runFlow(OAuthClientProvider provider, OAuthFlowOptions options)
             throws Exception {
+        return runFlow(provider, options, new FlowUse());
+    }
+
+    private static OAuthFlowResult runFlow(OAuthClientProvider provider, OAuthFlowOptions options,
+                                           FlowUse use) throws Exception {
         var fetch = OAuthTokenRequests.fetchOf(options.fetch());
         // A configured metadata URL is not cached, so changing it applies at once.
         var metadataUrl = options.authorizationServerMetadataUrl() == null
@@ -57,16 +79,32 @@ public final class OAuthFlow {
         var scope = pickScope(provider, options, discovered.resourceMetadata());
 
         var stored = provider.clientInformation();
+        use.storedClientId = stored == null ? null : stored.clientId();
         var document = stored != null ? null : provider.clientMetadataDocument(metadata);
         if (document != null) {
             checkClientMetadataUrl(document.url());
         }
+        // pi flow.ts:386-397 —— redirect URI 先算出来：换码用的它必须与授权请求那次一致，
+        // 而「换了 redirect URI」也正好能解释「client 找不到」。
+        var redirectUrl = document != null ? document.redirectUrl() : provider.redirectUrl();
+        if (options.authorizationCode() != null && options.authorizationRedirectUrl() != null
+                && !redirectUrl.equals(options.authorizationRedirectUrl())) {
+            throw new IllegalStateException("The code exchange would use the redirect URI "
+                    + redirectUrl + ", but the authorization request used "
+                    + options.authorizationRedirectUrl());
+        }
         var client = stored != null ? stored
                 : document != null ? clientDocumentInformation(document) : null;
         if (client == null) {
+            if (options.refreshOnly()) {
+                // pi flow.ts:400 —— 刷新不许注册 client：用户可能正在浏览器里做授权。
+                return OAuthFlowResult.REDIRECT;
+            }
             if (options.authorizationCode() != null) {
                 throw new IllegalStateException(
-                        "OAuth client information is missing during code exchange");
+                        "OAuth client information is missing during code exchange:"
+                                + " the authorization request's client was removed,"
+                                + " or the client settings changed");
             }
             if (!provider.canSaveClientInformation()) {
                 throw new IllegalStateException("OAuth client information cannot be persisted");
@@ -76,7 +114,6 @@ public final class OAuthFlow {
                     new OAuthTokenRequests.Options(metadata, provider.clientMetadata(), scope, fetch));
             provider.saveClientInformation(client);
         }
-        var redirectUrl = document != null ? document.redirectUrl() : provider.redirectUrl();
         var tokenOptions = new OAuthTokenRequests.TokenRequestOptions(
                 metadata, client, resource, provider.addClientAuthentication(), fetch);
 
@@ -107,6 +144,12 @@ public final class OAuthFlow {
             } catch (IOException ignored) {
                 // A network failure is worth a redirect attempt.
             }
+        }
+
+        if (options.refreshOnly()) {
+            // pi flow.ts:453 —— 刷新失败（或根本没有 refresh token）时刷新流程到此为止：
+            // 不注册 client、不覆盖 PKCE verifier 与 state，用户正在进行的授权仍然可用。
+            return OAuthFlowResult.REDIRECT;
         }
 
         var authorization = OAuthEndpoints.startAuthorization(

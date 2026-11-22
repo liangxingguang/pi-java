@@ -55,11 +55,17 @@ class OAuthFlowTest {
     }
 
     static OAuthFlowOptions options(McpFetch fetch) {
-        return new OAuthFlowOptions(SERVER, null, null, null, null, null, fetch, false, false);
+        return new OAuthFlowOptions(SERVER, null, null, null, null, null, fetch, false, false,
+                false, null);
     }
 
     static OAuthFlowOptions exchangeOptions(McpFetch fetch, String code, String iss) {
-        return new OAuthFlowOptions(SERVER, code, iss, null, null, null, fetch, false, false);
+        return new OAuthFlowOptions(SERVER, code, iss, null, null, null, fetch, false, false,
+                false, null);
+    }
+
+    static OAuthFlowOptions refreshOnlyOptions(McpFetch fetch) {
+        return options(fetch).asRefreshOnly();
     }
 
     static String challengeOf(String verifier) throws Exception {
@@ -168,6 +174,60 @@ class OAuthFlowTest {
                 .isEqualTo(OAuthFlowResult.REDIRECT);
         assertThat(provider.invalidations).containsExactly("tokens");
         assertThat(provider.authorizationUrl).isNotNull();
+    }
+
+    // ---- refresh-only 与换码前的 redirect URI 校验（flow.ts:386-400, 453） ----
+
+    @Test
+    void refreshOnlyWithoutAClientRedirectsWithoutRegistering() throws Exception {
+        var fetch = new ScriptedMcpFetch();
+        var provider = new TestOAuthProvider("http://127.0.0.1/callback");
+        provider.discovery = new OAuthDiscoveryState(AS, metadata(asJson(AS, REGISTER)), null, null);
+
+        assertThat(OAuthFlow.authorizeMcp(provider, refreshOnlyOptions(fetch)))
+                .isEqualTo(OAuthFlowResult.REDIRECT);
+        // 注册 client 或准备授权请求都会毁掉用户正在进行的登录。
+        assertThat(provider.client).isNull();
+        assertThat(provider.authorizationUrl).isNull();
+        assertThat(fetch.sentTo(REGISTER)).isEmpty();
+    }
+
+    @Test
+    void refreshOnlyReturnsRedirectInsteadOfAuthorizingWhenTheRefreshFails() throws Exception {
+        var fetch = new ScriptedMcpFetch().json(TOKEN, 500, "boom");
+        var provider = new TestOAuthProvider("http://127.0.0.1/callback");
+        provider.discovery = new OAuthDiscoveryState(AS, metadata(asJson(AS, REGISTER)), null, null);
+        provider.tokenSet = new OAuthTokens("a1", "Bearer", null, "org:read", "r1", null);
+        provider.client = client();
+        provider.verifier = "pending-verifier";
+
+        assertThat(OAuthFlow.authorizeMcp(provider, refreshOnlyOptions(fetch)))
+                .isEqualTo(OAuthFlowResult.REDIRECT);
+        // 刷新失败不等于可以开始新授权：待完成的 state 与 PKCE verifier 保持原样。
+        assertThat(provider.authorizationUrl).isNull();
+        assertThat(provider.verifier).isEqualTo("pending-verifier");
+    }
+
+    @Test
+    void refusesACodeExchangeThatWouldUseAnotherRedirectUri() throws Exception {
+        var fetch = new ScriptedMcpFetch()
+                .json(TOKEN, 200, "{\"access_token\":\"token\",\"token_type\":\"Bearer\"}");
+
+        assertThatThrownBy(() -> OAuthFlow.authorizeMcp(providerWithIss(false),
+                new OAuthFlowOptions(SERVER, "test-code", null, null, null, null, fetch,
+                        false, false, false, "http://127.0.0.1/other")))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("The code exchange would use the redirect URI"
+                        + " http://127.0.0.1/callback, but the authorization request used"
+                        + " http://127.0.0.1/other");
+        // 校验发生在发码之前。
+        assertThat(fetch.sentTo(TOKEN)).isEmpty();
+
+        assertThat(OAuthFlow.authorizeMcp(providerWithIss(false),
+                new OAuthFlowOptions(SERVER, "test-code", null, null, null, null, fetch,
+                        false, false, false, "http://127.0.0.1/callback")))
+                .isEqualTo(OAuthFlowResult.AUTHORIZED);
+        assertThat(fetch.sentTo(TOKEN)).hasSize(1);
     }
 
     // ---- Clause 7: RFC 9207 iss validation ----

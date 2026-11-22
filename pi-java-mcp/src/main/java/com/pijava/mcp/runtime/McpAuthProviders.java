@@ -271,7 +271,10 @@ public final class McpAuthProviders {
                         new TimedMcpFetch(fetch != null ? fetch : new JdkMcpFetch(),
                                 REFRESH_REQUEST_TIMEOUT_MS),
                         false,
-                        false);
+                        false,
+                        // pi auth-provider.ts:128 —— 后台刷新只刷新，不注册 client、不覆盖待完成的登录。
+                        true,
+                        null);
                 if (OAuthFlow.authorizeMcp(provider, flowOptions) == OAuthFlowResult.REDIRECT) {
                     throw new McpOAuthAuthorizationRequiredError();
                 }

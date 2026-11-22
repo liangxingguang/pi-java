@@ -94,7 +94,7 @@ public final class OAuthProviders {
                     URI.create(context.serverUrl()),
                     null, null, scope,
                     challenge.resourceMetadataUrl(), null,
-                    context.fetch(), false, insufficientScope);
+                    context.fetch(), false, insufficientScope, false, null);
             if (OAuthFlow.authorizeMcp(provider, options) == OAuthFlowResult.REDIRECT) {
                 throw new McpOAuthAuthorizationRequiredError();
             }

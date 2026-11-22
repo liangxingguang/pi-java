@@ -111,7 +111,7 @@ public final class McpSignIn {
                             stored == null || stored.tokens() == null ? null : stored.tokens().scope(),
                             challenge.scope())
                             : challenge == null ? null : challenge.scope());
-            var flow = flowOptions(options, scope, stepUp, null, null);
+            var flow = flowOptions(options, scope, stepUp, null, null, null);
             if (OAuthFlow.authorizeMcp(provider, flow) == OAuthFlowResult.AUTHORIZED) {
                 return;
             }
@@ -129,8 +129,10 @@ public final class McpSignIn {
             options.prompt().showAuthorizationUrl(url);
             var response = waitForAuthorizationResponse(callback, state, authorizationRedirectUrl,
                     options.prompt());
+            // pi sign-in.ts:202-209 —— 换码必须用授权请求那次用的 redirect URI，否则 flow 直接报错。
             OAuthFlow.authorizeMcp(provider,
-                    flowOptions(options, scope, stepUp, response.code(), response.iss()));
+                    flowOptions(options, scope, stepUp, response.code(), response.iss(),
+                            authorizationRedirectUrl.toString()));
         } finally {
             callback.close();
         }
@@ -157,7 +159,8 @@ public final class McpSignIn {
 
     private static OAuthFlowOptions flowOptions(Options options, @Nullable String scope,
                                                 boolean stepUp, @Nullable String code,
-                                                @Nullable String iss) {
+                                                @Nullable String iss,
+                                                @Nullable String authorizationRedirectUrl) {
         var challenge = options.challenge();
         return new OAuthFlowOptions(
                 URI.create(options.serverUrl()),
@@ -168,7 +171,9 @@ public final class McpSignIn {
                 options.settings().authServerMetadataUrl(),
                 null,
                 false,
-                stepUp);
+                stepUp,
+                false,
+                authorizationRedirectUrl);
     }
 
     /** Scopes of every list, each once ({@code oauth.ts:105-109}). */
