@@ -19,15 +19,25 @@ public final class RadiusMcpOffer {
 
     private RadiusMcpOffer() {}
 
-    /** Load global MCP state (project config is deliberately excluded) and prepare an offer. */
+    /**
+     * Load global MCP state (project config is deliberately excluded) and prepare an offer.
+     *
+     * <p>The plan and the {@code auth login} command share
+     * {@link RadiusMcpPlan}; this method only adapts it to the offer's prompt flow.</p>
+     */
     public static Decision prepare(Path agentDir, Path cwd) {
+        var plan = RadiusMcpPlan.plan("radius", agentDir, cwd);
+        if (plan.isPresent()) {
+            return new Decision(plan.get().name(), plan.get().config(), false);
+        }
         var servers = McpConfig.load(agentDir, cwd, false).servers();
         var existing = servers.stream()
             .filter(entry -> entry.config() instanceof McpServerConfig.Http http
                 && normalize(http.url()).equals(normalize(MCP_URL)))
             .findFirst().orElse(null);
-        return decisionFor("radius", existing == null ? null : (McpServerConfig.Http) existing.config(),
-            servers);
+        var name = existing == null ? "radius" : existing.name();
+        return new Decision(name, (McpServerConfig.Http) (existing == null
+            ? null : existing.config()), true);
     }
 
     /** Build the updated HTTP config while preserving every unrelated field. */
@@ -45,8 +55,7 @@ public final class RadiusMcpOffer {
             return new Decision(name == null ? "radius" : name, existing, true);
         }
         if (name == null) {
-            name = allServers.stream().anyMatch(entry -> entry.name().equals("radius"))
-                ? "radius-mcp" : "radius";
+            name = RadiusMcpPlan.availableName(allServers);
         }
         var auth = new McpServerConfig.Auth(providerId);
         var config = existing == null

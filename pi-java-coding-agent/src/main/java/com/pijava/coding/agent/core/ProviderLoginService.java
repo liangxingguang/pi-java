@@ -56,7 +56,7 @@ public final class ProviderLoginService implements LoginExecutor {
 
     /** Credential-stage operation; OAuth can be replaced by a local test rig. */
     @FunctionalInterface
-    interface Authenticator {
+    public interface Authenticator {
         void login(LoginProviderOption option, LoginInteraction interaction) throws IOException;
     }
 
@@ -131,7 +131,7 @@ public final class ProviderLoginService implements LoginExecutor {
         return success(option, status, warning, selected);
     }
 
-    static Authenticator standardAuthenticator(
+    public static Authenticator standardAuthenticator(
             FileCredentialStore apiKeys, OAuthCredentialStore oauthCredentials,
             Supplier<ChatGptOAuthFlow.LoginHints> chatGptHints) {
         return (option, interaction) -> {

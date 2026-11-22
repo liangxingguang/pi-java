@@ -1,7 +1,6 @@
 package com.pijava.coding.agent.core;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -45,10 +44,9 @@ public final class ProviderLoginCatalog {
                     LoginAuthType.API_KEY, status, false));
             }
         }
-        options.sort(Comparator.comparing((LoginProviderOption option) ->
-                option.name().toLowerCase(Locale.ROOT))
-            .thenComparing(LoginProviderOption::id)
-            .thenComparing(LoginProviderOption::authType));
+        // L5 W9（pi preferred-providers.ts）：伙伴 provider 置顶，其余按显示名；
+        // 稳定排序保证同一 provider 的账号项排在自己的 API key 项之前。
+        options.sort((a, b) -> PreferredProviders.compare(a.id(), a.name(), b.id(), b.name()));
         return List.copyOf(options);
     }
 
@@ -67,7 +65,8 @@ public final class ProviderLoginCatalog {
                 || option.name().toLowerCase(Locale.ROOT).equals(reference)).toList();
     }
 
-    private static ConfigurableProvider configurable(Provider provider) {
+    /** The provider's config-driven view, unwrapping remote catalog wrappers. */
+    public static ConfigurableProvider configurable(Provider provider) {
         if (provider instanceof ConfigurableProvider configurable) {
             return configurable;
         }

@@ -43,6 +43,17 @@ public final class AuthCommand {
             usage();
             return 1;
         }
+        // L5 W1（pi main.ts:130-170）：auth login/logout 在 runAuthCommand 前分派。
+        if ("login".equals(subArgs[0])) {
+            return AuthLoginCommand.run(
+                java.util.Arrays.copyOfRange(subArgs, 1, subArgs.length),
+                AuthLoginCommand.production());
+        }
+        if ("logout".equals(subArgs[0])) {
+            return AuthLogoutCommand.run(
+                java.util.Arrays.copyOfRange(subArgs, 1, subArgs.length),
+                AuthLogoutCommand.production());
+        }
         return switch (subArgs[0]) {
             case "print-api-key" -> printApiKey(provider(subArgs));
             case "check" -> check(provider(subArgs));
@@ -233,6 +244,8 @@ public final class AuthCommand {
     private static void usage() {
         System.out.println("""
             Usage:
+              pi-java auth login <provider> [--api-key] [--no-browser]
+              pi-java auth logout <provider>
               pi-java auth print-api-key <provider>
               pi-java auth check <provider>
               pi-java auth oauth-login <provider>   (OAuth PKCE/device-code flow)
