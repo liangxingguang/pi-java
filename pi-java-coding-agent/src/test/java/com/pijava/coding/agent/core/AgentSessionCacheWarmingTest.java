@@ -20,6 +20,7 @@ import com.pijava.agent.tool.DefaultFileSystem;
 import com.pijava.agent.tool.DefaultShellExecutor;
 import com.pijava.agent.tool.ToolContext;
 import com.pijava.ai.Usage;
+import com.pijava.ai.api.SessionResources;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
@@ -158,6 +159,29 @@ class AgentSessionCacheWarmingTest {
         drive(session, "go");
         session.close();
         assertThat(session.cacheWarmingStatus().reason()).isEqualTo("inactive");
+    }
+
+    /**
+     * ⑤ dispose 释放会话资源（pi {@code agent-session.ts:1501}）：{@code closeWith} 用当前
+     * sessionId 调 {@code SessionResources.cleanup}。
+     */
+    @Test
+    void closeCleansSessionResources() {
+        var session = anthropicSession(List.of(textSeq("hi")));
+        var id = session.sessionId();
+        var called = new AtomicBoolean();
+        var handle = SessionResources.register(cleaned -> {
+            if (id.equals(cleaned)) {
+                called.set(true);
+            }
+        });
+        try {
+            session.close();
+            assertThat(called).isTrue();
+        } finally {
+            handle.run();
+            session.close();
+        }
     }
 
     /** ④ 写入口：settings 写入＋onModeChanged（status 的 off 门逐字）。 */

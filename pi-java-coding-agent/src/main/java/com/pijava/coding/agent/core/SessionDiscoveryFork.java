@@ -495,5 +495,6 @@ final class SessionDiscoveryFork {
         }
         owner.services().settings().flush();
         owner.harness().close();
+        com.pijava.ai.api.SessionResources.cleanup(owner.sessionId()); // pi dispose :1501
     }
 }
