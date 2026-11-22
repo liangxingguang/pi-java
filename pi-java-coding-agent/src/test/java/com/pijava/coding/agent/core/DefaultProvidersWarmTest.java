@@ -152,4 +152,25 @@ class DefaultProvidersWarmTest {
         assertThat(options.extra()).doesNotContainKey("headers");
         assertThat(options.maxRetries()).isZero();
     }
+
+    /**
+     * ④ 暖路径钉 {@code disableContinuation=true}（pi {@code cache-warming.ts:76-79}）：
+     * 暖重放不得改写会话的 Anthropic thread 状态；同 sessionId 的主路径不带该键。
+     */
+    @Test
+    void warmPathDisablesContinuation() {
+        var warm = driveWarm(null, new Settings());
+        assertThat(warm.extra()).containsEntry("disableContinuation", true);
+
+        var registry = ProviderRegistry.create();
+        var provider = new RecordingProvider();
+        registry.register(provider);
+        var args = ArgsParser.parse(new String[] {"--provider", "alpha"});
+        DefaultProviders.streamFnFor(args, "alpha", registry, new Settings(), "session-1")
+            .stream(ModelId.of("alpha", "alpha-model"), Context.of(List.of()),
+                StreamOptions.defaults());
+        assertThat(provider.optionsSeen.get(0).extra())
+            .doesNotContainKey("disableContinuation")
+            .containsEntry("sessionId", "session-1");
+    }
 }

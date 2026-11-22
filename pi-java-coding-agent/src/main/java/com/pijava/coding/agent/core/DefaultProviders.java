@@ -314,8 +314,12 @@ public final class DefaultProviders {
                 return providers.get(fallbackName).orElseThrow(
                     () -> new IllegalStateException("Unknown provider: " + fallbackName));
             });
+            // pi cache-warming.ts:76-79：暖重放重复上一请求，不改写会话的 Anthropic
+            // thread 状态（extra 通道见 AnthropicStreamSupport.disableContinuationOf）。
+            var extra = requestExtra(options, sessionId);
+            extra.put("disableContinuation", true);
             var resolved = apiOptions(args, model.provider(), settings,
-                Credentials::resolveCredential, requestExtra(options, sessionId));
+                Credentials::resolveCredential, extra);
             // ①：maxRetries 钉 0（authKind 与 telemetry 保真；docs/13 §3.7）。
             resolved = withMaxRetries(resolved, 0);
             return streamBlocking(provider, model, context, options, resolved, bridge,

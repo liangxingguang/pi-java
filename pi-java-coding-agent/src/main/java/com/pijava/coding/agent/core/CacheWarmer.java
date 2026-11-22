@@ -356,7 +356,10 @@ public final class CacheWarmer {
         }
     }
 
-    /** pi :334-338 的展开覆盖：{@code maxTokens: 1}（maxRetries 在暖路径请求面，T7）。 */
+    /**
+     * pi :334-338 的展开覆盖：{@code maxTokens: 1}。{@code maxRetries: 0} 与
+     * {@code disableContinuation: true} 在暖路径请求面落地（{@code DefaultProviders.warmStreamFnFor}）。
+     */
     private static StreamOptions withWarmOverrides(StreamOptions options) {
         return new StreamOptions(OptionalInt.of(1), options.temperature(),
             options.reasoning(), options.cacheRetention(), options.sessionId(),
