@@ -124,8 +124,11 @@ final class AnthropicToolWire {
                 : StrictSampling.resolveStrict(td, supportsStrictTools,
                     AnthropicStrictKeywords.PREDICATE));
         var preferredStrict = strict && prefer;
+        // #114 余项（pi :1914-1929）：非 strict 发归一化根 schema，strict 发
+        // `{...parameters, ...legacyInputSchema}`。根 union 等其余键不发 —— Anthropic 会 400。
         var schema = strict
-            ? StrictJsonSchema.convert(td.inputSchema()) : td.inputSchema();
+            ? mergeLegacyInputSchema(StrictJsonSchema.convert(td.inputSchema()))
+            : legacyInputSchema(td.inputSchema());
         var definition = new LinkedHashMap<String, Object>();
         // B81（pi convertTools :1603）：OAuth 车道工具名走 CC 规范名映射。
         definition.put("name", ClaudeCodeNames.toWire(td.name(), oauth));
@@ -142,6 +145,41 @@ final class AnthropicToolWire {
         }
         definition.put("input_schema", schema);
         return new ToolDefinitionJson(definition, preferredStrict);
+    }
+
+    /**
+     * pi {@code :1914-1929} 的 {@code legacyInputSchema}：根只保留
+     * {@code type/properties/required} 与可选的 {@code additionalProperties/$defs/definitions}。
+     * 其余根键（尤其 {@code anyOf}/{@code oneOf}/{@code allOf}）不发 —— Anthropic 对根
+     * union 直接 400；{@code properties}/{@code required} 缺席时补 {@code {}}／{@code []}。
+     *
+     * <p>缺省用 {@code == null}（pi 的 {@code ??}）：键存在但值为 {@code null} 同样补缺省；
+     * 三个可选键用 {@code containsKey}（pi 的 {@code !== undefined}），显式 {@code null}
+     * 照发。</p>
+     */
+    private static Map<String, Object> legacyInputSchema(Map<String, Object> schema) {
+        var legacy = new LinkedHashMap<String, Object>();
+        legacy.put("type", "object");
+        legacy.put("properties", schema.get("properties") == null ? Map.of() : schema.get("properties"));
+        legacy.put("required", schema.get("required") == null ? List.of() : schema.get("required"));
+        for (var key : List.of("additionalProperties", "$defs", "definitions")) {
+            if (schema.containsKey(key)) {
+                legacy.put(key, schema.get(key));
+            }
+        }
+        return legacy;
+    }
+
+    /**
+     * pi strict 支的 {@code {...parameters, ...legacyInputSchema}}：已有键原位覆盖，新增键
+     * 追加到尾部（与 JS 展开的键序一致）。strictified 参数已带
+     * {@code type/properties/required/additionalProperties}，所以通常只补缺省的
+     * {@code properties}。
+     */
+    private static Map<String, Object> mergeLegacyInputSchema(Map<String, Object> parameters) {
+        var merged = new LinkedHashMap<>(parameters);
+        merged.putAll(legacyInputSchema(parameters));
+        return merged;
     }
 
     /** 定义 JSON ＋ 它是否算「prefer 且实际 strict」（pi {@code hasPreferredStrictTools} 的分子）。 */
