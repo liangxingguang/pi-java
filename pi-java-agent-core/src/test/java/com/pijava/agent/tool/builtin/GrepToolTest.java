@@ -53,8 +53,9 @@ class GrepToolTest {
             .isEqualTo("Search pattern (regex or literal string)");
         assertThat(p.get("path").get("description"))
             .isEqualTo("Directory or file to search (default: current directory)");
-        assertThat(p.get("glob").get("description"))
-            .isEqualTo("Filter files by glob pattern, e.g. '*.ts' or '**/*.spec.ts'");
+        assertThat(p.get("glob").get("description")).isEqualTo(
+            "Filter files by glob pattern relative to path, e.g. 'src/**/*.ts'. "
+                + "Without '/', e.g. '*.ts', it matches file names at any depth");
         assertThat(p.get("ignoreCase").get("description"))
             .isEqualTo("Case-insensitive search (default: false)");
         assertThat(p.get("literal").get("description"))
@@ -371,9 +372,23 @@ class GrepToolTest {
     }
 
     @Test
-    void noticeOrderIsMatchLimitThenByteLimit() throws Exception {
+    void exactlyLimitMatchesDoesNotReportLimitReached() throws Exception {
+        // 恰好 N 条且没有第 N+1 条 ⇒ 不证明被截断，不发 limit 告示（grep.ts:244-267）。
         Files.writeString(tmp.resolve("big.txt"),
             ("needle " + "y".repeat(400) + "\n").repeat(300));
+
+        var result = grep(new GrepTool.GrepInput("needle",
+            Optional.empty(), Optional.empty(), Optional.empty(),
+            Optional.empty(), Optional.empty(), Optional.of(300)));
+
+        assertThat(textOf(result)).endsWith("\n\n[50.0KB limit reached]");
+        assertThat(result.details().matchLimitReached()).isNull();
+    }
+
+    @Test
+    void limitNoticeAppearsWhenAnotherMatchExists() throws Exception {
+        Files.writeString(tmp.resolve("big.txt"),
+            ("needle " + "y".repeat(400) + "\n").repeat(301));
 
         var result = grep(new GrepTool.GrepInput("needle",
             Optional.empty(), Optional.empty(), Optional.empty(),
@@ -382,6 +397,59 @@ class GrepToolTest {
         assertThat(textOf(result)).endsWith(
             "\n\n[300 matches limit reached. Use limit=600 for more, or refine pattern."
                 + " 50.0KB limit reached]");
+    }
+
+    @Test
+    void limitKeepsTrailingContextOfLastAcceptedMatch() throws Exception {
+        // limit 命中在第 3 行，第 4 行的命中落在其尾上下文窗口内 ⇒ 按上下文（-）展示，
+        // 但仍算「还有命中」的证据 ⇒ 发 limit 告示（grep.ts:244-247）。
+        Files.writeString(tmp.resolve("f.txt"),
+            "a needle\nb\nc needle\nd needle\ne\nf");
+
+        var result = grep(new GrepTool.GrepInput("needle",
+            Optional.empty(), Optional.empty(), Optional.empty(),
+            Optional.empty(), Optional.of(1), Optional.of(2)));
+
+        assertThat(textOf(result)).startsWith(
+            "f.txt:1: a needle\nf.txt-2- b\nf.txt:3: c needle\nf.txt-4- d needle");
+        assertThat(textOf(result)).endsWith(
+            "\n\n[2 matches limit reached. Use limit=4 for more, or refine pattern]");
+        assertThat(result.details().matchLimitReached()).isEqualTo(2);
+    }
+
+    @Test
+    void overlappingContextWindowsPrintEachLineOnce() throws Exception {
+        Files.writeString(tmp.resolve("f.txt"), "l1\nl2 needle\nl3\nl4 needle\nl5");
+
+        var result = grep(new GrepTool.GrepInput("needle",
+            Optional.empty(), Optional.empty(), Optional.empty(),
+            Optional.empty(), Optional.of(2), Optional.empty()));
+
+        assertThat(textOf(result)).isEqualTo(
+            "f.txt-1- l1\nf.txt:2: l2 needle\nf.txt-3- l3\nf.txt:4: l4 needle\nf.txt-5- l5");
+    }
+
+    @Test
+    void globLeadingDotSlashIsStripped() throws Exception {
+        // rg 从不匹配开头的 "./"（grep.ts:167）。
+        Files.writeString(tmp.resolve("a.txt"), "needle");
+        Files.writeString(tmp.resolve("b.md"), "needle");
+
+        var result = grep(new GrepTool.GrepInput("needle",
+            Optional.empty(), Optional.of("./*.txt"), Optional.empty(),
+            Optional.empty(), Optional.empty(), Optional.empty()));
+
+        assertThat(textOf(result)).isEqualTo("a.txt:1: needle");
+    }
+
+    @Test
+    void trailingCarriageReturnIsStrippedFromLine() throws Exception {
+        // pi 的 /\r?\n?$/ 会剥掉行尾孤 CR；行中间的 CR 仍是内容（上一测试）。
+        Files.writeString(tmp.resolve("f.txt"), "needle\r");
+
+        var result = grep(input("needle"));
+
+        assertThat(textOf(result)).isEqualTo("f.txt:1: needle");
     }
 
     // ── helpers ───────────────────────────────────────────────────

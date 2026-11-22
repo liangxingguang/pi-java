@@ -16,6 +16,7 @@ import java.util.regex.Pattern;
 
 import com.pijava.agent.tool.AgentTool;
 import com.pijava.agent.tool.ExecutionMode;
+import com.pijava.agent.tool.GlobPattern;
 import com.pijava.agent.tool.PathUtils;
 import com.pijava.agent.tool.ToolContext;
 import com.pijava.agent.tool.ToolResult;
@@ -77,7 +78,8 @@ public final class GrepTool {
                         "path", Map.of("type", "string",
                             "description", "Directory or file to search (default: current directory)"),
                         "glob", Map.of("type", "string",
-                            "description", "Filter files by glob pattern, e.g. '*.ts' or '**/*.spec.ts'"),
+                            "description", "Filter files by glob pattern relative to path, e.g. "
+                                + "'src/**/*.ts'. Without '/', e.g. '*.ts', it matches file names at any depth"),
                         "ignoreCase", Map.of("type", "boolean",
                             "description", "Case-insensitive search (default: false)"),
                         "literal", Map.of("type", "boolean",
@@ -147,6 +149,7 @@ public final class GrepTool {
         int matchCount = 0;
         boolean matchLimitReached = false;
         boolean linesTruncated = false;
+        boolean limitHit = false;
         outer:
         for (Path file : candidates) {
             if (isBinarySniff(file)) {
@@ -154,29 +157,28 @@ public final class GrepTool {
             }
             List<String> lines = fileLines(file);
             String display = displayPath(root, file, isDirectory);
-            for (int i = 0; i < lines.size(); i++) {
-                if (!pattern.matcher(lines.get(i)).find()) {
-                    continue;
-                }
-                matchCount++;
-                int lineNumber = i + 1;
-                // pi formatBlock（grep.ts:197-215）：窗口 [max(1,N-C), min(len,N+C)]。
-                int start = contextValue > 0 ? Math.max(1, lineNumber - contextValue) : lineNumber;
-                int end = contextValue > 0 ? Math.min(lines.size(), lineNumber + contextValue) : lineNumber;
-                for (int cur = start; cur <= end; cur++) {
-                    var lt = TruncationUtils.truncateLine(lines.get(cur - 1),
-                        TruncationUtils.GREP_MAX_LINE_LENGTH);
-                    if (lt.wasTruncated()) {
-                        linesTruncated = true;
-                    }
-                    outputLines.add(cur == lineNumber
-                        ? display + ":" + cur + ": " + lt.text()
-                        : display + "-" + cur + "- " + lt.text());
-                }
-                if (matchCount >= effectiveLimit) {
+            List<Integer> matches = matchLines(lines, pattern);
+            if (limitHit) {
+                // Events only arrive for matches now; any remaining match proves the limit cut
+                // results off, and the surrounding context events are dropped（grep.ts:243-267）。
+                if (!matches.isEmpty()) {
                     matchLimitReached = true;
                     break outer;
                 }
+                continue;
+            }
+            // The limit may fall inside this file; only matches up to it are accepted.
+            int remaining = effectiveLimit - matchCount;
+            int accepted = Math.min(matches.size(), remaining);
+            boolean limitInFile = matches.size() > remaining;
+            linesTruncated |= emitWindows(outputLines, display, lines, matches, accepted, contextValue);
+            matchCount += accepted;
+            if (limitInFile) {
+                matchLimitReached = true;   // another match already exists past the limit
+                break outer;
+            }
+            if (matchCount >= effectiveLimit) {
+                limitHit = true;            // exactly N so far; a later match would prove more
             }
         }
         if (matchCount == 0) {
@@ -225,11 +227,13 @@ public final class GrepTool {
         var ignore = new ToolIgnoreFilter(root);
         var candidates = new ArrayList<Path>();
         // glob 语义按 rg --glob（gitignore 式）：无 "/" ⇒ 匹配 basename；
-        // 有 "/" ⇒ 相对 root 的锚定匹配（与 find 的 fd 语义不同，两工具各写各的）。
-        // 不能用 NIO PathMatcher：java 的 ** 不吃零段（'**/*.spec.ts' 漏根下文件），
-        // rg 的 **/ 是「零或多段」——走 globToRegex 翻译（评审发现 1）。
-        final Pattern globPattern = glob == null ? null : globToRegex(glob);
-        final boolean fullPath = glob != null && glob.contains("/");
+        // 有 "/" ⇒ 相对 root 的锚定匹配。rg 从不匹配开头的 "./"，所以先剥掉（"!" 取反保留，
+        // grep.ts:167）；匹配器与 find 共用 {@link GlobPattern}。
+        String effectiveGlob = glob == null ? null
+            : glob.replaceAll("^(!?)(?:\\./)+", "$1");
+        final GlobPattern globPattern = effectiveGlob == null ? null
+            : GlobPattern.compile(effectiveGlob, false);
+        final boolean fullPath = effectiveGlob != null && effectiveGlob.contains("/");
         Files.walkFileTree(root, new SimpleFileVisitor<>() {
             @Override
             public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
@@ -267,81 +271,76 @@ public final class GrepTool {
                     return true;
                 }
                 if (fullPath) {
-                    return globPattern.matcher(rel(file)).matches();
+                    return globPattern.matches(rel(file));
                 }
                 Path fileName = file.getFileName();
-                return fileName != null && globPattern.matcher(fileName.toString()).matches();
+                return fileName != null && globPattern.matches(fileName.toString());
             }
         });
         return candidates;
     }
 
-    /**
-     * rg {@code --glob} 语义翻译（gitignore 式）：{@code **&#47;} ＝ 零或多段、
-     * 裸 {@code **} ＝ 跨段任意、{@code *}＝ 段内任意、{@code ?} ＝ 段内单字、
-     * {@code [...]} 字符类（{@code !} 取反）、{@code {a,b}} 支选。调用方负责
-     * basename 模式（pattern 无 {@code /}）与锚定模式的分派；两侧都全串匹配。
-     */
-    private static Pattern globToRegex(String glob) {
-        var re = new StringBuilder("^");
-        int i = 0;
-        while (i < glob.length()) {
-            char c = glob.charAt(i);
-            if (c == '*') {
-                if (i + 1 < glob.length() && glob.charAt(i + 1) == '*') {
-                    if (i + 2 < glob.length() && glob.charAt(i + 2) == '/') {
-                        re.append("(?:[^/]+/)*");   // **/ ⇒ 零或多段（rg 语义）
-                        i += 3;
-                    } else {
-                        re.append(".*");            // 裸 ** ⇒ 跨段任意
-                        i += 2;
-                    }
-                } else {
-                    re.append("[^/]*");
-                    i++;
-                }
-            } else if (c == '?') {
-                re.append("[^/]");
-                i++;
-            } else if (c == '[') {
-                int end = glob.indexOf(']', i + 1);
-                if (end < 0) {
-                    re.append("\\[");
-                    i++;
-                } else {
-                    String cls = glob.substring(i + 1, end);
-                    if (cls.startsWith("!")) {
-                        cls = "^" + cls.substring(1);
-                    }
-                    re.append('[').append(cls).append(']');
-                    i = end + 1;
-                }
-            } else if (c == '{') {
-                int end = glob.indexOf('}', i + 1);
-                if (end < 0) {
-                    re.append("\\{");
-                    i++;
-                } else {
-                    String[] alts = glob.substring(i + 1, end).split(",", -1);
-                    re.append("(?:");
-                    for (int k = 0; k < alts.length; k++) {
-                        if (k > 0) {
-                            re.append('|');
-                        }
-                        re.append(Pattern.quote(alts[k]));
-                    }
-                    re.append(')');
-                    i = end + 1;
-                }
-            } else {
-                if ("\\.^$|()+".indexOf(c) >= 0) {
-                    re.append('\\');
-                }
-                re.append(c);
-                i++;
+    /** 行号（1 起）列表：pattern 命中的行，升序（rg 的 match 事件序）。 */
+    private static List<Integer> matchLines(List<String> lines, Pattern pattern) {
+        var matches = new ArrayList<Integer>();
+        for (int i = 0; i < lines.size(); i++) {
+            if (pattern.matcher(lines.get(i)).find()) {
+                matches.add(i + 1);
             }
         }
-        return Pattern.compile(re.append('$').toString());
+        return matches;
+    }
+
+    /**
+     * 按 rg 的 context/match 事件语义输出已接受匹配的窗口并集：每个匹配的
+     * {@code [m-C, m+C]} 只输出一次（行序升序），接受匹配行用 {@code :}、
+     * 其余用 {@code -}。落在最后一条已接受匹配之后的命中行（limit 之后才到的事件）
+     * 即使命中窗口也按上下文展示（grep.ts:244-247）。
+     *
+     * @return 是否有行被 {@link TruncationUtils#truncateLine} 截断
+     */
+    private static boolean emitWindows(List<String> output, String display, List<String> lines,
+            List<Integer> matches, int accepted, int context) {
+        if (accepted == 0) {
+            return false;
+        }
+        int lastAccepted = matches.get(accepted - 1);
+        var matchFlag = new boolean[lines.size() + 1];
+        for (int line : matches) {
+            matchFlag[line] = true;
+        }
+        boolean truncated = false;
+        int emittedThrough = 0;
+        for (int k = 0; k < accepted; k++) {
+            int matchLine = matches.get(k);
+            int start = context > 0 ? Math.max(1, matchLine - context) : matchLine;
+            int end = context > 0 ? Math.min(lines.size(), matchLine + context) : matchLine;
+            for (int cur = Math.max(start, emittedThrough + 1); cur <= end; cur++) {
+                truncated |= appendLine(output, display, cur, lines.get(cur - 1),
+                    matchFlag[cur] && cur <= lastAccepted);
+            }
+            emittedThrough = Math.max(emittedThrough, end);
+        }
+        return truncated;
+    }
+
+    /** 一行输出：命中 ⇒ {@code path:N: text}，上下文 ⇒ {@code path-N- text}。 */
+    private static boolean appendLine(List<String> output, String display, int lineNumber,
+            String rawText, boolean isMatch) {
+        var lt = TruncationUtils.truncateLine(stripTrailingCr(rawText),
+            TruncationUtils.GREP_MAX_LINE_LENGTH);
+        output.add(isMatch
+            ? display + ":" + lineNumber + ": " + lt.text()
+            : display + "-" + lineNumber + "- " + lt.text());
+        return lt.wasTruncated();
+    }
+
+    /**
+     * pi 的 {@code lineText.replace(/\r?\n?$/, "")} 对位：按 {@code \n} 切分后只剥一个
+     * 行尾 {@code \r}；孤立的 {@code \r} 留在行内（它只是内容，不是换行）。
+     */
+    private static String stripTrailingCr(String line) {
+        return line.endsWith("\r") ? line.substring(0, line.length() - 1) : line;
     }
 
     /** pi formatPath（grep.ts:137-145）：目录搜索 ⇒ 相对 root（\→/）；单文件 ⇒ basename。 */
@@ -357,13 +356,13 @@ public final class GrepTool {
     }
 
     /**
-     * pi getFileLines（grep.ts:148-160）：只做 \r\n→\n，按 \n 切（保留尾空段，同 JS split）；
-     * 孤立 \r 留在行内。
+     * pi getFileLines（grep.ts:148-160）：ripgrep 只按 {@code \n} 切行（保留尾空段，
+     * 同 JS {@code split}）；行尾的 {@code \r} 在输出时再剥（见 {@link #stripTrailingCr}）。
      */
     private static List<String> fileLines(Path file) {
         try {
             String content = new String(Files.readAllBytes(file), StandardCharsets.UTF_8);
-            return List.of(content.replace("\r\n", "\n").split("\n", -1));
+            return List.of(content.split("\n", -1));
         } catch (IOException e) {
             return List.of();   // pi: catch ⇒ lines = []
         }
