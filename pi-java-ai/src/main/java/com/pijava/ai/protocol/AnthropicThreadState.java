@@ -4,6 +4,8 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 
+import com.pijava.ai.api.SessionResources;
+
 /**
  * Anthropic message threads 的会话态（pi {@code anthropic-messages.ts:264-306}）。
  *
@@ -36,6 +38,11 @@ public final class AnthropicThreadState {
     private static final Map<String, Object> STATE = new LinkedHashMap<>();
 
     private AnthropicThreadState() {
+    }
+
+    /** pi {@code anthropic-messages.ts:304-306}：登记进会话资源清理表。 */
+    static {
+        SessionResources.register(AnthropicThreadState::clear);
     }
 
     /** 读取会话态；不存在或为 {@link #OFF} 时为空。 */

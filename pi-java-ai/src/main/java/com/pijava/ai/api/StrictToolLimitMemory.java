@@ -25,6 +25,11 @@ public final class StrictToolLimitMemory {
     private StrictToolLimitMemory() {
     }
 
+    /** pi {@code strict-tool-limits.ts:48-51}：登记进会话资源清理表。 */
+    static {
+        SessionResources.register(StrictToolLimitMemory::clear);
+    }
+
     /**
      * 记录该会话的 strict 工具已超限（pi {@code markStrictToolLimitsExceeded}）：无会话号
      * 直接忽略；超容量丢最旧。

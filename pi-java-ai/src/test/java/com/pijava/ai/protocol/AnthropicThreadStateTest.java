@@ -3,6 +3,8 @@ package com.pijava.ai.protocol;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import com.pijava.ai.api.SessionResources;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -48,6 +50,17 @@ class AnthropicThreadStateTest {
         assertThat(AnthropicThreadState.get(null)).isEmpty();
         assertThat(AnthropicThreadState.isOff(null)).isFalse();
         assertThat(AnthropicThreadState.size()).isZero();
+    }
+
+    /** pi {@code anthropic-messages.ts:304-306}：经会话资源清理表释放，不必手工 {@code clear}。 */
+    @Test
+    void sessionResourcesCleanupReleasesTheState() {
+        AnthropicThreadState.put("s", ENTRY);
+        assertThat(AnthropicThreadState.get("s")).contains(ENTRY);
+
+        SessionResources.cleanup("s");
+
+        assertThat(AnthropicThreadState.get("s")).isEmpty();
     }
 
     @Test

@@ -35,6 +35,17 @@ class StrictToolLimitMemoryTest {
         assertThat(StrictToolLimitMemory.exceeded("b")).isFalse();
     }
 
+    /** pi {@code strict-tool-limits.ts:48-51}：经会话资源清理表释放，不必手工 {@code clear}。 */
+    @Test
+    void sessionResourcesCleanupReleasesTheMemory() {
+        StrictToolLimitMemory.mark("a");
+        assertThat(StrictToolLimitMemory.exceeded("a")).isTrue();
+
+        SessionResources.cleanup("a");
+
+        assertThat(StrictToolLimitMemory.exceeded("a")).isFalse();
+    }
+
     /** 容量上限：第 10,001 个会话挤掉最旧（pi 的 {@code drops the oldest session}）。 */
     @Test
     void dropsOldestSessionBeyondCapacity() {
