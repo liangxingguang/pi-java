@@ -1,43 +1,38 @@
 package com.pijava.mcp.runtime;
 
-import java.io.IOException;
 import java.net.URI;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Function;
 
 import org.jspecify.annotations.Nullable;
 
 import com.pijava.ai.AbortSignal;
-import com.pijava.ai.utils.OAuthPage;
 import com.pijava.mcp.oauth.McpOAuthState;
+import com.pijava.mcp.oauth.McpRefreshLockBusyError;
 import com.pijava.mcp.oauth.OAuthCallback;
-import com.pijava.mcp.oauth.OAuthCallbackPage;
-import com.pijava.mcp.oauth.OAuthCallbackServer;
-import com.pijava.mcp.oauth.OAuthCallbackServerOptions;
 import com.pijava.mcp.oauth.OAuthChallenge;
 import com.pijava.mcp.oauth.OAuthClientInformation;
 import com.pijava.mcp.oauth.OAuthEndpoints;
 import com.pijava.mcp.oauth.OAuthFlow;
 import com.pijava.mcp.oauth.OAuthFlowOptions;
 import com.pijava.mcp.oauth.OAuthFlowResult;
-import com.pijava.mcp.oauth.OAuthStateStore;
 
 /**
- * Sign in to an MCP server: use the stored refresh token when possible, otherwise run the browser
- * authorization code flow (pi {@code signInMcpServer}, {@code oauth.ts:452-532}).
+ * Sign in to an MCP server: refresh the stored tokens with the stored client when possible,
+ * otherwise run the browser authorization code flow (pi {@code sign-in.ts}).
  *
- * <p>Tokens are saved to the store. The browser flow talks to a loopback callback server, with a
- * pasted redirect URL as the fallback for when the browser cannot reach it.</p>
+ * <p>The sign-in comes in two halves, so an application can complete it in another request with
+ * the same state store: {@link #start} refreshes or prepares the browser step, returning
+ * {@link McpSignInRedirect} as plain data, and {@link #complete} exchanges the authorization
+ * code. {@link #signIn} runs both halves over a loopback callback server.</p>
  */
 public final class McpSignIn {
 
@@ -45,10 +40,10 @@ public final class McpSignIn {
     }
 
     /**
-     * What a sign-in is built from (pi's options object, {@code oauth.ts:456-462}).
+     * What a sign-in is built from (pi {@code McpSignInOptions}, {@code sign-in.ts:24-38}).
      *
      * @param serverUrl the MCP server URL
-     * @param store the server's slice of {@code mcp-auth.json}
+     * @param store the server's slice of {@code mcp-auth.json}, with its refresh lock
      * @param settings the OAuth configuration
      * @param challenge the challenge that asked for the sign-in, when there was one
      * @param prompt how to talk to the user
@@ -56,110 +51,245 @@ public final class McpSignIn {
      */
     public record Options(
             String serverUrl,
-            OAuthStateStore store,
+            McpOAuthServerStore store,
             McpOAuthSettings settings,
             @Nullable OAuthChallenge challenge,
             McpSignInPrompt prompt,
             String clientName) {
     }
 
-    /** One authorization response ({@code oauth.ts:383}). */
-    record AuthorizationResponse(String code, @Nullable String iss) {
-    }
-
     /**
-     * Sign in, returning once the tokens are stored.
+     * Sign in over loopback, returning once the tokens are stored (pi {@code startMcpSignIn} and
+     * {@code completeMcpSignIn} driven from one call).
      *
      * @param options what to sign in to and how
      * @throws Exception when the flow failed; {@link McpSignInCancelledError} when the user
      *                   gave up
      */
     public static void signIn(Options options) throws Exception {
-        var serverUrl = options.serverUrl();
+        var callback = McpLoopbackSignIn.listen(options.serverUrl(), options.store(),
+                options.settings(), options.clientName());
+        try {
+            var started = start(options, callback.redirectUrl(), null);
+            if (!(started instanceof McpSignInRedirect authorization)) {
+                return;
+            }
+            options.prompt().showAuthorizationUrl(authorization.authorizationUrl());
+            var response = McpLoopbackSignIn.await(callback.server(), authorization,
+                    options.prompt(), null);
+            complete(options, callback.redirectUrl(), authorization, response);
+        } finally {
+            callback.server().close();
+        }
+    }
+
+    /**
+     * First half of a sign-in (pi {@code startMcpSignIn}, {@code sign-in.ts:76-82}). Without a
+     * step-up ({@code insufficient_scope}), it first tries to refresh the stored tokens with the
+     * stored client; otherwise it prepares the browser step: a fresh {@code state}, and a stored
+     * client that cannot use {@code redirectUrl} is dropped with its tokens.
+     *
+     * <p>Pass the same {@code redirectUrl} to {@link #complete}. Aborting {@code signal} stops the
+     * wait for the refresh lock, but a refresh already sent still saves its tokens.</p>
+     *
+     * @param options what to sign in to and how
+     * @param redirectUrl the redirect URI to use; {@link McpLoopbackSignIn#listen} provides one
+     * @param signal aborts the sign-in, or {@code null}
+     * @return {@link McpSignInStart.Authorized}, or the {@link McpSignInRedirect} to show
+     * @throws Exception when the flow failed; {@link McpSignInCancelledError} when the user
+     *                   gave up
+     */
+    public static McpSignInStart start(Options options, String redirectUrl, @Nullable AbortSignal signal)
+            throws Exception {
+        abortIfRequested(signal);
+        var stepUp = stepUp(options);
+        // A refresh keeps the granted scope, so a server asking for more needs the browser step.
+        if (!stepUp && refreshedBeforeSignIn(options, redirectUrl, signal)) {
+            return new McpSignInStart.Authorized();
+        }
+        abortIfRequested(signal);
+        return browserStep(options, redirectUrl, stepUp);
+    }
+
+    /**
+     * Second half of a sign-in: exchange the authorization code of {@code response} and save the
+     * tokens (pi {@code completeMcpSignIn}, {@code sign-in.ts:185-211}). Pass the {@code redirectUrl}
+     * given to {@link #start}.
+     *
+     * <p>Fails when the response carries another {@code state}, when another sign-in started with the
+     * store since, or when the exchange would use another redirect URI than the authorization
+     * request (the options changed).</p>
+     *
+     * @param options what to sign in to and how
+     * @param redirectUrl the redirect URI given to {@link #start}
+     * @param authorization the redirect result of {@link #start}
+     * @param response the authorization response
+     * @throws Exception when the exchange failed
+     */
+    public static void complete(Options options, String redirectUrl, McpSignInRedirect authorization,
+                                OAuthCallback response) throws Exception {
+        if (!Objects.equals(response.state(), authorization.state())) {
+            throw new IllegalStateException("The authorization response belongs to a different sign-in");
+        }
+        // The stored PKCE verifier belongs to the latest sign-in; exchanging with it would fail with
+        // `invalid_grant`, which discards the stored tokens (pi sign-in.ts:197-201).
+        var stored = options.store().load();
+        if (stored == null || !Objects.equals(stored.oauthState(), authorization.state())) {
+            throw new IllegalStateException("Another sign-in to this MCP server started since; sign in again");
+        }
+        var provider = McpAuthProviders.createProvider(options.serverUrl(), options.store(),
+                options.settings(), redirectUrl, options.clientName(), url -> {
+                });
+        OAuthFlow.authorizeMcp(provider,
+                flowOptions(options, authorization.scope(), stepUp(options), response.code(),
+                        response.iss(), authorization.redirectUrl()));
+    }
+
+    private static boolean stepUp(Options options) {
+        return options.challenge() != null && "insufficient_scope".equals(options.challenge().error());
+    }
+
+    private static void abortIfRequested(@Nullable AbortSignal signal) {
+        if (signal != null && signal.isAborted()) {
+            throw new McpSignInCancelledError();
+        }
+    }
+
+    /**
+     * Refresh the stored tokens with the stored client (pi {@code refreshBeforeSignIn},
+     * {@code sign-in.ts:88-105}). {@code false} means the browser step runs instead.
+     */
+    private static boolean refreshedBeforeSignIn(Options options, String redirectUrl,
+                                                 @Nullable AbortSignal signal) throws Exception {
+        var store = options.store();
+        var refreshed = new CompletableFuture<Boolean>();
+        Thread.startVirtualThread(() -> {
+            try {
+                refreshed.complete(refreshWithStoredClient(options, store, redirectUrl));
+            } catch (Throwable error) {
+                refreshed.completeExceptionally(error);
+            }
+        });
+        try {
+            return awaitAbortable(refreshed, signal);
+        } catch (McpRefreshLockBusyError busy) {
+            // Another process is refreshing and took too long. The user signs in instead.
+            return false;
+        }
+    }
+
+    /** The refresh itself, under the store's refresh lock, which it never re-enters. */
+    private static boolean refreshWithStoredClient(Options options, McpOAuthServerStore store,
+                                                   String redirectUrl) throws Exception {
+        var settings = options.settings();
+        return Boolean.TRUE.equals(store.withRefreshLock(() -> {
+            var state = store.load();
+            if (state == null || state.tokens() == null || state.tokens().refreshToken() == null) {
+                return false;
+            }
+            // `cimd` is to replace a registered client, so refreshing with it is the wrong identity.
+            if (settings.clientRegistration() == McpOAuthSettings.Registration.CIMD
+                    && state.clientInformation() != null && settings.clientId() == null) {
+                return false;
+            }
+            var provider = McpAuthProviders.createProvider(options.serverUrl(), store, settings,
+                    redirectUrl, options.clientName(), url -> {
+                    });
+            var challenge = options.challenge();
+            var flow = new OAuthFlowOptions(
+                    URI.create(options.serverUrl()),
+                    null,
+                    null,
+                    challenge == null ? null : challenge.scope(),
+                    challenge == null ? null : challenge.resourceMetadataUrl(),
+                    settings.authServerMetadataUrl(),
+                    null,
+                    false,
+                    false,
+                    true,
+                    null);
+            return OAuthFlow.authorizeMcp(provider, flow) == OAuthFlowResult.AUTHORIZED;
+        }));
+    }
+
+    /**
+     * Wait for the refresh. Aborting stops only the wait: a refresh the server answered may have
+     * rotated the refresh token, so it still saves its answer (pi {@code untilAborted}).
+     */
+    private static boolean awaitAbortable(CompletableFuture<Boolean> refreshed,
+                                          @Nullable AbortSignal signal) throws Exception {
+        if (signal == null) {
+            return join(refreshed);
+        }
+        var cancelled = new CompletableFuture<Boolean>();
+        var unsubscribe = signal.onAbort(
+                () -> cancelled.completeExceptionally(new McpSignInCancelledError()));
+        var settled = new CompletableFuture<Boolean>();
+        CompletableFuture.anyOf(refreshed, cancelled).whenComplete((value, error) -> {
+            if (error != null) {
+                settled.completeExceptionally(error);
+            } else {
+                settled.complete(Boolean.TRUE.equals(value));
+            }
+        });
+        try {
+            return join(settled);
+        } finally {
+            unsubscribe.run();
+        }
+    }
+
+    private static <T> T join(CompletableFuture<T> future) throws Exception {
+        try {
+            return future.join();
+        } catch (CompletionException failure) {
+            throw failure.getCause() instanceof Exception cause ? cause : failure;
+        }
+    }
+
+    /**
+     * Prepare the browser step: a fresh {@code state}, and a client that cannot use
+     * {@code redirectUrl} dropped with its tokens (pi {@code startBrowserStep},
+     * {@code sign-in.ts:120-145}).
+     */
+    private static McpSignInRedirect browserStep(Options options, String redirectUrl, boolean stepUp)
+            throws Exception {
         var store = options.store();
         var settings = options.settings();
         var challenge = options.challenge();
         var stored = store.load();
-        var stepUp = challenge != null && "insufficient_scope".equals(challenge.error());
-        var callbackOptions = McpCallbackSettings.from(settings);
-        // Reuse the port of the registered redirect URI so the registered client stays valid.
-        var registered = McpAuthProviders.firstRegisteredRedirectUrl(
-                stored == null ? null : stored.clientInformation());
-        var preferredPort = callbackOptions.port() != null ? callbackOptions.port()
-                : registered == null ? null : WebUrls.port(URI.create(registered));
-        var offersDocument = McpOAuthSettings.offersClientMetadataDocument(
-                settings, options.clientName());
-        var callback = listenForCallback(callbackOptions,
-                // The redirect URI of a server-specific Client ID Metadata Document.
-                offersDocument ? List.of(McpCallbackSettings.CALLBACK_PATH + "/"
-                        + McpClientMetadataDocuments.callbackId(serverUrl)) : List.of(),
-                preferredPort,
-                callbackOptions.port() != null);
-        var redirectUrl = callbackOptions.fixedRedirectUrl() != null
-                ? callbackOptions.fixedRedirectUrl() : callback.redirectUrl();
-        try {
-            if (stored != null) {
-                store.save(prepare(stored, settings, offersDocument, redirectUrl));
-            }
-            var authorizationUrl = new AtomicReference<URI>();
-            var provider = McpAuthProviders.createProvider(serverUrl, store, settings, redirectUrl,
-                    options.clientName(), authorizationUrl::set);
-            // A server asking for more scope gets it on top of the configured scope and, since the
-            // challenge may list only the missing scopes, on top of the scope granted so far.
-            var scope = mergeScopes(settings.scope(),
-                    stepUp ? OAuthEndpoints.stepUpScope(
-                            stored == null || stored.tokens() == null ? null : stored.tokens().scope(),
-                            challenge.scope())
-                            : challenge == null ? null : challenge.scope());
-            var flow = flowOptions(options, scope, stepUp, null, null, null);
-            if (OAuthFlow.authorizeMcp(provider, flow) == OAuthFlowResult.AUTHORIZED) {
-                return;
-            }
-            var url = authorizationUrl.get();
-            if (url == null) {
-                throw new IllegalStateException("OAuth flow did not produce an authorization URL");
-            }
-            var state = provider.state();
-            if (state == null) {
-                throw new IllegalStateException("OAuth flow did not produce a state parameter");
-            }
-            // The flow picks the redirect URI, which may be specific to the MCP server.
-            var chosen = queryParameter(url, "redirect_uri");
-            var authorizationRedirectUrl = URI.create(chosen == null ? redirectUrl : chosen);
-            options.prompt().showAuthorizationUrl(url);
-            var response = waitForAuthorizationResponse(callback, state, authorizationRedirectUrl,
-                    options.prompt());
-            // pi sign-in.ts:202-209 —— 换码必须用授权请求那次用的 redirect URI，否则 flow 直接报错。
-            OAuthFlow.authorizeMcp(provider,
-                    flowOptions(options, scope, stepUp, response.code(), response.iss(),
-                            authorizationRedirectUrl.toString()));
-        } finally {
-            callback.close();
+        if (stored != null) {
+            store.save(prepare(stored, settings, McpOAuthSettings.offersClientMetadataDocument(
+                    settings, options.clientName()), redirectUrl));
         }
+        var authorizationUrl = new AtomicReference<URI>();
+        var provider = McpAuthProviders.createProvider(options.serverUrl(), store, settings,
+                redirectUrl, options.clientName(), authorizationUrl::set);
+        // A server asking for more scope gets it on top of the configured scope and, since the
+        // challenge may list only the missing scopes, on top of the scope granted so far.
+        var scope = mergeScopes(settings.scope(),
+                stepUp ? OAuthEndpoints.stepUpScope(
+                        stored == null || stored.tokens() == null ? null : stored.tokens().scope(),
+                        challenge.scope())
+                        : challenge == null ? null : challenge.scope());
+        // The refresh already happened; a second one would keep the old scope.
+        OAuthFlow.authorizeMcp(provider, flowOptions(options, scope, true, null, null, null));
+        var url = authorizationUrl.get();
+        if (url == null) {
+            throw new IllegalStateException("OAuth flow did not produce an authorization URL");
+        }
+        var state = provider.state();
+        if (state == null) {
+            throw new IllegalStateException("OAuth flow did not produce a state parameter");
+        }
+        // The flow picks the redirect URI, which may be specific to the MCP server.
+        var chosen = queryParameter(url, "redirect_uri");
+        return new McpSignInRedirect(url, chosen == null ? redirectUrl : chosen, state,
+                queryParameter(url, "scope"));
     }
 
-    /** The state a sign-in starts from ({@code oauth.ts:481-496}). */
-    static McpOAuthState prepare(McpOAuthState stored, McpOAuthSettings settings,
-                                         boolean offersDocument, String redirectUrl) {
-        // Every sign-in gets a fresh `state` parameter.
-        // A registered client cannot use another redirect URI, and its tokens belong to it. A
-        // Client ID Metadata Document is not stored, so with one, a stored client was registered
-        // before and is replaced.
-        var keepClient = settings.clientId() != null
-                || (offersDocument ? stored.clientInformation() == null
-                        : registeredRedirectUrls(stored.clientInformation()).contains(redirectUrl));
-        return new McpOAuthState(stored.serverUrl(),
-                keepClient ? stored.clientInformation() : null,
-                keepClient ? stored.tokens() : null,
-                keepClient ? stored.tokensExpireAt() : null,
-                stored.codeVerifier(),
-                null,
-                stored.discovery());
-    }
-
-    private static OAuthFlowOptions flowOptions(Options options, @Nullable String scope,
-                                                boolean stepUp, @Nullable String code,
-                                                @Nullable String iss,
+    private static OAuthFlowOptions flowOptions(Options options, @Nullable String scope, boolean stepUp,
+                                                @Nullable String code, @Nullable String iss,
                                                 @Nullable String authorizationRedirectUrl) {
         var challenge = options.challenge();
         return new OAuthFlowOptions(
@@ -174,6 +304,25 @@ public final class McpSignIn {
                 stepUp,
                 false,
                 authorizationRedirectUrl);
+    }
+
+    /** The state a sign-in starts from (pi {@code stateForSignIn}, {@code sign-in.ts:151-170}). */
+    static McpOAuthState prepare(McpOAuthState stored, McpOAuthSettings settings,
+                                 boolean offersDocument, String redirectUrl) {
+        // Every sign-in gets a fresh `state` parameter.
+        // A registered client cannot use another redirect URI, and its tokens belong to it. A
+        // Client ID Metadata Document is not stored, so with one, a stored client was registered
+        // before and is replaced.
+        var keepClient = settings.clientId() != null
+                || (offersDocument ? stored.clientInformation() == null
+                        : registeredRedirectUrls(stored.clientInformation()).contains(redirectUrl));
+        return new McpOAuthState(stored.serverUrl(),
+                keepClient ? stored.clientInformation() : null,
+                keepClient ? stored.tokens() : null,
+                keepClient ? stored.tokensExpireAt() : null,
+                stored.codeVerifier(),
+                null,
+                stored.discovery());
     }
 
     /** Scopes of every list, each once ({@code oauth.ts:105-109}). */
@@ -198,113 +347,8 @@ public final class McpSignIn {
                 ? List.of() : information.redirectUris();
     }
 
-    /** {@code responseFromRedirectUrl} ({@code oauth.ts:385-402}). */
-    static AuthorizationResponse responseFromRedirectUrl(String input, String state, URI redirectUrl) {
-        URI url;
-        try {
-            url = URI.create(input.strip());
-        } catch (IllegalArgumentException error) {
-            throw new IllegalStateException(
-                    "Expected the full redirect URL from the browser address bar", error);
-        }
-        // URI.create accepts a relative reference; `new URL` does not, so the scheme is the
-        // check that makes the two agree.
-        if (url.getScheme() == null) {
-            throw new IllegalStateException(
-                    "Expected the full redirect URL from the browser address bar");
-        }
-        // A server-specific redirect URI tells authorization servers apart, so it must match exactly.
-        if (!Objects.equals(origin(url), origin(redirectUrl))
-                || !WebUrls.pathname(url).equals(WebUrls.pathname(redirectUrl))) {
-            throw new IllegalStateException("The redirect URL does not match this sign-in's redirect URI");
-        }
-        var parameters = queryParameters(url);
-        var error = parameters.get("error");
-        if (error != null) {
-            throw new IllegalStateException(parameters.getOrDefault("error_description", error));
-        }
-        if (!Objects.equals(parameters.get("state"), state)) {
-            throw new IllegalStateException("The redirect URL belongs to a different sign-in");
-        }
-        var code = parameters.get("code");
-        if (code == null || code.isEmpty()) {
-            throw new IllegalStateException("The redirect URL does not contain an authorization code");
-        }
-        return new AuthorizationResponse(code, parameters.get("iss"));
-    }
-
-    /** Wait for the browser callback or a pasted redirect URL, whichever comes first. */
-    static AuthorizationResponse waitForAuthorizationResponse(
-            OAuthCallbackServer callback, String state, URI redirectUrl, McpSignInPrompt prompt) {
-        var controller = AbortSignal.create();
-        CompletableFuture<OAuthCallback> fromBrowser =
-                callback.waitForCallback(state, WebUrls.pathname(redirectUrl));
-        var fromUser = new CompletableFuture<AuthorizationResponse>();
-        Thread.startVirtualThread(() -> {
-            try {
-                var input = prompt.promptForRedirectUrl(controller);
-                if (input == null || input.isBlank()) {
-                    throw new McpSignInCancelledError();
-                }
-                fromUser.complete(responseFromRedirectUrl(input, state, redirectUrl));
-            } catch (Throwable failure) {
-                fromUser.completeExceptionally(failure);
-            }
-        });
-        try {
-            var winner = CompletableFuture.anyOf(fromBrowser.thenApply(callback1 -> (Object) callback1),
-                    fromUser.thenApply(response -> (Object) response)).join();
-            if (winner instanceof OAuthCallback fromCallback) {
-                return new AuthorizationResponse(fromCallback.code(), fromCallback.iss());
-            }
-            return (AuthorizationResponse) winner;
-        } catch (CompletionException failure) {
-            throw failure.getCause() instanceof RuntimeException runtime ? runtime
-                    : new IllegalStateException(failure.getCause());
-        } finally {
-            // The losing side rejects once the prompt is aborted or the callback server closes.
-            controller.abort();
-            fromBrowser.exceptionally(ignored -> null);
-            fromUser.exceptionally(ignored -> null);
-        }
-    }
-
-    /** Listen on {@code port}, or on a free port when it is taken and not required. */
-    private static OAuthCallbackServer listenForCallback(
-            McpCallbackSettings settings, List<String> extraPaths, @Nullable Integer port, boolean required)
-            throws IOException {
-        Function<OAuthCallbackPage, String> pageRenderer = McpSignIn::renderCallbackPage;
-        var options = new OAuthCallbackServerOptions(settings.host(), settings.redirectHost(),
-                port == null ? 0 : port, settings.path(), extraPaths, null, pageRenderer);
-        try {
-            return OAuthCallbackServer.listen(options);
-        } catch (IOException error) {
-            if (required || port == null) {
-                throw error;
-            }
-            return OAuthCallbackServer.listen(new OAuthCallbackServerOptions(
-                    settings.host(), settings.redirectHost(), 0, settings.path(), extraPaths, null,
-                    pageRenderer));
-        }
-    }
-
-    private static String renderCallbackPage(OAuthCallbackPage page) {
-        if (page instanceof OAuthCallbackPage.Ok) {
-            return OAuthPage.success("Signed in to the MCP server. You may now close this page.");
-        }
-        var failed = (OAuthCallbackPage.Failed) page;
-        return OAuthPage.error(failed.message(), failed.details());
-    }
-
-    /** {@code url.origin}: scheme, host, and a non-default port. */
-    private static String origin(URI uri) {
-        var port = WebUrls.port(uri);
-        return uri.getScheme().toLowerCase(Locale.ROOT) + "://" + WebUrls.hostname(uri)
-                + (port == null ? "" : ":" + port);
-    }
-
     /** The decoded query parameters, first value of each name winning. */
-    private static Map<String, String> queryParameters(URI uri) {
+    static Map<String, String> queryParameters(URI uri) {
         var parameters = new LinkedHashMap<String, String>();
         var query = uri.getRawQuery();
         if (query == null) {

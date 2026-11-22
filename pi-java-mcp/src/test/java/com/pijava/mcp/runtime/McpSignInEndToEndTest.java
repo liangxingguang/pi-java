@@ -9,7 +9,6 @@ import org.jspecify.annotations.Nullable;
 
 import org.junit.jupiter.api.Test;
 
-import com.pijava.mcp.oauth.MemoryOAuthStateStore;
 import com.pijava.mcp.oauth.OAuthError;
 import com.pijava.mcp.oauth.OAuthIssuerMismatchError;
 
@@ -25,7 +24,7 @@ class McpSignInEndToEndTest {
     @Test
     void signsInThroughDiscoveryRegistrationPkceAndRefresh() throws Exception {
         try (var server = AuthorizationServerFixture.start(AuthorizationServerFixture.Mode.NORMAL)) {
-            var store = new MemoryOAuthStateStore();
+            var store = new MemoryServerStore();
             var settings = McpOAuthSettings.none();
             var prompt = new BrowserPrompt();
 
@@ -71,7 +70,7 @@ class McpSignInEndToEndTest {
         try (var server = AuthorizationServerFixture.start(
                 AuthorizationServerFixture.Mode.WRONG_STATE)) {
             assertThatThrownBy(() -> McpSignIn.signIn(new McpSignIn.Options(
-                    server.mcpUrl(), new MemoryOAuthStateStore(), McpOAuthSettings.none(),
+                    server.mcpUrl(), new MemoryServerStore(), McpOAuthSettings.none(),
                     null, new BrowserPrompt(), "pi-java")))
                     .isInstanceOf(IllegalStateException.class)
                     .hasMessage("The redirect URL belongs to a different sign-in");
@@ -83,7 +82,7 @@ class McpSignInEndToEndTest {
         try (var server = AuthorizationServerFixture.start(
                 AuthorizationServerFixture.Mode.WRONG_ISSUER)) {
             assertThatThrownBy(() -> McpSignIn.signIn(new McpSignIn.Options(
-                    server.mcpUrl(), new MemoryOAuthStateStore(), McpOAuthSettings.none(),
+                    server.mcpUrl(), new MemoryServerStore(), McpOAuthSettings.none(),
                     null, new BrowserPrompt(), "pi-java")))
                     .isInstanceOf(OAuthIssuerMismatchError.class)
                     .hasMessageContaining("https://wrong-issuer.test");
@@ -95,7 +94,7 @@ class McpSignInEndToEndTest {
         try (var server = AuthorizationServerFixture.start(
                 AuthorizationServerFixture.Mode.WRONG_VERIFIER)) {
             assertThatThrownBy(() -> McpSignIn.signIn(new McpSignIn.Options(
-                    server.mcpUrl(), new MemoryOAuthStateStore(), McpOAuthSettings.none(),
+                    server.mcpUrl(), new MemoryServerStore(), McpOAuthSettings.none(),
                     null, new BrowserPrompt(), "pi-java")))
                     .isInstanceOf(OAuthError.class)
                     .hasMessage("invalid_grant");

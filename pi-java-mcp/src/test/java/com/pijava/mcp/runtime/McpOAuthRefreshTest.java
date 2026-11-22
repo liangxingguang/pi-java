@@ -1,9 +1,7 @@
 package com.pijava.mcp.runtime;
 
 import java.net.URI;
-import java.util.concurrent.Callable;
 
-import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 
 import com.pijava.mcp.AuthProvider;
@@ -24,7 +22,7 @@ class McpOAuthRefreshTest {
     @Test
     void refreshingWithoutAStoredClientDoesNotRegisterOne() throws Exception {
         try (var server = AuthorizationServerFixture.start(AuthorizationServerFixture.Mode.NORMAL)) {
-            var store = new MemoryStore();
+            var store = new MemoryServerStore();
             signIn(server, store);
             assertThat(server.registrations()).isEqualTo(1);
             // The tokens outlived the client, for example because another process signed out.
@@ -46,7 +44,7 @@ class McpOAuthRefreshTest {
     void aRejectedClientIsDroppedButThePendingSignInStays() throws Exception {
         try (var server = AuthorizationServerFixture.start(
                 AuthorizationServerFixture.Mode.REJECT_CLIENT)) {
-            var store = new MemoryStore();
+            var store = new MemoryServerStore();
             signIn(server, store);
             var pending = store.load();
             assertThat(pending.oauthState()).isNotNull();
@@ -71,7 +69,7 @@ class McpOAuthRefreshTest {
     void aRejectedRefreshTokenDropsOnlyTheTokens() throws Exception {
         try (var server = AuthorizationServerFixture.start(
                 AuthorizationServerFixture.Mode.REJECT_REFRESH)) {
-            var store = new MemoryStore();
+            var store = new MemoryServerStore();
             signIn(server, store);
             var pending = store.load();
 
@@ -105,26 +103,5 @@ class McpOAuthRefreshTest {
 
     private static AuthProvider.Context context(AuthorizationServerFixture server, String token) {
         return new AuthProvider.Context(401, "", server.mcpUrl(), token, null);
-    }
-
-    /** An in-memory store whose refresh lock never contends. */
-    private static final class MemoryStore implements McpOAuthServerStore {
-
-        private @Nullable McpOAuthState value;
-
-        @Override
-        public @Nullable McpOAuthState load() {
-            return value;
-        }
-
-        @Override
-        public void save(McpOAuthState state) {
-            this.value = state;
-        }
-
-        @Override
-        public <T> T withRefreshLock(Callable<T> action) throws Exception {
-            return action.call();
-        }
     }
 }

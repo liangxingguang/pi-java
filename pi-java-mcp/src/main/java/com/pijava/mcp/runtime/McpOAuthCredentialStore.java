@@ -27,6 +27,7 @@ import com.pijava.mcp.McpJson;
 import com.pijava.mcp.config.JsJson;
 import com.pijava.mcp.config.McpServerConfigs;
 import com.pijava.mcp.oauth.McpOAuthState;
+import com.pijava.mcp.oauth.McpRefreshLockBusyError;
 import com.pijava.mcp.oauth.OAuthTokens;
 
 /**
@@ -206,7 +207,8 @@ public final class McpOAuthCredentialStore {
                 // Contention inside this JVM; the caller's single-flight refresh handles it.
             }
             if (attempt + 1 >= attempts) {
-                throw new IOException("Timed out waiting for the MCP OAuth refresh lock");
+                // Not a plain failure: a sign-in skips the refresh and goes to the browser step.
+                throw new McpRefreshLockBusyError();
             }
             try {
                 Thread.sleep(REFRESH_LOCK_RETRY_MS);
