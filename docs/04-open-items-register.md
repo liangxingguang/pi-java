@@ -11,6 +11,9 @@
 - **B**：功能或行为缺口。已用到 **B292**（B289–B292 是 L1 收口四项，随 [`docs/11`](11-l1-ai-completion-design.md) 直接在代码里落地、未在 §1 立项，故无销号动作；L1 余项复验（strict 无类型节点判据、暖请求 `disableContinuation`）与第二次复验（Anthropic 非 strict 根 schema、`session-resources` 清理接线）同样直接落地、未新开号，见 [`14`](14-l1-residual-alignment-design.md)、[`15`](15-l1-residual-audit-followup-design.md)；B288 仍是 codemode 提案拟新增接缝，未批准）；新工单从 **B293** 起。
 - **D**：已登记的窄差。已用到 **D273**（codemode 原稿预占号无效）；新窄差从 **D274** 起，明细存于对应 `docs/map/`。
 - **读数视图（2026-11-22 起）**：真源是各层地图 `docs/map/NN-*.md`；`docs/05` §1.2 是**汇总视图**、`docs/09` §3 是**进度视图**（含「当前」列），两者必须与真源同步改。设计稿（`docs/11`／`docs/12`…）只记设计与收口结论、**不发布读数**，其中的分数一律视为各自写作时的基线。
+- **L1 #6 迁移（2026-11-22）**：缓存预热策略按 [`docs/16`](16-l1-cache-warming-policy-design.md) 迁入 `pi-java-ai`
+  （`com.pijava.ai.api.CacheWarmingPolicy`），coding-agent 改为消费者；行为／数字／wire 不变，未新开 B／D 号，
+  `map/02` 的 #6 改判对齐 ⇒ L1 **246/246＝100%**。
 - **F**：需要用户拍板的事项。
 - **R1**：pi 已删除的面，不为旧参照物补功能。
 - **R2**：Provider 只覆盖已批准的主流范围。Qwen／Xiaomi Token Plan 家族（团队／个人、国际／中国、AMS／SGP）已按 `docs/09` P3 余项纳入（26 个内置 provider）；其余长尾 provider 仍排除。
