@@ -26,7 +26,7 @@ class McpCliHelpTest {
     private int run(String... args) {
         return McpCommand.run(args, new McpCommand.Options(root, root,
                 new McpOAuthCredentialStore(root), null, out::add, err::add, false,
-                InputStream.nullInputStream(), "pi-java", "0.0.0"));
+                InputStream.nullInputStream(), "pi-java", "0.0.0", null));
     }
 
     @Test

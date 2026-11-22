@@ -5,6 +5,8 @@ import java.util.Map;
 
 import org.jspecify.annotations.Nullable;
 
+import com.pijava.ai.auth.Credentials;
+import com.pijava.ai.auth.OAuthCredentialStore;
 import com.pijava.coding.agent.core.SettingsManager;
 import com.pijava.mcp.config.McpServerConfig;
 import com.pijava.mcp.config.McpServerEntry;
@@ -12,6 +14,7 @@ import com.pijava.mcp.runtime.ConfigValueResolver;
 import com.pijava.mcp.runtime.McpConnectionOptions;
 import com.pijava.mcp.runtime.McpDefaultTransport;
 import com.pijava.mcp.runtime.McpOAuthCredentialStore;
+import com.pijava.mcp.runtime.McpProviderToken;
 import com.pijava.mcp.runtime.McpServerConnection;
 import com.pijava.mcp.runtime.McpServerLog;
 
@@ -29,9 +32,36 @@ final class McpCommandSupport {
                 entry, options.cwd(),
                 (server, cwd, provider) ->
                         McpDefaultTransport.create(server, cwd, provider, ConfigValueResolver.DEFAULT),
-                credentials, null, connection -> {
+                credentials, options.providerToken(), connection -> {
                 }, null, new McpServerLog(options.agentDir().resolve("mcp.log")),
                 options.clientName(), options.clientVersion(), ConfigValueResolver.DEFAULT));
+    }
+
+    /**
+     * The provider a server borrows its credentials from ({@code cli.ts:113-116}).
+     *
+     * @param entry the configured server
+     * @return the provider name, or {@code null} when the server does not use one
+     */
+    static @Nullable String authProvider(McpServerEntry entry) {
+        return entry.config() instanceof McpServerConfig.Http http && http.auth() != null
+                ? http.auth().provider() : null;
+    }
+
+    /**
+     * The current token of a pi provider, read the way the session reads it: the stored OAuth
+     * credential first, then {@code auth.json} and the environment.
+     *
+     * @return the token reader a CLI invocation runs with
+     */
+    static McpProviderToken providerTokens() {
+        return provider -> {
+            var oauth = new OAuthCredentialStore().resolve(provider);
+            if (oauth.isPresent()) {
+                return oauth.get().accessToken();
+            }
+            return Credentials.resolveApiKey(provider).orElse(null);
+        };
     }
 
     /** {@code cli.ts:113-116}. */

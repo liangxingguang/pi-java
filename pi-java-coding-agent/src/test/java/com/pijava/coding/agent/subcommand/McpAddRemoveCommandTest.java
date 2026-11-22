@@ -40,7 +40,8 @@ class McpAddRemoveCommandTest {
 
     private McpCommand.Options options() {
         return new McpCommand.Options(cwd, agentDir, new McpOAuthCredentialStore(agentDir), null,
-                out::add, err::add, false, InputStream.nullInputStream(), "pi-java", "0.0.0");
+                out::add, err::add, false, InputStream.nullInputStream(), "pi-java", "0.0.0",
+                null);
     }
 
     private int run(String... args) {

@@ -8,12 +8,14 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import com.pijava.mcp.McpJson;
 import com.pijava.mcp.runtime.McpOAuthCredentialStore;
+import com.pijava.mcp.runtime.McpProviderToken;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -39,8 +41,13 @@ class McpListCommandTest {
     }
 
     private McpCommand.Options options() {
+        return options(null);
+    }
+
+    private McpCommand.Options options(@Nullable McpProviderToken providerToken) {
         return new McpCommand.Options(cwd, agentDir, new McpOAuthCredentialStore(agentDir), null,
-                out::add, err::add, false, InputStream.nullInputStream(), "pi-java", "0.0.0");
+                out::add, err::add, false, InputStream.nullInputStream(), "pi-java", "0.0.0",
+                providerToken);
     }
 
     private int run(String... args) {
@@ -210,6 +217,70 @@ class McpListCommandTest {
     void listTakesNoPositionalArguments() {
         assertThat(run("list", "extra")).isEqualTo(1);
         assertThat(err.get(0)).startsWith("Usage: pi-java mcp list [--json]");
+    }
+
+    // --------------------------------------------- servers using a provider's credentials
+
+    /** An {@code auth.provider} server at the fixture's endpoint. */
+    private static String providerServer(String name, McpHttpFixture server) {
+        return "{ \"mcpServers\": { \"" + name + "\": { \"url\": " + quote(server.url())
+                + ", \"auth\": { \"provider\": \"anthropic\" } } } }";
+    }
+
+    @Test
+    void anAuthProviderServerConnectsWithTheProvidersToken() throws IOException {
+        var server = McpHttpFixture.start("provider-token");
+        try {
+            configure(providerServer("secure", server));
+            assertThat(McpCommand.run(new String[] {"list"},
+                    options(provider -> "provider-token"))).isZero();
+
+            assertThat(out.get(0)).isEqualTo("secure: connected, 1 tool (codemode, global)");
+            assertThat(out).anyMatch(line -> line.equals("  tools: echo"));
+        } finally {
+            server.stop();
+        }
+    }
+
+    @Test
+    void aServerUsingAProviderPointsAtTheLoginCommand() throws IOException {
+        var server = McpHttpFixture.start("provider-token");
+        try {
+            configure(providerServer("secure", server));
+            // No provider token: the server answers 401 and needs the provider's sign-in.
+            assertThat(run("list")).isEqualTo(1);
+
+            assertThat(out.get(0)).isEqualTo("secure: needs sign-in (codemode, global)");
+            assertThat(out).anyMatch(line ->
+                    line.equals("  sign in with: /login anthropic in pi-java"));
+        } finally {
+            server.stop();
+        }
+    }
+
+    @Test
+    void jsonCarriesTheAuthProvider() throws IOException {
+        var server = McpHttpFixture.start("provider-token");
+        try {
+            configure(providerServer("secure", server));
+            run("list", "--json");
+
+            var reported = McpJson.mapper().readTree(String.join("\n", out))
+                    .path("servers").get(0);
+            assertThat(reported.path("authProvider").asText()).isEqualTo("anthropic");
+        } finally {
+            server.stop();
+        }
+    }
+
+    @Test
+    void aServerWithoutAProviderSaysToSignInWithTheCommand() {
+        var report = new McpListCommand.ServerReport("files", "global", "mcp.json", null, true,
+                "codemode", "java -cp x", null, "needs-auth", List.of(), null, null, null);
+
+        McpListCommand.printReport(report, out::add);
+
+        assertThat(out).contains("  sign in with: pi-java mcp login files");
     }
 
     @Test

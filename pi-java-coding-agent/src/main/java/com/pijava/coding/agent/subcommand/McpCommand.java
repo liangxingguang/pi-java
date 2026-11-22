@@ -14,6 +14,7 @@ import com.pijava.ai.AbortSignal;
 import com.pijava.mcp.config.LoadedMcpConfig;
 import com.pijava.mcp.config.McpConfig;
 import com.pijava.mcp.config.McpServerEntry;
+import com.pijava.mcp.runtime.McpProviderToken;
 import com.pijava.mcp.runtime.McpServerConnection;
 import com.pijava.mcp.runtime.McpOAuthCredentialStore;
 import com.pijava.mcp.runtime.McpSignIn;
@@ -49,6 +50,8 @@ public final class McpCommand {
      * @param input where a pasted redirect URL is read from
      * @param clientName the MCP client name
      * @param clientVersion the MCP client version
+     * @param providerToken the current token of a provider, for servers with {@code auth.provider};
+     *                      the live store when {@code null}
      */
     public record Options(
             Path cwd,
@@ -60,13 +63,15 @@ public final class McpCommand {
             boolean terminal,
             InputStream input,
             String clientName,
-            String clientVersion) {
+            String clientVersion,
+            @Nullable McpProviderToken providerToken) {
 
         /** The defaults a real invocation runs with, writing to stdout and stderr. */
         public static Options of(Path cwd, Path agentDir, String clientName, String clientVersion) {
             return new Options(cwd, agentDir, new McpOAuthCredentialStore(agentDir), null,
                     System.out::println, System.err::println,
-                    System.console() != null, System.in, clientName, clientVersion);
+                    System.console() != null, System.in, clientName, clientVersion,
+                    McpCommandSupport.providerTokens());
         }
     }
 
@@ -170,6 +175,15 @@ public final class McpCommand {
         if (parsed.has("local") && entry.scope() != com.pijava.mcp.config.McpScope.PROJECT) {
             error.accept("MCP server \"" + name + "\" is defined in " + entry.source()
                     + ", not in the project; omit --local.");
+            return 1;
+        }
+        // `auth.provider` servers borrow another provider's credentials, which this command
+        // cannot store (cli.ts:285-291).
+        var authProvider = McpCommandSupport.authProvider(entry);
+        if (authProvider != null) {
+            error.accept("MCP server \"" + name + "\" uses the credentials of provider \""
+                    + authProvider + "\". Run \"" + McpCliHelp.APP_NAME + " auth " + command + " "
+                    + authProvider + "\".");
             return 1;
         }
         var connection = McpCommandSupport.connection(entry, options, credentials);

@@ -41,7 +41,8 @@ class McpLoginCommandTest {
     private int run(String... args) {
         return McpCommand.run(args, new McpCommand.Options(cwd, agentDir,
                 new McpOAuthCredentialStore(agentDir), url -> out.add("opened " + url),
-                out::add, err::add, false, InputStream.nullInputStream(), "pi-java", "0.0.0"));
+                out::add, err::add, false, InputStream.nullInputStream(), "pi-java", "0.0.0",
+                null));
     }
 
     private void configure(String json) throws IOException {
@@ -176,7 +177,8 @@ class McpLoginCommandTest {
 
     private McpCommand.Options options(boolean terminal, java.util.function.Consumer<String> openUrl) {
         return new McpCommand.Options(cwd, agentDir, new McpOAuthCredentialStore(agentDir), openUrl,
-                out::add, err::add, terminal, InputStream.nullInputStream(), "pi-java", "0.0.0");
+                out::add, err::add, terminal, InputStream.nullInputStream(), "pi-java", "0.0.0",
+                null);
     }
 
     @Test
@@ -187,7 +189,7 @@ class McpLoginCommandTest {
                 url -> out.add("opened " + url), out::add, err::add, false,
                 new ByteArrayInputStream("http://127.0.0.1/callback?code=x&state=y\n"
                         .getBytes(StandardCharsets.UTF_8)),
-                "pi-java", "0.0.0");
+                "pi-java", "0.0.0", null);
         assertThat(McpCommand.run(new String[] {"login", "files", "--timeout", "1"}, options))
                 .isEqualTo(1);
         // The connect failed before any sign-in, so nothing was opened.

@@ -34,6 +34,7 @@ final class McpListCommand {
             boolean enabled,
             String exposure,
             String transport,
+            @Nullable String authProvider,
             String state,
             List<String> tools,
             @Nullable Map<String, String> toolExposure,
@@ -113,12 +114,13 @@ final class McpListCommand {
         var config = entry.config();
         var enabled = !Boolean.FALSE.equals(config.enabled());
         var exposure = config.exposure() == null ? "codemode" : config.exposure().wire();
+        var authProvider = McpCommandSupport.authProvider(entry);
         var connection = McpCommandSupport.connection(entry, options, credentials);
         if (!enabled) {
             return new ServerReport(entry.name(), scopeOf(entry), entry.source().toString(),
                     entry.override() == null ? null : entry.override().toString(),
-                    false, exposure, McpCommandSupport.describeTransport(entry), "disabled", List.of(),
-                    null, null, null);
+                    false, exposure, McpCommandSupport.describeTransport(entry), authProvider,
+                    "disabled", List.of(), null, null, null);
         }
         try {
             connection.getClient().join();
@@ -148,8 +150,8 @@ final class McpListCommand {
         }
         return new ServerReport(entry.name(), scopeOf(entry), entry.source().toString(),
                 entry.override() == null ? null : entry.override().toString(),
-                true, exposure, McpCommandSupport.describeTransport(entry), state, tools, overrides,
-                resources, error);
+                true, exposure, McpCommandSupport.describeTransport(entry), authProvider, state,
+                tools, overrides, resources, error);
     }
 
     private static String scopeOf(McpServerEntry entry) {
@@ -185,6 +187,9 @@ final class McpListCommand {
         node.put("enabled", report.enabled());
         node.put("exposure", report.exposure());
         node.put("transport", report.transport());
+        if (report.authProvider() != null) {
+            node.put("authProvider", report.authProvider());
+        }
         node.put("state", report.state());
         var tools = node.putArray("tools");
         for (var tool : report.tools()) {
@@ -204,7 +209,7 @@ final class McpListCommand {
     }
 
     /** The human-readable block of one server ({@code cli.ts:493-515}). */
-    private static void printReport(ServerReport report, Consumer<String> log) {
+    static void printReport(ServerReport report, Consumer<String> log) {
         log.accept(report.name() + ": " + describeState(report) + " ("
                 + report.exposure() + ", " + report.scope() + ")");
         log.accept("  " + report.transport());
@@ -212,7 +217,12 @@ final class McpListCommand {
             log.accept("  project override: " + report.override());
         }
         if ("needs-auth".equals(report.state())) {
-            log.accept("  sign in with: " + McpCliHelp.APP_NAME + " mcp login " + report.name());
+            // A server using a provider's credentials signs in through `/login` in a session
+            // (cli.ts:497-502).
+            log.accept(report.authProvider() == null
+                    ? "  sign in with: " + McpCliHelp.APP_NAME + " mcp login " + report.name()
+                    : "  sign in with: /login " + report.authProvider() + " in "
+                            + McpCliHelp.APP_NAME);
         }
         if (!report.tools().isEmpty()) {
             var tools = new ArrayList<String>();
