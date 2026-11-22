@@ -95,6 +95,30 @@ public final class FileCredentialStore implements CredentialStore {
         mutate(all -> all.remove(provider));
     }
 
+    /** The credential file this store reads and writes (pi {@code getAuthPath}). */
+    public Path path() {
+        return path;
+    }
+
+    /** Provider ids with a stored API key; profile entries ({@code provider::profile}) are not listed. */
+    public java.util.Set<String> storedProviders() {
+        return readAll().keySet().stream().filter(key -> !key.contains("::"))
+            .collect(java.util.stream.Collectors.toUnmodifiableSet());
+    }
+
+    /** Remove the provider's default key and every profile key; true when anything was stored. */
+    public boolean deleteAllForProvider(String provider) {
+        var removed = new boolean[1];
+        mutate(all -> {
+            var prefix = provider + "::";
+            var keys = all.keySet().stream()
+                .filter(key -> key.equals(provider) || key.startsWith(prefix)).toList();
+            removed[0] = !keys.isEmpty();
+            keys.forEach(all::remove);
+        });
+        return removed[0];
+    }
+
     // ── File I/O ──────────────────────────────────────────────
 
     /** 锁内读全量（pi {@code withLock} 的读臂——读也过锁，杜绝撕裂读）。 */
@@ -133,8 +157,7 @@ public final class FileCredentialStore implements CredentialStore {
 
     /** 打开 CREATE/READ/WRITE 通道：先取 JVM 内锁，再持有跨进程文件锁运行 body。 */
     private <T> T withLockedFile(ChannelIo<T> body) {
-        var vmLock = VM_LOCKS.computeIfAbsent(
-            path.toAbsolutePath().normalize(), key -> new ReentrantLock());
+        var vmLock = VM_LOCKS.computeIfAbsent(lockKey(), key -> new ReentrantLock());
         vmLock.lock();
         try {
             var parent = path.getParent();
@@ -157,6 +180,18 @@ public final class FileCredentialStore implements CredentialStore {
                 "Failed to update auth file: " + path, e);
         } finally {
             vmLock.unlock();
+        }
+    }
+
+    /**
+     * Lock key after symlink resolution: aliases of one file share a single in-JVM lock
+     * (pi {@code auth-storage.ts:86-87,131-132} locks the realpath-resolved file).
+     */
+    private Path lockKey() {
+        try {
+            return path.toRealPath();
+        } catch (IOException e) {
+            return path.toAbsolutePath().normalize();
         }
     }
 

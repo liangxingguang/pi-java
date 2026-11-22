@@ -92,6 +92,18 @@ public final class LoginDialogScreen implements ScreenOverlay, LoginInteraction 
             });
             return;
         }
+        if (event instanceof OAuthEvent.AuthUrl authUrl) {
+            // L5 W1：流程不再自己打开浏览器，结构化消费者负责（TUI 保持自动打开）。
+            notify(authUrl.legacyText());
+            com.pijava.coding.agent.cli.WebUrl.webUrl(authUrl.url()).ifPresent(url -> {
+                try {
+                    browserOpener.open(url);
+                } catch (Exception ignored) {
+                    // Launcher failures must not interrupt login.
+                }
+            });
+            return;
+        }
         notify(event.legacyText());
     }
 

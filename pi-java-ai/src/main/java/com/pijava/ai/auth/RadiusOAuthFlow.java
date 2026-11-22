@@ -111,9 +111,14 @@ public final class RadiusOAuthFlow {
                 : authorizationEndpoint;
             var authorizeUrl = endpoint + "?" + OAuthFlow.formEncode(params);
             interaction.notify("Listening for OAuth callback on " + redirectUri);
-            interaction.notify(authorizeUrl);
-            if (autoOpenBrowser) {
-                OAuthFlow.openBrowser(authorizeUrl);
+            if (interaction.handlesStructuredEvents()) {
+                // L5 W1：结构化消费者（CLI/TUI 登录）自己展示并按需打开浏览器。
+                interaction.notify(new OAuthEvent.AuthUrl(authorizeUrl, null));
+            } else {
+                interaction.notify(authorizeUrl);
+                if (autoOpenBrowser) {
+                    OAuthFlow.openBrowser(authorizeUrl);
+                }
             }
             try {
                 var credential = server.outcome().join();

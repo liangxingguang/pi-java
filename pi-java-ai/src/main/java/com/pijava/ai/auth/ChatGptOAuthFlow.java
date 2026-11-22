@@ -120,7 +120,12 @@ public final class ChatGptOAuthFlow {
 
         var authorizeUrl = buildAuthorizeUrl(hints, hostId, pkce.challenge(), state, nonce);
         try {
-            interaction.notify("Open this URL in your browser:\n  " + authorizeUrl);
+            if (interaction.handlesStructuredEvents()) {
+                // L5 W1：结构化消费者（CLI/TUI 登录）自己展示并按需打开浏览器。
+                interaction.notify(new OAuthEvent.AuthUrl(authorizeUrl, null));
+            } else {
+                interaction.notify("Open this URL in your browser:\n  " + authorizeUrl);
+            }
             interaction.notify("Complete sign-in in your browser. If the callback does not complete, "
                 + "paste the final redirect URL here.");
             var outcome = LoopbackCallbackServer.<AuthorizationResult>awaitCallbackOrManual(

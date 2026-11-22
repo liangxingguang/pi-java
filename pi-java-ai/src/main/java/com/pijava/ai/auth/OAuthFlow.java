@@ -87,7 +87,10 @@ public final class OAuthFlow {
             var authorizeUrl = buildAuthorizeUrl(redirectUriHolder[0], pkce.challenge());
             interaction.notify("Listening for " + displayName() + " OAuth callback on "
                 + redirectUriHolder[0]);
-            if (!autoOpenBrowser || !openBrowser(authorizeUrl)) {
+            if (interaction.handlesStructuredEvents()) {
+                // L5 W1：结构化消费者（CLI/TUI 登录）自己展示并按需打开浏览器。
+                interaction.notify(new OAuthEvent.AuthUrl(authorizeUrl, null));
+            } else if (!autoOpenBrowser || !openBrowser(authorizeUrl)) {
                 interaction.notify("Could not open a browser automatically.\nOpen this URL manually:\n  "
                     + authorizeUrl);
             }

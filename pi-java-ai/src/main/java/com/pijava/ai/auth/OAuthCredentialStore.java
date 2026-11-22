@@ -98,6 +98,21 @@ public final class OAuthCredentialStore {
         });
     }
 
+    /** The credential file this store reads and writes. */
+    public Path path() {
+        return path;
+    }
+
+    /** Provider ids with a stored OAuth credential. */
+    public java.util.Set<String> storedProviders() {
+        try {
+            return withLockedFile(channel -> java.util.Collections.unmodifiableSet(
+                new java.util.LinkedHashSet<>(readFrom(channel).keySet())));
+        } catch (UnsupportedOperationException e) {
+            return java.util.Set.of();
+        }
+    }
+
     /**
      * 在<b>独占文件锁</b>内对 provider 的凭证「读当前 → 应用 mutation → 回写」，
      * 返回 mutation 的结果（provider 不存在时返回 {@code null}，不调用 mutation）。
@@ -147,8 +162,7 @@ public final class OAuthCredentialStore {
 
     /** 打开 CREATE/READ/WRITE 通道：先取 JVM 内锁，再持有跨进程文件锁运行 body。 */
     private <T> T withLockedFile(ChannelIo<T> body) {
-        var vmLock = VM_LOCKS.computeIfAbsent(
-            path.toAbsolutePath().normalize(), key -> new ReentrantLock());
+        var vmLock = VM_LOCKS.computeIfAbsent(lockKey(), key -> new ReentrantLock());
         vmLock.lock();
         try {
             var parent = path.getParent();
@@ -169,6 +183,18 @@ public final class OAuthCredentialStore {
                 "Failed to update OAuth auth file: " + path, e);
         } finally {
             vmLock.unlock();
+        }
+    }
+
+    /**
+     * Lock key after symlink resolution: aliases of one file share a single in-JVM lock
+     * (pi {@code auth-storage.ts:86-87,131-132} locks the realpath-resolved file).
+     */
+    private Path lockKey() {
+        try {
+            return path.toRealPath();
+        } catch (IOException e) {
+            return path.toAbsolutePath().normalize();
         }
     }
 

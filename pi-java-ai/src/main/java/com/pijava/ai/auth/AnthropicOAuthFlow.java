@@ -257,6 +257,11 @@ public final class AnthropicOAuthFlow {
     }
 
     private void presentAuthorizeUrl(OAuthInteraction interaction, String url, String instructions) {
+        if (interaction.handlesStructuredEvents()) {
+            // L5 W1：结构化消费者（CLI/TUI 登录）自己展示并按需打开浏览器。
+            interaction.notify(new OAuthEvent.AuthUrl(url, instructions));
+            return;
+        }
         interaction.notify("Open this URL in your browser:\n  " + url);
         if (!autoOpenBrowser || !OAuthFlow.openBrowser(url)) {
             interaction.notify("Could not open a browser automatically. " + instructions);
