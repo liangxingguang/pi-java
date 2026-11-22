@@ -5,6 +5,8 @@
 > 【已收口（2026-11-22）】**本稿六个单元已全部落地**：B289 `49336f70`、B290 `6d393725`、B291 `c8df0315`、
 > B292 `083d3552`、D6 threads 见 [`12`](12-anthropic-threads-design.md)（`177acc36`…`93b4bfe4`）。
 > **当前读数以 `docs/map/02` 为准：L1 = 245.5/246＝99.8%**（余 cache 策略单元 0.5，属模块归属、随 L5 迁移）。
+> **2026-11-22 复验补记**：§3.2 的判断「逐节点判据已具备」不准确，无类型节点判据与暖请求
+> `disableContinuation` 已在当晚补入，见 [`14`](14-l1-residual-alignment-design.md)；读数不变。
 > 下文「96.5%」「242.5/246」等数字是**收口前的规划基线**，保留只为说明拆解逻辑，不是现状。
 >
 > 【编号约定】新设计稿按**当前存在的最新编号 +1** 顺延（2026-11-22 起执行）。本稿占用 **11**，下一份为 **12**。`docs/06` 为历史空缺，不补；旧批次稿（原 11–71 段）已删除、只在 git 中可追溯，号可复用，不再按历史最大号跳号。
@@ -67,7 +69,7 @@
 
 - 新类 `pi-java-ai/src/main/java/com/pijava/ai/api/StrictToolLimitMemory.java`：`LinkedHashSet<String>` + 10k 上限、`mark(sessionId)`、`exceeded(sessionId)`、`clear(sessionId)`。
 - `AnthropicMessagesApi`（`:244-276`）：把局部 `disablePreferredStrictTools` 的初值改为 `StrictToolLimitMemory.exceeded(sessionId)`，在 `:362-371` 的 fallback 判定处命中三条文本时 `mark(sessionId)`。`sessionId` 已有通道（`:206-207` 字段、`AnthropicStreamSupport:25-28` 从 `extra["sessionId"]` 读）。
-- 逐节点判据**已具备**（`AnthropicStrictKeywords:20-47`、`AnthropicToolWire:116-145`、`StrictSampling:47-71` 的 prefer 降级/require 抛错），本项**只补会话记忆**，不重写判据。
+- 逐节点判据当时**只具备 provider 专有谓词**（`AnthropicStrictKeywords:20-47`、`AnthropicToolWire:116-145`、`StrictSampling:47-71` 的 prefer 降级/require 抛错，docs/17 已闭环）；pi `constrained-sampling.ts:73-76` 的**无类型节点拒绝**当时未移植。本项先补会话记忆；无类型判据于 2026-11-22 复验补入 `StrictJsonSchema.makeNodeStrict`，见 [`14-l1-residual-alignment-design.md`](14-l1-residual-alignment-design.md)。
 - 清理钩子：Java 无 `cleanupSessionResources` 等价物，落到 coding-agent 会话关闭点（与 `DefaultProviders` 同层）；先做「10k 上限自愈」，清理钩子作为第二步。
 
 **夹具**：`StrictSamplingTest` 新增 3 例（三条文本各 mark 一次后下一轮直接非 strict；无关 400 不影响；`clear` 后恢复）；10k 上限用循环 10,001 验证丢最旧（对齐 pi 测试）。

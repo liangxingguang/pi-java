@@ -21,7 +21,8 @@
 >   cause＋code 追加到错误文本）Java 无等价实现**，编号 B289（⚠️ 实际未进 `docs/04` §1 台账，
 >   已在 L1 收口时直接落地：`49336f70`）；
 >   strict 工具「无类型节点降级＋按会话记忆超限」与 lazy 初始化取消映射 `stopReason: aborted`
->   也仍未落，归 P2 余项/P5。
+>   也仍未落，归 P2 余项/P5。**2026-11-22 复验收口**：lazy 取消映射已落（B291 `c8df0315`）；
+>   无类型节点判据与暖请求 `disableContinuation` 已落（[`14-l1-residual-alignment-design.md`](14-l1-residual-alignment-design.md)）。
 > - P3 部分完成（2026-11-21）：`fca70024`（catalog 规则按 `a00a5048d` 重新 vendor、上游快照重取、
 >   18 分片重生成：645 chat／74 image，radius 基线 28→39）、`21ec26b0`（默认模型表同步：
 >   Anthropic Opus 5.5、OpenAI GPT-6.2 Sol、Google gemini-4-argon 等）。
@@ -47,7 +48,8 @@
 >   真机冒烟经用户裁决豁免（以 `mvn test -pl pi-java-ai` 2241 全绿收口）。
 > - L1 收口完成（2026-11-22）：B289 `49336f70`、B290 `6d393725`、B291 `c8df0315`、B292 `083d3552`；
 >   L0 的 `telemetryNow` 已由 `f0841d49` 回补。`map/02` 记 L1 **245.5/246＝99.8%**（余 cache 策略单元
->   0.5，属模块归属，随 L5 迁移收口）。
+>   0.5，属模块归属，随 L5 迁移收口）。**复验补记**：strict 无类型节点判据与暖请求
+>   `disableContinuation` 于当晚补入（[`14`](14-l1-residual-alignment-design.md)），读数不变。
 > - P9 设计稿已出（2026-11-22，[`13-mcp-p9-design.md`](13-mcp-p9-design.md)）：9 项缺口拆成 S1–S7，
 >   待 D1–D5 拍板（`PipeTransport` 做或出分母、Windows 两段关闭、两段式 sign-in 公开面、
 >   `mcp list` 的 provider token 来源、`#26` 是否含代码）。拍板后按 S1→S7 逐阶段落地。
