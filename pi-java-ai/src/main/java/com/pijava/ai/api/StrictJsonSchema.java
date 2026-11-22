@@ -12,8 +12,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 /**
  * pi {@code makeStrictJsonSchema} ＋ {@code makeJsonSchemaNodeStrict}
  * （{@code constrained-sampling.ts:53-127}）：把工具的 JSON Schema 转换为 provider
- * strict 子集 —— 禁用键拒绝、object 属性全部 required、非 required 属性补 null union、
- * {@code additionalProperties:false}。
+ * strict 子集 —— 禁用键拒绝、无 {@code type} 节点拒绝（裸 {@code enum} 除外）、
+ * object 属性全部 required、非 required 属性补 null union、{@code additionalProperties:false}。
  *
  * <p><b>纯函数</b>：内部深拷贝（Jackson convertValue），入参不被修改。</p>
  */
@@ -76,6 +76,14 @@ public final class StrictJsonSchema {
                         entry.getKey() + ": " + jsonValue(entry.getValue()) + " is unsupported");
                 }
             }
+        }
+
+        // pi :73-76：OpenAI strict 拒绝没有 type 的节点；裸 enum 算 typed，裸 const 不算。
+        // 按键缺席判 undefined：type:null 在 pi 里也不触发。
+        if (!node.containsKey("type") && !node.containsKey("anyOf")
+                && !node.containsKey("enum")) {
+            throw new UnsupportedStrictJsonSchemaException(
+                "schemas without a type are unsupported");
         }
 
         if (node.containsKey("anyOf")) {

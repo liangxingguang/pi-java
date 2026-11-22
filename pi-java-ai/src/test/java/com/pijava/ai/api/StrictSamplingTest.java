@@ -69,6 +69,29 @@ class StrictSamplingTest {
         assertThat(StrictSampling.resolveStrict(prefer, false)).isNull();
     }
 
+    // ── #101 余项：无类型节点（pi constrained-sampling.ts:73-76）──────────
+
+    @Test
+    void preferUntypedNodeFallsBackToNull() {
+        Map<String, Object> untyped = Map.of("type", "object",
+            "properties", Map.of("x", Map.of()));
+        var prefer = tool(new JsonSchemaSampling(StrictMode.PREFER), untyped);
+
+        assertThat(StrictSampling.resolveStrict(prefer, true)).isNull();
+    }
+
+    @Test
+    void requireUntypedNodeThrowsWithPiWording() {
+        Map<String, Object> untyped = Map.of("type", "object",
+            "properties", Map.of("x", Map.of()));
+        var require = tool(new JsonSchemaSampling(StrictMode.REQUIRE), untyped);
+
+        assertThatThrownBy(() -> StrictSampling.resolveStrict(require, true))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessage("Tool \"t\" requires JSON-schema constrained sampling, but "
+                + "schemas without a type are unsupported.");
+    }
+
     // ── 批1/#101：provider 专有谓词（Anthropic 关键字集）────────────────
 
     /** 探测谓词：只拒绝 {@code bad} 键，用于断言三参版的回落/抛出路径。 */

@@ -78,8 +78,10 @@ class StrictJsonSchemaTest {
             .isInstanceOf(UnsupportedStrictJsonSchemaException.class)
             .hasMessageContaining("unions");
 
+        // tuple 判据在「无类型节点」之后（pi 同序），所以要带 type 才会命中 tuple。
         Map<String, Object> tuple = Map.of("type", "object",
-            "properties", Map.of("x", Map.of("items", List.of(Map.of("type", "string")))));
+            "properties", Map.of("x", Map.of("type", "array",
+                "items", List.of(Map.of("type", "string")))));
         assertThatThrownBy(() -> StrictJsonSchema.convert(tuple))
             .isInstanceOf(UnsupportedStrictJsonSchemaException.class)
             .hasMessageContaining("tuple");
@@ -87,10 +89,41 @@ class StrictJsonSchemaTest {
 
     @Test
     void propertiesRequireObjectType() {
-        Map<String, Object> input = Map.of("properties", Map.of("x", Map.of("type", "string")));
+        // 有 type（不是 object）才走到 properties 判据；无 type 由下一个用例单独钉。
+        Map<String, Object> input = Map.of("type", "string",
+            "properties", Map.of("x", Map.of("type", "string")));
         assertThatThrownBy(() -> StrictJsonSchema.convert(input))
             .isInstanceOf(UnsupportedStrictJsonSchemaException.class)
             .hasMessageContaining("type object");
+    }
+
+    @Test
+    void untypedNodeIsRejected() {
+        // pi :73-76：无 type/anyOf/enum 的节点（含嵌套属性）在 strict 下不可转换。
+        Map<String, Object> input = Map.of("type", "object",
+            "properties", Map.of("x", Map.of()));
+        assertThatThrownBy(() -> StrictJsonSchema.convert(input))
+            .isInstanceOf(UnsupportedStrictJsonSchemaException.class)
+            .hasMessage("schemas without a type are unsupported");
+    }
+
+    @Test
+    void bareEnumCountsAsTyped() {
+        Map<String, Object> input = Map.of("type", "object",
+            "properties", Map.of("kind", Map.of("enum", List.of("a", "b"))));
+
+        var strict = StrictJsonSchema.convert(input);
+
+        assertThat(strict.get("additionalProperties")).isEqualTo(false);
+    }
+
+    @Test
+    void bareConstDoesNotCountAsTyped() {
+        Map<String, Object> input = Map.of("type", "object",
+            "properties", Map.of("kind", Map.of("const", "a")));
+        assertThatThrownBy(() -> StrictJsonSchema.convert(input))
+            .isInstanceOf(UnsupportedStrictJsonSchemaException.class)
+            .hasMessage("schemas without a type are unsupported");
     }
 
     @Test
