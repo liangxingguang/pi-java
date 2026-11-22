@@ -215,7 +215,16 @@ Java（`coding-agent/subcommand/McpCommand.java` + `McpListCommand.java`）：`M
 | S1 `#22` | 2026-11-22 | `02b6bf59` | 关闭三段式：关 stdin → `min(500ms, closeTimeout)` 宽限 → SIGTERM 等价 → 再 `closeTimeout` → SIGKILL；**关 stdin 前抓进程树快照**（父进程一退 `descendants()` 就空），父已退也给后代补一刀；`liveProcessGroups` 等价（JVM shutdown hook） | `McpStdioTest` +`aServerIgnoringStdinIsTerminatedAfterTheGracePeriod`（旧实现必 >2000ms，现 ~520ms）；既有 stubborn 用例仍绿 |
 | S2 `#22b` | 2026-11-22 | `db9f8646` | `StdioLineFrames.pump` 改按 8 KiB 块扫描 `\n`，未完成尾巴按块留存、换行时只 join 一次；`maxMessageBytes` 与 CRLF 语义不变 | 新增 `StdioLineFramesTest` 5 例（跨块重组、多帧＋CRLF、2 MiB 单行、超限、EOF 残帧） |
 | S3 `#25`/`#26` | 2026-11-22 | `d80b326f` | JSON 分支读 `maxMessageBytes`（超限抛 `MCP JSON response exceeds N bytes`）；错误体改 `readBodyText`：只读摘录并**关流取消剩余**（原实现读 8 KiB 后不关流） | 新增 `StreamableHttpBodyLimitsTest` 3 例（超限失败＋流关闭、限内投递、20 KB 错误体截断＋流关闭） |
+| S4 `#36` | 2026-11-22 | `cd942ef` | `OAuthFlow` 增 `refreshOnly`：无 client 时直接 `REDIRECT`（不注册）、刷新失败后也 `REDIRECT`（不覆盖待完成登录的 `state`／PKCE verifier）；`invalid_client`／`unauthorized_client` 在 refreshOnly 下只在「存的就是这次用的 client」时才作废 client／tokens／discovery，非 refreshOnly 仍 `all`；换码前先校验 redirect URI 与授权请求一致（`flow.ts:386-400`）。`McpAuthProviders` 刷新传 `refreshOnly=true`；`settled()` 复核为已等价 | 新增 `McpOAuthRefreshTest` 3 例（无 client 不注册、`invalid_client` 只丢 client+tokens 而保住 `state`/verifier、`invalid_grant` 只丢 tokens）；`OAuthFlowTest` +3 例（refreshOnly 不注册、刷新失败不强推授权、换码 redirect URI 不一致先报错）；`AuthorizationServerFixture` 增 `REJECT_CLIENT`／`REJECT_REFRESH` 两模式 |
 
-> 模块测试：`pi-java-mcp` 289 → **292** 全绿；`pi-java-coding-agent` 的 MCP 相关 241 例全绿（S1 改动经
-> `McpServerConnection` 的关闭路径覆盖）。**读数暂不动**：按 `docs/04` §0，逐层收口时才三处同步，
-> 现仍记 L2 = 115.0/123（投影）；S4–S7 落地后统一重算。
+> S4 的两处**有意偏离**（`#36` 判据以外，不引入无用面）：
+> 1. 未加 pi `createMcpAuthProvider({redirectUrl})` 的应用侧 redirect 入口——production 调用方
+>    （`runtime.ts:190-197`、`oauth.ts:175-182`）都不传；Java 候选链 `[fixed, registered[0], FALLBACK]`
+>    与 pi `[app, fixed, registered[0]] → documents 过滤 → DEFAULT` 在合法配置下等价（documents 过滤只对
+>    非 `/callback` 路径生效，而那种配置本来就不出文档）。
+> 2. 「等刷新锁时可中止」随 S5 一起做：pi 的 `signal` 挂在 `startMcpSignIn`，Java 的 `McpSignIn.Options`
+>    目前没有取消入口，单调用 `signIn` 的取消只在粘贴回调那一步。
+
+> 模块测试：`pi-java-mcp` 289 → 292（S1–S3）→ **298**（S4）全绿；`pi-java-coding-agent` 的 MCP 相关
+> 241 例全绿（S1 改动经 `McpServerConnection` 的关闭路径覆盖）。**读数暂不动**：按 `docs/04` §0，
+> 逐层收口时才三处同步，现仍记 L2 = 115.0/123（投影）；S5–S7 落地后统一重算。
