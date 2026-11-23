@@ -4,7 +4,7 @@
 >
 > 当前锚点为 pi `56cae7823`（2026-11-20 七层 L0–L8 重测闭环后切换，见 `docs/map/ANCHOR.md`）。下方条目均已随所属层重测；个别行仍引 `ea448f454` 作对照证据，冲突时以新锚点为准。
 >
-> **历史设计稿引用**：现行保留的设计/计划稿只有三份——`docs/08-b161-codemode-mechanism-design.md`（B161 codemode 机制设计，**设计待审、尚未实施；已从原 `docs/61` 重编号**）、`docs/09-pi-latest-reanchor-plan.md`（pi 换锚与对齐计划，实施中）、`docs/10-schema-tool-validation-design.md`（P1 工具参数 pi-schema 校验设计）。其余批次设计/进度稿（原 `docs/06`、`docs/11`–`docs/60`、`docs/62`–`docs/66` 等）已删除。正文与代码注释中残留的 `docs/NN` 只是历史溯源标记，不构成有效链接。**现行结论以本文档 + `docs/map/` + `docs/05` 为准**，历史过程在 git。
+> **历史设计稿引用**：现行保留的设计/计划稿——`docs/08-b161-codemode-mechanism-design.md`（B161 codemode 机制设计，**设计待审、尚未实施；已从原 `docs/61` 重编号**）、`docs/09-pi-latest-reanchor-plan.md`（pi 换锚与对齐计划，实施中）、`docs/10-schema-tool-validation-design.md`（P1 工具参数 pi-schema 校验设计），以及换锚实施期各批次的 L1–L6 系列设计稿（`docs/11`–`docs/20`）。其余旧批次设计/进度稿（原 `docs/06`、`docs/62`–`docs/66` 等）已删除。正文与代码注释中残留的 `docs/NN` 只是历史溯源标记，不构成有效链接。**现行结论以本文档 + `docs/map/` + `docs/05` 为准**，历史过程在 git。
 
 ## 0. 口径
 
@@ -28,6 +28,66 @@
   行为不变量保持（工具名/参数集、slash 命令集、RPC 33 命令、session JSONL 线形、扩展注册面不变，无新模块）。
   新窄差 D274（重复信号强退）、D275（`/export` OSC8）、D277（会话内 cwd 三臂只走非交互错误臂）、
   D278（capture 输出无 TUI 安装触发点）；未新开 B 号。
+- **L6 复核（2026-11-23）**：评测域 24 行按目标锚点 `a00a5048d` 复核（[`docs/20`](20-l6-evals-recheck-design.md)）：
+  两锚点间 `packages/evals` 仅 `package.json` 变化（版本 1.4.0→1.6.0、依赖同步、`clean` 脚本 shx→node），
+  `src`／`evals/`／`test/` 逐字节未变 ⇒ **零代码**、24 行判定与 pi 证据全部续用，未新开 B／D 号；
+  唯一存疑 #20（TUI 审计 oracle 形态差）维持，收口条件＝L7 落地 context footer 状态行
+  ⇒ L6 **48.0/49＝98.0%**（复核读数，投影转正式）。L8 examples（plan-mode、subagent 重写未跟）仍归 P11 另批。
+- **L7 对账（2026-11-23）**：UI 层按 [`docs/21`](21-l7-recheck-plan.md) 完成复核对账（不写码）——
+  docs/09 十行全部成立（4 子机制补记）；预审计 12 项成立（主体在 `packages/tui`）＋漏项 11 项登记；
+  旧基线 10 行复核：S6/S19/S25/T3/T4/T5/T7/T10/W14 翻正「对齐」，S16 降「存疑」（query 门控缺失）
+  ⇒ 旧锚点正式读数修正 **178.5/244＝73.2%**。无法闭环预判：C21/R30（TamboUI 外部框架不可达）、
+  K40/K12（JVM 无 signal API）、R33（性能契约）按窄差 D 处置（正式编号在分段设计时落）。
+  分段实施 W1（状态面）→W8（收尾）按 docs/21 §7 推进。
+- **L7 W1 收口（2026-11-23）**：状态面按 [`docs/22`](22-w1-status-design.md) 落地——C5 loader/spinner
+  （`LoaderSpinner` 时间驱动帧计算＋指示器渲染 span 组）、C6 working 指示器（`StatusIndicator.Working`＋
+  TurnStart 置/AgentEnd 清＋扩展 `setWorkingMessage/Visible/Indicator` TUI 臂＋reset 的
+  `"Working (esc to interrupt)"` quirk 逐字）、C7 bordered loader（`BorderedLoaderFrame`，消费点
+  bug-report/session-share）、C8 cancellable loader（Esc 取消语义收编）⇒ 四行缺失→对齐；
+  C10 文案复核成立。静态 `● running` 删除。窄差 N1（embedded editor indicator）、N2（IdleStatus/
+  clearOnShrink）登记待正式编号。未新开 B 号；`map/05` 读数 **186.5/244＝76.4%**（投影回算 190.0/259）。
+- **L7 W2 收口（2026-11-23）**：工具/消息卡按 [`docs/23`](23-w2-design.md) 落地——R10 diff 渲染
+  （`DiffView` 重写：parseDiffLine 逐字＋1:1 词级 `WordDiff`＋`[reversed]` 反白＋公共缩进剥离＝漏项#5）、
+  R17/R18/R19 三消息卡（`CompactionCard`/`BranchCard`/`SkillCard`＋`SkillBlocks.parse`＋collapsed/expanded
+  文案逐字＋SUMMARY/CUSTOM 变换＋messageId/timestamp＝漏项#6）、R26 `FormatToolArgs`（collapsed 100 截/
+  expanded key: value＋JSON 缩进）、R25 复核翻正（`ReasoningDropNotice` 实现已接线，零代码）、
+  K37/C14 点击展开（`ChatViewportElement` 行区间＋`DragHandler.onDragEnd` 拖拽通道等价＝窄差 N）翻对齐；
+  R12 工具卡三态 bg＋fallback 折叠 10 行、R13 bash 卡（漏项#7：`BashCard`＋`MessageCards.bash`）缺失→存疑
+  （流式通道 D197/`BashExecutionUpdate` 无消费面维持）。窄差：customMessageBg 不铺底（R17–R19）、
+  bg 只铺文本格（R12）、skill collapsed label 色压平。未新开 B 号；`map/05` 读数 **196.0/244＝80.3%**
+  （投影回算 199.5/259＝77.0%）。
+- **L7 W3 收口（2026-11-23）**：渲染缓存契约按 [`docs/24`](24-w3-design.md) 落地——新增锚点单元
+  R30(2)/R31(2)/R32(1)/R33(1)/C21(1)；R31 `MarkdownRenderCache`（源词法缓存＋顶层块 record 复用＋
+  帧界裁剪＋主题/默认样式失配＝pi `blocks`/`invalidate` 对位）接线 `ChatViewportElement.flatten` 与
+  `MessageBubble` 三个 markdown 臂、R32 `MarkdownBlocks.stripHtmlComments`（围栏/行内代码感知、注释独占行
+  清空合并空行、两侧空白吞后侧）⇒ 两行**对齐**（＋3.0）；R30 全屏帧缓存、R33 ASCII/字素快路径、
+  C21 render 只读/组件缓存按 docs/21 §6 登记窄差 D（TamboUI 外部框架/无 Segmenter 性能契约，不进分子）。
+  窄差 N：三消息卡内部 Markdown 仍走静态路径、图片硬换行无观察面（R14）。以上 D/N 编号统一在 P12 落。
+  未新开 B 号；`map/05` 读数
+  **199.0/251＝79.3%**（未加权 101/152；投影回算 202.5/259＝78.2%）。
+- **L7 W4 收口（2026-11-23）**：补全与选择器按 [`docs/25`](25-w4-design.md) 落地——S16 config 选择器补
+  「query 未变不重过滤」（pi `config-selector.ts:504-508`；同族 thinking/scoped/settings 核查无同形缺陷）、
+  K25 `@文件`/路径补全（`FileCompleter`＋`FileCompletionPaths`：前缀提取/打分/引号形/Tab 强制；
+  fd→NIO 有界遍历＝窄差 N）、K26 大粘贴折叠（`EditorPaste`：>10 行/>1000 字符标记、提交展开、
+  撤销快照携带注册表、整标记退格与前向删、高位下移重编号）、K31 jump mode（`EditorJump`：
+  `Ctrl+]`/`Ctrl+Alt+]`、多行区分大小写）、新增 K41(1) 斜杠命令 Enter 上下文
+  （`ChatInputPortal.enterWithCompletion()`：slash 名/无补全 ⇒ 提交；文件补全只应用）、C2 选择列表复核
+  （确认 pi 无多选/分组，原注误记；补 ↑↓ wrap＋滚动 `(i/n)`＋无匹配文案）⇒ 六行**对齐**（＋6.5，分母 +1）；
+  extension-selector 补 10 行居中窗口＋`(i/n)`（漏项#4）。窄差 N：K25 fd/普通路径自然触发、
+  K26 词删/行删原子性与 tmux CSI-u、K31 键位不读 `keybindings.json`（K17 另账）、C2 描述列。
+  未新开 B 号；`map/05` 读数 **205.5/252＝81.5%**（未加权 107/153；投影回算 209.0/260＝80.4%）。
+- **L7 W5 收口（2026-11-24）**：平台/协议按 [`docs/26`](26-w5-design.md) 落地——K35 终端能力探测
+  （`TerminalCapabilities`：tmux/screen/Herdr/Rex/Orca/Kitty/Ghostty/WezTerm/Warp/iTerm2/WT/Alacritty/
+  vscode/zed/JetBrains/Windows/unknown 逐臂＋`PI_*` 覆盖；`SettingsScreen` 图片门、`PiTuiLauncher`
+  truecolor 同源）、K34 原生剪贴板（`NativeClipboard`：Termux/pbcopy/PowerShell+clip/wl-copy/xclip/xsel
+  ⇒ AWT 回退，2 s 超时；`/copy`/`ClipboardSupport` 同源）、K39 OSC 7501（`ProgramStatusProtocol`＋
+  `ProgramStatusReporter`：turn/消息/压缩/settled 状态机、blocked 来源栈、去重、退出 clear；
+  `extension-dialog`/`extension-overlay:N`＋`custom().blocked`）、K32 `modifyOtherKeys`＋CSI-u 备用键组
+  ＋`SHIFTED_SYMBOLS` 逻辑 Shift 归一、K38 复核（设置行/accessor 1–100/"auto"/`ScrollConfig` 消费早具备）
+  ⇒ 五行**对齐**（＋5.0，未新增分母）。窄差 N：N1 OSC 7501 无查询/DA 握手（TamboUI 独占 stdin）、
+  N2 OSC 8 不输出、N3 `baseLayoutKey` 不消费、N4 helper→平台 CLI、N5 登录 auth、N6 APC 标记无对应物；
+  D60 `"auto"` 维持 Codex 有界加速模型。以上 D/N 编号统一在 P12 落。未新开 B 号；`map/05` 读数
+  **210.5/252＝83.5%**（未加权 112/153；投影回算 214.0/260＝82.3%）。
 - **F**：需要用户拍板的事项。
 - **R1**：pi 已删除的面，不为旧参照物补功能。
 - **R2**：Provider 只覆盖已批准的主流范围。Qwen／Xiaomi Token Plan 家族（团队／个人、国际／中国、AMS／SGP）已按 `docs/09` P3 余项纳入（26 个内置 provider）；其余长尾 provider 仍排除。

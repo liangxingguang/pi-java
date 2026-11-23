@@ -5,7 +5,7 @@
 ## 基准与范围
 
 - **证据锚点＝`TARGET_PI_PIN=a00a5048d`**（2026-11-20）。存储后端 20 行已于 **2026-11-22** 按该锚点逐行复核并随 [`docs/18`](../18-l4-session-recheck-design.md) 收口；`CURRENT_PI_PIN` 仍是 `56cae7823`，切锚仍等七层全部重测（`ANCHOR.md` 完成条件）。java 侧证据见文末「L4 复核」段。
-- 本图**评测域** 24 行按 `56cae7823` 重测并随 docs/26 实施闭环（2026-11-05，L6）；目标锚点的评测复测归 P11，本图未改为新锚点评分。
+- 本图**评测域** 24 行按 `56cae7823` 重测并随 docs/26 实施闭环（2026-11-05，L6）；**2026-11-23 已按目标锚点 `a00a5048d` 复核**（[`docs/20`](../20-l6-evals-recheck-design.md)）：两锚点间 `packages/evals` 仅 `package.json` 变化（版本／依赖／clean 脚本），`src`／`evals/`／`test/` 逐字节未变 ⇒ 24 行判定与 pi 证据全部续用，**48.0/49＝98.0% 为复核读数**（不再是投影）。
 - 范围：`pi-java-session-backend-sqlite` ＋ `pi-java-agent-core` 的会话持久化面（主流对照 pi `coding-agent/src/core/session-manager.ts`）；`pi-java-evals` ↔ pi `packages/evals`；pi `packages/chord`（R5 不可达）；pi 仓库根 `scripts/` 与本仓 `docs/map/check-drift.sh`（口径外）。
 - 判定三档：**对齐** / **缺失** / **存疑**。每条给两侧 `file:line`。
 - 目标锚点评测参照版本：`1.6.0`（`packages/evals/package.json`；旧锚点 `1.4.0`）。
@@ -176,6 +176,14 @@ L6 落地的对应面见 §上表 #5/#21–#24。
 > 证据应为缺失。L6 W1/W2 补齐后 #5 恢复对齐，并新增 #21–#24 四行（Σ+6）。
 > 唯一存疑 #20（TUI 审计 oracle 形态差）在 docs/26 §1.4 复核后维持，理由未变。
 > 5 × 0.5 = 2.5 之外的缺口不存在——**唯一 −1.0 来自 #20 的存疑系数**。
+>
+> **目标锚点复核补记（2026-11-23，docs/20）**：`56cae7823..a00a5048d` 间 `packages/evals` 仅
+> `package.json` 变化（+4/−5：版本 1.4.0→1.6.0、`pi-ai`/`pi-coding-agent` 依赖同步、`clean`
+> 脚本 shx→node、删 `shx` devDep；`eval:audit` 旧锚点已存在），`src`／`evals/`／`test/`／
+> `docker/`／`vitest.evals.config.ts` 逐字节未变 ⇒ 上表 pi 证据 `file:line` 全部续用、24 行
+> 零改判。Java 侧证据续用：`51dc0f7c` 后触及 `pi-java-evals` 的仅 `6867078c`／`d035ffa0`
+> 两笔 provider 目录计数断言同步（`ProviderCatalogConformance`／`ProviderCatalogTest`），
+> 不触判定。读数 **48.0/49＝98.0%**（复核读数，非投影）。
 
 ---
 
@@ -296,7 +304,7 @@ pi `scripts/` 是仓库自身构建/发布/校验工具，按 R5 **不进产品�
 
 | # | 能力 | 存疑点 |
 |---|---|---|
-| S7 | TUI 文档审计（评测 #20） | pi 用 context-footer oracle（`42.2%/272k` 状态行）；java TUI 无该行，以 Java 文档问答＋Levenshtein 0.75 替代（D183／D189；L6 §1.4 已按新锚点复核，判分核心未变，维持存疑） |
+| S7 | TUI 文档审计（评测 #20） | pi 用 context-footer oracle（`42.2%/272k` 状态行）；java TUI 无该行，以 Java 文档问答＋Levenshtein 0.75 替代（D183／D189；L6 §1.4 已按新锚点复核，判分核心未变，维持存疑）。**2026-11-23 按 `a00a5048d` 再复核（docs/20）**：`tui.docs.eval.ts` 两锚点零 diff，oracle 形态未变（`BUILT_IN_CONTEXT_PATTERN` `:13-15`、内联 `levenshteinSimilarity` `:19-30`），维持存疑；收口条件＝L7 落地 context footer 状态行 |
 
 > #6 已按 docs/24 §1.5 改判「对齐（形状不同）」并登记 D218；S1 销号。
 > 评测域唯一存疑是 #20；其余 23 行全部对齐，**没有第二个缺口**。
@@ -305,4 +313,5 @@ pi `scripts/` 是仓库自身构建/发布/校验工具，按 R5 **不进产品�
 
 - **L4 session：44/44＝100%**，新锚点无 L4 行为变化（`packages/durable` 仍 R5 出分母，会话变更归 L5）。
 - **L6 evals：48.0/49≈98.0%**，`packages/evals/src` 零行为变化，唯一存疑 #20（TUI context-footer oracle）不变。
+  **已于 2026-11-23 复核确认（docs/20）**：`56cae7823..a00a5048d` 仅 `package.json` 变化，24 行判定全部续用，读数转正式。
 - 正式行级重判归 P12；口径见 [`../05-module-alignment-map.md` §1.2](../05-module-alignment-map.md)。
