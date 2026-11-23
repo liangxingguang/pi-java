@@ -132,7 +132,6 @@ public final class AuthLoginCommand {
     }
 
     static Parsed parseRequest(String[] args) {
-        var request = new LoginRequest("", false, true);
         var apiKey = false;
         var browser = true;
         var ref = "";
