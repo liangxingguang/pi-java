@@ -26,12 +26,11 @@ import com.pijava.coding.agent.pkg.SourceResolver.ScopedPackage;
  * pi {@code DefaultPackageManager} 的 update 机制（批 19 T3，docs/30 §3）——
  * {@code update}/{@code updateConfiguredSources}/{@code shouldUpdateNpmSource}/
  * {@code updateNpmBatch}/{@code checkForAvailableUpdates}/{@code runWithConcurrency}
- * （package-manager.ts:1090-1280/:1691-1713）对位。
+ * （package-manager.ts:1090-1330/:1691-1713）对位；L5 W8 补 {@code result} 事件。
  *
  * <p>并发闸＝共享游标 worker-pool（虚拟线程＋{@link AtomicInteger}）：<b>首错即整体
- * 抛、其余 worker 后台继续</b>（pi detached 语义，裁决⑥——{@code StructuredTaskScope}
- * 默认取消其余任务，语义不符故自写）。npm 更新按 scope 分批<b>逐包顺装</b>（pi
- * 一次 npm install 多 spec，窄差 D113）。</p>
+ * 抛、其余 worker 后台继续</b>（pi detached 语义，裁决⑥）。npm 更新按 scope 分批
+ * <b>逐包顺装</b>（pi 一次 npm install 多 spec，窄差 D113）。</p>
  */
 final class PackageUpdater {
 
@@ -65,8 +64,10 @@ final class PackageUpdater {
     /** pi {@code ConfiguredUpdateSource}／{@code NpmUpdateTarget} 合并形。 */
     private record UpdateTarget(String source, SourceScope scope, ParsedSource parsed) {}
 
-    /** pi {@code shouldUpdateNpmSource} 的三态返回（:1178-1195）：未装 ⇒ 无版本；
-     *  查询失败 ⇒ 保守 shouldUpdate＝true 且无 targetVersion。 */
+    /** pi {@code UpdatedPackage}（:1298-1305，L5 W8）：git 侧变化的 from→to。 */
+    private record GitUpdate(String source, SourceScope scope, String from, String to) {}
+
+    /** pi {@code shouldUpdateNpmSource} 三态返回（:1178-1195）：未装 ⇒ 无版本；查询失败 ⇒ 保守 true。 */
     record NpmCheck(UpdateTarget entry, boolean shouldUpdate, String installedVersion,
                     String targetVersion) {}
 
@@ -125,8 +126,8 @@ final class PackageUpdater {
         var npmCandidates = new ArrayList<UpdateTarget>();
         var gitCandidates = new ArrayList<UpdateTarget>();
         for (var entry : sources) {
-            // Pinned npm versions are fixed. Pinned git refs are configured checkout
-            // targets, so include them to reconcile an existing clone.（pi :1135-1144）
+            // Pinned npm versions are fixed; pinned git refs are configured checkout
+            // targets, so include them to reconcile an existing clone（pi :1135-1144）。
             if (entry.parsed() instanceof NpmSource npm) {
                 if (!npm.pinned()) {
                     npmCandidates.add(entry);
@@ -166,12 +167,20 @@ final class PackageUpdater {
                 return null;
             });
         }
+        var gitUpdates = new java.util.concurrent.ConcurrentLinkedQueue<GitUpdate>();
         if (!gitCandidates.isEmpty()) {
             List<ThrowingSupplier<Void>> gitTasks = gitCandidates.stream()
                 .<ThrowingSupplier<Void>>map(entry -> () -> {
+                    var targetDir = layout.gitInstallPath((GitSource) entry.parsed(),
+                        entry.scope());
+                    var from = gitStore.gitHead(targetDir);
                     progress.run(Action.UPDATE, entry.source(),
                         "Updating " + entry.source() + "...", () ->
                             gitStore.updateGit((GitSource) entry.parsed(), entry.scope()));
+                    var to = gitStore.gitHead(targetDir);
+                    if (!Objects.equals(from, to)) {
+                        gitUpdates.add(new GitUpdate(entry.source(), entry.scope(), from, to));
+                    }
                     return null;
                 })
                 .toList();
@@ -181,11 +190,60 @@ final class PackageUpdater {
             });
         }
         runWithConcurrency(tasks, tasks.size());
+        emitUpdateResults(npmCandidates, userUpdates, projectUpdates, gitCandidates, gitUpdates);
     }
 
-    /** pi {@code shouldUpdateNpmSource}（:1181-1195）：未安装 ⇒ true；查询失败
-     *  ⇒ <b>true（保守更新）</b>；否则 latest &gt; installed。返回三态以支撑
-     *  安装后「版本没变」的进度警告（{@link #reportUnchangedNpmUpdates}）。 */
+    /**
+     * pi :1307-1330（L5 W8）：逐包发 {@code result} 事件——npm 按配置序（版本
+     * 装后现读）、git 按配置序（与完成序无关）；文案
+     * {@code source[(project)] from -> to}，git 值截 7 位、缺席 {@code (none)}。
+     */
+    private void emitUpdateResults(List<UpdateTarget> npmCandidates, List<NpmCheck> userUpdates,
+            List<NpmCheck> projectUpdates, List<UpdateTarget> gitCandidates,
+            java.util.concurrent.ConcurrentLinkedQueue<GitUpdate> gitUpdates) {
+        var updated = new ArrayList<UpdatedPackage>();
+        for (var entry : npmCandidates) {
+            var check = userUpdates.stream().filter(c -> c.entry() == entry).findFirst()
+                .or(() -> projectUpdates.stream().filter(c -> c.entry() == entry).findFirst());
+            if (check.isEmpty()) {
+                continue;
+            }
+            var installedPath = layout.managedNpmInstallPath(
+                (NpmSource) entry.parsed(), entry.scope());
+            var to = Files.exists(installedPath) ? layout.installedNpmVersion(installedPath) : null;
+            if (!Objects.equals(to, check.get().installedVersion())) {
+                updated.add(new UpdatedPackage(entry.source(), entry.scope(), "npm",
+                    check.get().installedVersion(), to));
+            }
+        }
+        for (var entry : gitCandidates) {
+            var update = gitUpdates.stream()
+                .filter(u -> u.source().equals(entry.source()) && u.scope() == entry.scope())
+                .findFirst();
+            update.ifPresent(u -> updated.add(
+                new UpdatedPackage(u.source(), u.scope(), "git", u.from(), u.to())));
+        }
+        for (var pkg : updated) {
+            var scope = pkg.scope() == SourceScope.PROJECT ? " (project)" : "";
+            emitProgress(ProgressEvent.result(Action.UPDATE, pkg.source(),
+                pkg.source() + scope + " " + formatUpdateValue(pkg.type(), pkg.from())
+                    + " -> " + formatUpdateValue(pkg.type(), pkg.to())));
+        }
+    }
+
+    /** pi :1309-1314：git 值 slice(0, 7)；undefined ⇒ {@code (none)}。 */
+    private static String formatUpdateValue(String type, String value) {
+        if (value == null) {
+            return "(none)";
+        }
+        return "git".equals(type) ? value.substring(0, Math.min(7, value.length())) : value;
+    }
+
+    /** pi {@code UpdatedPackage}（:1298-1305）：type ∈ {npm, git}。 */
+    private record UpdatedPackage(String source, SourceScope scope, String type,
+                                  String from, String to) {}
+
+    /** pi {@code shouldUpdateNpmSource}（:1181-1195）：未安装/查询失败 ⇒ true；否则 latest &gt; installed。 */
     NpmCheck shouldUpdateNpmSource(UpdateTarget entry) {
         var source = (NpmSource) entry.parsed();
         var installedPath = layout.managedNpmInstallPath(source, entry.scope());
@@ -204,8 +262,7 @@ final class PackageUpdater {
         }
     }
 
-    /** pi {@code updateNpmBatch}（:1197-1209）：进度消息逐字；java 逐包顺装（D113）。
-     *  装完走 {@link #reportUnchangedNpmUpdates}（pi :1211-1233）。 */
+    /** pi {@code updateNpmBatch}（:1197-1209）：进度消息逐字；java 逐包顺装（D113）。 */
     private void updateNpmBatch(List<NpmCheck> sources, SourceScope scope)
             throws IOException {
         if (sources.isEmpty()) {
@@ -228,9 +285,7 @@ final class PackageUpdater {
     }
 
     /**
-     * pi {@code reportUnchangedNpmUpdates}（:1211-1233）：npm 在发布后短时间内可能
-     * 解析到过期 registry 元数据、静默装回旧版本——announced 了更新却没变版本时
-     * 发一条 progress 消息（文案逐字；品牌无插值）。
+     * pi {@code reportUnchangedNpmUpdates}（:1211-1233）：装了却没变版本 ⇒ progress 警告（文案逐字）。
      */
     private void reportUnchangedNpmUpdates(List<NpmCheck> sources, SourceScope scope) {
         for (var check : sources) {
@@ -257,8 +312,7 @@ final class PackageUpdater {
 
     // ── checkForAvailableUpdates（:1217-1280）────────────────────
 
-    /** pi {@code checkForAvailableUpdates}：离线 ⇒ []；排除 temporary/local/pinned/
-     *  未安装；并发 4。 */
+    /** pi {@code checkForAvailableUpdates}：离线 ⇒ []；排除 temporary/local/pinned/未安装；并发 4。 */
     List<PackageUpdate> checkForAvailableUpdates() {
         if (PackageEnvironment.isOfflineModeEnabled()) {
             return List.of();

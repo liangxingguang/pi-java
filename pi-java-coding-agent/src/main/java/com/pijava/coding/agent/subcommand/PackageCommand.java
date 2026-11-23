@@ -226,8 +226,41 @@ public final class PackageCommand {
         }
         if (target instanceof UpdateTarget.All || target instanceof UpdateTarget.Extensions) {
             var updateSource = target instanceof UpdateTarget.Extensions e ? e.source() : null;
+            // L5 W8（pi :1058-1067）：result 汇总＋progress 警告计数；start 即时打。
+            var updatedPackages = new java.util.ArrayList<String>();
+            var warningCount = new java.util.concurrent.atomic.AtomicInteger();
+            pm.setProgressCallback(event -> {
+                if (event.type() == ProgressEvent.Type.RESULT
+                        && event.action() == ProgressEvent.Action.UPDATE
+                        && event.message() != null) {
+                    updatedPackages.add(event.message());
+                } else if (event.type() == ProgressEvent.Type.START && event.message() != null) {
+                    System.out.println(event.message());
+                } else if (event.type() == ProgressEvent.Type.PROGRESS
+                        && event.message() != null) {
+                    warningCount.incrementAndGet();
+                    System.out.println(event.message());
+                }
+            });
             pm.update(updateSource);
-            System.out.println(updateSource != null ? "Updated " + updateSource : "Updated packages");
+            // pi :1136-1160 四臂（文案逐字）。
+            if (com.pijava.coding.agent.pkg.PackageEnvironment.isOfflineModeEnabled()) {
+                System.out.println("Skipped package updates (offline mode)");
+            } else if (updatedPackages.isEmpty() && warningCount.get() > 0) {
+                System.out.println(updateSource != null
+                    ? updateSource + " was not updated, see the warnings above"
+                    : "No packages were updated, see the warnings above");
+            } else if (updatedPackages.isEmpty()) {
+                System.out.println(updateSource != null
+                    ? updateSource + " is already up to date"
+                    : "Packages are already up to date");
+            } else {
+                var count = updatedPackages.size();
+                System.out.println("Updated " + count + " package" + (count == 1 ? "" : "s") + ":");
+                for (var message : updatedPackages) {
+                    System.out.println("  " + message);
+                }
+            }
         }
         if (target instanceof UpdateTarget.All || target instanceof UpdateTarget.Self) {
             // L5 W4（pi config.ts:341-359 + package-manager-cli.ts:1109-1119）：

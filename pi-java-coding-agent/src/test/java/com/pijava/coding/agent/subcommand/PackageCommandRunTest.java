@@ -181,7 +181,7 @@ class PackageCommandRunTest {
         var code = PackageCommand.run("update", new String[] {"--extensions"}, env);
 
         assertThat(code).isZero();
-        assertThat(stdout()).contains("Updated packages");
+        assertThat(stdout()).contains("Packages are already up to date");
     }
 
     @Test

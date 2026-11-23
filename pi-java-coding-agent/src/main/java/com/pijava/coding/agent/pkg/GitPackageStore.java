@@ -41,6 +41,11 @@ public final class GitPackageStore {
         this.progressCallback = callback;
     }
 
+    /** L5 W8（pi {@code commandOutput="capture"}）：git 命令不碰终端、输出只留尾部。 */
+    public void setCaptureOutput(boolean capture) {
+        git.setCaptureOutput(capture);
+    }
+
     /** pi {@code getGitUpdateMarkerPath}（:1971-1973）：
      *  {@code <parent>/.<basename>.pi-update-incomplete}。 */
     public static Path updateMarkerPath(Path targetDir) {
@@ -87,6 +92,23 @@ public final class GitPackageStore {
         }
     }
 
+    /**
+     * pi {@code getGitHead}（:1324-1331，L5 W8）：目标目录 HEAD 的全长 sha；
+     * 目录不存在或命令失败 ⇒ {@code null}（版本箭头显示 {@code (none)}）。
+     */
+    public String gitHead(Path targetDir) {
+        if (!Files.exists(targetDir)) {
+            return null;
+        }
+        try {
+            var head = git.capture(List.of("git", "rev-parse", "HEAD"), targetDir,
+                GitRunner.NETWORK_TIMEOUT_MS).trim();
+            return head.isEmpty() ? null : head;
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
     /** pi {@code updateGit}（:1925-1939）。 */
     public void updateGit(GitSource source, SourceScope scope) throws IOException {
         var targetDir = layout.gitInstallPath(source, scope);
@@ -129,11 +151,26 @@ public final class GitPackageStore {
         cleanGitCheckout(targetDir, markerPath);
     }
 
-    /** pi {@code cleanAndInstallGitDependencies}（:1975-1990；npm 安装臂裁，D103）。 */
+    /**
+     * pi {@code cleanAndInstallGitDependencies}（:2188-2214；npm 安装臂裁，D103）。
+     * L5 W8：Windows 上被别的会话占用的文件会让 {@code git clean} 失败——此时
+     * <b>不中断</b>：发黄色 progress 提示、保留 marker（下次更新重试清理）。
+     */
     private void cleanGitCheckout(Path targetDir, Path markerPath) throws IOException {
-        // Clean untracked files (extensions should be pristine).
-        git.run(List.of("git", "clean", "-fdx"), targetDir);
-        Files.deleteIfExists(markerPath);
+        var cleaned = true;
+        try {
+            // Clean untracked files (extensions should be pristine).
+            git.run(List.of("git", "clean", "-fdx"), targetDir);
+        } catch (GitCommandException e) {
+            cleaned = false;
+            var reason = e.getMessage() != null ? e.getMessage() : e.toString();
+            emitProgress(ProgressEvent.progress(Action.UPDATE, targetDir.toString(),
+                "Could not remove all untracked files in " + targetDir + " (" + reason + "). "
+                    + "Files may be in use by another pi-java session; close it and run the update again."));
+        }
+        if (cleaned) {
+            Files.deleteIfExists(markerPath);
+        }
     }
 
     /** pi {@code getLocalGitUpdateTarget}（:1601-1662）双臂逐字。 */

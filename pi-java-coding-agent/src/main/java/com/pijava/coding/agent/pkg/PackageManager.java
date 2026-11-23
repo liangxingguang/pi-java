@@ -95,6 +95,11 @@ public final class PackageManager {
         gitStore.setProgressCallback(callback);
     }
 
+    /** L5 W8（pi {@code commandOutput}）：true ⇒ 安装/更新期 git 输出 capture（TUI 起手）。 */
+    public void setCommandOutputCapture(boolean capture) {
+        gitStore.setCaptureOutput(capture);
+    }
+
     public InstallLayout layout() {
         return layout;
     }
