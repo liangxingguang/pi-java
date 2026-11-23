@@ -214,6 +214,10 @@ class TreeNavigationFlowTest {
             case ChatMessage.ToolResult tr -> "";
             case ChatMessage.TurnSeparator ts -> ts.label();
             case ChatMessage.Markdown md -> md.text();
+            case ChatMessage.CompactionCard c -> c.summary();
+            case ChatMessage.BranchCard b -> b.summary();
+            case ChatMessage.SkillCard s -> s.name();
+            case ChatMessage.BashCard b -> b.command();
             case ChatMessage.Padded p -> "padded:" + p.pad();
         }).toList();
     }

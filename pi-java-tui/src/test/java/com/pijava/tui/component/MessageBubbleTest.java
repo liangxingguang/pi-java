@@ -79,11 +79,15 @@ class MessageBubbleTest {
     void toolResultIsPreformattedTruncatedIndentedAndDim() {
         var lines = MessageBubble.lines(new ChatMessage.ToolResult(
             List.of(new ContentBlock.TextContent("x".repeat(600))), false));
+        // L7 W2（R12，pi Text 行为）：单行无折叠（≤10 行）不再 500 字符截断，
+        // preformatted 行由终端裁剪；三态 bg 叠加（文本格窄差 D）。
         assertThat(lines).hasSize(1);
         assertThat(lines.get(0).preformatted()).isTrue();
         assertThat(lines.get(0).initialIndent()).isEqualTo(4);
-        assertThat(lines.get(0).style()).isEqualTo(Style.EMPTY.dim());
-        assertThat(lines.get(0).markup()).hasSize(501); // 500 + ellipsis
+        assertThat(lines.get(0).markup()).hasSize(600);
+        assertThat(lines.get(0).style()).isEqualTo(Style.EMPTY.dim().patch(
+            com.pijava.tui.theme.TuiThemeBridge.bg(
+                com.pijava.coding.agent.theme.ThemeToken.TOOL_SUCCESS_BG)));
     }
 
     @Test
@@ -166,11 +170,43 @@ class MessageBubbleTest {
     }
 
     @Test
+    void toolResultCollapsesToTenLinePreviewWhenFolded() {
+        // L7 W2（R12，pi FALLBACK_PREVIEW_LINES=10）：非错误折叠 ⇒ 前 10 行＋省略行。
+        var text = java.util.stream.IntStream.rangeClosed(1, 15)
+            .mapToObj(i -> "line" + i).reduce((a, b) -> a + "\n" + b).orElseThrow();
+        var folded = MessageBubble.lines(new ChatMessage.ToolResult(
+            List.of(new ContentBlock.TextContent(text)), false));
+        assertThat(folded).hasSize(11);
+        assertThat(folded.get(0).markup()).isEqualTo("line1");
+        assertThat(folded.get(9).markup()).isEqualTo("line10");
+        assertThat(folded.get(10).markup())
+            .isEqualTo("... 5 more lines (ctrl+o to expand)");
+
+        // 展开态 ⇒ 全部行。
+        com.pijava.tui.component.MessageBubbleVisibility.installToolsExpanded(() -> true);
+        try {
+            var expanded = MessageBubble.lines(new ChatMessage.ToolResult(
+                List.of(new ContentBlock.TextContent(text)), false));
+            assertThat(expanded).hasSize(15);
+            assertThat(expanded.get(14).markup()).isEqualTo("line15");
+        } finally {
+            com.pijava.tui.component.MessageBubbleVisibility.installToolsExpanded(null);
+        }
+
+        // 错误结果不折叠（pi isError 臂）。
+        var err = MessageBubble.lines(new ChatMessage.ToolResult(
+            List.of(new ContentBlock.TextContent(text)), true));
+        assertThat(err).hasSize(15);
+    }
+
+    @Test
     void toolResultErrorIsMarkedAndRed() {
         var err = MessageBubble.lines(new ChatMessage.ToolResult(
             List.of(new ContentBlock.TextContent("bad")), true));
         assertThat(err.get(0).markup()).isEqualTo("! bad");
-        assertThat(err.get(0).style()).isEqualTo(Style.EMPTY.red());
+        assertThat(err.get(0).style()).isEqualTo(Style.EMPTY.red().patch(
+            com.pijava.tui.theme.TuiThemeBridge.bg(
+                com.pijava.coding.agent.theme.ThemeToken.TOOL_ERROR_BG)));
     }
 
     @Test
@@ -183,12 +219,17 @@ class MessageBubbleTest {
         assertThat(lines).hasSize(3);
         assertThat(lines.get(0).markup()).isEqualTo("done");
         assertThat(lines.get(0).initialIndent()).isEqualTo(4);
-        assertThat(lines.get(0).style()).isEqualTo(Style.EMPTY.dim());
+        assertThat(lines.get(0).style()).isEqualTo(Style.EMPTY.dim().patch(
+            com.pijava.tui.theme.TuiThemeBridge.bg(
+                com.pijava.coding.agent.theme.ThemeToken.TOOL_SUCCESS_BG)));
         assertThat(lines.get(1).markup()).isEqualTo("+new");
         assertThat(lines.get(1).initialIndent()).isEqualTo(4);
-        assertThat(lines.get(1).style()).isEqualTo(Style.EMPTY.fg(DiffView.ADDED));
+        // pi diff.ts：无行号的 "+new"/"-old" 不匹配 parseDiffLine ⇒ toolDiffContext（dim）。
+        assertThat(lines.get(1).style()).isEqualTo(
+            com.pijava.tui.theme.TuiThemeBridge.fg(com.pijava.coding.agent.theme.ThemeToken.TOOL_DIFF_CONTEXT));
         assertThat(lines.get(2).markup()).isEqualTo("-old");
-        assertThat(lines.get(2).style()).isEqualTo(Style.EMPTY.fg(DiffView.REMOVED));
+        assertThat(lines.get(2).style()).isEqualTo(
+            com.pijava.tui.theme.TuiThemeBridge.fg(com.pijava.coding.agent.theme.ThemeToken.TOOL_DIFF_CONTEXT));
     }
 
     @Test
@@ -218,13 +259,13 @@ class MessageBubbleTest {
         assertThat(ChatMessage.from(new Entry.ThinkingLevelChange(
                 "t", 0, null, null, "high")))
             .isEqualTo(new ChatMessage.System("Thinking: high", MetaKind.THINKING_LEVEL));
+        // L7 W2（R17/R18）：压缩/分支摘要改为对位 pi 的独立卡。
         assertThat(ChatMessage.from(new Entry.Compaction(
                 "c", 0, null, null, "kept 3 msgs", null, List.of(), 100, null, null, null)))
-            .isEqualTo(new ChatMessage.System(
-                "Compacted context: kept 3 msgs", MetaKind.COMPACTION));
+            .isEqualTo(new ChatMessage.CompactionCard(100, "kept 3 msgs", "c", null));
         assertThat(ChatMessage.from(new Entry.BranchSummary(
                 "b", 0, null, null, "from-1", "summ", null, null, null)))
-            .isEqualTo(new ChatMessage.System("Branch: summ", MetaKind.BRANCH));
+            .isEqualTo(new ChatMessage.BranchCard("summ", "b", null));
         // 批 26（docs/37 T10）：无渲染器的 custom 条目不渲（pi
         // interactive-mode.ts:3848-3850——getEntryRenderer 缺席 ⇒ 直接 return）。
         assertThat(ChatMessage.from(new Entry.Custom(
@@ -281,7 +322,8 @@ class MessageBubbleTest {
         var lines = MessageBubble.lines(new ChatMessage.Assistant(List.of(
             new ContentBlock.ToolUseContent("id", "bash",
                 java.util.Map.of("command", "echo hi")))));
-        assertThat(lines.get(0).markup()).startsWith("[cyan]bash[/]");
+        // L7 W2（R26）：回落走 FormatToolArgs——collapsed 单行 "bash command=echo hi"。
+        assertThat(lines.get(0).markup()).isEqualTo("bash command=echo hi");
     }
 
     // ── 批 12 T6（docs/23 §3/§7）：outputPad 烘焙包装 ─────────────
@@ -306,9 +348,9 @@ class MessageBubbleTest {
             new ContentBlock.ToolUseContent("id", "bash", java.util.Map.of("command", "x"))));
         var lines = MessageBubble.lines(new ChatMessage.Padded(card, 1));
 
-        // 工具卡两行（名称行 indent 0→1、参数行 indent 4→5）。
+        // 工具卡回落 collapsed 单行（R26 FormatToolArgs）⇒ indent 0→1，无参数行。
         assertThat(lines.get(0).initialIndent()).isEqualTo(1);
-        assertThat(lines.get(1).initialIndent()).isEqualTo(5);
+        assertThat(lines).hasSize(1);
     }
 
     @Test

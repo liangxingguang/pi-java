@@ -133,5 +133,6 @@ class ShareFlowTest {
 
         @Override public void status(String message) { statuses.add(message); }
         @Override public void error(String message) { errors.add(message); }
+        @Override public int terminalCols() { return 40; }
     }
 }

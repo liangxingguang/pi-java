@@ -102,10 +102,9 @@ class ModelThinkingLevelScreenTest {
 
             var screen = new ModelThinkingLevelScreen(session);
             screen.onKeyEvent(ENTER);       // model 步
-            // level 步：已有 override ⇒ 末项 "(clear override)"——Down 到底再 Enter。
-            for (int i = 0; i < 16; i++) {
-                screen.onKeyEvent(DOWN);
-            }
+            // level 步：已有 override ⇒ 末项 "(clear override)"。pi select-list ↑
+            // 顶部 wrap 到底，一次 UP 即到末项（档数依模型而变，不写死）。
+            screen.onKeyEvent(KeyEvent.ofKey(KeyCode.UP));
             screen.onKeyEvent(ENTER);
             screen.apply(session, s -> { });
 

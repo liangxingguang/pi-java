@@ -180,15 +180,20 @@ class ChatScreenSessionEventTest {
     }
 
     @Test
-    void onlyTheRetryIndicatorTicks() {
+    void onlyAnimatedIndicatorsTick() {
         var screen = new ChatScreen();
         assertThat(screen.hasTickingIndicator()).isFalse();
 
         screen.onSessionEvent(new AgentSessionEvent.AutoRetryStart(1, 3, 1000L, "x"));
         assertThat(screen.hasTickingIndicator()).isTrue();
 
-        // 无倒计时的指示器不唤醒：inline 模式只在重试窗口里每秒重绘
+        // L7 W1（docs/22 §4.2）：pi 四 kind 全是 Loader ⇒ 全带 spinner ⇒ 全唤醒
+        // （inline 12.5Hz 重绘本就是 pi 行为；倒计时按帧重算取值不变）。
         screen.onSessionEvent(new AgentSessionEvent.CompactionStart(CompactionReason.MANUAL));
+        assertThat(screen.hasTickingIndicator()).isTrue();
+
+        // 清空后不再唤醒。
+        screen.clearIndicator(StatusIndicator.Kind.COMPACTION);
         assertThat(screen.hasTickingIndicator()).isFalse();
     }
 
@@ -196,16 +201,154 @@ class ChatScreenSessionEventTest {
     void unrelatedSessionEventsAreIgnored() {
         var screen = new ChatScreen();
         // 批 2：新事件面（漏斗五帧＋agent_settled{aborted}）落 default 忽略。
+        // （L7 W1：TurnStart 置 working 指示器，另有专测——不再算「无关」。）
         var user = new com.pijava.ai.message.Message.UserMessage(
             List.of(new com.pijava.ai.message.ContentBlock.TextContent("hi")));
         screen.onSessionEvent(new AgentSessionEvent.AgentSettled(false));
         screen.onSessionEvent(new AgentSessionEvent.AgentStart());
-        screen.onSessionEvent(new AgentSessionEvent.TurnStart());
         screen.onSessionEvent(new AgentSessionEvent.MessageStart(user));
         screen.onSessionEvent(new AgentSessionEvent.MessageEnd(user));
 
         assertThat(screen.indicator()).isNull();
         assertThat(screen.messages()).isEmpty();
+    }
+
+    // ── L7 W1（docs/22 §6）：working 指示器 ──────────────────────
+
+    @Test
+    void turnStartShowsTheWorkingIndicatorWithDefaultMessage() {
+        var screen = new ChatScreen();
+        screen.onSessionEvent(new AgentSessionEvent.TurnStart());
+
+        var working = (StatusIndicator.Working) screen.indicator();
+        assertThat(working.kind()).isEqualTo(StatusIndicator.Kind.WORKING);
+        assertThat(working.textAt(0L)).isEqualTo("Working");
+        assertThat(working.frames()).isEqualTo(com.pijava.tui.component.LoaderSpinner.DEFAULT_FRAMES);
+        assertThat(working.spinnerFrameAt(working.startNanos() + 0L))
+            .isEqualTo(com.pijava.tui.component.LoaderSpinner.DEFAULT_FRAMES.get(0));
+        assertThat(screen.hasTickingIndicator()).isTrue();
+    }
+
+    @Test
+    void turnStartKeepsAnActiveWorkingIndicatorInsteadOfRestartingTheAnimation() {
+        var screen = new ChatScreen();
+        screen.onSessionEvent(new AgentSessionEvent.TurnStart());
+        var first = (StatusIndicator.Working) screen.indicator();
+
+        screen.onSessionEvent(new AgentSessionEvent.TurnStart());
+
+        assertThat(screen.indicator()).isSameAs(first);
+    }
+
+    @Test
+    void agentEndClearsWorkingButNotAConcurrentCompaction() {
+        var screen = new ChatScreen();
+        screen.onSessionEvent(new AgentSessionEvent.TurnStart());
+        screen.onSessionEvent(new AgentSessionEvent.AgentEnd(List.of(), false));
+        assertThat(screen.indicator()).isNull();
+
+        // compaction 在 agent_end 期间并发：kind 守卫拦住（pi clearStatusIndicator("working")）
+        screen.onSessionEvent(new AgentSessionEvent.CompactionStart(CompactionReason.OVERFLOW));
+        screen.onSessionEvent(new AgentSessionEvent.AgentEnd(List.of(), false));
+        assertThat(text(screen))
+            .isEqualTo("Context overflow detected, Auto-compacting... (esc to cancel)");
+    }
+
+    @Test
+    void invisibleWorkingClearsEveryIndicatorOnTurnStart() {
+        var screen = new ChatScreen();
+        screen.setWorkingVisible(false);
+        screen.onSessionEvent(new AgentSessionEvent.AutoRetryStart(1, 3, 1000L, "x"));
+
+        // pi turn_start 的 else 臂：workingVisible=false ⇒ clearStatusIndicator() 全清。
+        screen.onSessionEvent(new AgentSessionEvent.TurnStart());
+        assertThat(screen.indicator()).isNull();
+
+        screen.setWorkingVisible(true);
+        screen.onSessionEvent(new AgentSessionEvent.TurnStart());
+        assertThat(screen.indicator().kind()).isEqualTo(StatusIndicator.Kind.WORKING);
+    }
+
+    @Test
+    void extensionWorkingMessageAndFramesFlowIntoTheIndicator() {
+        var screen = new ChatScreen();
+        screen.setWorkingMessage("Summarizing");
+        screen.setWorkingIndicator(new com.pijava.coding.agent.extension.WorkingIndicatorOptions(
+            List.of("●"), 120L));
+
+        screen.onSessionEvent(new AgentSessionEvent.TurnStart());
+
+        var working = (StatusIndicator.Working) screen.indicator();
+        assertThat(working.textAt(0L)).isEqualTo("Summarizing");
+        assertThat(working.frames()).containsExactly("●");
+        assertThat(working.intervalMs()).isEqualTo(120L);
+        // 单帧静态：任意时刻取值不变（pi 无定时器分支）。
+        assertThat(working.spinnerFrameAt(working.startNanos() + 999_999_999L)).isEqualTo("●");
+    }
+
+    @Test
+    void emptyFramesHideTheSpinnerSymbolButKeepTheMessage() {
+        var screen = new ChatScreen();
+        screen.setWorkingIndicator(new com.pijava.coding.agent.extension.WorkingIndicatorOptions(
+            List.of(), 80L));
+        screen.onSessionEvent(new AgentSessionEvent.TurnStart());
+
+        var working = (StatusIndicator.Working) screen.indicator();
+        assertThat(working.textAt(0L)).isEqualTo("Working");
+        assertThat(working.spinnerFrameAt(working.startNanos() + 500_000_000L)).isEmpty();
+        // 无动画 ⇒ 不唤醒（inline 无需周期重绘）。
+        assertThat(screen.hasTickingIndicator()).isFalse();
+    }
+
+    @Test
+    void workingMessageSwapKeepsTheAnimationStart() {
+        var screen = new ChatScreen();
+        screen.onSessionEvent(new AgentSessionEvent.TurnStart());
+        var before = (StatusIndicator.Working) screen.indicator();
+
+        screen.setWorkingMessage("Thinking");
+        var after = (StatusIndicator.Working) screen.indicator();
+
+        assertThat(after.textAt(0L)).isEqualTo("Thinking");
+        assertThat(after.startNanos()).isEqualTo(before.startNanos());
+    }
+
+    @Test
+    void resetWorkingStateRestoresDefaultsAndTheInterruptSuffix() {
+        var screen = new ChatScreen();
+        screen.setInterruptHint("ctrl+c");
+        screen.setWorkingMessage("custom");
+        screen.setWorkingVisible(false);
+        screen.setWorkingIndicator(new com.pijava.coding.agent.extension.WorkingIndicatorOptions(
+            List.of("▸"), 50L));
+        screen.onSessionEvent(new AgentSessionEvent.TurnStart());
+        assertThat(screen.indicator()).isNull();   // invisible ⇒ 清
+
+        screen.setWorkingVisible(true);
+        screen.onSessionEvent(new AgentSessionEvent.TurnStart());
+        // pi resetExtensionUI（:2673-2682）的 quirk 逐字：复位后 message 带中断后缀。
+        screen.resetExtensionUi();
+        var working = (StatusIndicator.Working) screen.indicator();
+        assertThat(working.textAt(0L)).isEqualTo("Working (ctrl+c to interrupt)");
+        assertThat(working.frames())
+            .isEqualTo(com.pijava.tui.component.LoaderSpinner.DEFAULT_FRAMES);
+    }
+
+    @Test
+    void theWorkingIndicatorWinsOverTheSnapshotInTheStatusBar() throws Exception {
+        var screen = new ChatScreen();
+        screen.updateSnapshot(new SessionSnapshot(
+            "demo", "google/gemini-2.5-flash", "running",
+            123L, 2, List.of(), List.of()));
+        screen.onSessionEvent(new AgentSessionEvent.TurnStart());
+
+        var row = renderRow(screen.statusBar(), 60);
+        assertThat(row).contains("Working");
+        // spinner 帧在场（braille 10 帧之一），且静态 ● running 不再出现在状态栏。
+        var braille = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏";
+        assertThat(braille.chars().anyMatch(c -> row.indexOf(Character.toString(c)) >= 0)).isTrue();
+        assertThat(row).doesNotContain("demo");
+        assertThat(row).doesNotContain("\u25CF running");
     }
 
     @Test

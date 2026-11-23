@@ -370,4 +370,81 @@ class ChatViewportElementTest {
     private static String bufferSymbol(Buffer buffer, int x, int y) {
         return buffer.get(x, y).symbol();
     }
+
+    // ── L7 W2（K37/C14）：卡类消息左键点击切换展开 ─────────────────────
+
+    /** 点击 compaction 卡行块 ⇒ 展开正文出现；再点 ⇒ 折回（pi setExpanded(!expanded)）。 */
+    @Test
+    void clickOnCompactionCardTogglesExpanded() throws Exception {
+        var element = viewport(List.of(new ChatMessage.CompactionCard(
+            12, "kept summary body", "c", null), USER_HELLO), null);
+        var harness = mouseHarness(element, 50, 8);
+        assertThat(rows(harness.buffer(), 8, 50)).anyMatch(r -> r.contains("Compacted from 12 tokens"));
+
+        harness.route(mouse(MouseEventKind.PRESS, MouseButton.LEFT, 2, 0));
+        harness.route(mouse(MouseEventKind.RELEASE, MouseButton.LEFT, 2, 0));
+        harness = mouseHarness(element, 50, 8);
+        assertThat(rows(harness.buffer(), 8, 50)).anyMatch(r -> r.contains("kept summary body"));
+
+        harness.route(mouse(MouseEventKind.PRESS, MouseButton.LEFT, 2, 0));
+        harness.route(mouse(MouseEventKind.RELEASE, MouseButton.LEFT, 2, 0));
+        harness = mouseHarness(element, 50, 8);
+        assertThat(rows(harness.buffer(), 8, 50)).anyMatch(r -> r.contains("Compacted from 12 tokens"));
+        assertThat(rows(harness.buffer(), 8, 50)).noneMatch(r -> r.contains("kept summary body"));
+    }
+
+    /** 非 card 行（User 气泡）点击不切换。 */
+    @Test
+    void clickOnNonCardRowDoesNotToggle() throws Exception {
+        var element = viewport(List.of(USER_HELLO), null);
+        var harness = mouseHarness(element, 40, 2);
+        harness.route(mouse(MouseEventKind.PRESS, MouseButton.LEFT, 2, 0));
+        harness.route(mouse(MouseEventKind.RELEASE, MouseButton.LEFT, 2, 0));
+        harness = mouseHarness(element, 40, 2);
+        assertThat(row(harness.buffer(), 0, 40)).contains("hello");
+    }
+
+    /** 点击回调（重绘钩子）收到卡的消息索引。 */
+    @Test
+    void cardTogglerReceivesMessageIndex() throws Exception {
+        var element = viewport(List.of(
+            new ChatMessage.CompactionCard(1, "s", "c", null), USER_HELLO), null);
+        var clicked = new ArrayList<Integer>();
+        element.cardToggler(clicked::add);
+        var harness = mouseHarness(element, 40, 3);
+        harness.route(mouse(MouseEventKind.PRESS, MouseButton.LEFT, 2, 0));
+        harness.route(mouse(MouseEventKind.RELEASE, MouseButton.LEFT, 2, 0));
+        assertThat(clicked).containsExactly(0);
+    }
+
+    // ── L7 W3（R31）：Markdown 顶层块缓存 ─────────────────────────────
+
+    @Test
+    void markdownBlocksAreCachedAcrossFrames() throws Exception {
+        var element = viewport(List.of(new ChatMessage.Assistant(List.of(
+            new ContentBlock.TextContent("first\n\nsecond")))), null);
+        render(element, 20, 6);
+        int rendered = element.markdownCache().renderedBlockCount();
+        assertThat(rendered).isGreaterThanOrEqualTo(2);
+
+        render(element, 20, 6);
+
+        assertThat(element.markdownCache().renderedBlockCount()).isEqualTo(rendered);
+        assertThat(element.markdownCache().cacheHitCount()).isGreaterThanOrEqualTo(2);
+    }
+
+    @Test
+    void streamingDraftRendersOnlyTheChangedBlock() throws Exception {
+        var element = viewport(List.of(), new ChatMessage.Markdown("a\n\nb"));
+        render(element, 20, 6);
+        int rendered = element.markdownCache().renderedBlockCount();
+        assertThat(rendered).isEqualTo(2);
+
+        element.messages(List.of(), new ChatMessage.Markdown("a\n\nb c"));
+        render(element, 20, 6);
+
+        // 首块命中，末块重渲染（≙ pi 流式期只重渲最后一块）。
+        assertThat(element.markdownCache().renderedBlockCount()).isEqualTo(rendered + 1);
+        assertThat(element.markdownCache().cacheHitCount()).isEqualTo(1);
+    }
 }

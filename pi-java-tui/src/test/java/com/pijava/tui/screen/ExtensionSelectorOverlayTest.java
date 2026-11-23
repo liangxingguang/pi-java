@@ -143,6 +143,33 @@ class ExtensionSelectorOverlayTest {
             .contains("esc cancel");
     }
 
+    // ── 窗口化（pi updateList :76-99：10 行居中＋(i/n)）──
+
+    @Test
+    void longListIsWindowedAroundSelection() {
+        var options = new java.util.ArrayList<String>();
+        for (int i = 0; i < 12; i++) {
+            options.add("opt-" + i);
+        }
+        var overlay = overlay(options, new CompletableFuture<>());
+        for (int i = 0; i < 10; i++) {
+            overlay.onKeyEvent(KeyEvent.ofKey(KeyCode.DOWN));
+        }
+
+        var text = visibleText(overlay.layout());
+        assertThat(text).contains("(11/12)");
+        assertThat(text).contains("opt-11");
+        assertThat(text).doesNotContain("opt-0\n");
+        assertThat(text).doesNotContain("opt-1\n");
+    }
+
+    @Test
+    void shortListHasNoScrollCount() {
+        var overlay = overlay(List.of("a", "b"), new CompletableFuture<>());
+
+        assertThat(visibleText(overlay.layout())).doesNotContain("(1/2)");
+    }
+
     // ── 倒计时（pi CountdownTimer 两回调）──
 
     @Test

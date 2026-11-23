@@ -200,7 +200,7 @@ class ExtensionCustomOverlayTest {
                 done.accept("done-via-overlay");
             });
             return component;
-        }, new ExtensionCustomOptions(true, handleRef::set));
+        }, new ExtensionCustomOptions(true, handleRef::set, null));
         var overlay = (ExtensionComponentOverlay) awaitOverlay();
 
         // 窄化三件（D99）：setHidden/isHidden 现读，hide 摘屏。

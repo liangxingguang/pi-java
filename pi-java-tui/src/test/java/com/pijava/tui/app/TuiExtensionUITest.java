@@ -243,4 +243,25 @@ class TuiExtensionUITest {
         closeIfDone(overlay);
         assertThat(call.get(5, TimeUnit.SECONDS)).isEqualTo("rt:seed");
     }
+
+    // ── L7 W1（docs/22 §6，C6）：working 三方法 TUI 臂 ──
+
+    @Test
+    void workingArmsDispatchOntoTheRenderThread() {
+        var options = new com.pijava.coding.agent.extension.WorkingIndicatorOptions(
+            List.of("▸"), 100L);
+        ui.setWorkingMessage("Summarizing");
+        ui.setWorkingIndicator(options);
+        dispatcher.drain();
+
+        chatScreen.onSessionEvent(new com.pijava.coding.agent.core.AgentSessionEvent.TurnStart());
+        var working = (com.pijava.tui.component.StatusIndicator.Working) chatScreen.indicator();
+        assertThat(working.textAt(0L)).isEqualTo("Summarizing");
+        assertThat(working.frames()).containsExactly("▸");
+
+        ui.setWorkingVisible(false);
+        dispatcher.drain();
+        chatScreen.onSessionEvent(new com.pijava.coding.agent.core.AgentSessionEvent.TurnStart());
+        assertThat(chatScreen.indicator()).isNull();
+    }
 }

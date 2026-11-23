@@ -120,6 +120,34 @@ class ConfigSelectorScreenTest {
             .toList();
     }
 
+    /** W4 S16（pi config-selector.ts:504-508）：query 未变时方向键不重过滤、不重置选中。 */
+    @Test
+    void cursorKeysDoNotResetSelection() {
+        var c = component(WriteScope.GLOBAL, false);
+        c.onKeyEvent(KeyEvent.ofKey(KeyCode.DOWN));
+        for (int guard = 0; guard < 20 && c.model().selectedItem() == null; guard++) {
+            c.onKeyEvent(KeyEvent.ofKey(KeyCode.DOWN));
+        }
+        assertThat(c.model().selectedItem()).isNotNull();
+        String first = c.model().selectedItem().displayName();
+
+        String target = null;
+        for (int i = 0; i < 20; i++) {
+            c.onKeyEvent(KeyEvent.ofKey(KeyCode.DOWN));
+            var item = c.model().selectedItem();
+            if (item != null && !item.displayName().equals(first)) {
+                target = item.displayName();
+                break;
+            }
+        }
+        assertThat(target).isNotNull();
+
+        c.onKeyEvent(KeyEvent.ofKey(KeyCode.LEFT));
+        assertThat(c.model().selectedItem().displayName()).isEqualTo(target);
+        c.onKeyEvent(KeyEvent.ofKey(KeyCode.RIGHT));
+        assertThat(c.model().selectedItem().displayName()).isEqualTo(target);
+    }
+
     // ── 分组与显示名（pi :84-186）───────────────────────────────
 
     @Test

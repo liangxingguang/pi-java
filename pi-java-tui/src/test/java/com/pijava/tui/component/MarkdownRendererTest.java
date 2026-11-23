@@ -270,6 +270,53 @@ class MarkdownRendererTest {
         assertThat(lines("   \n  ")).isEmpty();
     }
 
+    // ── R32 HTML 注释隐藏（pi markdown.ts:200-225/:869-876） ─────────
+
+    @Test
+    void hidesBlockHtmlCommentsWithoutExtraSpacing() {
+        var out = lines("a\n\n<!-- c -->\n\nb");
+        assertThat(out.stream().map(LogicalLine::markup).toList())
+            .containsExactly("a", "", "b");
+    }
+
+    @Test
+    void hidesCommentsAtEdges() {
+        var out = lines("<!-- c -->\ntext\n<!-- d -->");
+        assertThat(out.stream().map(LogicalLine::markup).toList())
+            .containsExactly("text");
+    }
+
+    @Test
+    void collapsesInlineCommentSpacing() {
+        assertThat(lines("a <!-- c --> b").get(0).markup()).isEqualTo("a b");
+        assertThat(lines("a<!--c-->b").get(0).markup()).isEqualTo("ab");
+    }
+
+    @Test
+    void keepsCommentsInsideFences() {
+        var out = lines("```\n<!-- c -->\n```");
+        assertThat(out.get(1).markup()).isEqualTo("  <!-- c -->");
+    }
+
+    @Test
+    void keepsCommentsInsideInlineCode() {
+        var out = lines("`<!-- c -->`");
+        assertThat(out.get(0).markup()).contains("<!-- c -->");
+    }
+
+    @Test
+    void unclosedCommentHidesRest() {
+        var out = lines("a\n<!-- c\nb");
+        assertThat(out.stream().map(LogicalLine::markup).toList()).containsExactly("a");
+    }
+
+    @Test
+    void commentOnlySourceRendersOneBlankLine() {
+        var out = lines("<!-- c -->");
+        assertThat(out).hasSize(1);
+        assertThat(out.get(0).markup()).isEmpty();
+    }
+
     // ── 高亮行序列化 ──────────────────────────────────────
 
     @Test

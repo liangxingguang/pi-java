@@ -166,4 +166,23 @@ class SelectListTest {
             'a', dev.tamboui.tui.event.KeyModifiers.CTRL))).isFalse();
         assertThat(list.filter()).isEmpty();
     }
+
+    /** W4 C2（pi select-list.ts:151-160）：↑↓ wrap，PgUp/PgDn 仍 clamp。 */
+    @Test
+    void upDownWrapAroundTheEnds() {
+        list.onKeyEvent(KeyEvent.ofKey(dev.tamboui.tui.event.KeyCode.UP));
+        assertThat(list.selected()).as("顶部上移 wrap 到底").contains("gamma");
+
+        list.onKeyEvent(KeyEvent.ofKey(dev.tamboui.tui.event.KeyCode.DOWN));
+        assertThat(list.selected()).as("底部下移 wrap 到顶").contains("alpha");
+    }
+
+    @Test
+    void emptyListRendersNoMatchMessage() {
+        var empty = new SelectList<String>(List.of(), s -> s);
+        empty.onKeyEvent(KeyEvent.ofChar('z'));
+
+        assertThat(empty.selected()).isEmpty();
+        assertThat(empty.render()).isNotNull();
+    }
 }
