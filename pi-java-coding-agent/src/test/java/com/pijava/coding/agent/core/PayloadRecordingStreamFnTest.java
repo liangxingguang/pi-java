@@ -121,8 +121,8 @@ class PayloadRecordingStreamFnTest {
                 .as("提示段表：preamble 与 cwd 恒在，有工具时还有 tools/rules（pi 的段名）")
                 .contains("preamble", "cwd", "tools", "rules");
             assertThat(head.get("sections").get("preamble").asText())
-                .isEqualTo("You are pi-java, an AI coding assistant. Help the user write, read, "
-                    + "and understand code. Use the provided tools when useful.");
+                .isEqualTo("You are a coding assistant running inside pi-java, a coding agent "
+                    + "harness. Help users inspect files, run commands, and modify code.");
             assertThat(payload.get("messages").get(1).get("role").asText())
                 .isEqualTo("user");
             assertThat(payload.get("tools").isArray()).isTrue();

@@ -82,7 +82,8 @@ public final class ConversationSerializer {
             return text;
         }
         int truncatedChars = text.length() - TOOL_RESULT_MAX_CHARS;
-        return text.substring(0, TOOL_RESULT_MAX_CHARS)
+        // L5 W11（pi utils.ts:101-104）：切片走 sliceHead（代理对安全）。
+        return com.pijava.agent.tool.TruncationUtils.sliceHead(text, TOOL_RESULT_MAX_CHARS)
             + "\n\n[... " + truncatedChars + " more characters truncated]";
     }
 

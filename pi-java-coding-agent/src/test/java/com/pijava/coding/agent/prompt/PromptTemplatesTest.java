@@ -32,6 +32,19 @@ class PromptTemplatesTest {
         assertThat(PromptTemplates.parseCommandArgs("  ''  ")).containsExactly("");
     }
 
+    /** L5 W11（pi prompt-templates.ts:28-70）：引号只在参数开头、反斜杠转义、未闭合回退字面。 */
+    @Test
+    void parseCommandArgsHandlesQuotePlacementAndUnclosedQuotes() {
+        assertThat(PromptTemplates.parseCommandArgs("\"say \\\"hi\\\"\""))
+            .containsExactly("say \"hi\"");
+        assertThat(PromptTemplates.parseCommandArgs("it's")).containsExactly("it's");
+        assertThat(PromptTemplates.parseCommandArgs("\"abc")).containsExactly("\"abc");
+        assertThat(PromptTemplates.parseCommandArgs("a \"b c"))
+            .containsExactly("a", "\"b", "c");
+        assertThat(PromptTemplates.parseCommandArgs("'say \\'hi\\''"))
+            .containsExactly("say 'hi'");
+    }
+
     @Test
     void parseCommandArgsUsesJsWhitespaceSet() {
         // JS /\s/：含 NBSP、U+3000、U+FEFF、U+2028/U+2029；不含 U+0085。

@@ -251,7 +251,15 @@ public final class ContextEntries {
      * 走第一支。裸串 content 经 {@link CustomMessageContent#toBlocks()} 归一成
      * text 块（导入形兜底，:533-536）。
      */
-    private static Message applyEditToMessage(Message message, Entry.ContextEdit edit) {
+    /**
+     * L5 W11（pi {@code getMessageFromEntry(entry, edit)}，branch-summarization.ts:203-247）：
+     * 单条消息应用其 target 的最新 edit；{@code replacement == null} ⇒ 隐藏（{@code null}）。
+     */
+    public static Message applyEditedMessage(Message message, Entry.ContextEdit edit) {
+        return edit.replacement() == null ? null : applyEditToMessage(message, edit);
+    }
+
+    static Message applyEditToMessage(Message message, Entry.ContextEdit edit) {
         if (edit.replacement() == null) {
             return message;
         }

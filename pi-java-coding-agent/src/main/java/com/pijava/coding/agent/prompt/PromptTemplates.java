@@ -269,16 +269,24 @@ public final class PromptTemplates {
         var current = new StringBuilder();
         Character inQuote = null;
         boolean hasToken = false;
+        int quoteStart = 0;
         for (int i = 0; i < argsString.length(); i++) {
             char c = argsString.charAt(i);
             if (inQuote != null) {
-                if (c == inQuote) {
+                // L5 W11（pi :36-40）：反斜杠转义开引号字符保字面（"say \"hi\""）。
+                if (c == '\\' && i + 1 < argsString.length()
+                        && argsString.charAt(i + 1) == inQuote.charValue()) {
+                    current.append(inQuote.charValue());
+                    i++;
+                } else if (c == inQuote) {
                     inQuote = null;
                 } else {
                     current.append(c);
                 }
-            } else if (c == '"' || c == '\'') {
+            } else if ((c == '"' || c == '\'') && !hasToken) {
+                // 引号只在参数开头生效（词中撇号按字面，pi :44-47）。
                 inQuote = c;
+                quoteStart = i;
                 hasToken = true;
             } else if (isJsWhitespace(c)) {
                 if (hasToken) {
@@ -289,6 +297,13 @@ public final class PromptTemplates {
             } else {
                 current.append(c);
                 hasToken = true;
+            }
+            // L5 W11（pi :57-64）：未闭合引号整体回退为字面文本（从开引号处重读）。
+            if (inQuote != null && i == argsString.length() - 1) {
+                inQuote = null;
+                current.setLength(0);
+                current.append(argsString.charAt(quoteStart));
+                i = quoteStart;
             }
         }
         if (hasToken) {

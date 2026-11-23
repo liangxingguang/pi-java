@@ -128,7 +128,7 @@ class SystemPromptsTest {
 
         assertThat(tools).startsWith("<tools>\n- read: Read a file\n- edit: Edit a file\n");
         assertThat(tools).doesNotContain("bash");
-        assertThat(tools).contains("In addition to the tools above");
+        assertThat(tools).contains("Additional tools may be available.");
     }
 
     /** 过滤后为空 ⇒ `(none)`（凭空造 "(read, bash)" 之类的表格是错的）。 */

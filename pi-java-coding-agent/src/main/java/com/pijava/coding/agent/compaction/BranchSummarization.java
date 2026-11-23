@@ -218,9 +218,21 @@ public final class BranchSummarization {
                 fileOps.addFromDetails(bs.details());
             }
         }
+        // L5 W11（pi :227-230）：context edits 隐藏/替换更早条目——按 target 取最新一条，
+        // 摘要输入与转录投影同口径。
+        var edits = new java.util.LinkedHashMap<String, Entry.ContextEdit>();
+        for (var entry : entries) {
+            if (entry instanceof Entry.ContextEdit edit) {
+                edits.put(edit.targetId(), edit);
+            }
+        }
         for (int i = entries.size() - 1; i >= 0; i--) {
             var entry = entries.get(i);
             var message = messageFromEntry(entry);
+            var edit = edits.get(entry.id());
+            if (message != null && edit != null) {
+                message = ContextEntries.applyEditedMessage(message, edit);
+            }
             if (message == null) {
                 continue;
             }

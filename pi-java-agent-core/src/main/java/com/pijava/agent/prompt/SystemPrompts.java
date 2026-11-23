@@ -50,8 +50,8 @@ public final class SystemPrompts {
      * 通道（{@code BuildSystemPromptOptions.promptGuidelines}）。</p>
      */
     public static final String DEFAULT_PREAMBLE =
-        "You are pi-java, an AI coding assistant. Help the user write, read, "
-            + "and understand code. Use the provided tools when useful.";
+        "You are a coding assistant running inside pi-java, a coding agent harness. "
+            + "Help users inspect files, run commands, and modify code.";
 
     /** pi {@code buildSystemPromptState} 的返回形状（{@code :186-194}）。 */
     public record State(String content, Map<String, String> sections) {}
@@ -169,8 +169,7 @@ public final class SystemPrompts {
             : visible.stream()
                 .map(name -> "- " + name + ": " + options.toolSnippets().get(name))
                 .collect(Collectors.joining("\n"));
-        return tools + "\n\nIn addition to the tools above, you may have access to other custom "
-            + "tools depending on the project.";
+        return tools + "\n\nAdditional tools may be available.";
     }
 
     /**
@@ -258,9 +257,8 @@ public final class SystemPrompts {
             + "(process, requirements, architecture, and one document per alignment package)");
         lines.add("- When reading pi-java docs, resolve docs/... under Additional docs, "
             + "not the current working directory");
-        lines.add("- When working on pi-java topics, read the docs and follow .md cross-references "
-            + "before implementing");
-        lines.add("- Always read pi-java .md files completely and follow links to related docs");
+        lines.add("- Before implementing harness changes, read the relevant docs and examples "
+            + "in full, following related cross-references.");
         return String.join("\n", lines);
     }
 

@@ -256,6 +256,32 @@ class BranchSummarizationTest {
         assertThat(nonReasoning.requests.get(0).reasoning()).isEmpty();
     }
 
+    /** L5 W11（pi branch-summarization.ts:227-230）：摘要输入应用每个 target 的最新 context edit。 */
+    @Test
+    void prepareBranchEntriesAppliesLatestContextEdits() {
+        var hidden = entry("m1", null, user("secret"));
+        var replaced = entry("m2", "m1", assistant("original"));
+        var keep = entry("m3", "m2", user("keep"));
+        var hideEdit = new Entry.ContextEdit("e1", 0, "m3", Instant.now(), "m1", null);
+        var replaceEdit = new Entry.ContextEdit("e2", 0, "m3", Instant.now(), "m2",
+            new Entry.ContextEdit.Replacement(
+                new com.pijava.agent.entry.CustomMessageContent.Text("replaced")));
+
+        var prepared = BranchSummarization.prepareBranchEntries(
+            List.of(hidden, replaced, keep, hideEdit, replaceEdit), 0);
+
+        assertThat(prepared.messages()).extracting(BranchSummarizationTest::textOf)
+            .as("隐藏的条目剔除，替换的条目用新正文").containsExactly("replaced", "keep");
+    }
+
+    private static String textOf(Message message) {
+        return message.content().stream()
+            .filter(ContentBlock.TextContent.class::isInstance)
+            .map(ContentBlock.TextContent.class::cast)
+            .map(ContentBlock.TextContent::text)
+            .reduce("", String::concat);
+    }
+
     @Test
     void toolCallInResponseIsRejected() {
         var done = AssistantMessage.empty().withContent(List.of(
