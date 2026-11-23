@@ -100,6 +100,8 @@ class AgentSessionCacheWarmingTest {
     void promptTriggersWarmerStartAndSettledStopsIt() throws Exception {
         try (var session = anthropicSession(List.of(textSeq("hi")))) {
             assertThat(session.cacheWarmingStatus()).as("warmer 装配在").isNotNull();
+            // L5 W2：默认 idle ⇒ 本用例显式选 streaming 才测 settled 停臂。
+            session.setCacheWarmingMode("streaming");
 
             drive(session, "go");
 
@@ -114,6 +116,7 @@ class AgentSessionCacheWarmingTest {
     void summaryPathDoesNotRetriggerWarmerStart() throws Exception {
         try (var session = anthropicSession(List.of(
                 textSeq("one"), textSeq("two"), textSeq("summary")))) {
+            session.setCacheWarmingMode("streaming"); // L5 W2：默认 idle。
             drive(session, "first");
             drive(session, "second");
             assertThat(session.cacheWarmingStatus().reason()).isEqualTo("agent run settled");

@@ -87,6 +87,8 @@ class SessionCommandsCacheWarmingTest {
     @Test
     void freshSessionShowsInactiveWaitingForFirstRequest() {
         try (var session = anthropicSession(List.of())) {
+            // L5 W2：默认 idle；本用例测 streaming 三态之一。
+            session.setCacheWarmingMode("streaming");
             var info = sessionInfo(session);
             assertThat(info).contains("Cache Warming\n")
                 .contains("Mode: streaming\n")
@@ -99,6 +101,7 @@ class SessionCommandsCacheWarmingTest {
     @Test
     void settledRunShowsAgentRunSettled() throws Exception {
         try (var session = anthropicSession(List.of(usageSeq("hi", 100_000, 0, 0)))) {
+            session.setCacheWarmingMode("streaming"); // L5 W2：默认 idle。
             session.processPrompt("go").statusFuture().get(30, TimeUnit.SECONDS);
             var info = sessionInfo(session);
             assertThat(info).contains("Status: Inactive (agent run settled)\n");

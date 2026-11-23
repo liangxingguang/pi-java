@@ -33,10 +33,7 @@ class SettingsScreenCacheWarmingTest {
             try (var session = AgentSession.create(ArgsParser.parse(new String[] { }))) {
                 var screen = new SettingsScreen(session);
 
-                screen.activate("cache-warming-mode");
-                assertThat(session.services().settings().network().getCacheWarmingMode())
-                    .isEqualTo("idle");
-
+                // L5 W2：默认 idle ⇒ 三值循环从 idle 起转 streaming→idle→off→streaming。
                 screen.activate("cache-warming-mode");
                 assertThat(session.services().settings().network().getCacheWarmingMode())
                     .isEqualTo("off");
@@ -46,6 +43,10 @@ class SettingsScreenCacheWarmingTest {
                 screen.activate("cache-warming-mode");
                 assertThat(session.services().settings().network().getCacheWarmingMode())
                     .isEqualTo("streaming");
+
+                screen.activate("cache-warming-mode");
+                assertThat(session.services().settings().network().getCacheWarmingMode())
+                    .isEqualTo("idle");
             }
         });
     }
