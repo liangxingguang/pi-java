@@ -56,6 +56,13 @@ public final class PiTuiLauncher {
         // 启动选择器只在会话解析前可用；会话内 /resume 由 TUI 选择器处理，
         // 这里清除避免主 UI 运行期再弹裸终端选择器。
         session.sessionCwdPrompter(null);
+        // docs/26 §4.3（K39）：OSC 7501 程序状态——会话名晚绑定（session 刚装配）。
+        var programStatus = com.pijava.tui.util.ProgramStatusReporter.stdout(() -> {
+            var bound = sessionRef.get();
+            return bound == null ? null : bound.sessionName();
+        });
+        extensionUI.setProgramStatusReporter(programStatus);
+        chatScreen.setProgramStatusReporter(programStatus);
         sessionRef.set(session);
         var mode = new InteractiveMode(session);
         // Windows Terminal/ConPTY send about one raw event per wheel notch
@@ -76,8 +83,11 @@ public final class PiTuiLauncher {
         // pi :668-673 对位）。onChanged ⇒ 样式表重生成＋重渲染（pi ui.invalidate
         // ＋requestRender 对位——SemanticColors 访问器现读活跃主题，无须清缓存）。
         com.pijava.coding.agent.theme.Themes.setRegisteredThemes(session.themes());
+        // docs/26 §4.1（K35）：settings 覆盖优先，否则用终端能力探测（rex/Alacritty/
+        // Windows 控制台等的 truecolor 判定与 pi 同源）。
         com.pijava.coding.agent.theme.Themes.redetectColorMode(
-            terminalTrueColor(session).orElse(null));
+            terminalTrueColor(session).orElseGet(
+                () -> com.pijava.tui.util.TerminalCapabilities.get().trueColor()));
         var themeEngineRef = new java.util.concurrent.atomic.AtomicReference<
             dev.tamboui.css.engine.StyleEngine>();
         var themeController = new com.pijava.coding.agent.theme.ThemeController(
@@ -165,6 +175,8 @@ public final class PiTuiLauncher {
             }
             return runRegular(app, args, session, themeEngineRef);
         } finally {
+            // docs/26 §4.3（K39）：退出移除程序状态（幂等）。
+            programStatus.clear();
             // 批 21（T7，pi main.ts:428/971/992 对位）：退出停主题监视器。
             com.pijava.coding.agent.theme.Themes.stopThemeWatcher();
             // 交互模式退出 ⇒ 恢复旧 handler（钩的独占装配只活在本模式内）。

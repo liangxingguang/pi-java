@@ -1,13 +1,14 @@
 package com.pijava.tui.util;
 
-import java.awt.Toolkit;
-import java.awt.datatransfer.StringSelection;
 import java.io.IOException;
 
+import com.pijava.coding.agent.core.clipboard.NativeClipboard;
+
 /**
- * 系统剪贴板（docs/19 §3.12，裁决⑤）：仅 AWT 通道，不移植 pi 的
- * native/pbcopy/clip/wl-copy/OSC 52 降级链（窄差 D44）。headless／不可用
- * ⇒ {@link IOException}（调用方转 showError，pi :5605-5607 对位）。
+ * 系统剪贴板入口（docs/26 §4.2，K34）：默认走
+ * {@link NativeClipboard} 的平台命令行链（Termux/pbcopy/PowerShell/clip/
+ * wl-copy/xclip/xsel），最后 AWT Toolkit 兜底。headless／不可用 ⇒
+ * {@link IOException}（调用方转 showError，pi :5605-5607 对位）。
  */
 public final class ClipboardSupport {
 
@@ -18,7 +19,7 @@ public final class ClipboardSupport {
         void copy(String text) throws IOException;
     }
 
-    private static volatile CopyFn impl = ClipboardSupport::awtCopy;
+    private static volatile CopyFn impl = NativeClipboard::copy;
 
     private ClipboardSupport() {}
 
@@ -28,19 +29,10 @@ public final class ClipboardSupport {
     }
 
     /**
-     * 测试替换点：注入假实现（{@code null} 恢复 AWT 默认）。测试结束必须复位
-     * —— 静态态跨用例泄漏会让真 AWT 臂静默失效。
+     * 测试替换点：注入假实现（{@code null} 恢复默认）。测试结束必须复位
+     * —— 静态态跨用例泄漏会让真通道静默失效。
      */
     public static void overrideForTest(CopyFn fn) {
-        impl = fn == null ? ClipboardSupport::awtCopy : fn;
-    }
-
-    private static void awtCopy(String text) throws IOException {
-        try {
-            Toolkit.getDefaultToolkit().getSystemClipboard()
-                .setContents(new StringSelection(text), null);
-        } catch (Exception e) {
-            throw new IOException("Clipboard unavailable: " + e.getMessage(), e);
-        }
+        impl = fn == null ? NativeClipboard::copy : fn;
     }
 }

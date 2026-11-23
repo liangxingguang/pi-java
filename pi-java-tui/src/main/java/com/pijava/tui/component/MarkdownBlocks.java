@@ -62,7 +62,7 @@ final class MarkdownBlocks {
 
     /** 解析（带 space token 对位信息）。 */
     static List<Spaced> parse(String markdown) {
-        var lines = markdown.split("\r?\n", -1);
+        var lines = stripHtmlComments(markdown).split("\r?\n", -1);
         var out = new ArrayList<Spaced>();
         int i = 0;
         boolean pendingBlank = false;
@@ -88,6 +88,120 @@ final class MarkdownBlocks {
     /** 解析（纯块表，测试面）。 */
     static List<Block> parseBlocks(String markdown) {
         return parse(markdown).stream().map(Spaced::block).toList();
+    }
+
+    // ── R32 HTML 注释隐藏（pi markdown.ts:200-225/:752-757/:869-876 对位） ──
+
+    /**
+     * 围栏外 HTML 注释整段移除；注释独占行清空为 {@code ""}（相邻空行经
+     * {@link #parse} 的 pendingBlank 合并，等价 pi 移除注释块并合并相邻 space
+     * token——段间不制造额外空行、首尾不留空行）。未闭合注释吞到源末（pi
+     * {@code (?:-->|$)}，流式期不闪）。围栏内与行内代码 span 内的 {@code <!--}
+     * 原样保留（pi 的 code/codespan token 优先）。
+     */
+    static String stripHtmlComments(String markdown) {
+        var lines = markdown.split("\r?\n", -1);
+        var out = new ArrayList<String>(lines.length);
+        boolean inFence = false;
+        char fenceChar = 0;
+        int fenceLen = 0;
+        boolean inComment = false;
+        for (var line : lines) {
+            if (inFence) {
+                out.add(line);
+                if (isFenceClose(line, fenceChar, fenceLen)) {
+                    inFence = false;
+                }
+                continue;
+            }
+            var fence = FENCE_OPEN.matcher(line);
+            if (fence.matches()) {
+                inFence = true;
+                fenceChar = fence.group(1).charAt(0);
+                fenceLen = fence.group(1).length();
+                out.add(line);
+                continue;
+            }
+            var stripped = stripCommentsInLine(line, inComment);
+            inComment = stripped.inComment();
+            out.add(stripped.text());
+        }
+        return String.join("\n", out);
+    }
+
+    private record LineStrip(String text, boolean inComment) {}
+
+    private static LineStrip stripCommentsInLine(String line, boolean inComment) {
+        var sb = new StringBuilder(line.length());
+        boolean hadComment = false;
+        int codeTicks = 0;   // >0 ⇒ 行内代码 span 的反引号 run 长度
+        int i = 0;
+        int n = line.length();
+        while (i < n) {
+            if (inComment) {
+                hadComment = true;
+                int end = line.indexOf("-->", i);
+                if (end < 0) {
+                    return new LineStrip(finishCommentLine(sb, hadComment), true);
+                }
+                i = end + 3;
+                inComment = false;
+                i = skipSpaceAfterComment(line, sb, i);
+                continue;
+            }
+            char c = line.charAt(i);
+            if (c == '`') {
+                int run = 1;
+                while (i + run < n && line.charAt(i + run) == '`') {
+                    run++;
+                }
+                if (codeTicks == 0) {
+                    codeTicks = run;
+                } else if (run == codeTicks) {
+                    codeTicks = 0;
+                }
+                sb.append(line, i, i + run);
+                i += run;
+                continue;
+            }
+            if (codeTicks == 0 && c == '<' && line.startsWith("<!--", i)) {
+                hadComment = true;
+                int end = line.indexOf("-->", i + 4);
+                if (end < 0) {
+                    return new LineStrip(finishCommentLine(sb, hadComment), true);
+                }
+                i = end + 3;
+                i = skipSpaceAfterComment(line, sb, i);
+                continue;
+            }
+            sb.append(c);
+            i++;
+        }
+        return new LineStrip(finishCommentLine(sb, hadComment), false);
+    }
+
+    /** pi dropLeadingSpace：注释两侧均为空白 ⇒ 吞后侧空白（{@code a <!-- c --> b} ⇒ {@code a b}）。 */
+    private static int skipSpaceAfterComment(String line, StringBuilder sb, int from) {
+        if (sb.length() == 0 || !isBlankChar(sb.charAt(sb.length() - 1))) {
+            return from;
+        }
+        int i = from;
+        while (i < line.length() && isBlankChar(line.charAt(i))) {
+            i++;
+        }
+        return i;
+    }
+
+    private static boolean isBlankChar(char c) {
+        return c == ' ' || c == '\t';
+    }
+
+    /** 注释独占行 ⇒ {@code ""}；否则保留移除后的文本（未闭合注释时尾随空白自然保留）。 */
+    private static String finishCommentLine(StringBuilder sb, boolean hadComment) {
+        if (hadComment && sb.toString().isBlank()) {
+            return "";
+        }
+        return sb.toString();
     }
 
     private record ParseResult(Block block, int next) {}

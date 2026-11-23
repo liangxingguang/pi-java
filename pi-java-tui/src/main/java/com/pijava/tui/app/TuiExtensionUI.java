@@ -18,7 +18,6 @@ import com.pijava.coding.agent.extension.ExtensionComponent;
 import com.pijava.coding.agent.extension.ExtensionComponentFactory;
 import com.pijava.coding.agent.extension.ExtensionCustomOptions;
 import com.pijava.coding.agent.extension.ExtensionFooterFactory;
-import com.pijava.coding.agent.extension.ExtensionOverlayHandle;
 import com.pijava.coding.agent.extension.ExtensionSlotFactory;
 import com.pijava.coding.agent.extension.ExtensionUI;
 import com.pijava.coding.agent.extension.ExtensionUiDialogOptions;
@@ -26,12 +25,15 @@ import com.pijava.coding.agent.extension.ExtensionUiHostEnv;
 import com.pijava.coding.agent.extension.ExtensionWidgetContent;
 import com.pijava.coding.agent.extension.ExtensionWidgetOptions;
 import com.pijava.coding.agent.extension.NotifyType;
+import com.pijava.coding.agent.extension.WorkingIndicatorOptions;
 import com.pijava.tui.screen.ExtensionComponentOverlay;
 import com.pijava.tui.screen.ExtensionDialog;
 import com.pijava.tui.screen.ExtensionEditorOverlay;
 import com.pijava.tui.screen.ExtensionInputOverlay;
 import com.pijava.tui.screen.ExtensionSelectorOverlay;
 import com.pijava.tui.screen.ScreenOverlay;
+import com.pijava.tui.util.ProgramStatusReporter;
+import com.pijava.tui.util.ProgramStatusReporter.BlockedStatus;
 import com.pijava.tui.util.TerminalTitle;
 import com.pijava.tui.util.TextLayout;
 
@@ -48,7 +50,11 @@ public final class TuiExtensionUI implements ExtensionUI {
 
     /** 活动对话框（onSessionInvalidated 复位面；跨线程 ⇒ COW）。 */
     private record ActiveDialog(ExtensionDialog dialog, ScreenOverlay overlay,
-                                CompletableFuture<Object> result) {}
+                                CompletableFuture<Object> result,
+                                @Nullable BlockedStatus blocked) {}
+
+    /** pi 的 {@code extension-dialog} 阻塞来源键。 */
+    private final ExtensionProgramStatus programStatus = new ExtensionProgramStatus();
 
     private final TuiExtensionUiHost host;
     private final ExtensionUiHostEnv hostEnv;
@@ -86,6 +92,11 @@ public final class TuiExtensionUI implements ExtensionUI {
         return hostEnv;
     }
 
+    /** 接线 OSC 7501 上报（PiTuiLauncher 装配；docs/26 §4.3）。 */
+    public void setProgramStatusReporter(@Nullable ProgramStatusReporter reporter) {
+        programStatus.setReporter(reporter);
+    }
+
     // ── 阻塞对话四件套（pi :2690-2865 序对位）────────────────
 
     @Override
@@ -100,7 +111,7 @@ public final class TuiExtensionUI implements ExtensionUI {
         var overlay = new ExtensionSelectorOverlay(title, options, host.keybindings(),
             host.terminalCols(), result, host::toggleToolsExpanded);
         return runDialog(overlay, overlay, result, signal,
-            opts != null ? opts.timeoutMillis() : null);
+            opts != null ? opts.timeoutMillis() : null, BlockedStatus.question(title));
     }
 
     /** pi :2749-2758 逐字——confirm ＝ selector 特化（{@code title\nmessage}，Yes/No）。 */
@@ -121,7 +132,7 @@ public final class TuiExtensionUI implements ExtensionUI {
         var overlay = new ExtensionInputOverlay(title, placeholder, host.keybindings(),
             host.terminalCols(), result);
         return runDialog(overlay, overlay, result, signal,
-            opts != null ? opts.timeoutMillis() : null);
+            opts != null ? opts.timeoutMillis() : null, BlockedStatus.question(title));
     }
 
     @Override
@@ -134,7 +145,8 @@ public final class TuiExtensionUI implements ExtensionUI {
             com.pijava.tui.util.TamboUIAdapter.isWindows());
         var overlay = new ExtensionEditorOverlay(title, prefill, host.keybindings(),
             host.terminalCols(), command, host.externalEditorRoundtrip(), result);
-        return runDialog(overlay, overlay, result, null, null);
+        return runDialog(overlay, overlay, result, null, null,
+            BlockedStatus.question(title));
     }
 
     // ── custom 挂载面（pi showExtensionCustom :2966-3043 对位）──
@@ -185,16 +197,19 @@ public final class TuiExtensionUI implements ExtensionUI {
             return (T) result.getNow(null);
         }
         if (opts.onHandle() != null) {
-            opts.onHandle().accept(new OverlayHandleNarrowed(overlay));
+            opts.onHandle().accept(new OverlayHandleNarrowed(overlay,
+                host::dismissOverlay, host.dispatcher()::dispatch));
         }
         // 批 17 评审回补（Minor 1）：结局后清账——活动对话表不滞留死条目。
-        var active = new ActiveDialog(overlay, overlay, result);
+        String statusSource = programStatus.openOverlay(opts.blocked());
+        var active = new ActiveDialog(overlay, overlay, result, null);
         activeDialogs.add(active);
         host.openOverlay(overlay);
         try {
             return (T) awaitResult(result);
         } finally {
             activeDialogs.remove(active);
+            programStatus.closeOverlay(statusSource);
         }
     }
 
@@ -224,6 +239,26 @@ public final class TuiExtensionUI implements ExtensionUI {
                           @Nullable ExtensionWidgetOptions options) {
         host.dispatcher().dispatch(() ->
             host.chatScreen().setExtensionWidget(key, content, options, hostEnv));
+    }
+
+    // ── L7 W1（docs/22 §4.4，C6）：working 三方法 TUI 臂（pi :2840-2847 对位）──
+
+    /** pi {@code setWorkingMessage}（:2840）：null ⇒ 回默认。 */
+    @Override
+    public void setWorkingMessage(@Nullable String message) {
+        host.dispatcher().dispatch(() -> host.chatScreen().setWorkingMessage(message));
+    }
+
+    /** pi {@code setWorkingVisible}（:2847）。 */
+    @Override
+    public void setWorkingVisible(boolean visible) {
+        host.dispatcher().dispatch(() -> host.chatScreen().setWorkingVisible(visible));
+    }
+
+    /** pi {@code setWorkingIndicator}（:2844 面上方）：null ⇒ 回默认动画。 */
+    @Override
+    public void setWorkingIndicator(@Nullable WorkingIndicatorOptions options) {
+        host.dispatcher().dispatch(() -> host.chatScreen().setWorkingIndicator(options));
     }
 
     // ── 主题面（批 21 T9：pi interactive-mode.ts:2665-2680 对位）──
@@ -308,8 +343,9 @@ public final class TuiExtensionUI implements ExtensionUI {
     /**
      * pi {@code resetExtensionUI}（interactive-mode.ts:2452-2483）本批相关段逐字：
      * 关活动对话框（resolve 取消值）→ 清 widget 两区 → footer/header 回内置 → 清扩展
-     * 状态段。java 无 terminal input listeners/autocomplete/custom editor/working
-     * message 面（随后续批，docs/28 §4）。
+     * 状态段 → working 三态复位（L7 W1，docs/22 §4.4：含 :2673-2682 的
+     * {@code "Working (esc to interrupt)"} quirk）。java 无 terminal input
+     * listeners/autocomplete/custom editor 面（随后续批，docs/28 §4）。
      */
     @Override
     public void onSessionInvalidated() {
@@ -320,6 +356,7 @@ public final class TuiExtensionUI implements ExtensionUI {
                 dialog.result().complete(null);     // 取消值兜底（complete 幂等）
             }
             activeDialogs.clear();
+            programStatus.reset();
             host.chatScreen().resetExtensionUi();
         });
     }
@@ -339,9 +376,13 @@ public final class TuiExtensionUI implements ExtensionUI {
     @SuppressWarnings("unchecked")
     private <T> T runDialog(ExtensionDialog dialog, ScreenOverlay overlay,
                             CompletableFuture<T> result, @Nullable AbortSignal signal,
-                            @Nullable Long timeoutMillis) {
-        var active = new ActiveDialog(dialog, overlay, (CompletableFuture<Object>) result);
+                            @Nullable Long timeoutMillis, @Nullable BlockedStatus blocked) {
+        var active = new ActiveDialog(dialog, overlay, (CompletableFuture<Object>) result,
+            blocked);
         activeDialogs.add(active);
+        if (blocked != null) {
+            programStatus.pushDialog(blocked);
+        }
         Runnable unsubscribeAbort = () -> { };
         if (signal != null) {
             unsubscribeAbort = signal.onAbort(() -> cancelDialog(active));
@@ -368,6 +409,9 @@ public final class TuiExtensionUI implements ExtensionUI {
                 countdown.cancel(false);
             }
             activeDialogs.remove(active);
+            if (blocked != null) {
+                programStatus.popDialog(blocked);
+            }
         }
     }
 
@@ -433,30 +477,6 @@ public final class TuiExtensionUI implements ExtensionUI {
             component.dispose();
         } catch (Exception ignored) {
             // pi：ignore dispose errors
-        }
-    }
-
-    /** pi {@code OverlayHandle} 的窄化三件（docs/28 §4/窄差 D99）。 */
-    private final class OverlayHandleNarrowed implements ExtensionOverlayHandle {
-        private final ExtensionComponentOverlay overlay;
-
-        OverlayHandleNarrowed(ExtensionComponentOverlay overlay) {
-            this.overlay = overlay;
-        }
-
-        @Override
-        public void hide() {
-            host.dismissOverlay(overlay);   // 摘屏；结局仍由 done 闭包决定（pi 同构）
-        }
-
-        @Override
-        public void setHidden(boolean hidden) {
-            host.dispatcher().dispatch(() -> overlay.setHidden(hidden));
-        }
-
-        @Override
-        public boolean isHidden() {
-            return overlay.isHidden();
         }
     }
 

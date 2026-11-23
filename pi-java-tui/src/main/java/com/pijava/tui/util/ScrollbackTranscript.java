@@ -117,6 +117,11 @@ public final class ScrollbackTranscript {
             case ChatMessage.System(String text, MetaKind kind) -> text;
             case ChatMessage.TurnSeparator(String label) -> label;
             case ChatMessage.Markdown(String text) -> text;
+            // L7 W2：卡类消息进 raw scrollback 时取正文（卡没有单串形态）。
+            case ChatMessage.CompactionCard(_, String summary, _, _) -> summary;
+            case ChatMessage.BranchCard(String summary, _, _) -> summary;
+            case ChatMessage.SkillCard(String name, String content, _, _, _) -> name + " " + content;
+            case ChatMessage.BashCard(String command, String output, _, _, _, _, _) -> command + "\n" + output;
             case ChatMessage.Padded(var inner, int pad) -> joinText(inner);
         };
     }

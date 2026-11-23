@@ -158,6 +158,11 @@ final class ExtensionInjectionLayer {
         terminalWidth = source == null ? () -> 80 : source;
     }
 
+    /** 终端列数现读（L7 W1：BorderedLoaderFrame 框线宽度源——docs/22 §4.5）。 */
+    int terminalCols() {
+        return terminalWidth.getAsInt();
+    }
+
     /** widget 上区行集（ChatScreen render/renderBottomArea 装配缝——原直读 widgetsAbove）。 */
     java.util.List<Element> widgetRowsAbove(boolean spacerWhenEmpty, boolean leadingSpacer) {
         return widgetRows(widgetsAbove, spacerWhenEmpty, leadingSpacer);

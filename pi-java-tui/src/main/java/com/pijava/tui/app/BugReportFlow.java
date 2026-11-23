@@ -179,7 +179,8 @@ public final class BugReportFlow {
 
     private void runSummary(Options options) {
         var loader = new BugReportLoaderScreen(
-            "Writing summary with " + modelName() + "...", () -> { });
+            "Writing summary with " + modelName() + "...", () -> { },
+            chatScreen::terminalCols);
         openOverlay.accept(loader);
         var worker = Thread.startVirtualThread(() -> {
             String summary;
@@ -226,7 +227,8 @@ public final class BugReportFlow {
     }
 
     private void runUpload(BugReport.Bundle bundle) {
-        var loader = new BugReportLoaderScreen("Uploading bug report...", () -> { });
+        var loader = new BugReportLoaderScreen("Uploading bug report...", () -> { },
+            chatScreen::terminalCols);
         openOverlay.accept(loader);
         var worker = Thread.startVirtualThread(() -> {
             try {

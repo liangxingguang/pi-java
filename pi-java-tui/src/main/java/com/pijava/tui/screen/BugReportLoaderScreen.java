@@ -1,25 +1,29 @@
 package com.pijava.tui.screen;
 
 import java.util.function.Consumer;
+import java.util.function.IntSupplier;
 
 import com.pijava.coding.agent.core.AgentSession;
-import com.pijava.tui.util.TamboUIAdapter;
+import com.pijava.tui.component.LoaderSpinner;
 
 import dev.tamboui.toolkit.element.Element;
 import dev.tamboui.tui.event.KeyEvent;
 
 /**
- * {@code /bug} 的等待屏（批 15 T7，pi {@code BorderedLoader} 弱形状——摘要生成
- * 与上传两处的 loader，interactive-mode bug-report.ts 的 showLoader 对位）。
+ * {@code /bug} 的等待屏（批 15 T7，pi {@code BorderedLoader} 对位——摘要生成
+ * 与上传两处的 loader，interactive-mode bug-report.ts:275 的 showLoader）。
  *
- * <p>Esc ⇒ 置中止旗＋回调（flow 用来 interrupt worker 线程；pi 的
- * {@code signal.abort()} 对位）。无 spinner 纯文本（窄差注记随 D83 族——
- * pi 是带边框旋转件）。worker 完成由 flow 经 {@code openOverlay(null)} 关屏，
- * 不经 {@link #isDone()}。</p>
+ * <p>L7 W1（docs/22 §4.5，C7/C8）：纯文本 → 共享 {@link BorderedLoaderFrame}
+ * （上下 {@code ─} 框线＋80ms braille spinner＋cancel hint）；Esc ⇒ 置中止旗＋回调
+ * （flow 用来 interrupt worker 线程；pi 的 {@code signal.abort()} 对位——
+ * {@code CancellableLoader} 语义）。worker 完成由 flow 经 {@code openOverlay(null)}
+ * 关屏，不经 {@link #isDone()}。</p>
  */
 public final class BugReportLoaderScreen implements ScreenOverlay {
 
     private final String message;
+    private final IntSupplier width;
+    private final long startNanos = System.nanoTime();
     private volatile Runnable onAbort;
     private volatile boolean aborted;
     // volatile：写在键处理线程、读在渲染帧（isDone）——spotbugs
@@ -29,10 +33,12 @@ public final class BugReportLoaderScreen implements ScreenOverlay {
     /**
      * @param message 等待文案（pi 逐字）
      * @param onAbort Esc 回调（flow 的 worker interrupt）
+     * @param width   终端列数（框线宽度；flow 经 {@code ChatScreen.terminalCols()} 注入）
      */
-    public BugReportLoaderScreen(String message, Runnable onAbort) {
+    public BugReportLoaderScreen(String message, Runnable onAbort, IntSupplier width) {
         this.message = message;
         this.onAbort = onAbort;
+        this.width = width;
     }
 
     /** 晚绑定 Esc 回调（flow 在 worker 线程起来后换上有意义的 interrupt）。 */
@@ -67,8 +73,9 @@ public final class BugReportLoaderScreen implements ScreenOverlay {
 
     @Override
     public Element render() {
-        return TamboUIAdapter.column(
-            TamboUIAdapter.text(message),
-            TamboUIAdapter.text("(esc to cancel)"));
+        return BorderedLoaderFrame.render(
+            LoaderSpinner.frameAt(LoaderSpinner.DEFAULT_FRAMES,
+                LoaderSpinner.DEFAULT_INTERVAL_MS, startNanos, System.nanoTime()),
+            message, true, width.getAsInt());
     }
 }

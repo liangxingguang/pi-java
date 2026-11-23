@@ -172,14 +172,23 @@ public final class ExtensionSelectorOverlay implements ScreenOverlay, ExtensionD
             rows.add(List.of(new Span(" " + line, SemanticColors.accent().bold())));
         }
         rows.add(List.of());
-        // pi updateList：选中项 "→ " 前缀＋accent；未选 "  " 前缀＋正文色。
+        // pi updateList：选中项 "→ " 前缀＋accent；未选 "  " 前缀＋正文色；
+        // 10 行居中窗口，越界追加 muted "  (i/n)"（extension-selector.ts:76-99）。
         int selected = selectedIndex.get();
-        for (int i = 0; i < options.size(); i++) {
+        int maxVisible = 10;
+        int start = Math.max(0,
+            Math.min(selected - maxVisible / 2, options.size() - maxVisible));
+        int end = Math.min(start + maxVisible, options.size());
+        for (int i = start; i < end; i++) {
             if (i == selected) {
                 rows.add(List.of(new Span(" → " + options.get(i), SemanticColors.accent())));
             } else {
                 rows.add(List.of(new Span("   " + options.get(i), SemanticColors.plain())));
             }
+        }
+        if (start > 0 || end < options.size()) {
+            rows.add(List.of(new Span("  (" + (selected + 1) + "/" + options.size() + ")",
+                SemanticColors.muted())));
         }
         rows.add(List.of());
         rows.add(hintRow());

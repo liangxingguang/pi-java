@@ -1,9 +1,11 @@
 package com.pijava.tui.screen;
 
+import java.nio.file.Path;
 import java.util.List;
 import java.util.function.Consumer;
 
 import com.pijava.tui.component.EditorComponent;
+import com.pijava.tui.component.FileCompleter;
 import com.pijava.tui.component.PendingQueueView;
 import com.pijava.tui.component.SlashCompleter;
 
@@ -21,6 +23,9 @@ final class ChatInputPortal {
     private final EditorComponent editor = new EditorComponent();
     private final PendingQueueView pendingQueue;
     private SlashCompleter completer = new SlashCompleter(List.of());
+    /** K25：{@code @文件}／路径补全（pi CombinedAutocompleteProvider 的文件臂）。 */
+    private FileCompleter fileCompleter =
+        new FileCompleter(Path.of(System.getProperty("user.dir")), () -> 5);
     // 批 12（docs/23）：settings 消费键的 live-read 源（PiTuiApp 装配注入；
     // 默认值保持批 12 前行为——直构 ChatScreen 的测试面零变化）。
     private java.util.function.IntSupplier autocompleteMaxVisible = () -> 5;
@@ -29,20 +34,51 @@ final class ChatInputPortal {
         this.pendingQueue = pendingQueue;
     }
 
-    /** Forward a key event: slash completion first, then the editor. */
+    /** K25：补全根目录（装配时注入会话 cwd；默认进程工作目录）。 */
+    void setCompletionBasePath(Path basePath) {
+        fileCompleter = new FileCompleter(basePath, () -> autocompleteMaxVisible.getAsInt());
+    }
+
+    /** Forward a key event: slash completion, file completion, then the editor. */
     void onKeyEvent(KeyEvent event) {
+        if (fileCompleter.active()) {
+            switch (fileCompleter.onKeyEvent(event)) {
+                case COMPLETE -> applyFileCompletion();
+                case HANDLED -> { }
+                case IGNORED -> {
+                    editor.onKeyEvent(event);
+                    refreshCompleters();
+                }
+            }
+            return;
+        }
         var action = completer.onKeyEvent(event);
         switch (action) {
             case COMPLETE -> {
                 if (applyCompletion()) {
-                    completer.update(editor.getText());
+                    refreshCompleters();
                 }
             }
             case HANDLED -> { }
             case IGNORED -> {
+                // Tab 未命中 slash 补全 ⇒ 强制文件补全（pi shouldTriggerFileCompletion）。
+                if (event.isChar('\t') && !event.hasShift()) {
+                    fileCompleter.update(editor.lineBeforeCursor(), true);
+                    return;
+                }
                 editor.onKeyEvent(event);
-                completer.update(editor.getText());
+                refreshCompleters();
             }
+        }
+    }
+
+    /** Recompute both popups from the current editor text (slash name context wins). */
+    private void refreshCompleters() {
+        completer.update(editor.getText());
+        if (completer.active()) {
+            fileCompleter.update(null, false);
+        } else {
+            fileCompleter.update(editor.lineBeforeCursor(), false);
         }
     }
 
@@ -69,6 +105,9 @@ final class ChatInputPortal {
 
     /** Replace the input with the highlighted command (Tab or Enter). */
     boolean applyCompletion() {
+        if (fileCompleter.active()) {
+            return applyFileCompletion();
+        }
         String name = completer.selectedName();
         if (name == null) {
             return false;
@@ -78,14 +117,45 @@ final class ChatInputPortal {
         return true;
     }
 
-    /** Whether the slash-command popup is visible. */
+    /** K25：把高亮文件建议替换进编辑器（目录不补尾空格）。 */
+    boolean applyFileCompletion() {
+        String value = fileCompleter.selectedValue();
+        if (value == null) {
+            return false;
+        }
+        int graphemes = fileCompleter.replaceGraphemes();
+        String insert = fileCompleter.selectedDirectory() ? value : value + " ";
+        editor.replaceBeforeCursor(graphemes, insert);
+        fileCompleter.update(null, false);
+        completer.update(editor.getText());
+        return true;
+    }
+
+    /**
+     * K41（pi editor.ts:804-830）：Enter 在补全打开时的语义。
+     *
+     * @return true 表示应继续提交（slash 命令名上下文或无补全）；文件补全只应用不提交
+     */
+    boolean enterWithCompletion() {
+        if (completer.active()) {
+            applyCompletion();
+            return true;
+        }
+        if (fileCompleter.active()) {
+            applyFileCompletion();
+            return false;
+        }
+        return true;
+    }
+
+    /** Whether a completion popup (slash or file) is visible. */
     boolean completerActive() {
-        return completer.active();
+        return completer.active() || fileCompleter.active();
     }
 
     /** Popup row count (inline bottom-region height driver). */
     int completerLineCount() {
-        return completer.lineCount();
+        return fileCompleter.active() ? fileCompleter.lineCount() : completer.lineCount();
     }
 
     /** Editor row count (bottom-region height driver). */
@@ -100,13 +170,13 @@ final class ChatInputPortal {
 
     /** 补全弹层渲染件（同上的装配缝——原直读 completer 字段）。 */
     Element completerElement() {
-        return completer.render();
+        return fileCompleter.active() ? fileCompleter.render() : completer.render();
     }
 
     /** Clears the editor and closes the slash completer. */
     void clearInput() {
         editor.clear();
-        completer.update("");
+        refreshCompleters();
     }
 
     boolean isInputEmpty() {
@@ -136,13 +206,13 @@ final class ChatInputPortal {
     /** Insert pasted text into the editor. */
     void insertText(String text) {
         editor.insertText(text);
-        completer.update(editor.getText());
+        refreshCompleters();
     }
 
     /** Replace the editor content（pi {@code editor.setText}；dequeue/fork 回填用，docs/21 §3.3）。 */
     void setEditorText(String text) {
         editor.setText(text);
-        completer.update(editor.getText());
+        refreshCompleters();
     }
 
     /**

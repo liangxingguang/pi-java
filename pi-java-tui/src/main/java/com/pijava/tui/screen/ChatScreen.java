@@ -238,11 +238,36 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
     /** pi {@code resetExtensionUI} 的 ChatScreen 段（interactive-mode.ts:2452-2483）。 */
     public void resetExtensionUi() {
         extensionLayer.resetExtensionUi();
+        // L7 W1（docs/22 §4.4）：working 三态复位是 pi 同函数的一段（:2673-2682）。
+        sessionEventRouter.resetWorkingState();
+    }
+
+    // ── L7 W1（docs/22 §4.4，C6）：扩展 working 三方法委托 ───────
+
+    /** pi {@code setWorkingMessage}（interactive-mode.ts:2840）：null ⇒ 回默认。 */
+    public void setWorkingMessage(String message) {
+        sessionEventRouter.setWorkingMessage(message);
+    }
+
+    /** pi {@code setWorkingVisible}（:2847）。 */
+    public void setWorkingVisible(boolean visible) {
+        sessionEventRouter.setWorkingVisible(visible);
+    }
+
+    /** pi {@code setWorkingIndicator}（:2844 面上方）：null ⇒ 回默认动画。 */
+    public void setWorkingIndicator(
+            com.pijava.coding.agent.extension.WorkingIndicatorOptions options) {
+        sessionEventRouter.setWorkingIndicator(options);
     }
 
     /** 终端列数源注入（PiTuiApp 装配）。 */
     public void setTerminalWidthSource(java.util.function.IntSupplier source) {
         extensionLayer.setTerminalWidthSource(source);
+    }
+
+    /** 终端列数现读（L7 W1：loader 框线宽度源，docs/22 §4.5）。 */
+    public int terminalCols() {
+        return extensionLayer.terminalCols();
     }
 
     /**
@@ -294,7 +319,11 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
     public void onSessionEvent(AgentSessionEvent event) {
         sessionEventRouter.onSessionEvent(event);
     }
-
+    /** docs/26 §4.3（K39）：接线 OSC 7501 状态机（PiTuiLauncher 装配）。 */
+    public void setProgramStatusReporter(
+            com.pijava.tui.util.ProgramStatusReporter reporter) {
+        sessionEventRouter.setProgramStatusReporter(reporter);
+    }
     /** 批 17（T4）：pi {@code showWarning}（interactive-mode.ts:4629-4633）——「Warning: 」前缀。 */
     public void showWarning(String message) {
         sessionEventRouter.showWarning(message);
@@ -378,14 +407,10 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
     // ── 批 29（E2）：输入口面委托（本体在 {@link ChatInputPortal}）──
 
     /** Forward a key event: slash completion first, then the editor. */
-    public void onKeyEvent(KeyEvent event) {
-        inputPortal.onKeyEvent(event);
-    }
+    public void onKeyEvent(KeyEvent event) { inputPortal.onKeyEvent(event); }
 
     /** Inject the slash-command catalog for completion (from the registry). */
-    public void setSlashCommands(List<SlashCompleter.CommandItem> items) {
-        inputPortal.setSlashCommands(items);
-    }
+    public void setSlashCommands(List<SlashCompleter.CommandItem> items) { inputPortal.setSlashCommands(items); }
 
     /** 批 12 T4：{@code editorPaddingX} 现读源（编辑器双侧留白热更）。 */
     public void setEditorPaddingSource(java.util.function.IntSupplier source) {
@@ -398,24 +423,24 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
     }
 
     /** Replace the input with the highlighted command (Tab or Enter). */
-    public boolean applyCompletion() {
-        return inputPortal.applyCompletion();
+    public boolean applyCompletion() { return inputPortal.applyCompletion(); }
+
+    /** K41：Enter 补全语义——true＝继续提交（slash 名/无补全）；false＝文件补全只应用。 */
+    public boolean enterWithCompletion() { return inputPortal.enterWithCompletion(); }
+
+    /** K25：补全根目录（装配时注入会话 cwd）。 */
+    public void setCompletionBasePath(java.nio.file.Path basePath) {
+        inputPortal.setCompletionBasePath(basePath);
     }
 
-    /** Whether the slash-command popup is visible. */
-    public boolean completerActive() {
-        return inputPortal.completerActive();
-    }
+    /** Whether a completion popup (slash or file) is visible. */
+    public boolean completerActive() { return inputPortal.completerActive(); }
 
     /** Popup row count (inline bottom-region height driver). */
-    public int completerLineCount() {
-        return inputPortal.completerLineCount();
-    }
+    public int completerLineCount() { return inputPortal.completerLineCount(); }
 
     /** Editor row count (bottom-region height driver). */
-    public int editorLineCount() {
-        return inputPortal.editorLineCount();
-    }
+    public int editorLineCount() { return inputPortal.editorLineCount(); }
 
     // ── Input portal API (PiTuiApp only touches ChatScreen) ──
 

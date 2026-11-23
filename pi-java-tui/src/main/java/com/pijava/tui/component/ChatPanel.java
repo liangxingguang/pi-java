@@ -55,6 +55,7 @@ public final class ChatPanel {
     public void clear() {
         messages.clear();
         draft = null;
+        element.clearCardState();
     }
 
     /** The number of committed messages (for tests). */

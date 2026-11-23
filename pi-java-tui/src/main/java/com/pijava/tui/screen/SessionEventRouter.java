@@ -2,8 +2,10 @@ package com.pijava.tui.screen;
 
 import com.pijava.agent.entry.Entry;
 import com.pijava.coding.agent.core.AgentSessionEvent;
+import com.pijava.coding.agent.extension.WorkingIndicatorOptions;
 import com.pijava.tui.component.ChatMessage;
 import com.pijava.tui.component.ChatPanel;
+import com.pijava.tui.component.LoaderSpinner;
 import com.pijava.tui.component.MetaKind;
 import com.pijava.tui.component.PendingQueueView;
 import com.pijava.tui.component.StatusIndicator;
@@ -24,9 +26,19 @@ final class SessionEventRouter {
     // pi 的取消提示取自用户键位表（keyText("app.interrupt")）；默认值与
     // KeybindingsManager 的默认 app.interrupt 绑定一致，PiTuiApp 构造时改用实际绑定。
     private String interruptHint = "esc";
+    // ── L7 W1（docs/22 §4.3，C6）：working 指示器三态（pi interactive-mode.ts:553-556）──
+    // pi defaultWorkingMessage = "Working"（:556 逐字）。
+    static final String DEFAULT_WORKING_MESSAGE = "Working";
+    // 扩展 setWorkingMessage/setWorkingVisible/setWorkingIndicator 的落点（volatile：
+    // 写在扩展调度入队后的渲染线程、读在渲染帧——同上方 indicator 的手法）。
+    private volatile String workingMessage;
+    private volatile boolean workingVisible = true;
+    private volatile WorkingIndicatorOptions workingOptions;
     // 批 15（T2d）：message_end 的 /bug 建议钩（PiTuiApp 装配，门在钩内）。
     private java.util.function.Consumer<com.pijava.ai.message.Message.AssistantMessage>
         bugReportHook = message -> { };
+    // docs/26 §4.3（K39）：OSC 7501 状态机（PiTuiLauncher 装配；可 null ⇒ 不报）。
+    private com.pijava.tui.util.ProgramStatusReporter programStatus;
 
     SessionEventRouter(ChatPanel chatPanel, PendingQueueView pendingQueue,
                        CacheNoticeRenderer cacheNotices) {
@@ -47,7 +59,27 @@ final class SessionEventRouter {
      * @param event 会话事件
      */
     void onSessionEvent(AgentSessionEvent event) {
+        var reporter = programStatus;
+        if (reporter != null) {
+            reporter.handleEvent(event);
+        }
         switch (event) {
+            case AgentSessionEvent.TurnStart ignored -> {
+                // L7 W1（docs/22 §4.3）：pi turn_start（interactive-mode.ts:3612-3627）逐字——
+                // workingVisible 为真且槽内非 working ⇒ 置 working；不可见 ⇒ 全清。
+                if (workingVisible) {
+                    var active = indicator;
+                    if (active == null || active.kind() != StatusIndicator.Kind.WORKING) {
+                        setIndicator(workingNow());
+                    }
+                } else {
+                    clearIndicator(null);
+                }
+            }
+            case AgentSessionEvent.AgentEnd ignored ->
+                // pi agent_end（:3848）：clearStatusIndicator("working")——kind 守卫
+                // ⇒ 不误清并发中的 compaction 指示器。
+                clearIndicator(StatusIndicator.Kind.WORKING);
             case AgentSessionEvent.AutoRetryStart start -> setIndicator(
                 StatusIndicator.retry(start.attempt(), start.maxAttempts(),
                     start.delayMs(), interruptHint));
@@ -68,14 +100,15 @@ final class SessionEventRouter {
             case AgentSessionEvent.SummarizationRetryAttemptStart start -> {
                 clearIndicator(StatusIndicator.Kind.RETRY);
                 setIndicator("branchSummary".equals(start.source())
-                    ? new StatusIndicator.BranchSummary(interruptHint)
-                    : new StatusIndicator.Compaction(start.reason(), interruptHint));
+                    ? new StatusIndicator.BranchSummary(System.nanoTime(), interruptHint)
+                    : new StatusIndicator.Compaction(System.nanoTime(),
+                        start.reason(), interruptHint));
             }
             case AgentSessionEvent.SummarizationRetryFinished ignored ->
                 clearIndicator(StatusIndicator.Kind.RETRY);
             case AgentSessionEvent.CompactionStart start ->
                 setIndicator(new StatusIndicator.Compaction(
-                    start.reason().name().toLowerCase(), interruptHint));
+                    System.nanoTime(), start.reason().name().toLowerCase(), interruptHint));
             case AgentSessionEvent.CompactionEnd ignored ->
                 clearIndicator(StatusIndicator.Kind.COMPACTION);
             case AgentSessionEvent.QueueUpdate q ->
@@ -136,12 +169,89 @@ final class SessionEventRouter {
         indicator = next;
     }
 
+    // ── L7 W1（docs/22 §4.3）：working 三态与复位 ────────────────
+
+    /** 按当前三态构造 working 指示器（pi {@code showWorkingStatusIndicator}，:2546-2559）。 */
+    private StatusIndicator workingNow() {
+        var options = workingOptions;
+        var frames = options != null && options.frames() != null
+            ? options.frames() : LoaderSpinner.DEFAULT_FRAMES;
+        long interval = options != null && options.intervalMs() != null
+            ? options.intervalMs() : LoaderSpinner.DEFAULT_INTERVAL_MS;
+        return new StatusIndicator.Working(
+            workingMessage != null ? workingMessage : DEFAULT_WORKING_MESSAGE,
+            frames, interval, System.nanoTime());
+    }
+
+    /**
+     * 扩展 {@code setWorkingMessage}（pi :2840-2846）：null ⇒ 回默认；有活动 working
+     * 时直接生效（record 不可变 ⇒ 替换新 Working、保留动画起点）。
+     */
+    void setWorkingMessage(String message) {
+        this.workingMessage = message;
+        var active = indicator;
+        if (active instanceof StatusIndicator.Working w) {
+            indicator = new StatusIndicator.Working(
+                message != null ? message : DEFAULT_WORKING_MESSAGE,
+                w.frames(), w.intervalMs(), w.startNanos());
+        }
+    }
+
+    /**
+     * 扩展 {@code setWorkingVisible}（pi {@code setWorkingVisible}，:2561-2572）：
+     * false ⇒ 清 working（kind 守卫）；true 且槽内非 working ⇒ 置（无 streaming
+     * 状态位——turn_start/AgentEnd 已是 streaming 真相源，此处对位 pi 的
+     * 「isStreaming && 非 working」半边）。
+     */
+    void setWorkingVisible(boolean visible) {
+        this.workingVisible = visible;
+        if (!visible) {
+            clearIndicator(StatusIndicator.Kind.WORKING);
+            return;
+        }
+        var active = indicator;
+        if (active == null || active.kind() != StatusIndicator.Kind.WORKING) {
+            setIndicator(workingNow());
+        }
+    }
+
+    /** 扩展 {@code setWorkingIndicator}（pi :2574-2581）：活动 working 直接换帧表。 */
+    void setWorkingIndicator(WorkingIndicatorOptions options) {
+        this.workingOptions = options;
+        var active = indicator;
+        if (active instanceof StatusIndicator.Working w) {
+            var frames = options != null && options.frames() != null
+                ? options.frames() : LoaderSpinner.DEFAULT_FRAMES;
+            long interval = options != null && options.intervalMs() != null
+                ? options.intervalMs() : LoaderSpinner.DEFAULT_INTERVAL_MS;
+            indicator = new StatusIndicator.Working(w.message(), frames, interval, w.startNanos());
+        }
+    }
+
+    /**
+     * 扩展 UI 复位（pi {@code resetExtensionUI} 的 working 段，:2673-2682 逐字序）：
+     * message/visible 回默认 → {@code setWorkingIndicator()}（帧表回默认，动画重启）→
+     * 活动 working ⇒ message 换成 {@code "Working (esc to interrupt)"}（pi 原样 quirk）。
+     */
+    void resetWorkingState() {
+        workingMessage = null;
+        workingVisible = true;
+        workingOptions = null;
+        var active = indicator;
+        if (active instanceof StatusIndicator.Working ignored) {
+            indicator = new StatusIndicator.Working(
+                DEFAULT_WORKING_MESSAGE + " (" + interruptHint + " to interrupt)",
+                LoaderSpinner.DEFAULT_FRAMES, LoaderSpinner.DEFAULT_INTERVAL_MS,
+                System.nanoTime());
+        }
+    }
+
     /**
      * 置分支摘要指示器（docs/18 §3.11；pi {@code showStatusIndicator(
      * new BranchSummaryStatusIndicator)}，interactive-mode.ts:5640）。
      */
     void showBranchSummaryIndicator() {
-        setIndicator(new StatusIndicator.BranchSummary(interruptHint));
+        setIndicator(new StatusIndicator.BranchSummary(System.nanoTime(), interruptHint));
     }
 
     /**
@@ -182,6 +292,11 @@ final class SessionEventRouter {
     void setBugReportHook(
             java.util.function.Consumer<com.pijava.ai.message.Message.AssistantMessage> hook) {
         bugReportHook = hook == null ? message -> { } : hook;
+    }
+
+    /** docs/26 §4.3（K39）：接线 OSC 7501 状态机。 */
+    void setProgramStatusReporter(com.pijava.tui.util.ProgramStatusReporter reporter) {
+        this.programStatus = reporter;
     }
 
     /** 往聊天区追加一条错误（pi {@code showError}，{@code :4273-4277}：红字 + {@code Error: } 前缀）。 */

@@ -72,11 +72,17 @@ public final class SelectList<T> {
             return true;
         }
         if (event.isUp()) {
-            selected = Math.max(0, selected - 1);
+            // pi select-list.ts:151-155：顶部上移 wrap 到底部。
+            if (!visible.isEmpty()) {
+                selected = selected == 0 ? visible.size() - 1 : selected - 1;
+            }
             return true;
         }
         if (event.isDown()) {
-            selected = Math.min(visible.size() - 1, selected + 1);
+            // pi select-list.ts:156-160：底部下移 wrap 到顶部。
+            if (!visible.isEmpty()) {
+                selected = selected >= visible.size() - 1 ? 0 : selected + 1;
+            }
             return true;
         }
         // L5 W9：搜索框光标键只移动光标（不 refresh、不重置选中）。
@@ -248,16 +254,26 @@ public final class SelectList<T> {
 
     /** Render the list with the current selection highlighted. */
     public Element render() {
+        if (visible.isEmpty()) {
+            // pi select-list.ts:79-83：无匹配文案。
+            return TamboUIAdapter.markupText("[dim]  No matching commands[/]");
+        }
         String title = filter.isEmpty()
             ? "Select (type to filter, ↑/↓ enter, Esc cancel)"
             : "Filter: \"" + filter + "\" (Esc clear, enter confirm)";
-        return TamboUIAdapter.list(
+        Element list = TamboUIAdapter.list(
             visibleRange().stream().map(label).toList())
             .selected(windowSelectedIndex())
             .highlightColor(dev.tamboui.style.Color.CYAN)
             .rounded()
             .title(title)
             .fill();
+        if (visible.size() <= maxVisible) {
+            return list;
+        }
+        // pi select-list.ts:105-109：滚动时追加 "  (i/n)"。
+        String count = "  (" + (selectedIndex() + 1) + "/" + visible.size() + ")";
+        return TamboUIAdapter.column(List.of(list, TamboUIAdapter.markupText("[dim]" + count + "[/]")));
     }
 
     private void refresh() {

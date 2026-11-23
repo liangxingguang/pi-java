@@ -159,8 +159,8 @@ public final class PiTuiApp {
         chatScreen.setPreviousAssistantSupplier(() -> com.pijava.tui.util.ReasoningDropNotice
             .previousAssistant(session.accumulatedEntries()));
         chatScreen.setSlashCommands(slashFlow.loadSlashItems());
-        chatScreen.setInterruptHint(
-            KeybindingHints.keyText(keys.strokeFor(KeybindingsManager.INTERRUPT)));
+        chatScreen.setCompletionBasePath(java.nio.file.Path.of(session.cwd())); // K25：@文件补全根目录
+        chatScreen.setInterruptHint(KeybindingHints.keyText(keys.strokeFor(KeybindingsManager.INTERRUPT)));
         // docs/21（§3.7）：排队区 hint 行键名随绑定表取（pi getAppKeyDisplay 对位）。
         chatScreen.setDequeueHint(
             KeybindingHints.displayText(keys.strokeFor(KeybindingsManager.DEQUEUE)));

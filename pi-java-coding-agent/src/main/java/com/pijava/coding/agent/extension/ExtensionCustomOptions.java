@@ -14,10 +14,13 @@ import org.jspecify.annotations.Nullable;
  * @param overlay  true ⇒ 走 overlay 臂（java 与非 overlay 臂同路径——模态层，
  *                 窄差 D99；pi 默认 false 逐字）
  * @param onHandle overlay 展示后回调（窄化三件 {@link ExtensionOverlayHandle}）
+ * @param blocked  OSC 7501 阻塞状态（docs/26 §4.3，K39；pi {@code options?.blocked}）
  */
 public record ExtensionCustomOptions(
-    boolean overlay, @Nullable Consumer<ExtensionOverlayHandle> onHandle) {
+    boolean overlay, @Nullable Consumer<ExtensionOverlayHandle> onHandle,
+    @Nullable ExtensionBlockedStatus blocked) {
 
-    /** 默认（overlay=false，无 handle 回调——pi {@code options === undefined}）。 */
-    public static final ExtensionCustomOptions DEFAULT = new ExtensionCustomOptions(false, null);
+    /** 默认（overlay=false，无 handle 回调，无 blocked——pi {@code options === undefined}）。 */
+    public static final ExtensionCustomOptions DEFAULT =
+        new ExtensionCustomOptions(false, null, null);
 }

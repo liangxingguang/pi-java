@@ -32,6 +32,13 @@ public final class EventParser {
     private static final int ESC = 27;
     private static final int PEEK_TIMEOUT = 50;
 
+    /**
+     * docs/26 §4.4（K32）：pi {@code SHIFTED_SYMBOL_KEYS} 逐字——这些符号由
+     * Shift＋物理键产生，键位名写符号时消费隐含 Shift（{@code Ctrl++} 可命中
+     * {@code Ctrl+Shift+=}）。
+     */
+    private static final String SHIFTED_SYMBOLS = "~!@#$%^&*()_+|{}:<>?";
+
     private EventParser() {
     }
 
@@ -190,7 +197,7 @@ public final class EventParser {
 
         int c;
         while ((c = backend.read(PEEK_TIMEOUT)) != -2 && c != -1) {
-            if (c >= '0' && c <= '9' || c == ';') {
+            if (c >= '0' && c <= '9' || c == ';' || c == ':') {
                 sb.append((char) c);
             } else {
                 // End of sequence
@@ -209,6 +216,10 @@ public final class EventParser {
 
         // Parse sequences like "1~" (Home), "4~" (End), "5~" (PgUp), etc.
         if (terminator == '~') {
+            // xterm modifyOtherKeys: ESC[27;<modifier>;<keycode>~（docs/26 §4.4）。
+            if (params.startsWith("27;")) {
+                return parseModifyOtherKeys(params, bindings);
+            }
             return parseVT(params, bindings);
         }
 
@@ -305,17 +316,77 @@ public final class EventParser {
         }
     }
 
-    /** Parse CSI-u key sequences: ESC[<code>;<modifier>u (kitty keyboard protocol). */
-    private static Event parseCsiU(String params, Bindings bindings) {
+    /**
+     * Parse xterm modifyOtherKeys: {@code ESC[27;<modifier>;<keycode>~}
+     * (docs/26 §4.4). Modifier is 1-indexed (2 = shift, 5 = ctrl, …);
+     * shifted symbols consume the implicit Shift so bindings like
+     * {@code ctrl++} match the physical {@code ctrl+shift+=}.
+     */
+    private static Event parseModifyOtherKeys(String params, Bindings bindings) {
         String[] parts = params.split(";");
+        if (parts.length < 3) {
+            return KeyEvent.ofKey(KeyCode.UNKNOWN, bindings);
+        }
+        int modValue;
         int code;
         try {
-            code = Integer.parseInt(parts[0]);
+            modValue = Integer.parseInt(parts[1]);
+            code = Integer.parseInt(parts[2]);
         } catch (NumberFormatException e) {
             return KeyEvent.ofKey(KeyCode.UNKNOWN, bindings);
         }
-        KeyModifiers mods = parts.length > 1
-            ? parseModifierCode(parts[1]) : KeyModifiers.NONE;
+        int bits = modValue - 1;
+        boolean shift = (bits & 1) != 0;
+        boolean alt = (bits & 2) != 0;
+        boolean ctrl = (bits & 4) != 0;
+        if (shift && isShiftedSymbol(code)) {
+            shift = false;
+        }
+        KeyModifiers mods = KeyModifiers.of(ctrl, alt, shift);
+        return switch (code) {
+            case 13 -> KeyEvent.ofKey(KeyCode.ENTER, mods, bindings);
+            case 9 -> KeyEvent.ofKey(KeyCode.TAB, mods, bindings);
+            case 27 -> KeyEvent.ofKey(KeyCode.ESCAPE, mods, bindings);
+            case 127 -> KeyEvent.ofKey(KeyCode.BACKSPACE, mods, bindings);
+            default -> code >= 32 && code <= 126
+                ? KeyEvent.ofChar((char) code, mods, bindings)
+                : KeyEvent.ofKey(KeyCode.UNKNOWN, bindings);
+        };
+    }
+
+    /** Whether {@code code} is produced by Shift and named as the symbol. */
+    private static boolean isShiftedSymbol(int code) {
+        return code >= 0 && code < 128 && SHIFTED_SYMBOLS.indexOf(code) >= 0;
+    }
+
+    /** Parse CSI-u key sequences: ESC[<code>[[:<shifted>[:<base>]]];<modifier>u. */
+    private static Event parseCsiU(String params, Bindings bindings) {
+        String keyPart = params;
+        String modPart = null;
+        int semi = params.indexOf(';');
+        if (semi >= 0) {
+            keyPart = params.substring(0, semi);
+            modPart = params.substring(semi + 1);
+        }
+        String[] groups = keyPart.split(":", -1);
+        int code;
+        Integer shiftedKey = null;
+        try {
+            code = Integer.parseInt(groups[0]);
+            if (groups.length > 1 && !groups[1].isEmpty()) {
+                shiftedKey = Integer.parseInt(groups[1]);
+            }
+            // groups[2] is the base-layout key; parsed but unused (docs/26 §5 N3).
+        } catch (NumberFormatException e) {
+            return KeyEvent.ofKey(KeyCode.UNKNOWN, bindings);
+        }
+        KeyModifiers mods = modPart != null
+            ? parseModifierCode(modPart.split(":", 2)[0]) : KeyModifiers.NONE;
+        if (shiftedKey != null && isShiftedSymbol(shiftedKey) && hasShift(modPart)) {
+            // Logical Shifted symbol: name the produced symbol and consume Shift.
+            code = shiftedKey;
+            mods = parseModifierCode(stripShift(modPart));
+        }
 
         return switch (code) {
             case 13 -> KeyEvent.ofKey(KeyCode.ENTER, mods, bindings);
@@ -324,6 +395,27 @@ public final class EventParser {
             case 127 -> KeyEvent.ofKey(KeyCode.BACKSPACE, mods, bindings);
             default -> parseCsiUPrintable(code, mods, bindings);
         };
+    }
+
+    /** Whether the CSI-u modifier field carries Shift (bit 0 after the 1-indexed decode). */
+    private static boolean hasShift(String modPart) {
+        try {
+            int bits = Integer.parseInt(modPart.split(":", 2)[0]) - 1;
+            return (bits & 1) != 0;
+        } catch (NumberFormatException e) {
+            return false;
+        }
+    }
+
+    /** Returns the CSI-u modifier field with Shift cleared (other bits preserved). */
+    private static String stripShift(String modPart) {
+        String token = modPart.split(":", 2)[0];
+        try {
+            int bits = Integer.parseInt(token) - 1;
+            return Integer.toString((bits & ~1) + 1);
+        } catch (NumberFormatException e) {
+            return token;
+        }
     }
 
     /** Printable ASCII keys carried in CSI-u (letters, digits, punctuation). */

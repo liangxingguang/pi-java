@@ -1,5 +1,7 @@
 package com.pijava.tui.component;
 
+import java.util.List;
+
 /**
  * 状态指示器槽位的取值 —— 对齐 pi
  * {@code modes/interactive/components/status-indicator.ts}。
@@ -13,12 +15,18 @@ package com.pijava.tui.component;
  * <p>倒计时<b>不靠定时器</b>：pi 用 {@code CountdownTimer} 每秒 {@code requestRender}，
  * 而 pi-java 的 fullscreen 每 33 ms 整帧重绘
  * （{@code TamboUIAdapter.createRunner().tickRate(33ms)}）⇒ 按帧从截止时刻重算即等价；
- * inline（按需重绘）另配 1 Hz 唤醒（{@code util.CountdownWake}）。见 原 docs/31 §8.38.4。</p>
+ * inline（按需重绘）另配 80ms 唤醒（{@code util.CountdownWake}）。见 原 docs/31 §8.38.4
+ * ＋ docs/22 §4.4。</p>
+ *
+ * <p>L7 W1（docs/22 §4.2）：pi 的四 kind 全是 {@code Loader} 子类 ⇒ <b>全带 spinner</b>
+ * ——各 record 增 {@code startNanos}（动画起点），渲染层按
+ * {@link #spinnerFrameAt(long)} 逐帧取 braille 帧并按 kind 配色
+ * （working/compaction/branchSummary ⇒ accent，retry ⇒ warning）。</p>
  */
 public sealed interface StatusIndicator {
 
-    /** pi {@code StatusIndicatorKind} 中本包可产生的三种。 */
-    enum Kind { RETRY, COMPACTION, BRANCH_SUMMARY }
+    /** pi {@code StatusIndicatorKind} 中本包可产生的四种（working 为 L7 W1 新增）。 */
+    enum Kind { WORKING, RETRY, COMPACTION, BRANCH_SUMMARY }
 
     /** 指示器种类（清位守卫按它比对）。 */
     Kind kind();
@@ -26,7 +34,15 @@ public sealed interface StatusIndicator {
     /** 当前应显示的文本；含倒计时的变体按 {@code nowNanos} 重算。 */
     String textAt(long nowNanos);
 
-    /** 是否含倒计时（inline 模式据此决定要不要每秒唤醒重绘）。 */
+    /**
+     * 当前应渲染的 spinner 帧（L7 W1，C5/C6）——按本指示器的帧表与起点计算。
+     * 空帧表 ⇒ {@code ""}（无 spinner 符号，message 保留）；单帧 ⇒ 静态逐字。
+     */
+    default String spinnerFrameAt(long nowNanos) {
+        return "";
+    }
+
+    /** 是否含倒计时或帧动画（inline 模式的 80ms 唤醒据此决定要不要标脏重绘）。 */
     default boolean ticking() {
         return false;
     }
@@ -41,16 +57,28 @@ public sealed interface StatusIndicator {
      * @return 新的 retry 指示器
      */
     static Retry retry(int attempt, int maxAttempts, long delayMs, String interruptHint) {
-        return new Retry(attempt, maxAttempts,
-            System.nanoTime() + delayMs * 1_000_000L, interruptHint);
+        long now = System.nanoTime();
+        return new Retry(now, attempt, maxAttempts,
+            now + delayMs * 1_000_000L, interruptHint);
+    }
+
+    /**
+     * 建 working 指示器（pi {@code WorkingStatusIndicator}，:37-55）——默认帧表＋默认间隔。
+     *
+     * @param message 文案（pi {@code workingMessage ?? defaultWorkingMessage}，默认 {@code "Working"}）
+     * @return 新的 working 指示器
+     */
+    static Working working(String message) {
+        return new Working(message, LoaderSpinner.DEFAULT_FRAMES,
+            LoaderSpinner.DEFAULT_INTERVAL_MS, System.nanoTime());
     }
 
     /**
      * retry 指示器 —— 文本逐字照 pi：
      * {@code Retrying (1/3) in 4s... (esc to cancel)}（秒数 = {@code ceil(剩余/1000)}）。
      */
-    record Retry(int attempt, int maxAttempts, long deadlineNanos, String interruptHint)
-            implements StatusIndicator {
+    record Retry(long startNanos, int attempt, int maxAttempts, long deadlineNanos,
+                 String interruptHint) implements StatusIndicator {
 
         @Override
         public Kind kind() {
@@ -62,6 +90,12 @@ public sealed interface StatusIndicator {
             long remainingMs = Math.max(0L, deadlineNanos - nowNanos) / 1_000_000L;
             return "Retrying (" + attempt + "/" + maxAttempts + ") in "
                 + ((remainingMs + 999) / 1000) + "s... (" + interruptHint + " to cancel)";
+        }
+
+        @Override
+        public String spinnerFrameAt(long nowNanos) {
+            return LoaderSpinner.frameAt(LoaderSpinner.DEFAULT_FRAMES,
+                LoaderSpinner.DEFAULT_INTERVAL_MS, startNanos, nowNanos);
         }
 
         @Override
@@ -78,7 +112,8 @@ public sealed interface StatusIndicator {
      *                      缺席时落 pi 的 else 支（{@code Auto-compacting...}）
      * @param interruptHint 取消提示键（pi {@code keyText("app.interrupt")}）
      */
-    record Compaction(String reasonLiteral, String interruptHint) implements StatusIndicator {
+    record Compaction(long startNanos, String reasonLiteral, String interruptHint)
+            implements StatusIndicator {
 
         @Override
         public Kind kind() {
@@ -88,6 +123,17 @@ public sealed interface StatusIndicator {
         @Override
         public String textAt(long nowNanos) {
             return label() + " (" + interruptHint + " to cancel)";
+        }
+
+        @Override
+        public String spinnerFrameAt(long nowNanos) {
+            return LoaderSpinner.frameAt(LoaderSpinner.DEFAULT_FRAMES,
+                LoaderSpinner.DEFAULT_INTERVAL_MS, startNanos, nowNanos);
+        }
+
+        @Override
+        public boolean ticking() {
+            return true;
         }
 
         private String label() {
@@ -108,7 +154,7 @@ public sealed interface StatusIndicator {
      * pi interactive-mode.ts:5640 对位）与 {@code summarization_retry_attempt_start}
      * 的 {@code "branchSummary"} 源。</p>
      */
-    record BranchSummary(String interruptHint) implements StatusIndicator {
+    record BranchSummary(long startNanos, String interruptHint) implements StatusIndicator {
 
         @Override
         public Kind kind() {
@@ -118,6 +164,55 @@ public sealed interface StatusIndicator {
         @Override
         public String textAt(long nowNanos) {
             return "Summarizing branch... (" + interruptHint + " to cancel)";
+        }
+
+        @Override
+        public String spinnerFrameAt(long nowNanos) {
+            return LoaderSpinner.frameAt(LoaderSpinner.DEFAULT_FRAMES,
+                LoaderSpinner.DEFAULT_INTERVAL_MS, startNanos, nowNanos);
+        }
+
+        @Override
+        public boolean ticking() {
+            return true;
+        }
+    }
+
+    /**
+     * working 指示器（L7 W1 新增，C6）——pi {@code WorkingStatusIndicator}：
+     * 流式期间「spinner + 文案」，默认文案 {@code "Working"}。
+     *
+     * <p>扩展面语义（pi {@code WorkingIndicatorOptions}，types.ts:136-141 逐字）：
+     * {@code frames} 空 ⇒ 无 spinner 符号（message 保留）；单帧 ⇒ 静态逐字
+     * （custom frames verbatim——渲染层对非默认帧表不加色，N4）；默认帧表 ⇒ accent 色。</p>
+     *
+     * @param message    文案
+     * @param frames     帧表（null/空 ⇒ 无 spinner 符号）
+     * @param intervalMs 帧间隔毫秒（&le;0 ⇒ 默认 80）
+     * @param startNanos 动画起点
+     */
+    record Working(String message, List<String> frames, long intervalMs, long startNanos)
+            implements StatusIndicator {
+
+        @Override
+        public Kind kind() {
+            return Kind.WORKING;
+        }
+
+        @Override
+        public String textAt(long nowNanos) {
+            return message;
+        }
+
+        @Override
+        public String spinnerFrameAt(long nowNanos) {
+            return LoaderSpinner.frameAt(frames, intervalMs, startNanos, nowNanos);
+        }
+
+        /** 帧表有动画（&ge;2 帧）才需要周期唤醒。 */
+        @Override
+        public boolean ticking() {
+            return frames != null && frames.size() > 1;
         }
     }
 }

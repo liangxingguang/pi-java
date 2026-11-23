@@ -42,10 +42,26 @@ public final class MarkdownRenderer {
         }
         // pi 逐字：tab → 3 空格（lexing 前）
         var blocks = MarkdownBlocks.parse(markdown.replace("\t", "   "));
+        if (blocks.isEmpty()) {
+            // pi render(): return result.length > 0 ? result : [""]
+            return List.of(blank());
+        }
+        return assemble(blocks, theme, defaultStyle,
+            block -> emitBlock(block, theme, defaultStyle));
+    }
+
+    /**
+     * 块表 → 逻辑行（R31 缓存共用口）：块后间距规则与 {@link #toLogicalLines}
+     * 同形，块行由 {@code renderer} 提供（无缓存直接排放／缓存命中复用）。
+     */
+    static List<LogicalLine> assemble(List<MarkdownBlocks.Spaced> blocks, MarkdownTheme theme,
+                                      Style defaultStyle,
+                                      java.util.function.Function<MarkdownBlocks.Block,
+                                          List<LogicalLine>> renderer) {
         var out = new ArrayList<LogicalLine>();
         for (int i = 0; i < blocks.size(); i++) {
             var spaced = blocks.get(i);
-            emitBlock(spaced.block(), theme, defaultStyle, out);
+            out.addAll(renderer.apply(spaced.block()));
             if (i + 1 >= blocks.size()) {
                 break;
             }
@@ -67,12 +83,13 @@ public final class MarkdownRenderer {
         return out;
     }
 
-    private static LogicalLine blank() {
+    static LogicalLine blank() {
         return new LogicalLine("", 0, 0, false, Style.EMPTY);
     }
 
-    private static void emitBlock(MarkdownBlocks.Block block, MarkdownTheme theme,
-                                  Style defaultStyle, List<LogicalLine> out) {
+    static List<LogicalLine> emitBlock(MarkdownBlocks.Block block, MarkdownTheme theme,
+                                       Style defaultStyle) {
+        var out = new ArrayList<LogicalLine>();
         switch (block) {
             case MarkdownBlocks.Block.Heading h -> emitHeading(h, theme, defaultStyle, out);
             case MarkdownBlocks.Block.Paragraph p -> {
@@ -92,6 +109,7 @@ public final class MarkdownRenderer {
             case MarkdownBlocks.Block.Hr hr -> out.add(new LogicalLine(
                 "─".repeat(HR_WIDTH), 0, 0, true, fg(theme.hr())));
         }
+        return out;
     }
 
     // ── 标题（pi :473-498：L1 加下划线；L≥3 显 "#"*level+" " 前缀） ──

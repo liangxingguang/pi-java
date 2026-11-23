@@ -75,6 +75,35 @@ public sealed interface ChatMessage {
     record TurnSeparator(String label) implements ChatMessage {}
 
     /**
+     * L7 W2（R17；pi {@code CompactionSummaryMessageComponent}）：压缩摘要卡——
+     * collapsed 单行 {@code Compacted from N tokens (… to expand)}，expanded 走
+     * Markdown（{@code SUMMARY} 变换＋messageId/timestamp，漏项#6）。展开态在
+     * 渲染层（全局 {@code toolsExpanded}＋K37 per-card），投影不可变。
+     */
+    record CompactionCard(int tokensBefore, String summary, String messageId, String timestamp)
+            implements ChatMessage {}
+
+    /** L7 W2（R18；pi {@code BranchSummaryMessageComponent}）：分支摘要卡（同上同构）。 */
+    record BranchCard(String summary, String messageId, String timestamp) implements ChatMessage {}
+
+    /**
+     * L7 W2（R19；pi {@code SkillInvocationMessageComponent}）：skill 调用卡——
+     * {@code <skill>} 块由 {@link SkillBlocks#parse} 解析；{@code userMessage}
+     * 非空时渲染层在其后追加 User 气泡（pi 渲染两个组件）。
+     */
+    record SkillCard(String name, String content, String userMessage,
+                     String messageId, String timestamp) implements ChatMessage {}
+
+    /**
+     * L7 W2（漏项#7；pi {@code BashExecutionComponent}）：bash 执行卡——
+     * {@code $ cmd} 头＋尾部输出预览＋三态状态行（cancelled/exit/truncated）。
+     * {@code excludeFromContext}（{@code !!}）⇒ dim 色对位 pi {@code bashMode}。
+     */
+    record BashCard(String command, String output, Integer exitCode, boolean cancelled,
+                    boolean truncated, String fullOutputPath, boolean excludeFromContext)
+            implements ChatMessage {}
+
+    /**
      * 批 25（docs/36 T8）：Markdown 源文本气泡——经 {@code MarkdownRenderer}
      * 渲染（pi 的 {@code Markdown} 组件对位，/hotkeys interactive-mode.ts:6921）。
      * 消费面＝/help /hotkeys 等 markdown 源命令结果。
@@ -128,13 +157,14 @@ public sealed interface ChatMessage {
             case Entry.ThinkingLevelChange change ->
                 new System("Thinking: " + change.thinkingLevel(),
                     MetaKind.THINKING_LEVEL);
-            // L5 W6（pi {@code summary} 面，types.ts:1563-1568）：摘要正文过变换链。
+            // L7 W2（R17/R18＋漏项#6）：压缩/分支摘要从一行弱形状改为对位 pi 的
+            // 独立卡（collapsed 单行＋expanded Markdown），变换链带条目 id/时间。
             case Entry.Compaction compaction ->
-                new System("Compacted context: " + transformSummary(compaction.summary()),
-                    MetaKind.COMPACTION);
+                new CompactionCard(compaction.tokensBefore(), compaction.summary(),
+                    compaction.id(), iso(compaction.timestamp()));
 
             case Entry.BranchSummary summary ->
-                new System("Branch: " + transformSummary(summary.summary()), MetaKind.BRANCH);
+                new BranchCard(summary.summary(), summary.id(), iso(summary.timestamp()));
             case Entry.Custom custom -> {
                 // 批 26（docs/37 T10）：pi interactive-mode.ts:3846-3866——entry
                 // renderer 缺席 ⇒ 不渲（批 26 前的 "Custom event:" 兜底退役）。
@@ -160,16 +190,20 @@ public sealed interface ChatMessage {
                         yield new System(String.join("\n", rendered), MetaKind.CUSTOM);
                     }
                 }
+                // 漏项#6（pi custom-message.ts 构造尾部）：回落臂变换链带 id/时间。
                 yield new System("[" + customMessage.customType() + "] "
-                    + MarkdownTransformers.apply(customMessage.content().plainText(),
-                        MarkdownMessageType.CUSTOM), MetaKind.CUSTOM);
+                    + MarkdownTransformers.applyForEntry(customMessage.content().plainText(),
+                        MarkdownMessageType.CUSTOM, customMessage.id(),
+                        iso(customMessage.timestamp())), MetaKind.CUSTOM);
             }
             case Entry.Usage usage -> cacheWarmNotice(usage);
-            // #57（docs/10 §3.3 ⑧）：bashExecution 按消息条目同格渲染，文本取 pi
-            // bashExecutionToText（!! 条目持久化但不进上下文，仍照 pi 显示；
-            // 渲染格是 R3 域窄差，不逐字）。
+            // L7 W2（漏项#7，pi interactive-mode.ts bashExecution 臂）：bashExecution
+            // 从纯文本 User 改为对位 BashExecutionComponent 的卡（`$ cmd`＋尾部
+            // 输出预览＋状态行）；!! 条目持久化但不进上下文（excludeFromContext）。
             case Entry.BashExecution bash ->
-                new User(com.pijava.agent.session.ContextEntries.bashExecutionText(bash));
+                new BashCard(bash.command(), bash.output(), bash.exitCode(), bash.cancelled(),
+                    bash.truncated(), bash.fullOutputPath(),
+                    Boolean.TRUE.equals(bash.excludeFromContext()));
             // 默认视图隐藏（pi tree-selector.ts:360-362 把 context_edit 列为 settings entry）。
             case Entry.ContextEdit ignored -> null;
         };
@@ -203,15 +237,20 @@ public sealed interface ChatMessage {
         return pad <= 0 ? line : new Padded(line, pad);
     }
 
-    /** L5 W6：摘要正文走 {@code summary} 面（渲染前变换链）。 */
-    private static String transformSummary(String summary) {
-        return MarkdownTransformers.apply(summary, MarkdownMessageType.SUMMARY);
-    }
-
     private static ChatMessage fromMessage(Entry.Message message) {
         var content = message.message().content();
         return switch (message.message().role()) {
-            case "user" -> new User(joinText(content));
+            // L7 W2（R19，pi interactive-mode.ts user 臂的 parseSkillBlock）：user 消息
+            // 命中 <skill> 块 ⇒ SkillCard（userMessage 在渲染层追加 User 气泡）。
+            case "user" -> {
+                var text = joinText(content);
+                var skill = SkillBlocks.parse(text);
+                if (skill != null) {
+                    yield new SkillCard(skill.name(), skill.content(), skill.userMessage(),
+                        message.id(), iso(message.timestamp()));
+                }
+                yield new User(text);
+            }
             // L5 W8（pi types.ts:1562-1568）：持久化条目 ⇒ 带 id 与 ISO 时间。
             case "assistant" -> new Assistant(content, message.id(),
                 message.timestamp() == null ? null : message.timestamp().toString());
@@ -219,6 +258,11 @@ public sealed interface ChatMessage {
             default -> new System("Unknown message role: " + message.message().role(),
                 MetaKind.GENERIC);
         };
+    }
+
+    /** Entry 时间戳的 ISO 形（{@code null} ≙ pi 的 undefined）。 */
+    private static String iso(java.time.Instant timestamp) {
+        return timestamp == null ? null : timestamp.toString();
     }
 
     /**

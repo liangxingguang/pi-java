@@ -6,6 +6,8 @@ import com.pijava.tui.component.ChatPanel;
 import com.pijava.tui.component.MetaKind;
 import com.pijava.tui.component.PendingQueueView;
 import com.pijava.tui.component.StatusBar;
+import com.pijava.tui.component.StatusIndicator;
+import com.pijava.tui.theme.SemanticColors;
 import com.pijava.tui.util.TamboUIAdapter;
 import dev.tamboui.toolkit.element.Element;
 import dev.tamboui.toolkit.elements.Column;
@@ -103,7 +105,18 @@ final class ChatScreenLayout {
         }
         var active = sessionEventRouter.indicator();
         if (active != null) {
-            children.add(TamboUIAdapter.text(" " + active.textAt(System.nanoTime())).length(1));
+            // L7 W1（docs/22 §4.4，C5/C6）：spinner + 文案 span 组——pi 四 kind 全是
+            // Loader ⇒ 全带 spinner；配色照 status-indicator.ts（working/compaction/
+            // branchSummary spinner accent、retry spinner warning，message 一律 muted）。
+            long now = System.nanoTime();
+            var frame = active.spinnerFrameAt(now);
+            var spans = new ArrayList<dev.tamboui.text.Span>();
+            if (!frame.isEmpty()) {
+                spans.add(new dev.tamboui.text.Span(" " + frame + " ", spinnerStyle(active.kind())));
+            }
+            spans.add(new dev.tamboui.text.Span(active.textAt(now), SemanticColors.muted()));
+            children.add(TamboUIAdapter.richText(
+                dev.tamboui.text.Text.from(dev.tamboui.text.Line.from(spans))));
         } else if (extensionLayer.hasCustomFooter()) {
             children.addAll(extensionLayer.customFooterRows());
         } else {
@@ -112,6 +125,12 @@ final class ChatScreenLayout {
                 : new StatusBar().render(snapshot));
         }
         return children.size() == 1 ? children.get(0) : TamboUIAdapter.column(children);
+    }
+
+    /** 指示器 spinner 配色（pi status-indicator.ts：retry ⇒ warning，余 ⇒ accent）。 */
+    private static dev.tamboui.style.Style spinnerStyle(StatusIndicator.Kind kind) {
+        return kind == StatusIndicator.Kind.RETRY
+            ? SemanticColors.warning() : SemanticColors.accent();
     }
 
     /** Refresh the status bar from a session snapshot. */

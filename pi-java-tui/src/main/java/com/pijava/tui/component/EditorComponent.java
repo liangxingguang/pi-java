@@ -1,6 +1,7 @@
 package com.pijava.tui.component;
 
 import java.util.ArrayDeque;
+import java.util.Map;
 import java.util.function.Consumer;
 
 import com.pijava.tui.util.TamboUIAdapter;
@@ -23,26 +24,29 @@ import dev.tamboui.widgets.input.TextAreaState;
  * Ctrl+A/E/B/F cursor shortcuts, and prompt history on bare ↑/↓ (K27,
  * {@link EditorHistory}). Undo restores text and cursor via TextAreaState's
  * cursor-move primitives (it has no cursor setter).</p>
+ *
+ * <p>Kill-ring operations live in {@link EditorKillOps}; large-paste folding
+ * (K26) in {@link EditorPaste}; character jump mode (K31) in
+ * {@link EditorJump}.</p>
  */
 public final class EditorComponent {
 
     /** Undo snapshot: editor text plus the grapheme-column cursor position. */
-    private record Snapshot(String text, int row, int col) {
+    private record Snapshot(String text, int row, int col,
+                            Map<Integer, String> pastes, int pasteCounter) {
     }
-
-    /** pi {@code lastAction}: consecutive kills accumulate, yank enables yank-pop. */
-    private static final String KILL = "kill";
-    private static final String YANK = "yank";
-    private static final String TYPE_WORD = "type-word";
 
     private final TextAreaState state = new TextAreaState();
     private final EditorElement element;
-    private final KillRing killRing = new KillRing();
+    private final EditorKillOps killOps = new EditorKillOps(state, this::pushSnapshot);
     /** 批 34（K27）：提示历史＋↑/↓ 首末行分派（pi editor.ts navigateHistory 对位）。 */
     private final EditorHistory history = new EditorHistory();
     private final ArrayDeque<Snapshot> undoStack = new ArrayDeque<>();
+    /** K26：大粘贴折叠注册表（pi pastes/pasteCounter）。 */
+    private final EditorPaste paste = new EditorPaste(state);
+    /** K31：字符跳转等待态。 */
+    private final EditorJump jump = new EditorJump(state);
     private Consumer<String> submitHandler = text -> { };
-    private String lastAction;
     /** 批 12 T4（docs/23 §3）：pi {@code editorPaddingX}（editor.ts:523-524
      *  双侧留白对位）——live-read 热更；默认 0。 */
     private java.util.function.IntSupplier paddingX = () -> 0;
@@ -97,6 +101,10 @@ public final class EditorComponent {
      */
     public void onKeyEvent(KeyEvent event) {
         var stroke = TamboUIAdapter.toStroke(event);
+        // K31（pi editor.ts:704-722）：jump mode 等待态与触发键最优先。
+        if (jump.handleKey(event, stroke)) {
+            return;
+        }
         // 批 34（K27；pi editor.ts:928/941 对位）：↑/↓ 首末行走提示历史，其余键退出浏览。
         if (history.handleNavigation(event.code(), event.hasCtrl() || event.hasAlt(),
                 state, this::pushSnapshot)) {
@@ -104,35 +112,35 @@ public final class EditorComponent {
         }
         // pi tui.editor.* bindings that do not clash with the app.* shortcuts.
         if (stroke.ctrl() && "w".equals(stroke.key())) {
-            deleteWordBackward();
+            killOps.deleteWordBackward();
             return;
         }
         if (stroke.alt() && "backspace".equals(stroke.key())) {
-            deleteWordBackward();
+            killOps.deleteWordBackward();
             return;
         }
         if (stroke.alt() && "d".equals(stroke.key())) {
-            deleteWordForward();
+            killOps.deleteWordForward();
             return;
         }
         if (stroke.alt() && "delete".equals(stroke.key())) {
-            deleteWordForward();
+            killOps.deleteWordForward();
             return;
         }
         if (stroke.ctrl() && "u".equals(stroke.key())) {
-            deleteToLineStart();
+            killOps.deleteToLineStart();
             return;
         }
         if (stroke.ctrl() && "k".equals(stroke.key())) {
-            deleteToLineEnd();
+            killOps.deleteToLineEnd();
             return;
         }
         if (stroke.ctrl() && "y".equals(stroke.key())) {
-            yank();
+            killOps.yank();
             return;
         }
         if (stroke.alt() && "y".equals(stroke.key())) {
-            yankPop();
+            killOps.yankPop();
             return;
         }
         if (stroke.ctrl() && "-".equals(stroke.key())) {
@@ -140,11 +148,11 @@ public final class EditorComponent {
             return;
         }
         if (stroke.ctrl() && "left".equals(stroke.key()) || stroke.alt() && "b".equals(stroke.key())) {
-            moveWordLeft();
+            killOps.moveWordLeft();
             return;
         }
         if (stroke.ctrl() && "right".equals(stroke.key()) || stroke.alt() && "f".equals(stroke.key())) {
-            moveWordRight();
+            killOps.moveWordRight();
             return;
         }
         // pi cursorLineStart/End（批 34，K20：ctrl+home/end 归还上层视口滚动的
@@ -195,10 +203,10 @@ public final class EditorComponent {
             return;
         }
         boolean whitespace = text.length() == 1 && Character.isWhitespace(text.charAt(0));
-        if (whitespace || !TYPE_WORD.equals(lastAction)) {
+        if (whitespace || !EditorKillOps.TYPE_WORD.equals(killOps.lastAction())) {
             pushSnapshot();
         }
-        lastAction = TYPE_WORD;
+        killOps.markTypeWord();
         state.insert(text);
     }
 
@@ -206,138 +214,30 @@ public final class EditorComponent {
         if (state.cursorCol() == 0 && state.cursorRow() == 0) {
             return;
         }
+        // K26（pi editor.ts:1411-1433）：退格落在完整粘贴标记上 ⇒ 整段删除并重编号。
+        if (paste.deleteBackward(this::pushSnapshot)) {
+            killOps.clearAction();
+            return;
+        }
         pushSnapshot();
-        lastAction = null;
+        killOps.clearAction();
         state.deleteBackward();
     }
 
     private void forwardDelete() {
+        // K26：前向删落在完整粘贴标记起点 ⇒ 整段删除（pi 原子段语义的等价面）。
+        if (paste.deleteForward(this::pushSnapshot)) {
+            killOps.clearAction();
+            return;
+        }
         String line = state.getLine(state.cursorRow());
         if (state.cursorRow() == state.lineCount() - 1
                 && state.cursorCol() >= EditorWordNav.charToGrapheme(line, line.length())) {
             return;
         }
         pushSnapshot();
-        lastAction = null;
+        killOps.clearAction();
         state.deleteForward();
-    }
-
-    /** Delete from the start of the line to the cursor (Ctrl+U), killing the text. */
-    private void deleteToLineStart() {
-        String line = state.getLine(state.cursorRow());
-        int col = state.cursorCol();
-        if (col > 0) {
-            pushSnapshot();
-            int charCursor = EditorWordNav.graphemeToChar(line, col);
-            killRing.push(line.substring(0, charCursor), true, KILL.equals(lastAction));
-            lastAction = KILL;
-            state.moveCursorToLineStart();
-            deleteForwardTimes(col);
-        } else if (state.cursorRow() > 0) {
-            // At start of a line: merge with the previous line, killing the newline.
-            pushSnapshot();
-            killRing.push("\n", true, KILL.equals(lastAction));
-            lastAction = KILL;
-            state.moveCursorToLineStart();
-            state.deleteBackward();
-        }
-    }
-
-    /** Delete from the cursor to the end of the line (Ctrl+K), killing the text. */
-    private void deleteToLineEnd() {
-        String line = state.getLine(state.cursorRow());
-        int col = state.cursorCol();
-        int lineGraphemes = EditorWordNav.charToGrapheme(line, line.length());
-        if (col < lineGraphemes) {
-            pushSnapshot();
-            int charCursor = EditorWordNav.graphemeToChar(line, col);
-            killRing.push(line.substring(charCursor), false, KILL.equals(lastAction));
-            lastAction = KILL;
-            deleteForwardTimes(lineGraphemes - col);
-        } else if (state.cursorRow() < state.lineCount() - 1) {
-            // At end of a line: merge with the next line, killing the newline.
-            pushSnapshot();
-            killRing.push("\n", false, KILL.equals(lastAction));
-            lastAction = KILL;
-            state.deleteForward();
-        }
-    }
-
-    /** Delete the word before the cursor (Ctrl+W / Alt+Backspace), killing it. */
-    private void deleteWordBackward() {
-        String line = state.getLine(state.cursorRow());
-        int col = state.cursorCol();
-        if (col == 0) {
-            if (state.cursorRow() > 0) {
-                pushSnapshot();
-                killRing.push("\n", true, KILL.equals(lastAction));
-                lastAction = KILL;
-                state.moveCursorToLineStart();
-                state.deleteBackward();
-            }
-            return;
-        }
-        pushSnapshot();
-        boolean wasKill = KILL.equals(lastAction);
-        int charCursor = EditorWordNav.graphemeToChar(line, col);
-        int deleteFromChar = EditorWordNav.findWordBackward(line, charCursor);
-        int deleteFromCol = EditorWordNav.charToGrapheme(line, deleteFromChar);
-        killRing.push(line.substring(deleteFromChar, charCursor), true, wasKill);
-        lastAction = KILL;
-        // Place the cursor at the word start and delete forward only the word,
-        // leaving the [0, deleteFrom) prefix in place.
-        state.moveCursorToLineStart();
-        moveCursorRightTimes(deleteFromCol);
-        deleteForwardTimes(col - deleteFromCol);
-    }
-
-    /** Delete the word after the cursor (Alt+D / Alt+Delete), killing it. */
-    private void deleteWordForward() {
-        String line = state.getLine(state.cursorRow());
-        int col = state.cursorCol();
-        int lineGraphemes = EditorWordNav.charToGrapheme(line, line.length());
-        if (col >= lineGraphemes) {
-            if (state.cursorRow() < state.lineCount() - 1) {
-                pushSnapshot();
-                killRing.push("\n", false, KILL.equals(lastAction));
-                lastAction = KILL;
-                state.deleteForward();
-            }
-            return;
-        }
-        pushSnapshot();
-        boolean wasKill = KILL.equals(lastAction);
-        int charCursor = EditorWordNav.graphemeToChar(line, col);
-        int deleteToChar = EditorWordNav.findWordForward(line, charCursor);
-        int deleteToCol = EditorWordNav.charToGrapheme(line, deleteToChar);
-        killRing.push(line.substring(charCursor, deleteToChar), false, wasKill);
-        lastAction = KILL;
-        deleteForwardTimes(deleteToCol - col);
-    }
-
-    /** Yank (paste) the most recent kill-ring entry at the cursor (Ctrl+Y). */
-    private void yank() {
-        if (killRing.length() == 0) {
-            return;
-        }
-        pushSnapshot();
-        state.insert(killRing.peek());
-        lastAction = YANK;
-    }
-
-    /**
-     * Cycle through the kill ring (Alt+Y): only works immediately after a yank
-     * and replaces the last yanked text with the previous entry.
-     */
-    private void yankPop() {
-        if (!YANK.equals(lastAction) || killRing.length() <= 1) {
-            return;
-        }
-        pushSnapshot();
-        deleteGraphemesBackward(EditorWordNav.graphemeCount(killRing.peek()));
-        killRing.rotate();
-        state.insert(killRing.peek());
-        lastAction = YANK;
     }
 
     /** Undo the most recent edit unit, restoring text and cursor (Ctrl+-). */
@@ -351,85 +251,34 @@ public final class EditorComponent {
         for (int i = 0; i < snapshot.row(); i++) {
             state.moveCursorDown();
         }
+        state.moveCursorToLineStart();
         for (int i = 0; i < snapshot.col(); i++) {
             state.moveCursorRight();
         }
+        // K26（pi editor.ts:2133-2142）：撤销同时恢复粘贴注册表与计数。
+        paste.restore(snapshot.pastes(), snapshot.pasteCounter());
         state.ensureCursorVisible(state.lineCount(), 80);
-        lastAction = null;
-    }
-
-    /** Move the cursor one word backward (Ctrl+Left / Alt+B). */
-    private void moveWordLeft() {
-        lastAction = null;
-        String line = state.getLine(state.cursorRow());
-        if (state.cursorCol() == 0) {
-            if (state.cursorRow() > 0) {
-                state.moveCursorUp();
-                state.moveCursorToLineEnd();
-            }
-            return;
-        }
-        int charCursor = EditorWordNav.graphemeToChar(line, state.cursorCol());
-        int newCol = EditorWordNav.charToGrapheme(line,
-            EditorWordNav.findWordBackward(line, charCursor));
-        state.moveCursorToLineStart();
-        moveCursorRightTimes(newCol);
-    }
-
-    /** Move the cursor one word forward (Ctrl+Right / Alt+F). */
-    private void moveWordRight() {
-        lastAction = null;
-        String line = state.getLine(state.cursorRow());
-        int lineGraphemes = EditorWordNav.charToGrapheme(line, line.length());
-        if (state.cursorCol() >= lineGraphemes) {
-            if (state.cursorRow() < state.lineCount() - 1) {
-                state.moveCursorDown();
-                state.moveCursorToLineStart();
-            }
-            return;
-        }
-        int charCursor = EditorWordNav.graphemeToChar(line, state.cursorCol());
-        int newCol = EditorWordNav.charToGrapheme(line,
-            EditorWordNav.findWordForward(line, charCursor));
-        state.moveCursorToLineStart();
-        moveCursorRightTimes(newCol);
+        killOps.clearAction();
     }
 
     // ── TextAreaState driver helpers ────────────────────────────────────
 
     private void pushSnapshot() {
-        undoStack.addLast(new Snapshot(state.text(), state.cursorRow(), state.cursorCol()));
-    }
-
-    private void deleteForwardTimes(int times) {
-        for (int i = 0; i < times; i++) {
-            state.deleteForward();
-        }
-    }
-
-    private void moveCursorRightTimes(int times) {
-        for (int i = 0; i < times; i++) {
-            state.moveCursorRight();
-        }
-    }
-
-    private void deleteGraphemesBackward(int graphemes) {
-        for (int i = 0; i < graphemes; i++) {
-            state.deleteBackward();
-        }
+        undoStack.addLast(new Snapshot(state.text(), state.cursorRow(), state.cursorCol(),
+            paste.snapshotPastes(), paste.counter()));
     }
 
     // ── Public API (unchanged surface, programmatic edits are undoable) ──
 
-    /** Insert pasted text at the cursor (bracketed paste support). */
+    /** Insert pasted text at the cursor (bracketed paste support; K26 folding). */
     public void insertText(String text) {
         if (text == null || text.isEmpty()) {
             return;
         }
         pushSnapshot();
-        lastAction = null;
+        killOps.clearAction();
         history.reset();
-        state.insert(text);
+        paste.insert(text);
     }
 
     /** Replace the whole editor content (slash completion). */
@@ -438,9 +287,10 @@ public final class EditorComponent {
         if (!state.text().equals(replacement)) {
             pushSnapshot();
         }
-        lastAction = null;
+        killOps.clearAction();
         history.reset();
         state.setText(replacement);
+        paste.clear();
     }
 
     /** Register the submit callback (invoked by the app on plain Enter). */
@@ -458,12 +308,19 @@ public final class EditorComponent {
         return state.text();
     }
 
+    /** K26：展开后的完整文本（粘贴标记还原；外部编辑器等消费面用）。 */
+    public String getExpandedText() {
+        return paste.expand(state.text());
+    }
+
     /** Clear the editor and its undo history. */
     public void clear() {
         state.clear();
         undoStack.clear();
-        lastAction = null;
+        killOps.clearAction();
         history.reset();
+        jump.cancel();
+        paste.clear();
     }
 
     /** Replace the editor content (programmatic edits are undoable). */
@@ -472,29 +329,62 @@ public final class EditorComponent {
         if (!state.text().equals(replacement)) {
             pushSnapshot();
         }
-        lastAction = null;
+        killOps.clearAction();
         history.reset();
         state.setText(replacement);
+        paste.clear();
+    }
+
+    /**
+     * K25 补全底座：光标所在行的 {@code [0, cursor)} 文本。
+     *
+     * @return 当前行光标前的字符子串
+     */
+    public String lineBeforeCursor() {
+        String line = state.getLine(state.cursorRow());
+        int charCol = Math.min(EditorWordNav.graphemeToChar(line, state.cursorCol()), line.length());
+        return line.substring(0, Math.max(0, charCol));
+    }
+
+    /**
+     * K25 补全底座：删除光标前 {@code graphemes} 个字素后插入 {@code text}
+     * （补全替换 token 的原子操作，单次 undo）。
+     *
+     * @param graphemes 被替换 token 的字素数
+     * @param text      替换文本（可为空串）
+     */
+    public void replaceBeforeCursor(int graphemes, String text) {
+        pushSnapshot();
+        killOps.clearAction();
+        history.reset();
+        for (int i = 0; i < graphemes && state.cursorCol() > 0; i++) {
+            state.deleteBackward();
+        }
+        if (text != null && !text.isEmpty()) {
+            state.insert(text);
+        }
     }
 
     /** Insert a newline (Shift+Enter). */
     public void insertNewline() {
         pushSnapshot();
-        lastAction = null;
+        killOps.clearAction();
         history.reset();
         state.insert("\n");
     }
 
     /** Notify the submit handler with the current content and reset the editor. */
     public void submit() {
-        var text = state.text();
+        // K26（pi submitValue :1040-1055）：提交前展开粘贴标记并 trim。
+        var text = paste.expand(state.text()).trim();
         if (!text.isBlank()) {
             history.add(text);        // pi addToHistory：先入历史再交 handler
             history.reset();
             submitHandler.accept(text);
             state.clear();
             undoStack.clear();
-            lastAction = null;
+            killOps.clearAction();
+            paste.clear();
         }
     }
 }

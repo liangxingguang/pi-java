@@ -126,6 +126,14 @@ public final class ChatViewportElement extends StyledElement<ChatViewportElement
     private Rect lastArea;
     private boolean scrollbarHovered;
     private boolean scrollbarDragging;
+    /** 本帧 committed 消息的行区间（flatten 与 lastRowCount 同帧更新）。 */
+    private List<int[]> messageRowRanges = List.of();
+    /** L7 W2（K37/C14）：卡类消息 per-card 展开态（null ≙ 全局 toolsExpanded 回落）。 */
+    private final java.util.Map<Integer, Boolean> cardExpanded = new java.util.HashMap<>();
+    /** 点击切换后的回调（重绘/test 观察点）。 */
+    private java.util.function.IntConsumer cardToggler;
+    /** L7 W3（R31）：Markdown 顶层块缓存（视口独占，帧界裁剪）。 */
+    private final MarkdownRenderCache markdownCache = new MarkdownRenderCache();
 
     /** Creates a chat viewport with scrollbar-drag (Codex-CLI style) handling. */
     public ChatViewportElement() {
@@ -152,8 +160,24 @@ public final class ChatViewportElement extends StyledElement<ChatViewportElement
 
             @Override
             public void onDragEnd(int endX, int endY) {
-                scrollbarDragging = false;
-                scrollbarHovered = inScrollbar(endX, endY);
+                if (scrollbarDragging) {
+                    scrollbarDragging = false;
+                    scrollbarHovered = inScrollbar(endX, endY);
+                    return;
+                }
+                // L7 W2（K37/C14）：PRESS 被 toolkit 的 startDrag 吞掉（routeMouseEvent
+                // 对 draggable 元素只走 drag 通道），RELEASE 经 onDragEnd 送达——非滚动条
+                // 臂即内容点击 ⇒ 命中卡类消息行块则切换展开态（C14 窄差 N：MouseRegion
+                // 组件不移植，拖拽通道上的 press→release 承担同可观察行为）。
+                if (endX >= 0 && !inScrollbar(endX, endY)) {
+                    int index = cardMessageAt(endY);
+                    if (index >= 0) {
+                        toggleCard(index);
+                        if (cardToggler != null) {
+                            cardToggler.accept(index);
+                        }
+                    }
+                }
             }
         });
     }
@@ -183,6 +207,22 @@ public final class ChatViewportElement extends StyledElement<ChatViewportElement
     public ChatViewportElement scrollbarMode(java.util.function.Supplier<ScrollbarMode> source) {
         this.scrollbarMode = source == null ? () -> ScrollbarMode.ALWAYS : source;
         return this;
+    }
+
+    /** L7 W2（K37）：注入点击切换回调（重绘钩子；null ⇒ 仅改状态）。 */
+    public ChatViewportElement cardToggler(java.util.function.IntConsumer toggler) {
+        this.cardToggler = toggler;
+        return this;
+    }
+
+    /** L7 W2（K37）：per-card 展开态读取（{@code MessageBubble.lines(msg, i, …)} 消费）。 */
+    Boolean cardExpandedAt(int index) {
+        return cardExpanded.get(index);
+    }
+
+    /** 清空 per-card 展开态（{@code ChatPanel.clear()} 对位）。 */
+    public void clearCardState() {
+        cardExpanded.clear();
     }
 
     /** 滚动条本帧是否占位（HIDDEN ⇒ 不渲染、内容区不让列）。 */
@@ -219,7 +259,42 @@ public final class ChatViewportElement extends StyledElement<ChatViewportElement
             }
             return scrollbarHovered ? EventResult.HANDLED : EventResult.UNHANDLED;
         }
+        // K37/C14 的点击臂在 DragHandler.onDragEnd（见构造器注释：PRESS 被
+        // startDrag 吞掉，本方法收不到 PRESS/拖拽 RELEASE）。
         return EventResult.UNHANDLED;
+    }
+
+    /** 点击行 → 卡类消息的 committed 索引；非卡/越界 ⇒ -1。 */
+    private int cardMessageAt(int y) {
+        if (lastArea == null || y < lastArea.y()) {
+            return -1;
+        }
+        int row = y - lastArea.y() + scrollState.offset();
+        var ranges = messageRowRanges;
+        for (int i = 0; i < ranges.size() && i < messages.size(); i++) {
+            var range = ranges.get(i);
+            if (row >= range[0] && row < range[1] && isCardMessage(messages.get(i))) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /** K37 的三卡＋bash 卡（Padded 烘焙包装解包后判型）。 */
+    private static boolean isCardMessage(ChatMessage message) {
+        var inner = message instanceof ChatMessage.Padded padded ? padded.inner() : message;
+        return inner instanceof ChatMessage.CompactionCard
+            || inner instanceof ChatMessage.BranchCard
+            || inner instanceof ChatMessage.SkillCard
+            || inner instanceof ChatMessage.BashCard;
+    }
+
+    /** 切换 per-card 展开态：现值（无 ⇒ 全局展开态）取反（pi setExpanded(!expanded)）。 */
+    private void toggleCard(int index) {
+        boolean current = cardExpanded.containsKey(index)
+            ? cardExpanded.get(index)
+            : MessageBubbleVisibility.toolsExpanded();
+        cardExpanded.put(index, !current);
     }
 
     /** Whether the pointer currently hovers the scrollbar (test hook). */
@@ -259,21 +334,38 @@ public final class ChatViewportElement extends StyledElement<ChatViewportElement
     }
 
     private List<RenderRow> flatten(int contentWidth) {
-        var rows = new ArrayList<RenderRow>();
-        for (var message : messages) {
-            if (!rows.isEmpty()) {
-                rows.add(new RenderRow("", Style.EMPTY)); // blank row between blocks
+        markdownCache.beginFrame();
+        try {
+            var rows = new ArrayList<RenderRow>();
+            var ranges = new ArrayList<int[]>(messages.size());
+            for (int mi = 0; mi < messages.size(); mi++) {
+                var message = messages.get(mi);
+                if (!rows.isEmpty()) {
+                    rows.add(new RenderRow("", Style.EMPTY)); // blank row between blocks
+                }
+                // 批 12 T6：outputPad 烘焙消息的右 pad＝内容宽 −2×pad（左 pad 由
+                // MessageBubble 的 indent 承担）；块间空行不动（pi 的 pad 是水平向）。
+                int pad = ChatMessage.padOf(message);
+                int start = rows.size();
+                rows.addAll(TextLayout.wrap(
+                    MessageBubble.lines(message, mi, cardExpanded::get, markdownCache),
+                    Math.max(1, contentWidth - 2 * pad)));
+                ranges.add(new int[] {start, rows.size()});
             }
-            // 批 12 T6：outputPad 烘焙消息的右 pad＝内容宽 −2×pad（左 pad 由
-            // MessageBubble 的 indent 承担）；块间空行不动（pi 的 pad 是水平向）。
-            int pad = ChatMessage.padOf(message);
-            rows.addAll(TextLayout.wrap(MessageBubble.lines(message),
-                Math.max(1, contentWidth - 2 * pad)));
+            messageRowRanges = ranges;
+            if (draft != null) {
+                rows.addAll(TextLayout.wrap(
+                    MessageBubble.lines(draft, -1, index -> null, markdownCache), contentWidth));
+            }
+            return rows;
+        } finally {
+            markdownCache.endFrame();   // R31：只保留本帧用到的源与块
         }
-        if (draft != null) {
-            rows.addAll(TextLayout.wrap(MessageBubble.lines(draft), contentWidth));
-        }
-        return rows;
+    }
+
+    /** L7 W3（R31）测试观察点：视口的 Markdown 块缓存。 */
+    MarkdownRenderCache markdownCache() {
+        return markdownCache;
     }
 
     /** Parses markup into a styled, single-row line (visible rows only). */

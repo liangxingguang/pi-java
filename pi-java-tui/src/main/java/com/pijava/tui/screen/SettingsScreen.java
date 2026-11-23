@@ -11,6 +11,7 @@ import com.pijava.tui.screen.settings.SettingsItems;
 import com.pijava.tui.screen.settings.SettingsListModel;
 import com.pijava.tui.screen.settings.SettingsListView;
 import com.pijava.tui.screen.settings.WarningSettingsScreen;
+import com.pijava.tui.util.TerminalCapabilities;
 import dev.tamboui.toolkit.element.Element;
 import dev.tamboui.tui.event.KeyCode;
 import dev.tamboui.tui.event.KeyEvent;
@@ -56,7 +57,8 @@ public final class SettingsScreen implements ScreenOverlay {
         this.model = new SettingsListModel(SettingsItems.build(
             session.services().settings(), session.modelCatalog(), session.harness().getModel(),
             currentTheme == null ? "system" : currentTheme, ThemeCatalog.getAvailableThemes(),
-            false, "Alt+Enter", "Shift+Tab"), 10);
+            // docs/26 §4.1（K35）：图片设置行只在终端支持图片协议时出现（pi 同门）。
+            TerminalCapabilities.get().images() != null, "Alt+Enter", "Shift+Tab"), 10);
     }
 
     @Override

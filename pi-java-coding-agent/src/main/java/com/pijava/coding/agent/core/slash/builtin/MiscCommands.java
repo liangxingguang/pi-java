@@ -99,12 +99,9 @@ public final class MiscCommands {
                         "No assistant message to copy yet.");
                 }
                 try {
-                    var clipboard = java.awt.Toolkit.getDefaultToolkit()
-                        .getSystemClipboard();
-                    clipboard.setContents(
-                        new java.awt.datatransfer.StringSelection(lastAssistant), null);
+                    com.pijava.coding.agent.core.clipboard.NativeClipboard.copy(lastAssistant);
                     return CompletableFuture.completedFuture("Copied.");
-                } catch (Exception headless) {
+                } catch (java.io.IOException unavailable) {
                     // Headless environments fall back to printing the text.
                     return CompletableFuture.completedFuture(
                         "Clipboard unavailable; last message:\n" + lastAssistant);

@@ -2,12 +2,13 @@ package com.pijava.tui.screen;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
+import java.util.function.IntSupplier;
 
 import com.pijava.coding.agent.core.AgentSession;
 import com.pijava.coding.agent.core.SessionShareService;
 import com.pijava.coding.agent.core.ShareCancellation;
 import com.pijava.coding.agent.core.ShareOutcome;
-import com.pijava.tui.util.TamboUIAdapter;
+import com.pijava.tui.component.LoaderSpinner;
 import dev.tamboui.toolkit.element.Element;
 import dev.tamboui.tui.event.KeyEvent;
 
@@ -20,6 +21,9 @@ public final class ShareFlow {
         void dismiss(ScreenOverlay overlay);
         void status(String message);
         void error(String message);
+
+        /** 终端列数（L7 W1：loader 框线宽度源，docs/22 §4.5）。 */
+        int terminalCols();
     }
 
     @FunctionalInterface
@@ -32,12 +36,15 @@ public final class ShareFlow {
     static final class Loader implements ScreenOverlay {
         private volatile String message;
         private final Runnable onAbort;
+        private final IntSupplier width;
+        private final long startNanos = System.nanoTime();
         private volatile boolean aborted;
         private volatile boolean done;
 
-        private Loader(String message, Runnable onAbort) {
+        private Loader(String message, Runnable onAbort, IntSupplier width) {
             this.message = message;
             this.onAbort = onAbort;
+            this.width = width;
         }
 
         String message() {
@@ -67,8 +74,11 @@ public final class ShareFlow {
 
         @Override
         public Element render() {
-            return TamboUIAdapter.column(TamboUIAdapter.text(message),
-                TamboUIAdapter.text("(esc to cancel)"));
+            // L7 W1（docs/22 §4.5，C7/C8）：pi BorderedLoader 帧形——框线＋spinner＋hint。
+            return BorderedLoaderFrame.render(
+                LoaderSpinner.frameAt(LoaderSpinner.DEFAULT_FRAMES,
+                    LoaderSpinner.DEFAULT_INTERVAL_MS, startNanos, System.nanoTime()),
+                message, true, width.getAsInt());
         }
     }
 
@@ -92,7 +102,7 @@ public final class ShareFlow {
 
     /** Start one sharing attempt. */
     public void begin() {
-        loader = new Loader("Preparing share...", this::cancel);
+        loader = new Loader("Preparing share...", this::cancel, host::terminalCols);
         host.open(loader);
         ShareCancellation cancellation = cancelled::get;
         worker = Thread.startVirtualThread(() -> {

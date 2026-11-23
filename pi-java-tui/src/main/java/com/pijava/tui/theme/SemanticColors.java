@@ -29,6 +29,11 @@ public final class SemanticColors {
         return TuiThemeBridge.fg(ThemeToken.MUTED);
     }
 
+    /** pi {@code border}（DynamicBorder/loader 框线——L7 W1 docs/22 §4.5）。 */
+    public static Style border() {
+        return TuiThemeBridge.fg(ThemeToken.BORDER);
+    }
+
     /** pi {@code warning}（label 标记/branch summary 前缀）。 */
     public static Style warning() {
         return TuiThemeBridge.fg(ThemeToken.WARNING);

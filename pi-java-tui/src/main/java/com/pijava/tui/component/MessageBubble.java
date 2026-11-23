@@ -34,12 +34,35 @@ public final class MessageBubble {
      * @return logical lines (empty for an empty message)
      */
     public static List<LogicalLine> lines(ChatMessage msg) {
+        return lines(msg, -1, index -> null);
+    }
+
+    /**
+     * L7 W2（K37）：带 per-card 展开态的投影——{@code cardExpanded} 对卡类消息
+     * （三卡＋bash 卡）返回显式值（null ⇒ 回落全局 {@code toolsExpanded}）。
+     *
+     * @param messageIndex 消息在 chat 面板中的索引（点击切换的 key）
+     */
+    public static List<LogicalLine> lines(ChatMessage msg, int messageIndex,
+                                          java.util.function.IntFunction<Boolean> cardExpanded) {
+        return lines(msg, messageIndex, cardExpanded, null);
+    }
+
+    /**
+     * L7 W3（R31）：带 Markdown 顶层块缓存的投影。{@code cache == null} ⇒ 无缓存
+     * 纯函数路径（测试/scrollback 等非视口消费点），输出逐字节一致。
+     */
+    public static List<LogicalLine> lines(ChatMessage msg, int messageIndex,
+                                          java.util.function.IntFunction<Boolean> cardExpanded,
+                                          MarkdownRenderCache cache) {
+        Boolean perCard = cardExpanded.apply(messageIndex);
+        boolean expanded = perCard != null ? perCard : MessageBubbleVisibility.toolsExpanded();
         return switch (msg) {
             case ChatMessage.User(var text) -> prefix(
                 TextLayout.split(TextLayout.escapeMarkup(text), false),
                 "› ", MESSAGE_INDENT);
             case ChatMessage.Assistant(var blocks, var messageId, var timestamp) ->
-                renderBlocks(blocks, messageId, timestamp);
+                renderBlocks(blocks, messageId, timestamp, cache);
             case ChatMessage.ToolCall(var name, var arguments) -> toolCallCard(name, arguments);
             case ChatMessage.ToolResult(var content, var isError, var durationMillis, var toolName) ->
                 toolResult(content, isError, durationMillis, toolName);
@@ -48,13 +71,39 @@ public final class MessageBubble {
             case ChatMessage.System(var text, var kind) -> system(text, kind);
             // 批 25（docs/36 T8）：markdown 源文本走渲染管线（pi Markdown 组件对位）。
             case ChatMessage.Markdown(var text) ->
-                MarkdownRenderer.toLogicalLines(text, MarkdownTheme.current(), Style.EMPTY);
+                markdownLines(cache, text, Style.EMPTY);
             case ChatMessage.TurnSeparator(var label) ->
                 List.of(new LogicalLine(separator(label), 0, 0, false, Style.EMPTY.dim()));
+            // L7 W2（R17；pi compaction-summary-message.ts）。
+            case ChatMessage.CompactionCard(var tokensBefore, var summary, var messageId, var timestamp) ->
+                MessageCards.compaction(tokensBefore, summary, messageId, timestamp, expanded);
+            // L7 W2（R18；pi branch-summary-message.ts）。
+            case ChatMessage.BranchCard(var summary, var messageId, var timestamp) ->
+                MessageCards.branch(summary, messageId, timestamp, expanded);
+            // L7 W2（R19；pi skill-invocation-message.ts）：userMessage 非空 ⇒ 卡后
+            // 追加 User 气泡（pi 渲染两个组件）。
+            case ChatMessage.SkillCard(var name, var content, var userMessage,
+                                       var messageId, var timestamp) ->
+                MessageCards.skill(name, content, userMessage, messageId, timestamp, expanded);
+            // L7 W2（漏项#7；pi bash-execution.ts）。
+            case ChatMessage.BashCard(
+                    var command, var output, var exitCode, var cancelled,
+                    var truncated, var fullOutputPath, var excludeFromContext) ->
+                MessageCards.bash(command, output, exitCode, cancelled, truncated,
+                    fullOutputPath, excludeFromContext, expanded);
             // 批 12 T6：outputPad 烘焙包装——每个 LogicalLine 左 indent 加 pad
             // （右 pad 由 ChatViewportElement.flatten 的内容宽 −2×pad 承担）。
-            case ChatMessage.Padded(var inner, var pad) -> indent(lines(inner), pad);
+            case ChatMessage.Padded(var inner, var pad) ->
+                indent(lines(inner, messageIndex, cardExpanded, cache), pad);
         };
+    }
+
+    /** R31：有缓存走块复用，无缓存走静态纯函数（行为一致）。 */
+    private static List<LogicalLine> markdownLines(MarkdownRenderCache cache, String markdown,
+                                                   Style style) {
+        return cache == null
+            ? MarkdownRenderer.toLogicalLines(markdown, MarkdownTheme.current(), style)
+            : cache.render(markdown, MarkdownTheme.current(), style);
     }
 
     /** Applies the first-line prefix and the continuation indent to a block. */
@@ -100,16 +149,9 @@ public final class MessageBubble {
             : "─".repeat(18) + " " + safe + " " + "─".repeat(18);
     }
 
-    private static List<LogicalLine> renderBlocks(List<ContentBlock> blocks) {
-        return renderBlocks(blocks, null, null);
-    }
-
-    /**
-     * @param messageId 持久化条目 id（实时消息 {@code null}）
-     * @param timestamp 持久化条目 ISO 时间（实时消息 {@code null}）
-     */
     private static List<LogicalLine> renderBlocks(List<ContentBlock> blocks,
-                                                  String messageId, String timestamp) {
+                                                  String messageId, String timestamp,
+                                                  MarkdownRenderCache cache) {
         var lines = new ArrayList<LogicalLine>();
         boolean prefixed = false;
         for (var block : blocks) {
@@ -120,10 +162,10 @@ public final class MessageBubble {
                 case ContentBlock.TextContent(var text, _) -> {
                     // 批 26（docs/37 T11）：渲染前变换缝（pi assistant-message.ts:113-117
                     // 的 createMarkdownTransform("assistant", ...) 对位）。
-                    var rendered = MarkdownRenderer.toLogicalLines(
+                    var rendered = markdownLines(cache,
                         MarkdownTransformers.applyForEntry(text.trim(),
                             MarkdownMessageType.ASSISTANT, messageId, timestamp),
-                        MarkdownTheme.current(), Style.EMPTY);
+                        Style.EMPTY);
                     if (!prefixed && !rendered.isEmpty()) {
                         // The bullet belongs to the assistant prose, not to a
                         // leading tool card (which has its own status prefix).
@@ -142,10 +184,9 @@ public final class MessageBubble {
                         yield List.<LogicalLine>of();
                     }
                     // 批 26（docs/37 T11）："assistant-thinking" 型变换缝。
-                    yield MarkdownRenderer.toLogicalLines(
+                    yield markdownLines(cache,
                         MarkdownTransformers.apply(text,
                             MarkdownMessageType.ASSISTANT_THINKING),
-                        MarkdownTheme.current(),
                         TuiThemeBridge.fg(ThemeToken.THINKING_TEXT).italic());
                 }
                 // 批 16（T4d）：渲染器责任链优先（扩展/MCP resolver），未命中 ⇒
@@ -171,41 +212,100 @@ public final class MessageBubble {
     }
 
     private static List<LogicalLine> toolCallCard(String name, String arguments) {
-        return new ToolCallCard(toolName(name),
-            TextLayout.escapeMarkup(arguments), "running").lines();
+        return withBg(new ToolCallCard(toolName(name),
+            TextLayout.escapeMarkup(arguments), "running").lines(), ThemeToken.TOOL_PENDING_BG);
     }
 
     /**
      * 批 16（T4d）：ToolUse 臂——渲染器命中用其行（标题行加粗对位 pi 的
      * {@code toolTitle} bold；args 部分 pi 是 muted，文本级接口不分段 ⇒ 整行 bold
-     * 首行＋dim 续行，窄差 D92 的着色粒度差），未命中回落 ToolCallCard。
-     * 批 34（K8）：expanded 改现读全局展开态（Ctrl+O 驱动，D197）。
+     * 首行＋dim 续行，窄差 D92 的着色粒度差），未命中回落 fallback（R12 三态 bg＋
+     * R26 参数形）。批 34（K8）：expanded 改现读全局展开态（Ctrl+O 驱动，D197）。
      */
     private static List<LogicalLine> toolUseLines(String name, Map<String, Object> arguments) {
         var renderer = ToolRenderers.resolve(name);
         var rendered = renderer == null ? null : renderer.renderCall(toolName(name),
             arguments == null ? Map.of() : arguments, MessageBubbleVisibility.toolsExpanded());
         if (rendered == null) {
-            return new ToolCallCard(toolName(name), toolArgs(arguments), "running").lines();
+            return fallbackCallLines(toolName(name), arguments);
         }
         return styledFlat(rendered, 0, Style.EMPTY.bold(), Style.EMPTY.dim());
     }
 
+    /**
+     * R12＋R26（pi createToolCallFallback → formatToolCallWithArgs）：调用卡回落
+     * —— {@code {"_raw": …}} 保持原 raw 文本路径（MCP 传输工件，pi 无此形）；
+     * 其余走 {@link FormatToolArgs}（collapsed key=value 100 截／expanded
+     * {@code   key: value} 多行）。pending 三态 bg（文本级只铺文本格＝窄差 D）。
+     */
+    private static List<LogicalLine> fallbackCallLines(String title, Map<String, Object> arguments) {
+        if (arguments != null && arguments.size() == 1 && arguments.get("_raw") instanceof String raw) {
+            return withBg(new ToolCallCard(title, TextLayout.escapeMarkup(raw), "running").lines(),
+                ThemeToken.TOOL_PENDING_BG);
+        }
+        var lines = FormatToolArgs.lines(title, arguments, MessageBubbleVisibility.toolsExpanded());
+        var out = new ArrayList<LogicalLine>(lines.size());
+        for (int i = 0; i < lines.size(); i++) {
+            out.add(new LogicalLine(TextLayout.escapeMarkup(lines.get(i)), 0, 0, false,
+                i == 0 ? Style.EMPTY.bold() : Style.EMPTY.dim()));
+        }
+        return withBg(out, ThemeToken.TOOL_PENDING_BG);
+    }
+
     /** 批 16（T4d）：ToolResult 臂——渲染器命中用其行（isError ⇒ 红，否则 dim，
-     *  对位 pi 的 error/toolOutput 色），未命中回落 ToolCallCard。 */
+     *  对位 pi 的 error/toolOutput 色），未命中回落 fallback（R12 bg＋折叠）。 */
     private static List<LogicalLine> toolResultLines(String toolName,
             List<ContentBlock> content, boolean isError) {
         var renderer = ToolRenderers.resolve(toolName);
         var rendered = renderer == null ? null : renderer.renderResult(toolName(toolName),
             joinText(content), isError, MessageBubbleVisibility.toolsExpanded());
         if (rendered == null) {
-            return new ToolCallCard(
-                toolName(toolName),
-                truncate(TextLayout.escapeMarkup(joinText(content)), 500),
-                isError ? "error" : "done").lines();
+            return withBg(
+                fallbackResultRows(joinText(content), isError,
+                    MessageBubbleVisibility.toolsExpanded(), TOOL_INDENT),
+                isError ? ThemeToken.TOOL_ERROR_BG : ThemeToken.TOOL_SUCCESS_BG);
         }
         var style = isError ? Style.EMPTY.red() : Style.EMPTY.dim();
         return styledFlat(rendered, TOOL_INDENT, style, style);
+    }
+
+    /** R12（pi {@code FALLBACK_PREVIEW_LINES}）：非错误且折叠 ⇒ 前 10 行＋省略行。 */
+    private static final int FALLBACK_PREVIEW_LINES = 10;
+
+    /**
+     * 通用结果回落行（pi createResultFallback 的文本级对位）：逐行 preformatted
+     * （长行由终端裁剪 ≙ pi Text 行为，不再 500 字符截断）；collapsed 且非错误
+     * 且超 10 行 ⇒ 前 10 行＋{@code ... N more lines (ctrl+o to expand)}。
+     */
+    private static List<LogicalLine> fallbackResultRows(String text, boolean isError,
+                                                        boolean expanded, int indent) {
+        var out = new ArrayList<LogicalLine>();
+        var lines = text.split("\r?\n", -1);
+        boolean folded = !isError && !expanded && lines.length > FALLBACK_PREVIEW_LINES;
+        int end = folded ? FALLBACK_PREVIEW_LINES : lines.length;
+        var style = isError ? Style.EMPTY.red() : Style.EMPTY.dim();
+        for (int i = 0; i < end; i++) {
+            var prefix = isError && i == 0 ? "! " : "";
+            out.add(new LogicalLine(prefix + TextLayout.escapeMarkup(lines[i]),
+                indent, indent, true, style));
+        }
+        if (folded) {
+            out.add(new LogicalLine("... " + (lines.length - FALLBACK_PREVIEW_LINES)
+                + " more lines (" + MessageCards.EXPAND_KEY + " to expand)",
+                indent, indent, false, Style.EMPTY.dim()));
+        }
+        return List.copyOf(out);
+    }
+
+    /** R12：行叠三态 bg（行 fg 保留，bg 覆盖——patch 语义 b 胜）。 */
+    private static List<LogicalLine> withBg(List<LogicalLine> lines, ThemeToken token) {
+        var bg = TuiThemeBridge.bg(token);
+        var out = new ArrayList<LogicalLine>(lines.size());
+        for (var line : lines) {
+            out.add(new LogicalLine(line.markup(), line.initialIndent(),
+                line.subsequentIndent(), line.preformatted(), line.style().patch(bg)));
+        }
+        return List.copyOf(out);
     }
 
     /** renderer 产行 → LogicalLine（首行 firstStyle、续行 restStyle，统一 indent）。 */
@@ -221,14 +321,6 @@ public final class MessageBubble {
     /** Tool card label: fall back to "tool" when the stream omits the name. */
     private static String toolName(String name) {
         return name == null || name.isBlank() ? "tool" : name;
-    }
-
-    /** Tool arguments for display: unwrap {"_raw": "..."} back to the raw text. */
-    private static String toolArgs(Map<String, Object> arguments) {
-        if (arguments.size() == 1 && arguments.get("_raw") instanceof String raw) {
-            return raw;
-        }
-        return String.valueOf(arguments);
     }
 
     /**
@@ -252,10 +344,10 @@ public final class MessageBubble {
         var out = new ArrayList<LogicalLine>();
         for (var block : content) {
             switch (block) {
-                case ContentBlock.TextContent(var text, _) -> out.add(new LogicalLine(
-                    (isError ? "! " : "") + truncate(TextLayout.escapeMarkup(text), 500),
-                    TOOL_INDENT, TOOL_INDENT, true,
-                    isError ? Style.EMPTY.red() : Style.EMPTY.dim()));
+                case ContentBlock.TextContent(var text, _) -> out.addAll(withBg(
+                    fallbackResultRows(text, isError,
+                        MessageBubbleVisibility.toolsExpanded(), TOOL_INDENT),
+                    isError ? ThemeToken.TOOL_ERROR_BG : ThemeToken.TOOL_SUCCESS_BG));
                 case ContentBlock.DiffContent(var diff) ->
                     out.addAll(indent(DiffView.lines(diff), TOOL_INDENT));
                 case ContentBlock.ImageContent(var mediaType, var data) -> out.add(new LogicalLine(
@@ -299,6 +391,8 @@ public final class MessageBubble {
         }
         return out;
     }
+
+    // ── L7 W2：消息卡（R17/R18/R19＋bash）——渲染在 {@link MessageCards}。
 
     /**
      * Renders a metadata/system bubble (P6-25): the kind's icon prefixes the

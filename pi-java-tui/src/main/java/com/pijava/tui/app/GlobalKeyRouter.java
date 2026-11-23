@@ -123,8 +123,11 @@ final class GlobalKeyRouter {
             }
         }
         if (TamboUIAdapter.isSendEnter(event)) {
-            chatScreen.applyCompletion(); // Enter picks the highlighted command
-            slashFlow.submit();
+            // K41（pi editor.ts:804-830）：slash 命令名/无补全 ⇒ 提交；
+            // 文件补全只应用不提交。
+            if (chatScreen.enterWithCompletion()) {
+                slashFlow.submit();
+            }
             return EventResult.HANDLED;
         }
         if (TamboUIAdapter.isNewlineEnter(event)) {
@@ -142,13 +145,10 @@ final class GlobalKeyRouter {
             handleAction(keyId);
             return EventResult.HANDLED;
         }
-        // Tab is surfaced as CHAR('\t') (see EventParser); use it for slash
-        // completion when the panel is open, otherwise ignore it so the editor
-        // never receives a stray tab character.
+        // Tab is surfaced as CHAR('\t') (see EventParser); the portal applies
+        // slash completion when open, otherwise forces file completion (K25).
         if (event.isChar('\t') && !event.hasShift()) {
-            if (chatScreen.completerActive()) {
-                chatScreen.onKeyEvent(event);
-            }
+            chatScreen.onKeyEvent(event);
             return EventResult.HANDLED;
         }
         // 批 34（K20；pi tui-alt-screen.ts:750-792 对位）：全屏 PgUp/PgDn 恒滚视口、

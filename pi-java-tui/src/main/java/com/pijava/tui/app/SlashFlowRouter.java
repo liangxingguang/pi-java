@@ -180,6 +180,7 @@ final class SlashFlowRouter {
 
                     @Override public void status(String message) { chatScreen.appendSystemText(message); }
                     @Override public void error(String message) { chatScreen.showError(message); }
+                    @Override public int terminalCols() { return app.terminalCols(); }
                 }, dispatcher::dispatch).begin();
             case CommandRegistry.UI_SCOPED_MODELS -> {
                 var sink = new AgentSessionScopeSink(app.session);

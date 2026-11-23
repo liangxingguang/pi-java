@@ -111,9 +111,14 @@ public final class ConfigSelectorComponent {
             toggleSelected();
             return true;
         }
-        // 其余 ⇒ 转发搜索输入框并重过滤（pi :517-519）。
+        // 其余 ⇒ 转发搜索输入框；仅 query 变化才重过滤（pi :504-508 的
+        // previousQuery 门控——←/→/Home/End 只移搜索光标，不重置选中项）。
+        String before = searchEditor.getText();
         searchEditor.onKeyEvent(event);
-        model.filterWith(searchEditor.getText());
+        String after = searchEditor.getText();
+        if (!after.equals(before)) {
+            model.filterWith(after);
+        }
         return true;
     }
 
