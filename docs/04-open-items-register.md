@@ -9,7 +9,7 @@
 ## 0. 口径
 
 - **B**：功能或行为缺口。已用到 **B292**（B289–B292 是 L1 收口四项，随 [`docs/11`](11-l1-ai-completion-design.md) 直接在代码里落地、未在 §1 立项，故无销号动作；L1 余项复验（strict 无类型节点判据、暖请求 `disableContinuation`）与第二次复验（Anthropic 非 strict 根 schema、`session-resources` 清理接线）同样直接落地、未新开号，见 [`14`](14-l1-residual-alignment-design.md)、[`15`](15-l1-residual-audit-followup-design.md)；B288 仍是 codemode 提案拟新增接缝，未批准）；新工单从 **B293** 起。
-- **D**：已登记的窄差。已用到 **D273**（codemode 原稿预占号无效）；新窄差从 **D274** 起，明细存于对应 `docs/map/`。
+- **D**：已登记的窄差。已用到 **D278**（L5 收口新增 D274／D275／D277／D278，D276 未用）；新窄差从 **D279** 起，明细存于对应 `docs/map/`。
 - **读数视图（2026-11-22 起）**：真源是各层地图 `docs/map/NN-*.md`；`docs/05` §1.2 是**汇总视图**、`docs/09` §3 是**进度视图**（含「当前」列），两者必须与真源同步改。设计稿（`docs/11`／`docs/12`…）只记设计与收口结论、**不发布读数**，其中的分数一律视为各自写作时的基线。
 - **L1 #6 迁移（2026-11-22）**：缓存预热策略按 [`docs/16`](16-l1-cache-warming-policy-design.md) 迁入 `pi-java-ai`
   （`com.pijava.ai.api.CacheWarmingPolicy`），coding-agent 改为消费者；行为／数字／wire 不变，未新开 B／D 号，
@@ -23,6 +23,11 @@
   行为不变量（v3 线形／文件命名／惰性创建／fork 语义）不变，未新开 B／D 号，`map/06` 20 行判定不变
   ⇒ L4 **44/44＝100%**。`session-cwd` 的 Continue/Fork/Cancel 与 `session-picker` 的 `flushStdout`
   按归属留给 L5／L7，不影响 L4 读数。
+- **L5 收口（2026-11-23）**：coding-agent 按 [`docs/19`](19-l5-coding-agent-design.md) W1–W11 落地——13 个重开单元
+  恢复「对齐」，9 个新单元落地（llama.cpp 默认端口按 F1／R2 出分母）；`map/04` 记 L5 **461/461＝100%**。
+  行为不变量保持（工具名/参数集、slash 命令集、RPC 33 命令、session JSONL 线形、扩展注册面不变，无新模块）。
+  新窄差 D274（重复信号强退）、D275（`/export` OSC8）、D277（会话内 cwd 三臂只走非交互错误臂）、
+  D278（capture 输出无 TUI 安装触发点）；未新开 B 号。
 - **F**：需要用户拍板的事项。
 - **R1**：pi 已删除的面，不为旧参照物补功能。
 - **R2**：Provider 只覆盖已批准的主流范围。Qwen／Xiaomi Token Plan 家族（团队／个人、国际／中国、AMS／SGP）已按 `docs/09` P3 余项纳入（26 个内置 provider）；其余长尾 provider 仍排除。
@@ -201,6 +206,15 @@ SQLite 后端是 pi-java 独立实现，保留模块，不对齐已删除 schema
 | D244 | subagent 用注入式假 runner 验 single/parallel/chain，不真起子进程 | map/04 |
 | D247/D248/D251/D252 | SDK/RPC/runtime 入口名差，用等价投影＋纯函数断言；Java `RpcExtensionUI.setTitle` 是行为增强差 | map/04 |
 | D249 | `dynamic.json` theme 仅作测试资源，断言键数与字段存在，无结构化类型 | map/04 |
+
+### 6.4a L5 收口新增窄差（证据：`docs/map/04-coding-agent.md`）
+
+| 编号 | 当前边界 | 证据 |
+|---|---|---|
+| D274 | 首次 SIGTERM/SIGHUP 的会话清理已做；Java 无公开信号 API、`Runtime.addShutdownHook` 不能区分重复信号 ⇒ pi「第二次信号立即强退」不移植 | map/04 |
+| D275 | `/export` HTML 工具文本中的 OSC 8 超链接不转 `<a>`（Java 导出无 ANSI/OSC 层，保持纯 escape 文本） | map/04 |
+| D277 | 会话内 `/resume` `/import` 命中 cwd 缺失时只走非交互错误臂；交互式 Continue/Fork/Cancel 仅在启动期三臂提供（TUI 需重启） | map/04 |
+| D278 | capture 输出模式（非交互 git env、尾部 8000 字符、凭据提示）已就绪，但 TUI 无安装触发点，仅 CLI／包命令路径消费 | map/04 |
 
 ### 6.5 TUI / Web（证据：`docs/map/05-tui-web.md`）
 

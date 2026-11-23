@@ -668,4 +668,47 @@ capture 必须读完 stdout/stderr 再 `waitFor`，防止子进程占管道导�
 
 ## 11. 实施记录
 
-（待用户审核后填写。）
+**状态（2026-11-23）**：W1–W11 全部落地，`map/04` 记 L5 **461/461＝100%**（462 预期减 1，llama 按 F1／R2 出分母）。
+11 笔提交，均在 `5a77fb48` 设计稿之后：
+
+| 序 | 提交 | 工作包 | 内容 | 主要测试 |
+|---|---|---|---|---|
+| 1 | `d119681f` | W1 | ai：`AuthUrl`/`OAuthEvent` 结构化认证 URL 与凭证列举（`OAuthCredentialStore.IN_FLIGHT`＋`awaitSettled`） | ai 认证/凭证既有套件 |
+| 2 | `ff71e4d3` | W1 | coding-agent：`auth login/logout`（`AuthLoginCommand`／`AuthLogoutCommand`／`AuthTerminal`／`RadiusMcpPlan`＋`AuthCommand` 分派；伙伴 Provider 排序；logout 四臂） | `AuthCommandsTest`／`RadiusMcpPlanTest` |
+| 3 | `6f19b8d8` | W3 | 会话 cwd 缺失 Continue/Fork/Cancel：`SessionCwd`／`SessionCwdPrompter`／`SessionPersistence.attachOpened`＋tui `SessionCwdPromptRunner`；启动期三臂逐字 | `SessionCwdTest` |
+| 4 | `8658dc6e` | W4 | 恢复分支模型/thinking（不可用模型回退 warning）；run 起点记 thinking（`SessionSelectionRestore`／`SessionSelectionRecorder`） | `SessionSelectionRestoreTest` 等 |
+| 5 | `992ccdd5` | W5 | 替换臂统一 `rebindSession`；诊断按 `type\0message` 去重＋继承；RPC 空闲 shutdown（`activeCommands` 门）；会话层 reload 双门；`SessionShutdownHook` 首信号清理 | `RpcIdleShutdownTest`／`StartupDiagnosticsDedupTest`／`SessionReloadSessionGateTest` |
+| 6 | `7859c0b2` | W2＋W7 | `cacheWarming` 默认 `idle`；暖提醒逐次合并（金额累加）；changelog 只解析版本行；`/copy` 按 `stopReason` 跳过；reasoning 丢弃提示（重复抑制） | `ChatScreenCacheWarmingTest`／`CacheWarmerTest`／`ChangelogSupportTest`／`LastAssistantTextTest`／`ReasoningDropNoticeTest` |
+| 7 | `816bae95` | W8 | `pi update` 逐包 `result`（git from→to 7 位）；CLI 四臂汇总；capture 输出（非交互 env／尾部 8000／凭据提示）；git clean 失败非致命 | `PackageUpdateResultTest`／`PackageCommandRunTest` |
+| 8 | `e2c8d097` | W6 | 恢复 loadout 只按 transcript 应用 modifier（`restoredToolNames`）；Markdown 六面（USER／ASSISTANT／THINKING／CUSTOM／SUMMARY／CHANGELOG）按注册类型过滤 | `RestoredToolLoadoutTest`／`MarkdownTransformerSurfaceTest` |
+| 9 | `c2d6ae89` | W9＋W10 | `SelectList` 光标键（Left/Right/Home/End）只移光标不重过滤；登录 device-code 验证 URL 经 `cli/WebUrl` 清洗 | `SelectListTest` |
+| 10 | `edaedc5f` | W11 | 系统提示 preamble／tools 尾句／docs 收句；技能路径提示；`parseCommandArgs` 引号只在词首开、反斜杠转义、未闭合回退；分支摘要应用 `context_edit`；摘要截断走 `sliceHead` | `SystemPromptsTest`／`PromptTemplatesTest`／`BranchSummarizationTest`／`PayloadRecordingStreamFnTest` |
+| 11 | `0f7f6fb4` | W2 适配 | cache 相关既有测试按 `idle` 默认调整（测 settled 行为处显式置 `streaming`） | `AgentSessionCacheWarmingTest`／`SessionCommandsCacheWarmingTest`／`SettingsScreenCacheWarmingTest` |
+
+**裁决落实（§8）**：F1 llama.cpp 出分母（461/461）；F2 重复信号强退登记 **D274**；F3 选择器 UX 在 TUI 实施、
+map/05 不新增单元、不重复计分；F4 `/export` OSC 8 登记 **D275**；F5 系统提示保留 pi-java 品牌与真实文档路径。
+
+**与设计的差异（登记性）**：
+
+- **W3 会话内手臂**：pi 在 `/resume`／`/import` 命中 cwd 缺失时仍可交互三臂；Java 会话内只走非交互错误臂
+  （`Error: Session cwd does not exist: <cwd>`），交互式选择仅在启动期提供 ⇒ **D277**。
+  map/04 的 N-1 仍判对齐：计分单元是「启动期 Continue/Fork/Cancel」，会话内形态作窄差处理。
+- **W8 capture 消费者**：`GitRunner` capture 面（非交互 env、尾部 8000、凭据提示）已实现并有测试，
+  但 TUI 无安装触发点（包安装只在 CLI／包命令路径），故无 TUI 端可观察行为 ⇒ **D278**。
+- **W2 行为变化**：`cacheWarming` 默认由 `streaming` 改为 `idle`（与 pi 一致），既有测试需显式置
+  `streaming` 才观察 settled streaming 行为；设置页三值循环起点由 `off` 变为 `idle`。
+- **W9 行为变化**：选择器搜索框 Left/Right/Home/End 只移动光标、不重跑过滤；输入/退格在光标处编辑。
+- **W11 行为变化**：`parseCommandArgs` 只在词首识别开引号，`it's` 类撇号不再吞并后续参数；未闭合引号
+  回退为字面引号。
+- **未新开 B 号**；D 编号 D276 未用，故新窄差从 D279 起（见 `docs/04` §0）。
+
+**计分与台账**：`map/04` 13 行改回「对齐」并补 L5 证据；新增 N-1..N-7（N-4 llama 出分母）；
+`docs/05` §1.2 L5 行 → **461/461＝100%**、合计 **1,318.0/1,396＝94.4%**；`docs/09` §3「当前」列与 §4 进度同步；
+`docs/04` §0 增 L5 收口段＋§6.4a 四条窄差。
+
+**测试**：coding-agent 全量 **2,042** 测、TUI 全量 **695** 测绿（W5 后分模块全量；W11 后 TUI 1 例
+`SettingsScreenCacheWarmingTest` 失败已由 `0f7f6fb4` 修复并单类复跑绿）。全仓
+`mvn clean verify -Dfrontend.skip=true` 结果见下（收口提交前执行）。
+
+> **全仓 verify（2026-11-23）**：待本轮执行完成后回填。
+
