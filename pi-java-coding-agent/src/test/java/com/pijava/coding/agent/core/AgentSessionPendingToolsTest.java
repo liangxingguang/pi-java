@@ -102,7 +102,9 @@ class AgentSessionPendingToolsTest {
         try (var session = rig("clear")) {
             session.harness().pendingToolNames().add("mcp__docs__search");
             var active = session.getActiveToolNames();
-            // 减员（撤掉一个激活工具）⇒ pending 清（pi :1524）
+            // L5 W6：pending 只在被去掉的名属于恢复 loadout 时才清——先把 active
+            // 标成 restored 基准，再减员（pi :1614-1617）。
+            session.modelTools().markRestoredToolNames(active);
             session.setActiveToolsByName(active.subList(1, active.size()));
             assertThat(session.harness().pendingToolNames()).isEmpty();
         }

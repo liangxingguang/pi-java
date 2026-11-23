@@ -199,11 +199,24 @@ final class ModelToolControl {
      * {@code _rebuildSystemPrompt} 净效果同。批 24（docs/35 D4 销号）：pending 两臂
      * 落地——减员 ⇒ 清 pending（pi :1524）；已注册名出 pending（pi :1529）。
      */
+    /** pi {@code _restoredToolNames}（:482，L5 W6）：恢复/重载所属 loadout 的基准集。 */
+    private final java.util.LinkedHashSet<String> restoredToolNames =
+        new java.util.LinkedHashSet<>();
+
+    /** pi {@code :3860}：reload 重绑后，当前激活名成为 restored 基准。 */
+    void markRestoredToolNames(java.util.Collection<String> names) {
+        restoredToolNames.clear();
+        restoredToolNames.addAll(names);
+    }
+
     void setActiveToolsByName(java.util.List<String> names) {
         var previous = getActiveToolNames();
         applyToolLoadout(names);
         var active = new java.util.HashSet<>(getActiveToolNames());
-        if (previous.stream().anyMatch(name -> !active.contains(name))) {
+        // L5 W6（pi :1614-1617）：只有去掉的名属于恢复 loadout 才清 pending——
+        // 扩展隐藏自己的工具不连带丢掉尚未注册的 MCP 工具。
+        if (previous.stream().anyMatch(name ->
+                !active.contains(name) && restoredToolNames.contains(name))) {
             owner.harness().pendingToolNames().clear();
         }
         owner.harness().pendingToolNames()
@@ -247,6 +260,7 @@ final class ModelToolControl {
             java.util.List<String> modifiers) {
         var pending = owner.harness().pendingToolNames();
         pending.clear();
+        restoredToolNames.clear();
         var systemMessages = new java.util.ArrayList<com.pijava.ai.message.Message>();
         for (var entry : branchEntries) {
             if (entry instanceof com.pijava.agent.entry.Entry.Message m
@@ -270,9 +284,13 @@ final class ModelToolControl {
             .filter(name -> !baseToolNames.contains(name))
             .filter(this::isActivatedOnRegistration)
             .toList();
-        var names = new java.util.ArrayList<String>();
+        var transcriptNames = new java.util.ArrayList<String>();
         com.pijava.ai.api.Transcripts.getCurrentTools(systemMessages)
-            .forEach(tool -> names.add(tool.name()));
+            .forEach(tool -> transcriptNames.add(tool.name()));
+        // pi :1938-1943：restored 基准＝修饰后的<b>转录</b> loadout（不含新注册工具）。
+        restoredToolNames.addAll(
+            ToolSelection.applyToolModifiers(transcriptNames, modifiers));
+        var names = new java.util.ArrayList<>(transcriptNames);
         names.addAll(newTools);
         var restored = ToolSelection.applyToolModifiers(names, modifiers);
         for (var name : restored) {

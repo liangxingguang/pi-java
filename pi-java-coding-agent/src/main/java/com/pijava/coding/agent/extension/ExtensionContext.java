@@ -353,6 +353,16 @@ public interface ExtensionContext {
     void registerMarkdownTransformer(MarkdownTransformer transformer);
 
     /**
+     * L5 W6（pi {@code registerMarkdownTransformer(transformer, options)}，
+     * types.ts:1690＋loader.ts:367-372）：显式生效面；缺省实现退回一参（使用
+     * {@link MarkdownTransformer#messageTypes()}）。
+     */
+    default void registerMarkdownTransformer(MarkdownTransformer transformer,
+            java.util.Set<MarkdownTransformContext.MarkdownMessageType> messageTypes) {
+        registerMarkdownTransformer(transformer);
+    }
+
+    /**
      * 批 27（B162/T11，E5-26）：pi {@code registerVirtualModel}（types.ts:1874-1884；
      * loader.ts:500-510 对位）——注册虚拟模型（路由每请求择物理模型）。重复注册
      * 同 provider+id 即替换。路由的 {@code ctx} 是<b>本</b>扩展上下文（pi 的

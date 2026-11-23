@@ -87,6 +87,8 @@ final class SessionReload {
             : SessionSetup.mergePaths(reloadCli,
                 SessionSetup.enabledPaths(assembly.resolved().themes()));
         session.setThemePathsForReload(reloadThemesPaths);
+        // L5 W6（pi :3860）：reload 后的 activated 名成为 restored 基准（默认工具 diff 之前）。
+        session.modelTools().markRestoredToolNames(session.getActiveToolNames());
         // ⑥ defaultTools diff（B246；pi :3678-3685）：新增 ⇒ 经注册表过滤并入
         //    activeTools；移除的保持激活（不动）；usesDefaultTools=false ⇒ 跳过。
         if (selection != null && selection.usesDefaultTools()) {

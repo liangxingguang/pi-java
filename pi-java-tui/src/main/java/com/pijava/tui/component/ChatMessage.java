@@ -5,6 +5,7 @@ import java.util.List;
 import com.pijava.agent.entry.Entry;
 import com.pijava.ai.message.ContentBlock;
 import com.pijava.ai.message.Message;
+import com.pijava.coding.agent.extension.MarkdownTransformContext.MarkdownMessageType;
 
 /**
  * TUI-internal message model: projects agent-core {@link Entry} values into
@@ -127,12 +128,13 @@ public sealed interface ChatMessage {
             case Entry.ThinkingLevelChange change ->
                 new System("Thinking: " + change.thinkingLevel(),
                     MetaKind.THINKING_LEVEL);
+            // L5 W6（pi {@code summary} 面，types.ts:1563-1568）：摘要正文过变换链。
             case Entry.Compaction compaction ->
-                new System("Compacted context: " + compaction.summary(),
+                new System("Compacted context: " + transformSummary(compaction.summary()),
                     MetaKind.COMPACTION);
 
             case Entry.BranchSummary summary ->
-                new System("Branch: " + summary.summary(), MetaKind.BRANCH);
+                new System("Branch: " + transformSummary(summary.summary()), MetaKind.BRANCH);
             case Entry.Custom custom -> {
                 // 批 26（docs/37 T10）：pi interactive-mode.ts:3846-3866——entry
                 // renderer 缺席 ⇒ 不渲（批 26 前的 "Custom event:" 兜底退役）。
@@ -159,7 +161,8 @@ public sealed interface ChatMessage {
                     }
                 }
                 yield new System("[" + customMessage.customType() + "] "
-                    + customMessage.content().plainText(), MetaKind.CUSTOM);
+                    + MarkdownTransformers.apply(customMessage.content().plainText(),
+                        MarkdownMessageType.CUSTOM), MetaKind.CUSTOM);
             }
             case Entry.Usage usage -> cacheWarmNotice(usage);
             // #57（docs/10 §3.3 ⑧）：bashExecution 按消息条目同格渲染，文本取 pi
@@ -198,6 +201,11 @@ public sealed interface ChatMessage {
         var line = new System(com.pijava.coding.agent.core.CacheWarmingFormatting
             .formatUsage(totalCost, note), MetaKind.GENERIC);
         return pad <= 0 ? line : new Padded(line, pad);
+    }
+
+    /** L5 W6：摘要正文走 {@code summary} 面（渲染前变换链）。 */
+    private static String transformSummary(String summary) {
+        return MarkdownTransformers.apply(summary, MarkdownMessageType.SUMMARY);
     }
 
     private static ChatMessage fromMessage(Entry.Message message) {

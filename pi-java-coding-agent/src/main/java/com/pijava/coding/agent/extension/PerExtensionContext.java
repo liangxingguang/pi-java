@@ -338,6 +338,12 @@ final class PerExtensionContext implements ExtensionContext {
     }
 
     @Override
+    public void registerMarkdownTransformer(MarkdownTransformer transformer,
+            java.util.Set<MarkdownTransformContext.MarkdownMessageType> messageTypes) {
+        base.surface().registerMarkdownTransformer(extensionPath, transformer, messageTypes);
+    }
+
+    @Override
     public void registerMarkdownTransformer(MarkdownTransformer transformer) {
         base.surface().registerMarkdownTransformer(extensionPath, transformer);
     }

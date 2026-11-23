@@ -21,13 +21,24 @@ public record MarkdownTransformContext(MarkdownMessageType messageType, boolean 
         this(messageType, isStreaming, availableWidth, null, null);
     }
 
-    /** pi {@code MarkdownTransformContext.messageType} 三值。 */
+    /**
+     * pi {@code MarkdownMessageType}（types.ts:1570，L5 W6 六值）：
+     * {@code custom}＝无 custom 渲染器的自定义消息与展开的技能块；{@code summary}
+     * ＝展开的分支/压缩摘要；{@code changelog}＝What's New／/changelog／Extension
+     * Updates／更新提示的发布说明。
+     */
     public enum MarkdownMessageType {
         /** pi {@code "user"}（裁决⑤：本批无消费点——user 消息不走 markdown 渲染）。 */
         USER,
         /** pi {@code "assistant"}。 */
         ASSISTANT,
         /** pi {@code "assistant-thinking"}。 */
-        ASSISTANT_THINKING
+        ASSISTANT_THINKING,
+        /** pi {@code "custom"}。 */
+        CUSTOM,
+        /** pi {@code "summary"}。 */
+        SUMMARY,
+        /** pi {@code "changelog"}。 */
+        CHANGELOG
     }
 }

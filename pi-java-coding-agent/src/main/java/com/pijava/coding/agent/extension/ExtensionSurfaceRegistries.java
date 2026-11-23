@@ -7,19 +7,16 @@ import com.pijava.coding.agent.extension.ExtensionContext.SendMessageOptions;
 import com.pijava.coding.agent.extension.ExtensionContext.SendUserMessageOptions;
 
 /**
- * 「按扩展名分桶的注册表集合」（结构债拆分：{@link DefaultExtensionContext} 的
- * flag／快捷键／渲染器／MCP／通道五簇＋{@code getCommands}＋模型面整块迁出，
- * 行为零变化）。五簇同构：extensionPath → 表；共享基础上下文上的无归属调用 ⇒ 抛
- * （抛错 stub 留主类的 {@code ExtensionContext} 实现面）。
+ * 「按扩展名分桶的注册表集合」（结构债拆分：{@link DefaultExtensionContext} 的 flag／快捷键／
+ * 渲染器／MCP／通道五簇＋{@code getCommands}＋模型面整块迁出，行为零变化）。五簇同构：
+ * extensionPath → 表；共享基础上下文上的无归属调用 ⇒ 抛（抛错 stub 留主类实现面）。
  */
 final class ExtensionSurfaceRegistries {
 
     private final DefaultExtensionContext base;
 
-    // ── 批 16（T1b）：flag 面——声明存本扩展（pi extension.flags）、值存共享表
-    // （pi runtime.flagValues）。pi 的 pending/commit 两阶段不移植：java 加载与
-    // 绑定同线程顺序执行（register 全在 loadAll 内、CLI 绑定在其后），
-    // set-if-absent 一刀即同净效果（docs/27 T1b 注记）。
+    // ── 批 16（T1b）：flag 面——声明存本扩展、值存共享表；pending/commit 两阶段不移植
+    //（java 加载与绑定同线程顺序执行，set-if-absent 一刀同净效果，docs/27 T1b 注记）。
     private final java.util.Map<String, Object> flagValues =
         new java.util.concurrent.ConcurrentHashMap<>();
     /** 全局名 → 声明（pi registeredFlags；同名后到胜出）。 */
@@ -29,10 +26,8 @@ final class ExtensionSurfaceRegistries {
     private final java.util.Map<String, java.util.Map<String, ExtensionFlag>> flagDeclarations =
         new java.util.LinkedHashMap<>();
     /**
-     * 批 23（docs/34 T1，裁决⑦）：MCP 注册表（pi {@code runtime.mcpServers} 对位，
-     * 每会话一份随上下文生死）。装载期注册静默落表——changeListener 由
-     * {@code AgentSession.loadExtensions} 尾部接线（裁决⑧：java 同步装载＋
-     * listener 后装 ≡ pi 的 pendingRuntimeChanges/commit 两阶段净效果）。
+     * 批 23（docs/34 T1，裁决⑦）：MCP 注册表（pi {@code runtime.mcpServers} 对位，每会话一份）。
+     * 装载期注册静默落表——changeListener 由 {@code AgentSession.loadExtensions} 尾部接线（裁决⑧）。
      */
     private final com.pijava.mcp.config.McpServerRegistry mcpServers =
         new com.pijava.mcp.config.McpServerRegistry();
@@ -45,15 +40,13 @@ final class ExtensionSurfaceRegistries {
     private final ExtensionChannelBus eventsView =
         channelBus.trackedView(channelSubscriptions::add);
     /**
-     * 批 26（docs/37 T9）：pi {@code extension.shortcuts} 对位——按扩展加载序的
-     * 快捷键表（extensionPath →〔keyId 原串 → 注册〕；注册点已解析校验 keyId）。
+     * 批 26（docs/37 T9）：pi {@code extension.shortcuts}——按加载序的快捷键表（keyId 注册点已校验）。
      */
     private final java.util.LinkedHashMap<String,
         java.util.LinkedHashMap<String, ExtensionShortcut>> shortcutsByExtension =
             new java.util.LinkedHashMap<>();
     /**
-     * 批 26（docs/37 T10）：pi {@code extension.messageRenderers}/{@code entryRenderers}
-     * 对位——按扩展加载序（first-wins 解决序，runner.ts:775-805）。
+     * 批 26（docs/37 T10）：pi {@code extension.messageRenderers}/{@code entryRenderers}——加载序 first-wins。
      */
     private final java.util.LinkedHashMap<String,
         java.util.Map<String, ExtensionMessageRenderer>> messageRenderersByExtension =
@@ -63,12 +56,15 @@ final class ExtensionSurfaceRegistries {
         java.util.Map<String, ExtensionEntryRenderer>> entryRenderersByExtension =
             new java.util.LinkedHashMap<>();
     /**
-     * 批 26（docs/37 T11）：pi {@code extension.markdownTransformer} 对位——
-     * <b>单槽</b>（loader.ts:361 赋值语义：同扩展重复注册后者覆盖）；跨扩展按
-     * 加载序链式（runner.ts:785-787 的 flatMap 对位）。
+     * 批 26（docs/37 T11）：pi {@code extension.markdownTransformer}——<b>单槽</b>（同扩展后者覆盖）；
+     * 跨扩展按加载序链式（runner.ts:797-805 的 flatMap＋messageTypes 过滤对位）。
      */
-    private final java.util.LinkedHashMap<String, MarkdownTransformer> markdownTransformers =
-        new java.util.LinkedHashMap<>();
+    private final java.util.LinkedHashMap<String, RegisteredMarkdownTransformer>
+        markdownTransformers = new java.util.LinkedHashMap<>();
+
+    /** L5 W6（pi {@code MarkdownTransformerRegistration}，types.ts:1590-1594）。 */
+    private record RegisteredMarkdownTransformer(MarkdownTransformer transformer,
+            java.util.Set<MarkdownTransformContext.MarkdownMessageType> messageTypes) {}
 
     ExtensionSurfaceRegistries(DefaultExtensionContext base) {
         this.base = base;
@@ -150,9 +146,7 @@ final class ExtensionSurfaceRegistries {
     // ── 快捷键面 ──
 
     /**
-     * pi {@code registerShortcut}（loader.ts:320-323）——写本扩展的表
-     * （keyId 在注册点解析校验，裁决⑫）；同名键再注册＝覆盖本扩展旧注册
-     * （pi 的 Map.set 同形）。
+     * pi {@code registerShortcut}（loader.ts:320-323）——写本扩展的表；同名键再注册＝覆盖旧注册。
      */
     void registerShortcut(String extensionPath, String keyId, String description,
                           ExtensionShortcut.ShortcutHandler handler) {
@@ -165,7 +159,6 @@ final class ExtensionSurfaceRegistries {
     /**
      * pi {@code runner.getShortcuts}（runner.ts:673-716）——冲突三规则解决。
      *
-     * @param keys    内置键位表；{@code null} ⇒ 空表（无键位面的宿主：RPC/headless）
      * @param hasUi   pi 的「无 UI ⇒ console.warn」门：false ⇒ 诊断写 stderr
      */
     ExtensionShortcuts.Resolution resolvedShortcuts(
@@ -230,12 +223,27 @@ final class ExtensionSurfaceRegistries {
 
     /** pi {@code extension.markdownTransformer = transformer}（loader.ts:361，单槽覆盖）。 */
     void registerMarkdownTransformer(String extensionPath, MarkdownTransformer transformer) {
-        markdownTransformers.put(extensionPath, transformer);
+        registerMarkdownTransformer(extensionPath, transformer, transformer.messageTypes());
     }
 
-    /** pi {@code getMarkdownTransformers}（runner.ts:785-787）：扩展加载序的链。 */
+    /** L5 W6：带生效面的注册（pi {@code MarkdownTransformerOptions.messageTypes}）。 */
+    void registerMarkdownTransformer(String extensionPath, MarkdownTransformer transformer,
+            java.util.Set<MarkdownTransformContext.MarkdownMessageType> messageTypes) {
+        var types = messageTypes == null ? transformer.messageTypes() : messageTypes;
+        markdownTransformers.put(extensionPath,
+            new RegisteredMarkdownTransformer(transformer, java.util.Set.copyOf(types)));
+    }
+
+    /**
+     * pi {@code getMarkdownTransformers}（runner.ts:797-805）：扩展加载序的链；
+     * 每条对未注册的 {@code messageType} 原样透传。
+     */
     java.util.List<MarkdownTransformer> markdownTransformers() {
-        return java.util.List.copyOf(markdownTransformers.values());
+        return markdownTransformers.values().stream()
+            .<MarkdownTransformer>map(registered -> (markdown, context) ->
+                registered.messageTypes().contains(context.messageType())
+                    ? registered.transformer().transform(markdown, context) : markdown)
+            .toList();
     }
 
     // ── 批 23（docs/34 T1）：MCP 注册面 ──
@@ -342,12 +350,9 @@ final class ExtensionSurfaceRegistries {
     // ── 批 27（B162/T11）：虚拟模型注册面 ──
 
     /**
-     * 批 27（B162/T11）：pi loader.ts:500-514 对位——把扩展的
-     * {@code route(request, ctx)} 适配成核心 {@code route(request)}（ctx 用注册时
-     * 捕获的调用方上下文）。java 的装载/绑定同线程顺序执行（flagValues 先例），
-     * pi 的 pending/commit 两阶段不移植——注册直进会话注册表；冲突/空 id 的
-     * {@code IllegalArgumentException} 由 {@code ExtensionManager} 的装载隔离
-     * 收成扩展错误（pi 的冲刷诊断臂对位）。
+     * 批 27（B162/T11）：pi loader.ts:500-514——把 {@code route(request, ctx)} 适配成核心
+     * {@code route(request)}（ctx 用注册时捕获的调用方上下文）；注册直进会话注册表，
+     * 冲突/空 id 的 {@code IllegalArgumentException} 由 ExtensionManager 装载隔离收成扩展错误。
      */
     void registerVirtualModel(ExtensionVirtualModel model, ExtensionContext routeContext) {
         var session = base.requireToolControl();
@@ -393,9 +398,8 @@ final class ExtensionSurfaceRegistries {
     }
 
     /**
-     * 批 26（docs/37 T3，E5-13）：pi {@code sendUserMessage}（agent-session.ts:2365-2393
-     * 逐字）——归一后走 {@code processPrompt}（source "extension"、deliverAs 作
-     * streamingBehavior、expandPromptTemplates 默认 false 经 PromptConfig 门）。
+     * 批 26（docs/37 T3，E5-13）：pi {@code sendUserMessage}（:2365-2393 逐字）——归一后走
+     * {@code processPrompt}（source "extension"、deliverAs 作 streamingBehavior）。
      */
     void sendUserMessage(CustomMessageContent content, SendUserMessageOptions options) {
         var host = base.hostSessionOrNull();

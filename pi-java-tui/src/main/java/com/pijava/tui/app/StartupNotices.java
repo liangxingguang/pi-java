@@ -173,8 +173,8 @@ final class StartupNotices {
                 "Updated to v" + v + ". Use /changelog to view full changelog.");
         } else {
             // pi 非折叠臂："What's New" 标题＋正文（D63：纯文本渲染，Markdown
-            // 组件随 R1 批）。
-            chatScreen.appendSystemText("What's New\n\n" + markdown.trim());
+            // 组件随 R1 批）。L5 W6：正文过 changelog 面变换链。
+            chatScreen.appendSystemText("What's New\n\n" + transformChangelog(markdown.trim()));
         }
         showExtensionChangelog();
     }
@@ -198,7 +198,13 @@ final class StartupNotices {
         var markdown = updates.stream()
             .map(com.pijava.coding.agent.core.ExtensionChangelogs.Update::markdown)
             .collect(java.util.stream.Collectors.joining("\n\n"));
-        chatScreen.appendSystemText("Extension Updates\n\n" + markdown.trim());
+        chatScreen.appendSystemText("Extension Updates\n\n" + transformChangelog(markdown.trim()));
+    }
+
+    /** L5 W6（pi {@code changelog} 面）：What's New／Extension Updates 正文过变换链。 */
+    private static String transformChangelog(String markdown) {
+        return com.pijava.tui.component.MarkdownTransformers.apply(markdown,
+            com.pijava.coding.agent.extension.MarkdownTransformContext.MarkdownMessageType.CHANGELOG);
     }
 
     /** Submit initial CLI messages when the TUI starts. */

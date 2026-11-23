@@ -13,4 +13,15 @@ public interface MarkdownTransformer {
      * 抛异常 ⇒ 保留当前文本继续下一个（静默吞）。
      */
     String transform(String markdown, MarkdownTransformContext context);
+
+    /**
+     * L5 W6（pi {@code MarkdownTransformerOptions.messageTypes}，loader.ts:253）：
+     * 生效面；缺省三值——链内按 {@code context.messageType()} 过滤，不命中即原样透传。
+     */
+    default java.util.Set<MarkdownTransformContext.MarkdownMessageType> messageTypes() {
+        return java.util.Set.of(
+            MarkdownTransformContext.MarkdownMessageType.USER,
+            MarkdownTransformContext.MarkdownMessageType.ASSISTANT,
+            MarkdownTransformContext.MarkdownMessageType.ASSISTANT_THINKING);
+    }
 }
