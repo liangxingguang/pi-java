@@ -229,11 +229,14 @@ public final class LoginDialogScreen implements ScreenOverlay, LoginInteraction 
         }
         deviceCodeStatus = status;
         if (action.openBrowserOnConfirm()) {
-            try {
-                browserOpener.open(action.verificationUri());
-            } catch (Exception ignored) {
-                // Launcher failures must not interrupt login (pi activateDeviceCode).
-            }
+            // L5 W10（pi web-url.ts）：只放行 http/https，控制字符不进浏览器参数。
+            com.pijava.coding.agent.cli.WebUrl.webUrl(action.verificationUri()).ifPresent(url -> {
+                try {
+                    browserOpener.open(url);
+                } catch (Exception ignored) {
+                    // Launcher failures must not interrupt login (pi activateDeviceCode).
+                }
+            });
         }
     }
 

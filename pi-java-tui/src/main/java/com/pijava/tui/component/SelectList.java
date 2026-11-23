@@ -33,6 +33,8 @@ public final class SelectList<T> {
     private boolean cancelled;
     private boolean confirmed;
     private String filter = "";
+    // L5 W9（pi 5bcf370a5）：搜索框内光标——Left/Right/Home/End 只移光标，不重过滤。
+    private int cursor;
 
     /**
      * Creates a selectable list over the given items.
@@ -77,16 +79,34 @@ public final class SelectList<T> {
             selected = Math.min(visible.size() - 1, selected + 1);
             return true;
         }
+        // L5 W9：搜索框光标键只移动光标（不 refresh、不重置选中）。
+        if (event.isLeft()) {
+            cursor = Math.max(0, cursor - 1);
+            return true;
+        }
+        if (event.isRight()) {
+            cursor = Math.min(filter.length(), cursor + 1);
+            return true;
+        }
+        if (event.code() == KeyCode.HOME) {
+            cursor = 0;
+            return true;
+        }
+        if (event.code() == KeyCode.END) {
+            cursor = filter.length();
+            return true;
+        }
         if (event.isConfirm()) {
             confirmed = true;
             return true; // caller reads selected()
         }
         if (event.isKey(KeyCode.BACKSPACE)) {
-            if (filter.isEmpty()) {
+            if (cursor == 0) {
                 return false;
             }
-            filter = filter.substring(0, filter.length() - 1);
-            refresh();
+            filter = filter.substring(0, cursor - 1) + filter.substring(cursor);
+            cursor--;
+            refresh(true);
             return true;
         }
         if (event.isCancel()) {
@@ -100,8 +120,9 @@ public final class SelectList<T> {
             return true;
         }
         if (isFilterInput(event)) {
-            filter += event.character();
-            refresh();
+            filter = filter.substring(0, cursor) + event.character() + filter.substring(cursor);
+            cursor++;
+            refresh(true);
             return true;
         }
         return false;
@@ -116,6 +137,11 @@ public final class SelectList<T> {
     /** The current filter query (P6-24 type-to-filter; empty when inactive). */
     public String filter() {
         return filter;
+    }
+
+    /** L5 W9：搜索框光标位置（{@code 0..filter().length()}；输入/退格在此处生效）。 */
+    public int cursorPosition() {
+        return cursor;
     }
 
     /** Printable character without Ctrl/Alt — accumulates into the filter. */
@@ -235,8 +261,19 @@ public final class SelectList<T> {
     }
 
     private void refresh() {
+        refresh(false);
+    }
+
+    /**
+     * 重算可见集；{@code keepCursor} ⇒ 光标已由调用方维护（输入/退格），
+     * 否则钉到查询末尾（程序化 filter/清空）。
+     */
+    private void refresh(boolean keepCursor) {
         visible.clear();
         visible.addAll(FuzzyMatcher.rank(filter, allItems, label));
         selected = 0;
+        if (!keepCursor) {
+            cursor = filter.length();
+        }
     }
 }

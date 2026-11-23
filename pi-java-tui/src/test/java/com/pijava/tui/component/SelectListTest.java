@@ -121,6 +121,45 @@ class SelectListTest {
         assertThat(longList.visibleRange().get(longList.windowSelectedIndex())).isEqualTo("i11");
     }
 
+    /** L5 W9（pi 5bcf370a5）：搜索框 Left/Right/Home/End 只移光标，不重过滤/不重置选中。 */
+    @Test
+    void cursorKeysMoveOnlyTheCursor() {
+        list.onKeyEvent(KeyEvent.ofChar('a'));
+        list.onKeyEvent(KeyEvent.ofChar('l'));
+        assertThat(list.filter()).isEqualTo("al");
+        assertThat(list.cursorPosition()).isEqualTo(2);
+
+        list.onKeyEvent(KeyEvent.ofKey(dev.tamboui.tui.event.KeyCode.LEFT));
+        assertThat(list.cursorPosition()).isEqualTo(1);
+        assertThat(list.filter()).isEqualTo("al");
+        assertThat(list.selected()).as("光标移动不重排").contains("alpha");
+
+        list.onKeyEvent(KeyEvent.ofKey(dev.tamboui.tui.event.KeyCode.RIGHT));
+        assertThat(list.cursorPosition()).isEqualTo(2);
+        list.onKeyEvent(KeyEvent.ofKey(dev.tamboui.tui.event.KeyCode.HOME));
+        assertThat(list.cursorPosition()).isZero();
+        assertThat(list.selected()).contains("alpha");
+        list.onKeyEvent(KeyEvent.ofKey(dev.tamboui.tui.event.KeyCode.END));
+        assertThat(list.cursorPosition()).isEqualTo(2);
+    }
+
+    /** 输入/退格在光标处生效（中段编辑）。 */
+    @Test
+    void typingAndBackspaceApplyAtTheCursor() {
+        list.onKeyEvent(KeyEvent.ofChar('g'));
+        list.onKeyEvent(KeyEvent.ofChar('a'));
+        assertThat(list.selected()).contains("gamma");
+        list.onKeyEvent(KeyEvent.ofKey(dev.tamboui.tui.event.KeyCode.LEFT));
+        list.onKeyEvent(KeyEvent.ofChar('z'));
+        assertThat(list.filter()).isEqualTo("gza");
+        assertThat(list.selected()).isEmpty();
+
+        list.onKeyEvent(KeyEvent.ofKey(dev.tamboui.tui.event.KeyCode.BACKSPACE));
+        assertThat(list.filter()).isEqualTo("ga");
+        assertThat(list.cursorPosition()).isEqualTo(1);
+        assertThat(list.selected()).contains("gamma");
+    }
+
     @Test
     void ctrlKeysAreNotFilterInput() {
         assertThat(list.onKeyEvent(KeyEvent.ofChar(
