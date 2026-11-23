@@ -707,8 +707,11 @@ map/05 不新增单元、不重复计分；F4 `/export` OSC 8 登记 **D275**；
 `docs/04` §0 增 L5 收口段＋§6.4a 四条窄差。
 
 **测试**：coding-agent 全量 **2,042** 测、TUI 全量 **695** 测绿（W5 后分模块全量；W11 后 TUI 1 例
-`SettingsScreenCacheWarmingTest` 失败已由 `0f7f6fb4` 修复并单类复跑绿）。全仓
-`mvn clean verify -Dfrontend.skip=true` 结果见下（收口提交前执行）。
+`SettingsScreenCacheWarmingTest` 失败已由 `0f7f6fb4` 修复并单类复跑绿）。
 
-> **全仓 verify（2026-11-23）**：待本轮执行完成后回填。
+> **全仓 verify（2026-11-23）**：`mvn clean verify -Dfrontend.skip=true` **BUILD SUCCESS**（16 模块全绿；
+> **7,153 测**、0 失败 0 错误、39 跳过）。分模块：coding-agent 2,042／TUI 695／agent-core 998／AI 2,264／
+> examples 401／MCP 317／evals 229／telemetry 82／web 72／sqlite 37／protocol 14／server 2。
+> 首轮在 SpotBugs 抓到 `AuthLoginCommand.parseRequest` 的 `DLS_DEAD_LOCAL_STORE`（未使用的 `var request`
+> 初值），删行后复跑通过。
 
