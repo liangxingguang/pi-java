@@ -52,13 +52,13 @@ public final class SettingsNetworkAccessors {
         java.util.Set.of("off", "streaming", "idle");
 
     /**
-     * pi {@code getCacheWarmingMode}（:914-918）：<b>只读全局域</b>（pi 注释：
+     * pi {@code getCacheWarmingMode}（:942-944）：<b>只读全局域</b>（pi 注释：
      * warming costs money——项目域被忽略）；值 ∉ {off,streaming,idle} ⇒ 回落
-     * {@code "streaming"}（settings-defaults.ts:65）。
+     * {@code SETTINGS_DEFAULTS.cacheWarming = "idle"}（settings-defaults.ts:61）。
      */
     public String getCacheWarmingMode() {
         var mode = manager.global().cacheWarming;
-        return mode != null && CACHE_WARMING_MODES.contains(mode) ? mode : "streaming";
+        return mode != null && CACHE_WARMING_MODES.contains(mode) ? mode : "idle";
     }
 
     /** pi {@code setCacheWarmingMode}（:920-923）：写全局域＋markModified。 */

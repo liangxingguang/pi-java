@@ -72,27 +72,30 @@ public final class ChangelogSupport {
         return Integer.compare(a.patch(), b.patch());
     }
 
-    /**
-     * pi {@code getNewEntries}（:182-192 逐字对位）：严格大于 {@code lastVersion}
-     * 的条目；lastVersion 解析失败段按 0（pi {@code Number() NaN || 0}）。
-     */
-    public static List<ChangelogEntry> getNewEntries(List<ChangelogEntry> entries,
-                                                     String lastVersion) {
-        var parts = lastVersion.split("\\.");
-        var last = new ChangelogEntry(num(parts, 0), num(parts, 1), num(parts, 2), "");
-        return entries.stream().filter(e -> compareVersions(e, last) > 0).toList();
-    }
+    /** pi {@code lastVersion.trim().match(/^v?(\d+)\.(\d+)\.(\d+)/)}（:183-190）。 */
+    private static final Pattern LEADING_VERSION =
+        Pattern.compile("^v?(\\d+)\\.(\\d+)\\.(\\d+)");
 
-    /** pi {@code parts.map(Number)} 的 {@code || 0} 臂：非数字/缺席段 ⇒ 0。 */
-    private static int num(String[] parts, int index) {
-        if (index >= parts.length) {
-            return 0;
+    /**
+     * pi {@code getNewEntries}（changelog.ts:183-198 逐字对位）：严格大于
+     * {@code lastVersion} 的条目；只读开头的 {@code v?major.minor.patch}——
+     * 预发布 {@code 0.1.5-20261020.7} 按 0.1.5 算，其说明不再每次启动重放（#11703）。
+     * 解析不出 ⇒ {@code Optional.empty()}（pi 返回 {@code undefined}，调用方
+     * 记当前版本、什么都不显示）。
+     */
+    public static Optional<List<ChangelogEntry>> getNewEntries(List<ChangelogEntry> entries,
+                                                               String lastVersion) {
+        if (lastVersion == null) {
+            return Optional.empty();
         }
-        try {
-            return Integer.parseInt(parts[index].trim());
-        } catch (NumberFormatException e) {
-            return 0;
+        var matcher = LEADING_VERSION.matcher(lastVersion.trim());
+        if (!matcher.find()) {
+            return Optional.empty();
         }
+        var last = new ChangelogEntry(Integer.parseInt(matcher.group(1)),
+            Integer.parseInt(matcher.group(2)), Integer.parseInt(matcher.group(3)), "");
+        return Optional.of(entries.stream()
+            .filter(e -> compareVersions(e, last) > 0).toList());
     }
 
     /** 读内置资源（pi {@code getChangelogPath} 对位：发行包根 CHANGELOG.md）。 */
@@ -134,10 +137,15 @@ public final class ChangelogSupport {
         }
         var newEntries = getNewEntries(entries, last);
         if (newEntries.isEmpty()) {
+            // Unreadable saved version: show nothing and record the current one.
+            install.setLastChangelogVersion(version);
+            return Optional.empty();
+        }
+        if (newEntries.get().isEmpty()) {
             return Optional.empty();
         }
         install.setLastChangelogVersion(version);
-        return Optional.of(newEntries.stream()
+        return Optional.of(newEntries.get().stream()
             .map(ChangelogEntry::content).collect(Collectors.joining("\n\n")));
     }
 

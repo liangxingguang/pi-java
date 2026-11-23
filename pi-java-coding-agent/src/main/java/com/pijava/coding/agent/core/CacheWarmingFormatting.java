@@ -2,7 +2,6 @@ package com.pijava.coding.agent.core;
 
 import java.util.Locale;
 
-import com.pijava.agent.entry.Entry;
 import com.pijava.ai.api.CacheWarmingPolicy;
 
 /**
@@ -97,15 +96,16 @@ public final class CacheWarmingFormatting {
     }
 
     /**
-     * pi :449-453 的 {@code formatCacheWarmingUsage}——落盘暖用量的转录单行。
+     * pi {@code formatCacheWarmingUsage}（cache-warmer.ts:352-355）——落盘暖用量的
+     * 转录单行；L5 W2 起签名是<b>累计成本</b>（背靠背暖行合并成一条）。
      * 金额＝{@code toFixed(6)} 去尾零（保留 ≥3 位小数，逐字正则
      * {@code (\.\d{3}\d*?)0+$ ⇒ $1}）。
      */
-    public static String formatUsage(Entry.Usage entry) {
-        var note = entry.note() != null ? " (" + entry.note() + ")" : "";
-        var cost = String.format(Locale.ROOT, "%.6f", entry.usage().cost().total())
+    public static String formatUsage(double totalCost, String note) {
+        var noteText = note != null ? " (" + note + ")" : "";
+        var cost = String.format(Locale.ROOT, "%.6f", totalCost)
             .replaceAll("(\\.\\d{3}\\d*?)0+$", "$1");
-        return "Cache warmed" + note + ": $" + cost;
+        return "Cache warmed" + noteText + ": $" + cost;
     }
 
     /**

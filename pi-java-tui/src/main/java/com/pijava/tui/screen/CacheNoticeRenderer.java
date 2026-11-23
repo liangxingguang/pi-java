@@ -26,6 +26,15 @@ final class CacheNoticeRenderer {
     private com.pijava.tui.util.CacheMissTracker cacheMissTracker =
         com.pijava.tui.util.CacheMissTracker.noModels();
     private com.pijava.ai.message.Message.AssistantMessage lastMissNotifiedMessage;
+    // L5 W2（pi cacheWarmingNotice，interactive-mode.ts:566/4351-4363）：背靠背暖行
+    // 合并成一条——组件引用＋累计成本＋note。
+    private ChatMessage cacheWarmingComponent;
+    private double cacheWarmingCost;
+    private String cacheWarmingNote;
+    // L5 W7：上一响应（分支最后一条 assistant）——reasoning-drop 同类抑制用。
+    private java.util.function.Supplier<java.util.Optional<
+            com.pijava.ai.message.Message.AssistantMessage>> previousAssistant =
+        java.util.Optional::empty;
 
     CacheNoticeRenderer(ChatPanel chatPanel, java.util.function.IntSupplier outputPad) {
         this.chatPanel = chatPanel;
@@ -50,13 +59,26 @@ final class CacheNoticeRenderer {
      * 门在调用点，批 12 T6 的 pad 参数同构）。非 cache_warm kind 由 from 滤掉。
      */
     void appendUsageNotice(Entry.Usage usage) {
-        if (!showCacheMissNotices.getAsBoolean()) {
+        if (!showCacheMissNotices.getAsBoolean() || usage.usage() == null) {
             return;
         }
-        var bubble = ChatMessage.from(usage, outputPad.getAsInt());
-        if (bubble != null) {
-            chatPanel.append(bubble);
+        // pi 只在 cache_warm kind 上调用本收口（interactive-mode.ts:3401/:3640/:4240）。
+        if (!"cache_warm".equals(usage.kind())) {
+            return;
         }
+        // L5 W2：上一条暖行仍是末项且 note 相同 ⇒ 原地更新并累加成本。
+        if (cacheWarmingComponent != null && chatPanel.last() == cacheWarmingComponent
+                && java.util.Objects.equals(cacheWarmingNote, usage.note())) {
+            cacheWarmingCost += usage.usage().cost().total();
+            cacheWarmingComponent = ChatMessage.cacheWarmNoticeLine(
+                cacheWarmingCost, cacheWarmingNote, outputPad.getAsInt());
+            chatPanel.replaceLast(cacheWarmingComponent);
+            return;
+        }
+        cacheWarmingCost = usage.usage().cost().total();
+        cacheWarmingNote = usage.note();
+        cacheWarmingComponent = ChatMessage.from(usage, outputPad.getAsInt());
+        chatPanel.append(cacheWarmingComponent);
     }
 
     /**
@@ -81,6 +103,34 @@ final class CacheNoticeRenderer {
             label = "Cache miss after " + Math.round(miss.idleMs() / 60_000.0) + "m idle";
         }
         chatPanel.append(new ChatMessage.System(label + ": " + reBilled, MetaKind.GENERIC));
+    }
+
+    /** L5 W7：上一响应现读源（pi {@code sessionManager.getBranch()} 反向扫描对位）。 */
+    void setPreviousAssistantSupplier(
+            java.util.function.Supplier<java.util.Optional<
+                    com.pijava.ai.message.Message.AssistantMessage>> supplier) {
+        previousAssistant = supplier == null ? java.util.Optional::empty : supplier;
+    }
+
+    /**
+     * L5 W7（pi {@code maybeShowThinkingDropNotice}，interactive-mode.ts:4384-4410）：
+     * provider 已报 withheld reasoning ⇒ 转录提示；同一 provider/类型且计数不增 ⇒ 不显示。
+     */
+    void appendReasoningDropNotice(com.pijava.ai.message.Message.AssistantMessage message) {
+        if (!showCacheMissNotices.getAsBoolean()) {
+            return;
+        }
+        var dropped = com.pijava.tui.util.ReasoningDropNotice.find(message);
+        if (dropped.isEmpty()) {
+            return;
+        }
+        var previous = previousAssistant.get()
+            .flatMap(com.pijava.tui.util.ReasoningDropNotice::find);
+        if (com.pijava.tui.util.ReasoningDropNotice.isRepeat(dropped.get(), previous)) {
+            return;
+        }
+        chatPanel.append(new ChatMessage.System(
+            com.pijava.tui.util.ReasoningDropNotice.text(dropped.get()), MetaKind.GENERIC));
     }
 
     /** miss 跟踪器逐条 feed（onEntry／rebuildTranscript 同序先 feed 再渲染）。 */

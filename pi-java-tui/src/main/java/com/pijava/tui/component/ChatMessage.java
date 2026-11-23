@@ -187,9 +187,17 @@ public sealed interface ChatMessage {
         }
         // 批 13（T10）：pi cache-warmer.ts:449-453 逐字（经格式化族共享），
         // kind 判据（interactive-mode.ts:3401/:4030）既有不动。
-        return new System(
-            com.pijava.coding.agent.core.CacheWarmingFormatting.formatUsage(usage),
-            MetaKind.GENERIC);
+        return cacheWarmNoticeLine(usage.usage().cost().total(), usage.note(), 0);
+    }
+
+    /**
+     * L5 W2（pi {@code addCacheWarmingUsage} 的组件构造，interactive-mode.ts:4361）：
+     * 累计成本的暖行；实时臂合并时替换 chatPanel 末项（{@code pad} 同 {@link #from} 烘焙）。
+     */
+    public static ChatMessage cacheWarmNoticeLine(double totalCost, String note, int pad) {
+        var line = new System(com.pijava.coding.agent.core.CacheWarmingFormatting
+            .formatUsage(totalCost, note), MetaKind.GENERIC);
+        return pad <= 0 ? line : new Padded(line, pad);
     }
 
     private static ChatMessage fromMessage(Entry.Message message) {

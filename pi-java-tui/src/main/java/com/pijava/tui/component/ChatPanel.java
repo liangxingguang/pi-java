@@ -34,6 +34,15 @@ public final class ChatPanel {
         messages.add(message);
     }
 
+    /** Replace the last committed message (L5 W2 live cache-warm merge; empty ⇒ append). */
+    public void replaceLast(ChatMessage message) {
+        if (messages.isEmpty()) {
+            messages.add(message);
+        } else {
+            messages.set(messages.size() - 1, message);
+        }
+    }
+
     /**
      * Sets the in-flight streaming draft (null = none). The draft joins the
      * viewport as the last message; committed messages follow on TextEnd.

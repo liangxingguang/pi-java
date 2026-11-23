@@ -127,8 +127,7 @@ public final class PiTuiApp {
         com.pijava.tui.component.MarkdownTransformers.install(session::markdownTransformers);
         // 批 26（docs/37 T9）：扩展快捷键随会话解析（pi setupExtensionShortcuts 对位）。
         resolveExtensionShortcuts(session);
-        // 批 25（docs/36 T7）：markdown.codeBlockIndent 现读缝（现读 this.session
-        // ⇒ switchSession 后新会话的设置面自然生效；E2-43 消费点）。
+        // 批 25（docs/36 T7）：markdown.codeBlockIndent 现读缝（switchSession 后自然生效）。
         com.pijava.tui.component.MarkdownTheme.installCodeBlockIndent(
             () -> session.services().settings().compaction().getMarkdownCodeBlockIndent());
         // hideThinkingBlock 现读：设置页切换后当前转录也立即隐藏/恢复 thinking。
@@ -138,8 +137,7 @@ public final class PiTuiApp {
         com.pijava.tui.component.MessageBubbleVisibility.installToolsExpanded(() -> toolOutputExpanded);
         this.sessionEvents = new SessionEventChannel(dispatcher, chatScreen::onSessionEvent);
         // 批 12（docs/23）：settings 消费键 live-read 注入——先于补全目录装配
-        // （completer 重建带上 maxVisible 源）；现读 this.session ⇒ switchSession
-        // 后新会话的设置面自然生效。
+        //（switchSession 后新会话的设置面自然生效）。
         chatScreen.setOutputPadSource(
             () -> session.services().settings().uiPrefs().getOutputPad());
         chatScreen.setEditorPaddingSource(
@@ -148,8 +146,7 @@ public final class PiTuiApp {
             () -> session.services().settings().uiPrefs().getAutocompleteMaxVisible());
         chatScreen.setScrollbarModeSource(
             () -> session.services().settings().uiPrefs().getFullscreenScrollbar());
-        // 批 13（docs/24 T10/T11）：showCacheMissNotices 门＋miss 价目目录源
-        // （ModelKey＝provider+"/"+model，首个斜杠切分——openrouter 斜杠 id 只吃前缀）。
+        // 批 13（docs/24 T10/T11）：showCacheMissNotices 门＋miss 价目目录源（ModelKey＝p/m）。
         chatScreen.setShowCacheMissNoticesSupplier(
             () -> session.services().settings().uiPrefs().getShowCacheMissNotices());
         chatScreen.setCacheMissTrackerModels(key -> {
@@ -158,6 +155,9 @@ public final class PiTuiApp {
                 : session.modelCatalog().find(com.pijava.ai.model.ModelId.of(
                     key.substring(0, slash), key.substring(slash + 1)));
         });
+        // L5 W7：reasoning-drop 同类抑制的上一响应源（pi branch 反向扫描）。
+        chatScreen.setPreviousAssistantSupplier(() -> com.pijava.tui.util.ReasoningDropNotice
+            .previousAssistant(session.accumulatedEntries()));
         chatScreen.setSlashCommands(slashFlow.loadSlashItems());
         chatScreen.setInterruptHint(
             KeybindingHints.keyText(keys.strokeFor(KeybindingsManager.INTERRUPT)));

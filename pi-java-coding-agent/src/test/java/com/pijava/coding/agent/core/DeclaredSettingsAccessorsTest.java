@@ -10,7 +10,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * 批 11 T7（docs/22 §3.13/§3.14）：声明面 14 键的字段 JSON 往返（写→读→写不丢、
- * 不再落 {@code unknown}）与逐键 quirk——cacheWarming 非法回落 streaming＋只读
+ * 不再落 {@code unknown}）与逐键 quirk——cacheWarming 非法回落 idle＋只读
  * 全局域、fullscreenWheelScrollLines clamp 1–100/"auto"、fullscreenExitOutput 非法
  * 回落 transcript、fullscreenScrollbar 非法回落 auto、showHardwareCursor env 回落、
  * {@code setEnableAnalytics} 生成 trackingId＋幂等、warnings 默认空形。
@@ -79,7 +79,7 @@ class DeclaredSettingsAccessorsTest {
         assertThat(manager.install().getEnableInstallTelemetry()).isTrue();
         assertThat(manager.install().getEnableAnalytics()).isFalse();
         assertThat(manager.install().getTrackingId()).isNull();
-        assertThat(manager.network().getCacheWarmingMode()).isEqualTo("streaming");
+        assertThat(manager.network().getCacheWarmingMode()).isEqualTo("idle");
         assertThat(manager.uiPrefs().getFullscreenExitOutput()).isEqualTo("transcript");
         assertThat(manager.uiPrefs().getFullscreenScrollbar()).isEqualTo("auto");
         assertThat(manager.uiPrefs().getFullscreenCopyOnSelect()).isTrue();
@@ -88,20 +88,20 @@ class DeclaredSettingsAccessorsTest {
         assertThat(manager.uiPrefs().getWarnings().anthropicExtraUsage()).isNull();
     }
 
-    /** cacheWarming：非法值回落 streaming；<b>只读全局域</b>（项目域被忽略）。 */
+    /** cacheWarming：非法值回落 idle（L5 W2）；<b>只读全局域</b>（项目域被忽略）。 */
     @Test
     void cacheWarmingFallsBackAndReadsGlobalOnly(@TempDir Path dir) throws Exception {
         Files.writeString(dir.resolve("settings.json"), "{\"cacheWarming\":\"bogus\"}");
         assertThat(SettingsManager.withStorage(storage(dir)).network()
-            .getCacheWarmingMode()).isEqualTo("streaming");
+            .getCacheWarmingMode()).isEqualTo("idle");
 
-        // 项目域设 idle、全局缺席 ⇒ 仍回落 streaming（pi：Global only）。
+        // 项目域设 idle、全局缺席 ⇒ 仍回落 idle（pi：Global only）。
         Files.writeString(dir.resolve("settings.json"), "{}");
         Files.createDirectories(dir.resolve(".pi-java"));
         Files.writeString(dir.resolve(".pi-java").resolve("settings.json"),
             "{\"cacheWarming\":\"idle\"}");
         assertThat(SettingsManager.withStorage(storage(dir)).network()
-            .getCacheWarmingMode()).isEqualTo("streaming");
+            .getCacheWarmingMode()).isEqualTo("idle");
     }
 
     /** fullscreenWheelScrollLines：clamp 1–100 后 floor；非 number ⇒ "auto"。 */

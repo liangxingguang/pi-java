@@ -137,25 +137,44 @@ final class SessionDataViews {
             .toList();
     }
 
-    /** The most recent assistant text (for {@code /copy}). */
+    /**
+     * The most recent assistant text (for {@code /copy} and RPC
+     * {@code get_last_assistant_text}); pi {@code getLastAssistantText},
+     * agent-session.ts:4526-4545 (L5 W7): skip a turn that did not end normally
+     * when it has no non-blank text (aborted / failed / tool-only, #12119);
+     * a normally-ended reply stays the last reply even without text.
+     */
     String lastAssistantText() {
         var transcript = owner.harness().snapshot(laneName()).transcript();
         for (int i = transcript.size() - 1; i >= 0; i--) {
             var entry = transcript.get(i);
-            if (entry instanceof Entry.Message message
-                    && "assistant".equals(message.message().role())) {
-                var builder = new StringBuilder();
-                for (var block : message.message().content()) {
-                    if (block instanceof com.pijava.ai.message.ContentBlock.TextContent text) {
-                        builder.append(text.text());
-                    }
-                }
-                if (!builder.isEmpty()) {
-                    return builder.toString();
+            if (!(entry instanceof Entry.Message message)
+                    || !(message.message() instanceof
+                        com.pijava.ai.message.Message.AssistantMessage assistant)) {
+                continue;
+            }
+            var content = assistant.content();
+            if (assistant.stopReason() != com.pijava.ai.message.StopReason.STOP
+                    && !hasNonBlankText(content)) {
+                continue;
+            }
+            var builder = new StringBuilder();
+            for (var block : content) {
+                if (block instanceof com.pijava.ai.message.ContentBlock.TextContent text) {
+                    builder.append(text.text());
                 }
             }
+            var trimmed = builder.toString().trim();
+            return trimmed.isEmpty() ? null : trimmed;
         }
         return null;
+    }
+
+    private static boolean hasNonBlankText(
+            java.util.List<com.pijava.ai.message.ContentBlock> content) {
+        return content.stream().anyMatch(block ->
+            block instanceof com.pijava.ai.message.ContentBlock.TextContent text
+                && !text.text().isBlank());
     }
 
     /** 批 13（T6）：当前叶 id——{@code CacheWarmer.SessionAccess.getBranch} 的操作数。 */

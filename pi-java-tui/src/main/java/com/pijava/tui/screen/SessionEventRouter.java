@@ -96,6 +96,8 @@ final class SessionEventRouter {
                 if (end.message() instanceof com.pijava.ai.message.Message.AssistantMessage am) {
                     if (am.stopReason() != com.pijava.ai.message.StopReason.ABORTED
                             && am.stopReason() != com.pijava.ai.message.StopReason.ERROR) {
+                        // L5 W7（pi :3783 挂点）：withheld reasoning 提示先于 miss 通知。
+                        cacheNotices.appendReasoningDropNotice(am);
                         var miss = cacheNotices.detectOnMessageEnd(am);
                         if (miss.isPresent() && cacheNotices.noticesEnabled()) {
                             cacheNotices.appendCacheMissNotice(miss.get());

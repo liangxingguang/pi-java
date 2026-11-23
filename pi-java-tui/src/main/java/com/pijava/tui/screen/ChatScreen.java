@@ -353,6 +353,13 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
         cacheNotices.setShowCacheMissNoticesSupplier(supplier);
     }
 
+    /** L5 W7：上一响应现读源（reasoning-drop 同类抑制；pi branch 反向扫描对位）。 */
+    public void setPreviousAssistantSupplier(
+            java.util.function.Supplier<java.util.Optional<
+                    com.pijava.ai.message.Message.AssistantMessage>> supplier) {
+        cacheNotices.setPreviousAssistantSupplier(supplier);
+    }
+
     /** 批 13（T11）：miss 检测的目录查询源（provider+"/"+model ⇒ {@code catalog.find}）。 */
     public void setCacheMissTrackerModels(
             java.util.function.Function<String, java.util.Optional<com.pijava.ai.catalog.ModelInfo>> models) {

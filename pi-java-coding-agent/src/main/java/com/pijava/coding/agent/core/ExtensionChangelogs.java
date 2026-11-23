@@ -74,8 +74,14 @@ public final class ExtensionChangelogs {
                 settings.setExtensionChangelogVersion(key, pkg.version());
                 continue;
             }
-            var entries = ChangelogSupport.getNewEntries(
+            var entriesOpt = ChangelogSupport.getNewEntries(
                 ChangelogSupport.parse(readFile(info.changelogPath())), lastVersion);
+            if (entriesOpt.isEmpty()) {
+                // Unreadable saved version: show nothing and record the current one.
+                settings.setExtensionChangelogVersion(key, pkg.version());
+                continue;
+            }
+            var entries = entriesOpt.get();
             if (entries.isEmpty()) {
                 continue;
             }

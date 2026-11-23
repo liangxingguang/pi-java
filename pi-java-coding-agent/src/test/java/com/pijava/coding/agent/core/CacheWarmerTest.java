@@ -376,7 +376,8 @@ class CacheWarmerTest {
         var entry = new Entry.Usage("u1", 0, null, Instant.ofEpochMilli(0), "cache_warm",
             "anthropic", "claude-opus-4-6", usage, "extension override",
             null, null, null, null, null);
-        assertThat(CacheWarmingFormatting.formatUsage(entry))
+        assertThat(CacheWarmingFormatting.formatUsage(
+                usage.cost().total(), entry.note()))
             .isEqualTo("Cache warmed (extension override): $0.029497");
     }
 }

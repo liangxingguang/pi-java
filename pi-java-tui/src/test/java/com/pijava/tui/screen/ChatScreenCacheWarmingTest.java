@@ -79,14 +79,49 @@ class ChatScreenCacheWarmingTest {
         screen.onEntry(entry);
         assertThat(screen.messages()).hasSize(1);
 
-        // 另一条目：onEntry 直渲（同门）。
+        // 另一条目：onEntry 直渲（同门）——L5 W2 起背靠背暖行并进上一条。
         screen.onEntry(warmEntry("u2", null));
-        assertThat(screen.messages()).hasSize(2);
+        assertThat(screen.messages()).containsExactly(
+            new ChatMessage.System("Cache warmed: $0.058995", MetaKind.GENERIC));
 
         // 门关：onEntry 也不渲。
         gate.set(false);
         screen.onEntry(warmEntry("u3", null));
-        assertThat(screen.messages()).hasSize(2);
+        assertThat(screen.messages()).hasSize(1);
+    }
+
+    // ── L5 W2：背靠背暖行合并成一条、成本累加 ─────────────────────────────
+
+    @Test
+    void backToBackWarmsCollapseIntoOneLineWithCumulativeCost() {
+        var screen = new ChatScreen();
+        screen.setShowCacheMissNoticesSupplier(() -> true);
+
+        screen.onSessionEvent(new AgentSessionEvent.EntryAppended(warmEntry("u1", null)));
+        screen.onSessionEvent(new AgentSessionEvent.EntryAppended(warmEntry("u2", null)));
+        screen.onSessionEvent(new AgentSessionEvent.EntryAppended(warmEntry("u3", null)));
+
+        // 3 × 0.02949725 = 0.08849175 ⇒ "$0.088492"（pi 逐条相加同口径）。
+        assertThat(screen.messages()).containsExactly(
+            new ChatMessage.System("Cache warmed: $0.088492", MetaKind.GENERIC));
+    }
+
+    @Test
+    void differentNotesStartANewLineAndAnInterveningMessageBreaksTheMerge() {
+        var screen = new ChatScreen();
+        screen.setShowCacheMissNoticesSupplier(() -> true);
+
+        screen.onSessionEvent(new AgentSessionEvent.EntryAppended(
+            warmEntry("u1", "extension override")));
+        screen.onSessionEvent(new AgentSessionEvent.EntryAppended(warmEntry("u2", null)));
+        assertThat(screen.messages()).as("note 不同 ⇒ 另起").hasSize(2);
+
+        // 中间插一条别的消息 ⇒ 上一条暖行不再是末项 ⇒ 另起（不是原地更新）。
+        screen.appendSystemText("something else");
+        screen.onSessionEvent(new AgentSessionEvent.EntryAppended(warmEntry("u3", null)));
+        assertThat(screen.messages()).hasSize(4);
+        assertThat(screen.messages().get(3)).isEqualTo(new ChatMessage.System(
+            "Cache warmed: $0.029497", MetaKind.GENERIC));
     }
 
     @Test

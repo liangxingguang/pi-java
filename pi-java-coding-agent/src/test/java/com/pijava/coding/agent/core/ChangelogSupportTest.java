@@ -54,15 +54,21 @@ class ChangelogSupportTest {
     }
 
     @Test
-    void getNewEntriesFiltersStrictlyGreaterWithLenientParse() {
+    void getNewEntriesFiltersStrictlyGreaterFromALeadingVersion() {
         var entries = ChangelogSupport.parse(SAMPLE);
 
         assertThat(ChangelogSupport.getNewEntries(entries, "0.1.0"))
+            .get().asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.LIST)
             .containsExactly(entries.get(0));
-        // pi Number() NaN || 0：非法段按 0 ⇒ "0.2.x" 的 last 吃掉 0.2.0。
-        assertThat(ChangelogSupport.getNewEntries(entries, "0.2.0-SNAPSHOT")).isEmpty();
-        assertThat(ChangelogSupport.getNewEntries(entries, "garbage"))
-            .containsExactlyElementsOf(entries);
+        // L5 W2（pi #11703）：只读开头 v?major.minor.patch——预发布按 0.1.5 算。
+        assertThat(ChangelogSupport.getNewEntries(entries, "0.2.0-SNAPSHOT"))
+            .get().asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.LIST)
+            .isEmpty();
+        assertThat(ChangelogSupport.getNewEntries(entries, "v0.1.0"))
+            .get().asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.LIST)
+            .containsExactly(entries.get(0));
+        // 解析不出 ⇒ pi 返回 undefined（调用方记版本、不显示）。
+        assertThat(ChangelogSupport.getNewEntries(entries, "garbage")).isEmpty();
     }
 
     @Test
@@ -108,6 +114,16 @@ class ChangelogSupportTest {
         assertThat(settings.install().getLastChangelogVersion()).isEqualTo("9.9.9");
         // 写回后不再重复显示（内置条目 ≤ 9.9.9）。
         assertThat(ChangelogSupport.forDisplay(settings, "9.9.9", false)).isEmpty();
+    }
+
+    /** L5 W2：存下的版本读不出 ⇒ 不显示、记当前版本（pi :1444-1449）。 */
+    @Test
+    void forDisplayUnreadableVersionRecordsCurrentAndShowsNothing(@TempDir Path dir) {
+        var settings = manager(dir);
+        settings.install().setLastChangelogVersion("garbage");
+
+        assertThat(ChangelogSupport.forDisplay(settings, "9.9.9", false)).isEmpty();
+        assertThat(settings.install().getLastChangelogVersion()).isEqualTo("9.9.9");
     }
 
     @Test
