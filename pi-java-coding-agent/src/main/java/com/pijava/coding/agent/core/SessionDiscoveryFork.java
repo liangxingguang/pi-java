@@ -478,11 +478,11 @@ final class SessionDiscoveryFork {
             return;
         }
         owner.messaging().closed(true);
-        // docs/16 裁决⑤：abort() 内含 abortCompaction/abortBranchSummary/abortRetry
-        // 并置中止旗 —— pi 的 settle 在途 turn 第一步（原实现只 abortRetry）。
+        // docs/16 裁决⑤：abort() 内含 abortCompaction/abortBranchSummary/abortRetry 并置中止旗——pi 的 settle 在途 turn 第一步。
         owner.abort();
-        // 批 13（T8-②，pi :1409-1412 对位）：dispose 停暖（onWarmed 无——裁决⑧，
-        // 广播内建于 appendUsage 收口）。
+        // L5 W5（pi dispose :426-445）：等凭证写入结算——Java 刷新在请求线程内同步持锁完成。
+        com.pijava.ai.auth.OAuthCredentialStore.awaitSettled(java.time.Duration.ofSeconds(15));
+        // 批 13（T8-②，pi :1409-1412 对位）：dispose 停暖（onWarmed 无——裁决⑧，广播内建于 appendUsage 收口）。
         owner.messaging().cancelCacheWarmer();
         // pi dispose/teardownCurrent：shutdown 事件在 dispose 之前（:258-267）。
         fireSessionShutdown(reason, targetSessionFile);

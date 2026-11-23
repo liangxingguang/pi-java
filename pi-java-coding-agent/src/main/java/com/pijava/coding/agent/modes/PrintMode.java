@@ -38,7 +38,8 @@ public final class PrintMode {
             return 1;
         }
         var prompt = String.join(" ", messages);
-        try (var session = sessionFactory.get()) {
+        try (var session = sessionFactory.get();
+             var shutdownHook = com.pijava.coding.agent.core.SessionShutdownHook.install(session)) {
             printStartupDiagnostics(session); // 批 16（T1d 裁决⑧）
             var result = session.processPrompt(prompt, PromptConfig.defaults());
             result.stream().forEach(event -> renderEvent(event, args.verbose()));
@@ -68,7 +69,8 @@ public final class PrintMode {
             return 1;
         }
         var prompt = String.join(" ", messages);
-        try (var session = AgentSession.create(args)) {
+        try (var session = AgentSession.create(args);
+             var shutdownHook = com.pijava.coding.agent.core.SessionShutdownHook.install(session)) {
             printStartupDiagnostics(session); // 批 16（T1d 裁决⑧）
             var result = session.processPrompt(prompt, PromptConfig.defaults());
             result.stream().forEach(event ->
@@ -99,9 +101,7 @@ public final class PrintMode {
 
     /** 批 16（T1d 裁决⑧）：扩展 flag 绑定诊断落 stderr（pi 启动期诊断同旨）。 */
     private static void printStartupDiagnostics(AgentSession session) {
-        for (var diagnostic : session.startupDiagnostics()) {
-            System.err.println(diagnostic.type() + ": " + diagnostic.message());
-        }
+        DiagnosticsStderr.write(session.startupDiagnostics());
     }
 
     /**

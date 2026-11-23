@@ -135,9 +135,8 @@ public final class AgentSession implements AutoCloseable {
 
     // ── 公开嵌套类型（API 面，留壳）──
     /**
-     * pi {@code navigateTree} 的返回：取消旗＋摘要中止旗（pi 区分
-     * {@code {cancelled:true}} 扩展取消与 {@code {cancelled:true, aborted:true}}
-     * 摘要中止，:4032/:4069）＋编辑器回填文本＋摘要 entry（可无）。
+     * pi {@code navigateTree} 的返回：取消旗＋摘要中止旗（pi 区分 {@code {cancelled:true}} 扩展取消与
+     * {@code {cancelled:true, aborted:true}} 摘要中止，:4032/:4069）＋编辑器回填文本＋摘要 entry（可无）。
      */
     public record TreeNavigation(boolean cancelled, boolean aborted, String editorText,
                                  Entry.BranchSummary summaryEntry) {}
@@ -207,6 +206,8 @@ public final class AgentSession implements AutoCloseable {
     // ── 只读投影委托（→ SessionDataViews；含扩展面只读出口）──
     /** 委托 {@link SessionDataViews}。 */ public String laneName() { return views.laneName(); }
     /** 委托 {@link SessionDataViews}。 */ public boolean isRunning() { return views.isRunning(); }
+    /** 会话已关闭（{@code ctx.shutdown()} 的 RPC 空闲退出判据；L5 W5）。 */ public boolean isClosed() { return messaging.closed(); }
+    /** L5 W5：替换会话继承已上报诊断键（pi {@code reportedDiagnosticKeys} 随 runtime 存活）。 */ public void carryReportedDiagnosticsFrom(AgentSession previous) { views.carryReportedDiagnosticsFrom(previous.views); }
     /** 委托 {@link SessionDataViews}。 */ public String sessionId() { return views.sessionId(); }
     /** 委托 {@link SessionDataViews}。 */ public String sessionFile() { return views.sessionFile(); }
     /** 委托 {@link SessionDataViews}。 */ public String cwd() { return views.cwd(); }

@@ -102,6 +102,19 @@ final class StartupNotices {
                 com.pijava.coding.agent.core.PackageUpdateNotifier.notificationText(updates))));
     }
 
+    /** L5 W5：会话替换后展示新会话尚未上报的诊断（pi showRuntimeDiagnostics 对位）。 */
+    void showRuntimeDiagnostics() {
+        var diagnostics = app.session.startupDiagnostics();
+        if (diagnostics.isEmpty()) {
+            return;
+        }
+        dispatcher.dispatch(() -> {
+            for (var diagnostic : diagnostics) {
+                chatScreen.appendSystemText(diagnostic.type() + ": " + diagnostic.message());
+            }
+        });
+    }
+
     /** 批 16（T1d 裁决⑧）：扩展 flag 绑定诊断随启动提示展示（dim 系统文本）。 */
     private void showStartupDiagnostics() {
         for (var diagnostic : app.session.startupDiagnostics()) {

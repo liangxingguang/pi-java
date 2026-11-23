@@ -442,7 +442,8 @@ final class ExtensionLoading {
     /**
      * 批 16（T5b，C-23/E5-29/B246）：pi {@code AgentSession.reload()}
      * （agent-session.ts:3660-3701）的 java 对位——七步序见 {@link SessionReload}。
-     * 双门（isStreaming/isCompacting）在命令层（pi interactive-mode.ts:6430-6440 同位）。
+     * 双门（isStreaming/isCompacting）命令层一道（interactive-mode.ts:6430-6440），
+     * 会话层再一道（L5 W5，直接调用 reload 的扩展/宿主也受拒）。
      */
     void reload() {
         SessionReload.reload(owner);

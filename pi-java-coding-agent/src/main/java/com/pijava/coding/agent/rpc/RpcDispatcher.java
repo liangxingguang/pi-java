@@ -29,6 +29,9 @@ public final class RpcDispatcher {
     private AgentSession session;
     private AutoCloseable eventSubscription;
     private volatile boolean streaming;
+    /** L5 W5：后台执行中的扩展命令数（pi {@code activeCommands}，空闲 shutdown 门）。 */
+    private final java.util.concurrent.atomic.AtomicInteger activeCommands =
+        new java.util.concurrent.atomic.AtomicInteger();
     /** 批 17（T3）：扩展 UI 应答通道（批 29 拆出 {@link RpcExtensionUiChannel}）。 */
     private final RpcExtensionUiChannel uiChannel;
     /** 批 17（T3/评审回补 #2）：RPC 臂 typed UI 实例（构造一次，new_session 重绑复用）。 */
@@ -44,8 +47,7 @@ public final class RpcDispatcher {
         this.out = out;
         this.args = args;
         this.eventSubscription = session.subscribe(this::emitEvent);
-        // 批 17（T3）：RPC 臂 typed 实现——九方法通道的 java 生产者自此接通
-        //（晚绑定修真：context 现读会话字段，后注入不再落空，E5-32）。
+        // 批 17（T3）：RPC 臂 typed 实现——九方法通道的 java 生产者自此接通（晚绑定修真，E5-32）。
         this.uiChannel = new RpcExtensionUiChannel(out);
         this.extensionUI = new RpcExtensionUI(uiChannel::request, uiChannel::write);
         session.extensionUI(extensionUI, "rpc");
@@ -90,8 +92,7 @@ public final class RpcDispatcher {
             switch (command) {
                 case RpcCommand.Prompt p -> handlePrompt(p);
                 case RpcCommand.Steer s -> {
-                    // 批 20（B237，pi rpc-mode.ts:416-419）：disposition 透传
-                    //（input 事件 handled / 正常 queued）＋images 透传；
+                    // 批 20（B237，pi rpc-mode.ts:416-419）：disposition 透传＋images 透传；
                     // 扩展命令入队 ⇒ IllegalStateException → 通用 fail 响应。
                     var steerDisposition =
                         session.steer(s.message(), toPromptImages(s.images()), "rpc");
@@ -112,26 +113,22 @@ public final class RpcDispatcher {
                     out.write(RpcResponse.ok(g.id(), "get_state",
                         RpcSessionPayloads.buildState(session, streaming)));
                 case RpcCommand.NewSession n -> {
-                    // 批 20（B257，pi rpc-mode.ts:432-441＋agent-session-runtime.ts:226-258
-                    // 逐字序）：before_switch("new") 取消 ⇒ {cancelled:true} **不替换**；
-                    // 响应形 {cancelled}（旧实现发全量 state——形状差修真）。
+                    // 批 20（B257，pi rpc-mode.ts:432-441＋agent-session-runtime.ts:226-258 逐字序）：
+                    // before_switch("new") 取消 ⇒ {cancelled:true} **不替换**；响应形 {cancelled}。
                     if (session.fireBeforeSwitch("new", null)) {
                         out.write(RpcResponse.ok(n.id(), "new_session",
                             new RpcPayloads.CancelledData(true)));
                     } else {
-                        // docs/15（B250）＋docs/16（B252）：替换式新建 —— start{new,
-                        // previous}＋旧会话真正关闭（closeForReplacement 内含
-                        // shutdown{new, 新 id}；pi newSession 序列，序差在册 D20）。
+                        // docs/15（B250）＋docs/16（B252）：替换式新建——start{new, previous}＋旧会话真正关闭
+                        //（closeForReplacement 内含 shutdown{new, 新 id}；pi newSession 序列，序差在册 D20）。
                         var old = session;
                         var previousId = old.sessionId();
-                        unsubscribe();
-                        session = AgentSession.createReplacing(args, previousId, n.parentSession());
-                        // 批 17 评审回补（Important #2）：新会话重绑 RPC 扩展 UI 通道
-                        //（pi finishSessionReplacement→rebindSession 对位，
-                        // agent-session-runtime.ts:187-191／rpc-mode.ts:313-321）。
-                        session.extensionUI(extensionUI, "rpc");
-                        old.closeForReplacement("new", session.sessionId());
-                        eventSubscription = session.subscribe(this::emitEvent);
+                        var next = AgentSession.createReplacing(
+                            args, previousId, n.parentSession());
+                        // L5 W5：替换臂统一重绑（pi finishSessionReplacement→
+                        // rebindSession 对位，agent-session-runtime.ts:187-191）。
+                        old.closeForReplacement("new", next.sessionId());
+                        rebindSession(next);
                         out.write(RpcResponse.ok(n.id(), "new_session",
                             new RpcPayloads.CancelledData(false)));
                     }
@@ -173,9 +170,8 @@ public final class RpcDispatcher {
                     out.write(RpcResponse.ok(g.id(), "get_available_thinking_levels",
                         RpcSessionPayloads.availableThinkingLevels(session)));
                 case RpcCommand.Compact c -> {
-                    // B176（原 docs/27）：pi void handleInputLine(line)（rpc-mode.ts:809）
-                    // —— 压缩跑 worker 虚拟线程，读线程立即处理后续命令；响应压缩
-                    // 完成时写出。
+                    // B176（原 docs/27）：pi void handleInputLine(line)（rpc-mode.ts:809）——压缩跑 worker
+                    // 虚拟线程，读线程立即处理后续命令；响应压缩完成时写出。
                     Thread.startVirtualThread(() -> {
                         try {
                             // B223（原 docs/47）：预算按会话当前模型现解析。
@@ -248,16 +244,18 @@ public final class RpcDispatcher {
                         Map.of("path", path)));
                 }
                 case RpcCommand.SwitchSession s -> {
-                    // docs/15（B250）：switchTo 集中 before_switch/shutdown/start
-                    // 序列；cancel ⇒ pi 同形回 {cancelled:true}（rpc-mode.ts:591-596）。
+                    // docs/15（B250）：switchTo 集中 before_switch/shutdown/start 序列；cancel ⇒ 同形 {cancelled}。
                     var result = session.switchTo(s.sessionPath());
                     switch (result.outcome()) {
                         case NOT_FOUND -> out.write(RpcResponse.fail(s.id(), "switch_session",
                             "Session not found: " + s.sessionPath()));
                         case CANCELLED -> out.write(RpcResponse.ok(s.id(), "switch_session",
                             Map.of("cancelled", true)));
-                        case SWITCHED -> out.write(RpcResponse.ok(s.id(), "switch_session",
-                            Map.of("cancelled", false)));
+                        case SWITCHED -> {
+                            reportDiagnostics();
+                            out.write(RpcResponse.ok(s.id(), "switch_session",
+                                Map.of("cancelled", false)));
+                        }
                     }
                 }
                 case RpcCommand.Fork fk -> {
@@ -274,9 +272,7 @@ public final class RpcDispatcher {
                             Map.of("text", "", "cancelled", true)));
                     } else {
                         // docs/16（B252）：旧会话关闭已收进 fork 内部（closeForFork）。
-                        unsubscribe();
-                        session = forked.get();
-                        eventSubscription = session.subscribe(this::emitEvent);
+                        rebindSession(forked.get());
                         out.write(RpcResponse.ok(fk.id(), "fork",
                             Map.of("text", selectedText, "cancelled", false)));
                     }
@@ -290,9 +286,7 @@ public final class RpcDispatcher {
                         out.write(RpcResponse.ok(c.id(), "clone",
                             Map.of("cancelled", true)));
                     } else {
-                        unsubscribe();
-                        session = forked.get();
-                        eventSubscription = session.subscribe(this::emitEvent);
+                        rebindSession(forked.get());
                         out.write(RpcResponse.ok(c.id(), "clone",
                             Map.of("cancelled", false)));
                     }
@@ -383,12 +377,15 @@ public final class RpcDispatcher {
                 }, null, null);
             if (!startedWritten.get()) {
                 if (result.commandCompletion() != null) {
-                    // 批 20 评审回补（I-1，pi rpc-mode.ts:398-412 时序对位）：void
-                    // prompt——响应在命令执行完成后才写（preflightResult 时序），
-                    // 读线程不阻塞（后续命令照读照护）。
-                    result.commandCompletion().thenRun(() -> writeQuietly(
-                        RpcResponse.ok(prompt.id(), "prompt",
-                            new RpcPayloads.DispositionData("handled"))));
+                    // 批 20 评审回补（I-1，pi rpc-mode.ts:398-412 时序对位）：响应在命令完成后才写。
+                    activeCommands.incrementAndGet();
+                    result.commandCompletion().whenComplete((value, error) -> {
+                        activeCommands.decrementAndGet();
+                        if (error == null) {
+                            writeQuietly(RpcResponse.ok(prompt.id(), "prompt",
+                                new RpcPayloads.DispositionData("handled")));
+                        }
+                    });
                 } else {
                     out.write(RpcResponse.ok(prompt.id(), "prompt",
                         new RpcPayloads.DispositionData(result.disposition())));
@@ -447,6 +444,45 @@ public final class RpcDispatcher {
             out.write(JsonEventMapper.toWire(event));
         } catch (IOException e) {
             throw new UncheckedIOException(e);
+        }
+    }
+
+    /**
+     * Swap the dispatcher onto a replacement session: unsubscribe the old channel,
+     * rebind the RPC extension UI, subscribe once, then report its diagnostics
+     * (pi {@code finishSessionReplacement→rebindSession}, L5 W5).
+     */
+    private void rebindSession(AgentSession next) {
+        var previous = session;
+        unsubscribe();
+        session = next;
+        next.carryReportedDiagnosticsFrom(previous); // L5 W5：已上报键随替换存活（pi reportedDiagnosticKeys）。
+        session.extensionUI(extensionUI, "rpc");
+        eventSubscription = session.subscribe(this::emitEvent);
+        reportDiagnostics();
+    }
+
+    /** Diagnostics the replaced session added, to stderr (pi diagnostics-stderr). */
+    private void reportDiagnostics() {
+        com.pijava.coding.agent.modes.DiagnosticsStderr.write(session.startupDiagnostics());
+    }
+
+    /** A replacement asked for shutdown (pi {@code ctx.shutdown()}); exit once idle. */
+    public boolean shutdownRequested() {
+        return session.isClosed();
+    }
+
+    /** Wait for the in-flight run/compaction to settle before leaving the loop. */
+    public void awaitIdle() {
+        var deadline = System.nanoTime() + java.time.Duration.ofSeconds(15).toNanos();
+        while (System.nanoTime() < deadline
+                && (session.isRunning() || session.isCompacting() || activeCommands.get() > 0)) {
+            try {
+                Thread.sleep(10);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
         }
     }
 

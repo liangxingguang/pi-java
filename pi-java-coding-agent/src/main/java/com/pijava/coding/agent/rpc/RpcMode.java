@@ -37,14 +37,21 @@ public final class RpcMode {
     private static int run(InputStream in, OutputStream out, Args args,
                            ProviderRegistry providers, ToolContext toolContext,
                            boolean backgroundCatalogRefresh) {
-        try (var session = providers == null
+        AgentSession session;
+        AutoCloseable shutdownHook;
+        try {
+            session = providers == null
                 ? AgentSession.create(args)
-                : AgentSession.create(args, providers, toolContext)) {
+                : AgentSession.create(args, providers, toolContext);
+            shutdownHook = com.pijava.coding.agent.core.SessionShutdownHook.install(session);
+        } catch (RuntimeException e) {
+            System.err.println("rpc error: " + e.getMessage());
+            return 1;
+        }
+        try (session; shutdownHook) {
             // 批 16（T1d 裁决⑧）：扩展 flag 绑定诊断落 stderr（RPC 线是 stdout，
             // 诊断不能混进去）。
-            for (var diagnostic : session.startupDiagnostics()) {
-                System.err.println(diagnostic.type() + ": " + diagnostic.message());
-            }
+            com.pijava.coding.agent.modes.DiagnosticsStderr.write(session.startupDiagnostics());
             // pi main.ts:924-932 —— RPC 模式在后台刷目录；不阻塞启动、错误吞掉、
             // 离线（--offline / PI_OFFLINE）时整个跳过。
             if (backgroundCatalogRefresh) {
@@ -58,6 +65,12 @@ public final class RpcMode {
 
             while ((line = reader.readLine()) != null) {
                 dispatcher.handleLine(line);
+                // L5 W5（pi rpc-mode.ts:754-758）：ctx.shutdown() 只在此刻处理——
+                // 命令处理完且会话空闲后退出；进行中的 run 先 settle。
+                if (dispatcher.shutdownRequested()) {
+                    dispatcher.awaitIdle();
+                    break;
+                }
             }
             dispatcher.close();
             return 0;

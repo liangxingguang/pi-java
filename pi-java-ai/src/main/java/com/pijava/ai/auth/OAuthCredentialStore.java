@@ -160,10 +160,36 @@ public final class OAuthCredentialStore {
      */
     private static final Map<Path, ReentrantLock> VM_LOCKS = new ConcurrentHashMap<>();
 
+    /** L5 W5：在飞凭证操作的计数（dispose 等其结算，pi settleCredentialWrites）。 */
+    private static final java.util.concurrent.atomic.AtomicInteger IN_FLIGHT =
+        new java.util.concurrent.atomic.AtomicInteger();
+
+    /**
+     * Wait until no credential read/write/refresh is in flight.
+     *
+     * @return true when everything settled before {@code timeout}
+     */
+    public static boolean awaitSettled(java.time.Duration timeout) {
+        var deadline = System.nanoTime() + timeout.toNanos();
+        while (IN_FLIGHT.get() > 0) {
+            if (System.nanoTime() >= deadline) {
+                return false;
+            }
+            try {
+                Thread.sleep(10);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return IN_FLIGHT.get() == 0;
+            }
+        }
+        return true;
+    }
+
     /** 打开 CREATE/READ/WRITE 通道：先取 JVM 内锁，再持有跨进程文件锁运行 body。 */
     private <T> T withLockedFile(ChannelIo<T> body) {
         var vmLock = VM_LOCKS.computeIfAbsent(lockKey(), key -> new ReentrantLock());
         vmLock.lock();
+        IN_FLIGHT.incrementAndGet();
         try {
             var parent = path.getParent();
             if (parent != null) {
@@ -182,6 +208,7 @@ public final class OAuthCredentialStore {
             throw new UnsupportedOperationException(
                 "Failed to update OAuth auth file: " + path, e);
         } finally {
+            IN_FLIGHT.decrementAndGet();
             vmLock.unlock();
         }
     }

@@ -429,9 +429,9 @@ public final class PiTuiApp {
     /** Visible for testing (docs/16 ExitPathCloseTest 的替换臂驱动口)。 */
     void switchSession(AgentSession newSession) {
         // 批 17 评审回补（Important #2）：模式层扩展 UI/mode 随切换携带——pi
-        // finishSessionReplacement→rebindSession（agent-session-runtime.ts:187-191）
-        // 对位；/new（createReplacing 烘 noop）、/fork、/resume 全会话换都过此缝。
+        // finishSessionReplacement→rebindSession（agent-session-runtime.ts:187-191）对位。
         newSession.extensionUI(session.extensionUI(), session.extensionMode());
+        newSession.carryReportedDiagnosticsFrom(session); // L5 W5：已上报键随替换存活（pi 同）。
         // 批 20（B237）：SlashContext 供应器同缝重注（批 17 评审 #2 同族）。
         injectSlashContext(newSession);
         this.session = newSession;
@@ -457,6 +457,7 @@ public final class PiTuiApp {
         snapshotHandle = newSession.watchSession();
         snapshotHandle.subscribe(snapshot ->
             dispatcher.dispatch(() -> chatScreen.updateSnapshot(snapshot)));
+        startupNotices.showRuntimeDiagnostics(); // L5 W5：替换会话后未上报的诊断上屏。
         // docs/65（R23，pi updateTerminalTitle 的 session_info_changed 时机对位）。
         startupNotices.applyTerminalTitle();
     }

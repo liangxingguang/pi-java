@@ -22,6 +22,9 @@ final class SessionDataViews {
     private static final Logger LOG = LoggerFactory.getLogger(SessionDataViews.class);
 
     private final AgentSession owner;
+    /** L5 W5：已上报诊断键（{@code type\0message}）。 */
+    private final java.util.Set<String> reportedDiagnosticKeys =
+        java.util.concurrent.ConcurrentHashMap.newKeySet();
 
     // Phase 6: 会话级事件广播（多监听器）。
     private final SessionEventHub eventHub = new SessionEventHub();
@@ -175,8 +178,25 @@ final class SessionDataViews {
     }
 
     /** 批 16（T1d，裁决⑧）：启动期扩展 flag 绑定诊断（只读面）。 */
+    /**
+     * Diagnostics not yet reported (pi {@code takeUnreportedDiagnostics},
+     * agent-session-runtime.ts:127-136；L5 W5）：keyed by {@code type\0message}，
+     * 替换会话后同一警告不会每换一次再报一遍。
+     */
     java.util.List<com.pijava.coding.agent.cli.Args.ArgDiagnostic> startupDiagnostics() {
-        return java.util.List.copyOf(owner.startupDiagnosticsInternal());
+        var fresh = new java.util.ArrayList<com.pijava.coding.agent.cli.Args.ArgDiagnostic>();
+        for (var diagnostic : owner.startupDiagnosticsInternal()) {
+            var key = diagnostic.type() + "\0" + diagnostic.message();
+            if (reportedDiagnosticKeys.add(key)) {
+                fresh.add(diagnostic);
+            }
+        }
+        return java.util.List.copyOf(fresh);
+    }
+
+    /** L5 W5：替换会话继承已上报键（pi {@code reportedDiagnosticKeys} 跨 apply 存活）。 */
+    void carryReportedDiagnosticsFrom(SessionDataViews previous) {
+        reportedDiagnosticKeys.addAll(previous.reportedDiagnosticKeys);
     }
 
     /** 批 16（T4d）：工具渲染器责任链（无扩展装配 ⇒ {@code null}，消费方回落默认）。 */

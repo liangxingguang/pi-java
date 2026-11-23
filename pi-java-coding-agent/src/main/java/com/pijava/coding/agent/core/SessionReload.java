@@ -35,6 +35,16 @@ final class SessionReload {
     private SessionReload() {}
 
     static void reload(AgentSession session) {
+        // L5 W5（pi agent-session.ts:3829-3835）：会话层双门——命令层已拦一道，
+        // 直接调用 reload()（扩展/宿主）也不得在流式或压缩中重载。
+        if (session.isRunning()) {
+            throw new IllegalStateException(
+                "Wait for the current response to finish before reloading.");
+        }
+        if (session.isCompacting()) {
+            throw new IllegalStateException(
+                "Wait for compaction to finish before reloading.");
+        }
         // 批 17（T7，docs/28 §3-T7.2）：pi handleReloadCommand:6440 对位——
         // resetExtensionUI 在真正 reload 之前（pi 的两道门〔流式/压缩中〕在调用方
         // 命令层，java 已有同门，本批不动）。七步序首步之**前**。
