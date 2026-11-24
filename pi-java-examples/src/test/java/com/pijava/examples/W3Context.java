@@ -84,6 +84,8 @@ final class W3Context {
     final Map<String, Map<String, Object>> appendedData = new LinkedHashMap<>();
     /** W5：sendMessage 的完整载荷（type, content, details）。 */
     final List<SentCustomMessage> sentCustom = new ArrayList<>();
+    /** 最近一次 sendMessage 的投递选项（args[4]，null ≙ 未给）。 */
+    Object lastSendOptions;
 
     /** W5：一条 {@code sendMessage} 的自定义消息载荷。 */
     record SentCustomMessage(String type, String content, Map<String, Object> details) {}
@@ -180,6 +182,7 @@ final class W3Context {
             case "getContextUsage": return contextUsage;
             case "sendMessage":
                 sentMessages.add((String) args[0]);
+                lastSendOptions = args.length > 4 ? args[4] : null;
                 if (args[1] instanceof CustomMessageContent content) {
                     @SuppressWarnings("unchecked")
                     var details = args[3] instanceof Map<?, ?> map

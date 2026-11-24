@@ -19,7 +19,7 @@ public final class SubagentAgents {
     public enum AgentScope { USER, PROJECT, BOTH }
 
     public record AgentConfig(String name, String description, List<String> tools,
-                              String model, String source, String systemPrompt) {}
+                              String model, String source, String filePath, String systemPrompt) {}
 
     /** pi L4：逗号串→List；非数组/非字符串→空。 */
     static List<String> parseToolList(Object raw) {
@@ -83,7 +83,8 @@ public final class SubagentAgents {
         var bodyStart = content.indexOf("---", content.indexOf("---") + 3);
         var systemPrompt = bodyStart < 0 ? "" : content.substring(bodyStart + 3).trim();
         return new AgentConfig(name, description, parseToolList(fm.get("tools")),
-            fm.get("model") instanceof String s2 ? s2 : null, source, systemPrompt);
+            fm.get("model") instanceof String s2 ? s2 : null, source, file.toString(),
+            systemPrompt);
     }
 
     static List<AgentConfig> loadAgentsFromDir(Path dir, String source) {

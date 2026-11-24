@@ -75,10 +75,9 @@ class PlanModeUtilsTest {
     }
 
     @Test
-    void cleanStepTextTruncatesBeyondFiftyChars() {
+    void cleanStepTextKeepsFullText() {
         var longText = "x".repeat(60);
-        var cleaned = PlanModeUtils.cleanStepText(longText);
-        assertThat(cleaned).hasSize(50).endsWith("...");
+        assertThat(PlanModeUtils.cleanStepText(longText)).hasSize(60).doesNotEndWith("...");
         assertThat(PlanModeUtils.cleanStepText("Read config")).isEqualTo("Config");
     }
 
@@ -98,12 +97,31 @@ class PlanModeUtilsTest {
 
             Done.""";
         var items = PlanModeUtils.extractTodoItems(message);
-        assertThat(items).hasSize(2);
+        // 3 号行内代码已由 cleanStepText 去掉反引号，整行捕获后不再被过滤
+        assertThat(items).hasSize(3);
         assertThat(items.get(0).step()).isEqualTo(1);
         assertThat(items.get(0).text()).isEqualTo("Configuration loader");
         assertThat(items.get(1).step()).isEqualTo(2);
         assertThat(items.get(1).text()).isEqualTo("Migration script");
+        assertThat(items.get(2).text()).isEqualTo("Skip this placeholder");
         assertThat(items).allSatisfy(item -> assertThat(item.completed()).isFalse());
+    }
+
+    @Test
+    void extractTodoItemsUsesLastPlanHeader() {
+        var message = """
+            Plan:
+            1. Draft from thinking
+            2. Draft second
+
+            Final plan:
+
+            Plan:
+            1. Ship the real change
+            2. Verify the clean build""";
+        var items = PlanModeUtils.extractTodoItems(message);
+        assertThat(items).extracting(TodoItem::text)
+            .containsExactly("Ship the real change", "Clean build");
     }
 
     @Test
@@ -118,29 +136,49 @@ class PlanModeUtilsTest {
         var items = PlanModeUtils.extractTodoItems("**Plan:**\n1. Verify the output format");
         assertThat(items).hasSize(1);
         assertThat(items.get(0).text()).isEqualTo("Output format");
-        // 加粗的步骤文本在 `[^*\n]+` 处就被截断：只有 "Write" 且长度 ≤5 ⇒ 不收（pi 同）
+        // 整行捕获＋尾部星号剥离；"Write the " 仍由动作前缀表去掉
         assertThat(PlanModeUtils.extractTodoItems("Plan:\n1. **Write** the migration script"))
-            .isEmpty();
+            .extracting(TodoItem::text).containsExactly("Migration script");
     }
 
     // ── extractDoneSteps / markCompletedSteps ───────────────────
 
     @Test
-    void extractDoneStepsCollectsAllMarkers() {
-        assertThat(PlanModeUtils.extractDoneSteps("done 1 [DONE:1], 3 [done:3]"))
-            .containsExactly(1, 3);
+    void extractDoneStepsCollectsAllMarkerVariants() {
+        assertThat(PlanModeUtils.extractDoneSteps(
+            "done 1 [DONE:1], 3 [done:3] [DONE 2] Done: 4 Step 5 is done step 6 complete"))
+            .containsExactly(1, 3, 2, 4, 5, 6);
         assertThat(PlanModeUtils.extractDoneSteps("no markers")).isEmpty();
     }
 
     @Test
-    void markCompletedStepsMarksHitItemsAndReturnsAllMarkerCount() {
+    void extractDoneStepsDedupesInFirstSeenOrder() {
+        assertThat(PlanModeUtils.extractDoneSteps("[DONE:2] [DONE:1] [DONE:2] Step 1 done"))
+            .containsExactly(2, 1);
+    }
+
+    @Test
+    void markCompletedStepsCountsOnlyNewlyMarkedItems() {
         var items = List.of(
             new TodoItem(1, "first", false),
             new TodoItem(2, "second", false));
         var count = PlanModeUtils.markCompletedSteps("[DONE:1] [DONE:9]", items);
-        // pi 逐字：返回值是标记总数，含未命中任何条目的标记
-        assertThat(count).isEqualTo(2);
+        // pi 逐字：只计新置真的条目；未命中的 9 不计
+        assertThat(count).isEqualTo(1);
         assertThat(items.get(0).completed()).isTrue();
         assertThat(items.get(1).completed()).isFalse();
+        assertThat(PlanModeUtils.markCompletedSteps("[DONE:1]", items)).isZero();
+    }
+
+    @Test
+    void allStepsCompleteMatchesWholePlanWording() {
+        // pi 正则里 are/is 分支后不带空白：只命中 "All steps complete" 与 "Every step is done"
+        assertThat(PlanModeUtils.allStepsComplete("All steps complete.")).isTrue();
+        assertThat(PlanModeUtils.allStepsComplete("Every step is done")).isTrue();
+        assertThat(PlanModeUtils.allStepsComplete("All steps are complete")).isFalse();
+        assertThat(PlanModeUtils.allStepsComplete("The plan is complete.")).isTrue();
+        assertThat(PlanModeUtils.allStepsComplete("plan completed")).isTrue();
+        assertThat(PlanModeUtils.allStepsComplete("[DONE:1]")).isFalse();
+        assertThat(PlanModeUtils.allStepsComplete("still working")).isFalse();
     }
 }

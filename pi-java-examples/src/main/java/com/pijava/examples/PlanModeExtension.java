@@ -100,10 +100,9 @@ public final class PlanModeExtension implements PiExtension {
             // 宿主已把 turn_end 的 message 定型为 AssistantMessage（pi 的 isAssistantMessage 守卫
             // 在 java 是类型面事实）
             var assistant = event.message();
-            if (PlanModeUtils.markCompletedSteps(PlanModeState.textContent(assistant),
-                    todoItems) > 0) {
-                updateStatus(c);
-            }
+            PlanModeUtils.markCompletedSteps(PlanModeState.textContent(assistant), todoItems);
+            // pi 逐字：恒刷新（便宜，且 widget 与状态段始终一致）
+            updateStatus(c);
             persistState(c);
             return null;
         });
@@ -179,8 +178,11 @@ public final class PlanModeExtension implements PiExtension {
         if (executionMode && !todoItems.isEmpty()) {
             var lines = new ArrayList<String>();
             for (var item : todoItems) {
+                // pi 的 widget 显示截断：>60 取前 57 ＋ "..."
+                var text = item.text().length() > 60
+                    ? item.text().substring(0, 57) + "..." : item.text();
                 // D235：success/muted/strikethrough 降级为 ☑/☐ 纯文本
-                lines.add(item.completed() ? "☑ " + item.text() : "☐ " + item.text());
+                lines.add(item.completed() ? "☑ " + text : "☐ " + text);
             }
             c.ui().setWidget("plan-todos", new ExtensionWidgetContent.Lines(lines),
                 ExtensionWidgetOptions.DEFAULT);
@@ -223,6 +225,12 @@ public final class PlanModeExtension implements PiExtension {
 
     private void onAgentEnd(List<Message> messages, ExtensionContext c) {
         if (executionMode && !todoItems.isEmpty()) {
+            // 回落：模型用整单措辞收尾（"All steps complete" / "The plan is complete"）
+            var lastAssistant = lastAssistant(messages);
+            if (lastAssistant != null
+                    && PlanModeUtils.allStepsComplete(PlanModeState.textContent(lastAssistant))) {
+                todoItems.forEach(item -> item.setCompleted(true));
+            }
             if (todoItems.stream().allMatch(TodoItem::completed)) {
                 var completedList = new StringBuilder();
                 for (var item : todoItems) {
@@ -231,9 +239,11 @@ public final class PlanModeExtension implements PiExtension {
                     }
                     completedList.append("~~").append(item.text()).append("~~");
                 }
+                // pi 只给 deliverAs: "nextTurn"：随下一条用户 prompt 注入，不额外起一轮
                 c.sendMessage("plan-complete",
                     CustomMessageContent.of("**Plan Complete!** ✓\n\n" + completedList),
-                    true, null, new ExtensionContext.SendMessageOptions(Boolean.FALSE, null));
+                    true, null, new ExtensionContext.SendMessageOptions(null,
+                        CustomMessageDelivery.NEXT_TURN));
                 executionMode = false;
                 todoItems = new ArrayList<>();
                 updateStatus(c);
@@ -247,12 +257,7 @@ public final class PlanModeExtension implements PiExtension {
             return;
         }
 
-        Message.AssistantMessage lastAssistant = null;
-        for (var message : messages) {
-            if (message instanceof Message.AssistantMessage assistant) {
-                lastAssistant = assistant;
-            }
-        }
+        var lastAssistant = lastAssistant(messages);
         if (lastAssistant != null) {
             var extracted = PlanModeUtils.extractTodoItems(
                 PlanModeState.textContent(lastAssistant));
@@ -339,6 +344,16 @@ public final class PlanModeExtension implements PiExtension {
             enablePlanModeTools(c);
         }
         updateStatus(c);
+    }
+
+    /** pi {@code [...messages].reverse().find(isAssistantMessage)}。 */
+    private static Message.AssistantMessage lastAssistant(List<Message> messages) {
+        for (int i = messages.size() - 1; i >= 0; i--) {
+            if (messages.get(i) instanceof Message.AssistantMessage assistant) {
+                return assistant;
+            }
+        }
+        return null;
     }
 
     /** 当前持久化快照（测试与调试用；pi 侧无此成员）。 */

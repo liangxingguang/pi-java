@@ -99,7 +99,8 @@ class SubagentAgentsTest {
     @Test
     void formatAgentList() {
         assertThat(SubagentAgents.formatAgentList(List.of())).isEqualTo("none");
-        var a = new SubagentAgents.AgentConfig("rev", "Reviews", List.of(), null, "user", "");
+        var a = new SubagentAgents.AgentConfig("rev", "Reviews", List.of(), null, "user",
+            "/tmp/rev.md", "");
         assertThat(SubagentAgents.formatAgentList(List.of(a)))
             .isEqualTo("rev (user): Reviews");
     }

@@ -121,10 +121,21 @@ public final class PlanModeUtils {
     private static final Pattern PLAN_HEADER =
         Pattern.compile("\\*{0,2}Plan:\\*{0,2}\\s*\\n", Pattern.CASE_INSENSITIVE);
     private static final Pattern NUMBERED =
-        Pattern.compile("^\\s*(\\d+)[.)]\\s+\\*{0,2}([^*\\n]+)", Pattern.MULTILINE);
+        Pattern.compile("^\\s*(\\d+)[.)]\\s+(.+)$", Pattern.MULTILINE);
     private static final Pattern TRAILING_STARS = Pattern.compile("\\*{1,2}$");
     private static final Pattern DONE_MARK =
-        Pattern.compile("\\[DONE:(\\d+)\\]", Pattern.CASE_INSENSITIVE);
+        Pattern.compile("\\[DONE\\s*:?\\s*(\\d+)\\]", Pattern.CASE_INSENSITIVE);
+    private static final Pattern DONE_PLAIN =
+        Pattern.compile("\\bDone\\s*:\\s*(\\d+)\\b", Pattern.CASE_INSENSITIVE);
+    private static final Pattern STEP_DONE = Pattern.compile(
+        "\\bStep\\s*(\\d+)\\s+(?:is\\s+)?(?:done|complete|completed|finished)\\b",
+        Pattern.CASE_INSENSITIVE);
+    private static final Pattern ALL_STEPS = Pattern.compile(
+        "(?:all|every)\\s+steps?\\s+(?:are|is\\s+)?(?:done|complete|completed|finished)",
+        Pattern.CASE_INSENSITIVE);
+    private static final Pattern PLAN_COMPLETE = Pattern.compile(
+        "\\b(?:the\\s+)?plan\\s+(?:is\\s+)?(?:complete|completed|done)\\b",
+        Pattern.CASE_INSENSITIVE);
 
     private PlanModeUtils() {}
 
@@ -144,7 +155,7 @@ public final class PlanModeUtils {
         return matchesAny(SAFE_CI, command) || matchesAny(SAFE_CS, command);
     }
 
-    /** pi {@code cleanStepText}：去粗体/斜体与行内代码、去动作前缀、折叠空白、首字母大写、50 截断。 */
+    /** pi {@code cleanStepText}：去粗体/斜体与行内代码、去动作前缀、折叠空白、首字母大写。 */
     public static String cleanStepText(String text) {
         var cleaned = BOLD_ITALIC.matcher(text).replaceAll("$1");
         cleaned = CODE.matcher(cleaned).replaceAll("$1");
@@ -154,25 +165,31 @@ public final class PlanModeUtils {
         if (!cleaned.isEmpty()) {
             cleaned = Character.toUpperCase(cleaned.charAt(0)) + cleaned.substring(1);
         }
-        if (cleaned.length() > 50) {
-            cleaned = cleaned.substring(0, 47) + "...";
-        }
         return cleaned;
     }
 
-    /** pi {@code extractTodoItems}：只收 {@code Plan:} 段之后的编号条目。 */
+    /**
+     * pi {@code extractTodoItems}：取<b>最后一个</b> {@code Plan:} 头之后的整行编号条目。
+     *
+     * <p>取最后一个头是因为 {@code getTextContent} 含 thinking 块：草稿可能出现在
+     * thinking，用户可见的计划在 text 块且排在后面。</p>
+     */
     public static List<TodoItem> extractTodoItems(String message) {
         var items = new ArrayList<TodoItem>();
         var header = PLAN_HEADER.matcher(message);
-        if (!header.find()) {
+        int sectionStart = -1;
+        while (header.find()) {
+            sectionStart = header.end();
+        }
+        if (sectionStart < 0) {
             return items;
         }
-        var planSection = message.substring(header.start() + header.group().length());
+        var planSection = message.substring(sectionStart);
         var numbered = NUMBERED.matcher(planSection);
         while (numbered.find()) {
             var text = TRAILING_STARS.matcher(numbered.group(2).strip()).replaceAll("").strip();
             if (text.length() > 5
-                    && !text.startsWith("`") && !text.startsWith("/") && !text.startsWith("-")) {
+                    && !text.startsWith("/") && !text.startsWith("-")) {
                 var cleaned = cleanStepText(text);
                 if (cleaned.length() > 3) {
                     items.add(new TodoItem(items.size() + 1, cleaned, false));
@@ -182,31 +199,50 @@ public final class PlanModeUtils {
         return items;
     }
 
-    /** pi {@code extractDoneSteps}：全部 {@code [DONE:n]} 标记的步骤号。 */
+    /**
+     * pi {@code extractDoneSteps}：三种完成标记的步骤号，按首次出现顺序去重
+     * （{@code [DONE:1]}／{@code [DONE 1]}、{@code Done: 1}、{@code Step 1 done}）。
+     */
     public static List<Integer> extractDoneSteps(String message) {
-        var steps = new ArrayList<Integer>();
-        var matcher = DONE_MARK.matcher(message);
-        while (matcher.find()) {
-            steps.add(Integer.parseInt(matcher.group(1)));
-        }
-        return steps;
+        var steps = new java.util.LinkedHashSet<Integer>();
+        collect(DONE_MARK, message, steps);
+        collect(DONE_PLAIN, message, steps);
+        collect(STEP_DONE, message, steps);
+        return List.copyOf(steps);
     }
 
     /**
-     * pi {@code markCompletedSteps}：把命中项的 {@code completed} 置真，返回<b>标记总数</b>
-     * （含未命中任何条目的标记，pi 逐字）。
+     * pi {@code markCompletedSteps}：对每个完成号找第一个 {@code step} 相同且未完成的
+     * 条目置真，返回<b>新标记数</b>。
      */
     public static int markCompletedSteps(String text, List<TodoItem> items) {
         var doneSteps = extractDoneSteps(text);
+        int marked = 0;
         for (var step : doneSteps) {
             for (var item : items) {
-                if (item.step() == step) {
+                if (item.step() == step && !item.completed()) {
                     item.setCompleted(true);
+                    marked++;
                     break;
                 }
             }
         }
-        return doneSteps.size();
+        return marked;
+    }
+
+    /**
+     * pi {@code allStepsComplete}：整单完成措辞（模型没用 {@code [DONE:n]} 时的回落），
+     * 只在本轮最后一条消息上查。
+     */
+    public static boolean allStepsComplete(String message) {
+        return ALL_STEPS.matcher(message).find() || PLAN_COMPLETE.matcher(message).find();
+    }
+
+    private static void collect(Pattern pattern, String message, java.util.Set<Integer> steps) {
+        var matcher = pattern.matcher(message);
+        while (matcher.find()) {
+            steps.add(Integer.parseInt(matcher.group(1)));
+        }
     }
 
     private static boolean matchesAny(List<Pattern> patterns, String command) {

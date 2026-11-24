@@ -184,7 +184,7 @@ final class PlanModeState {
             || !textContent(user).contains(PLAN_MODE_MARKER);
     }
 
-    /** 消息的全部 text 块以 {@code "\n"} 拼接（pi {@code getTextContent}）。 */
+    /** 消息的全部 text/thinking 块以 {@code "\n"} 拼接（pi {@code getTextContent}）。 */
     static String textContent(Message message) {
         var texts = new ArrayList<String>();
         var content = switch (message) {
@@ -196,6 +196,9 @@ final class PlanModeState {
         for (var block : content) {
             if (block instanceof ContentBlock.TextContent text) {
                 texts.add(text.text());
+            } else if (block instanceof ContentBlock.ThinkingContent thinking) {
+                // pi getTextContent 含 thinking：reasoning-max 模型的 [DONE:n] 与计划草稿常落在这里
+                texts.add(thinking.text());
             }
         }
         return String.join("\n", texts);

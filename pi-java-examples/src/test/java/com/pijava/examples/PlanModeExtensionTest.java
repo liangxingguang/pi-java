@@ -15,8 +15,12 @@ import com.pijava.ai.message.Message;
 import com.pijava.ai.provider.FauxProvider;
 import com.pijava.ai.stream.StreamEvent;
 import com.pijava.coding.agent.core.AgentSession;
+import com.pijava.coding.agent.core.CustomMessageDelivery;
 import com.pijava.coding.agent.core.PromptConfig;
 import com.pijava.coding.agent.core.slash.SlashContext;
+import com.pijava.coding.agent.extension.ExtensionContext;
+import com.pijava.coding.agent.extension.event.ExtensionEvent;
+import com.pijava.coding.agent.extension.event.ExtensionEventSpec;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -157,7 +161,8 @@ class PlanModeExtensionTest {
         var planText = """
             Plan:
             1. Read the loader
-            2. Add the validation step""";
+            2. Add the validation step
+            3. Implement the extremely long configuration migration for the whole subsystem and verify it end to end""";
         try (var scope = ExampleFixtures.scopeExtensions(tmp, PlanModeExtension.class);
                 var session = ExampleFixtures.newSession(tmp,
                     sequenceFaux("faux-pm5", planText, 3))) {
@@ -185,8 +190,49 @@ class PlanModeExtensionTest {
             assertThat(executeText).startsWith("Execute the plan.");
             assertThat(executeText).contains("1. Loader");
             assertThat(executeText).contains("After completing a step, include a [DONE:n] tag");
-            assertThat(ui.statuses()).containsEntry("plan-mode", "📋 0/2");
+            assertThat(ui.statuses()).containsEntry("plan-mode", "📋 0/3");
+
+            // widget 显示截断：>60 取前 57 ＋ "..."
+            var widget = ui.widgets().get("plan-todos");
+            assertThat(widget).hasSize(3);
+            // 前缀 "☐ " 2 字符 ＋ 截断后 60 字符
+            assertThat(widget.get(2)).hasSize(62).endsWith("...");
         }
+    }
+
+    @Test
+    void allStepsCompleteFallbackSendsPlanCompleteOnNextTurn() {
+        var w = new W3Context();
+        w.ui.answer("Execute the plan (track progress)");
+        new PlanModeExtension().register(w.ctx);
+        w.command("plan", "");
+
+        var plan = new Message.AssistantMessage(List.of(new ContentBlock.TextContent(
+            "Plan:\n1. Read the loader\n2. Add the validation step")));
+        w.fire(ExtensionEventSpec.AGENT_END, new ExtensionEvent.AgentEndEvent(List.of(plan)));
+        assertThat(w.sentCustom).noneMatch(m -> "plan-complete".equals(m.type()));
+
+        // 整单措辞回落：没有 [DONE:n] 也把全部条目标记完成
+        var done = new Message.AssistantMessage(List.of(
+            new ContentBlock.TextContent("All steps complete.")));
+        w.fire(ExtensionEventSpec.AGENT_END, new ExtensionEvent.AgentEndEvent(List.of(done)));
+
+        assertThat(w.sentCustom).anySatisfy(m -> {
+            assertThat(m.type()).isEqualTo("plan-complete");
+            assertThat(m.content()).contains("**Plan Complete!** ✓");
+        });
+        var options = (ExtensionContext.SendMessageOptions) w.lastSendOptions;
+        assertThat(options.deliverAs()).isEqualTo(CustomMessageDelivery.NEXT_TURN);
+        assertThat(w.ui.statuses()).containsEntry("plan-mode", null);
+    }
+
+    @Test
+    void textContentIncludesThinkingBlocks() {
+        var message = new Message.AssistantMessage(List.of(
+            new ContentBlock.ThinkingContent("Plan:\n1. Draft from thinking", null, false),
+            new ContentBlock.TextContent("All steps are complete.")));
+        assertThat(PlanModeState.textContent(message))
+            .isEqualTo("Plan:\n1. Draft from thinking\nAll steps are complete.");
     }
 
     private static FauxProvider sequenceFaux(String name, String text, int count) {
