@@ -49,8 +49,22 @@ public final class GrepTool {
     public record GrepDetails(TruncationUtils.TruncationResult truncation,
             Integer matchLimitReached, Boolean linesTruncated) {}
 
+    /**
+     * 目录判定接缝（对位 pi {@code GrepOperations}，B287）。搜索本身仍走本地引擎；
+     * pi 对远程 grep 的路线是覆写 {@code execute}，不是提供 custom operations
+     * （grep.ts 的 GrepOperations 注释）。
+     */
+    public interface Operations {
+        boolean isDirectory(String absolutePath) throws IOException;
+    }
+
     /** Create the grep tool. */
     public static AgentTool<GrepInput, GrepDetails> create() {
+        return create(null);
+    }
+
+    /** Create the grep tool with an injectable directory-detection seam. */
+    public static AgentTool<GrepInput, GrepDetails> create(Operations operations) {
         return new AgentTool<>() {
             @Override public String name() { return "grep"; }
             @Override public String label() { return "grep"; }
@@ -110,18 +124,21 @@ public final class GrepTool {
             public ToolResult<GrepDetails> execute(String toolCallId, GrepInput params,
                     AbortSignal signal, ToolUpdateCallback<GrepDetails> onUpdate,
                     ToolContext context) throws Exception {
-                return run(params, context);
+                return run(params, context, operations);
             }
         };
     }
 
     /** 对位 pi grep.ts:86-318 的核心流程（纯 Java 引擎）。 */
-    private static ToolResult<GrepDetails> run(GrepInput params, ToolContext context)
-            throws IOException {
+    private static ToolResult<GrepDetails> run(GrepInput params, ToolContext context,
+            Operations operations) throws IOException {
         String searchPath = PathUtils.resolveToolPath(context, params.path().orElse("."));
         Path root = Path.of(searchPath);
         boolean isDirectory;
-        if (Files.isDirectory(root)) {
+        if (operations != null) {
+            // pi grep.ts:120-126：custom-ops 只回答 isDirectory，非目录即按文件搜索。
+            isDirectory = operations.isDirectory(searchPath);
+        } else if (Files.isDirectory(root)) {
             isDirectory = true;
         } else if (Files.isRegularFile(root)) {
             isDirectory = false;

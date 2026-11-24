@@ -1,6 +1,8 @@
 package com.pijava.agent.tool.builtin;
 import com.pijava.ai.AbortSignal;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
@@ -8,6 +10,7 @@ import java.util.Optional;
 
 import com.pijava.agent.tool.AgentTool;
 import com.pijava.agent.tool.ExecutionMode;
+import com.pijava.agent.tool.FileSystem;
 import com.pijava.agent.tool.ImagePolicy;
 import com.pijava.agent.tool.PathUtils;
 import com.pijava.agent.tool.ToolContext;
@@ -33,8 +36,43 @@ public final class ReadTool {
     public record ReadInput(String path, Optional<Integer> offset, Optional<Integer> limit) {}
     public record ReadDetails(TruncationUtils.TruncationResult truncation) {}
 
+    /**
+     * 文件读取接缝（对位 pi {@code ReadOperations}，B287）：默认实现走
+     * {@link ToolContext#fs()}；远程后端可注入自己的实现。
+     */
+    public interface Operations {
+        byte[] readFile(String absolutePath) throws IOException;
+        InputStream createReadStream(String absolutePath) throws IOException;
+        void access(String absolutePath) throws IOException;
+        Optional<String> detectImageMimeType(String absolutePath) throws IOException;
+
+        static Operations from(ToolContext context) {
+            FileSystem fs = context.fs();
+            return new Operations() {
+                @Override public byte[] readFile(String absolutePath) throws IOException {
+                    return fs.readBinary(absolutePath);
+                }
+                @Override public InputStream createReadStream(String absolutePath) throws IOException {
+                    return fs.openRead(absolutePath);
+                }
+                @Override public void access(String absolutePath) throws IOException {
+                    fs.fileInfo(absolutePath);
+                }
+                @Override public Optional<String> detectImageMimeType(String absolutePath)
+                        throws IOException {
+                    return PathUtils.detectImageMimeType(fs, absolutePath);
+                }
+            };
+        }
+    }
+
     /** Create the read tool. */
     public static AgentTool<ReadInput, ReadDetails> create() {
+        return create(null);
+    }
+
+    /** Create the read tool with an injectable filesystem seam. */
+    public static AgentTool<ReadInput, ReadDetails> create(Operations operations) {
         return new AgentTool<>() {
             @Override public String name() { return "read"; }
             @Override public String label() { return "read"; }
@@ -94,11 +132,17 @@ public final class ReadTool {
                     AbortSignal signal, ToolUpdateCallback<ReadDetails> onUpdate,
                     ToolContext context) throws Exception {
                 String absolutePath = PathUtils.resolveToolPath(context, params.path());
+                Operations ops = operations != null ? operations : Operations.from(context);
+                try {
+                    ops.access(absolutePath);
+                } catch (IOException e) {
+                    throw new IllegalArgumentException("File not found: " + params.path(), e);
+                }
 
                 // Sniff the image header only; text files are not loaded whole before reading.
-                var mimeType = PathUtils.detectImageMimeType(context.fs(), absolutePath);
+                var mimeType = ops.detectImageMimeType(absolutePath);
                 if (mimeType.isPresent()) {
-                    return readImage(context.fs().readBinary(absolutePath), mimeType.get(), context);
+                    return readImage(ops.readFile(absolutePath), mimeType.get(), context);
                 }
 
                 // Text file. Integral ranges (all Java ints) stream; a negative limit keeps the
@@ -108,12 +152,11 @@ public final class ReadTool {
                 Integer limit = params.limit().orElse(null);
                 StreamingLineSelector.Selection selection;
                 if (limit == null || limit >= 0) {
-                    try (var in = context.fs().openRead(absolutePath)) {
+                    try (var in = ops.createReadStream(absolutePath)) {
                         selection = StreamingLineSelector.select(in, startLine, limit, signal);
                     }
                 } else {
-                    selection = selectFromBuffer(context.fs().readBinary(absolutePath),
-                        startLine, limit);
+                    selection = selectFromBuffer(ops.readFile(absolutePath), startLine, limit);
                 }
 
                 int totalFileLines = selection.totalFileLines();

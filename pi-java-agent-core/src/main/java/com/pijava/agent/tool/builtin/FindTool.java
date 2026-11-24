@@ -48,8 +48,29 @@ public final class FindTool {
     public record FindDetails(TruncationUtils.TruncationResult truncation,
             Integer resultLimitReached) {}
 
+    /**
+     * 文件查找接缝（对位 pi {@code FindOperations}，B287）：默认实现是本地遍历；
+     * 远程后端注入 {@link #glob} 即可替换文件后端。
+     */
+    public interface Operations {
+        /** pi 的 custom-ops 分支固定把这两条忽略规则交给实现（find.ts:118）。 */
+        List<String> DEFAULT_IGNORE = List.of("**/node_modules/**", "**/.git/**");
+
+        boolean exists(String absolutePath) throws IOException;
+        boolean isDirectory(String absolutePath) throws IOException;
+
+        /** 返回匹配项（绝对路径）；最多 {@code maxResults} 条。 */
+        List<String> glob(String pattern, String absoluteRoot, List<String> ignore,
+                int maxResults) throws IOException;
+    }
+
     /** Create the find tool. */
     public static AgentTool<FindInput, FindDetails> create() {
+        return create(null);
+    }
+
+    /** Create the find tool with an injectable filesystem seam. */
+    public static AgentTool<FindInput, FindDetails> create(Operations operations) {
         return new AgentTool<>() {
             @Override public String name() { return "find"; }
             @Override public String label() { return "find"; }
@@ -95,21 +116,24 @@ public final class FindTool {
             public ToolResult<FindDetails> execute(String toolCallId, FindInput params,
                     AbortSignal signal, ToolUpdateCallback<FindDetails> onUpdate,
                     ToolContext context) throws Exception {
-                return run(params, context);
+                return run(params, context, operations);
             }
         };
     }
 
     /** 对位 pi find.ts:88-310 的核心流程（纯 Java 引擎，fd 分支形状）。 */
-    private static ToolResult<FindDetails> run(FindInput params, ToolContext context)
-            throws IOException {
+    private static ToolResult<FindDetails> run(FindInput params, ToolContext context,
+            Operations operations) throws IOException {
         String searchPath = PathUtils.resolveToolPath(context, params.path().orElse("."));
         Path root = Path.of(searchPath);
         // 错文采 pi custom-ops 分支形（find.ts:118；fd 分支报 fd 自身 stderr，不可逐字——D5）。
-        if (!Files.exists(root)) {
+        boolean exists = operations != null ? operations.exists(searchPath) : Files.exists(root);
+        if (!exists) {
             throw new IllegalArgumentException("Path not found: " + searchPath);
         }
-        if (!Files.isDirectory(root)) {
+        boolean isDirectory = operations != null
+            ? operations.isDirectory(searchPath) : Files.isDirectory(root);
+        if (!isDirectory) {
             throw new IllegalArgumentException("Not a directory: " + searchPath);
         }
         // fd treats --max-results 0 as unlimited, so a limit below 1 means 1（find.ts:114）。
@@ -122,78 +146,99 @@ public final class FindTool {
         boolean isRelativePathPattern = isPathPattern && !isAbsolutePattern(pattern);
         final GlobPattern matcher = GlobPattern.compile(pattern, ignoreCase);
 
-        final var ignore = new ToolIgnoreFilter(root);
-        final var results = new ArrayList<String>();
-
-        class Walker extends SimpleFileVisitor<Path> {
-            private boolean limitReached;
-
-            @Override
-            public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
-                Path dirName = dir.getFileName();
-                if (dirName != null && dirName.toString().equals(".git")) {
-                    return FileVisitResult.SKIP_SUBTREE;
+        final List<String> results;
+        final boolean resultLimitReached;
+        if (operations != null) {
+            var matches = operations.glob(params.pattern(), searchPath,
+                Operations.DEFAULT_IGNORE, effectiveLimit);
+            var relResults = new ArrayList<String>();
+            for (String match : matches) {
+                if (relResults.size() >= effectiveLimit) {
+                    break;
                 }
-                if (!dir.equals(root)) {
-                    if (ignore.isIgnored(rel(dir), true)) {
+                String rel = relativize(searchPath, match);
+                if (rel.startsWith("..")) {
+                    continue;
+                }
+                relResults.add(rel);
+            }
+            results = relResults;
+            // pi find.ts:126-132：custom-ops 分支饱和即视为触限。
+            resultLimitReached = results.size() >= effectiveLimit;
+        } else {
+            final var ignore = new ToolIgnoreFilter(root);
+            final var localResults = new ArrayList<String>();
+
+            class Walker extends SimpleFileVisitor<Path> {
+                private boolean limitReached;
+
+                @Override
+                public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
+                    Path dirName = dir.getFileName();
+                    if (dirName != null && dirName.toString().equals(".git")) {
                         return FileVisitResult.SKIP_SUBTREE;
                     }
-                    // fd 无 --type：目录也入选（输出不带尾分隔符）。
-                    if (matches(dir)) {
-                        add(rel(dir));
+                    if (!dir.equals(root)) {
+                        if (ignore.isIgnored(rel(dir), true)) {
+                            return FileVisitResult.SKIP_SUBTREE;
+                        }
+                        // fd 无 --type：目录也入选（输出不带尾分隔符）。
+                        if (matches(dir)) {
+                            add(rel(dir));
+                        }
                     }
+                    ignore.push(dir);
+                    return FileVisitResult.CONTINUE;
                 }
-                ignore.push(dir);
-                return FileVisitResult.CONTINUE;
-            }
 
-            @Override
-            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
-                if (!ignore.isIgnored(rel(file), false) && matches(file)) {
-                    add(rel(file));
+                @Override
+                public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
+                    if (!ignore.isIgnored(rel(file), false) && matches(file)) {
+                        add(rel(file));
+                    }
+                    return FileVisitResult.CONTINUE;
                 }
-                return FileVisitResult.CONTINUE;
-            }
 
-            @Override
-            public FileVisitResult postVisitDirectory(Path dir, IOException exc) {
-                ignore.pop();
-                return FileVisitResult.CONTINUE;
-            }
-
-            private void add(String relPath) {
-                // One result past the limit tells "exactly N" apart from "more than N"（#7121）。
-                if (results.size() >= effectiveLimit) {
-                    limitReached = true;
-                    throw new LimitReached();
+                @Override
+                public FileVisitResult postVisitDirectory(Path dir, IOException exc) {
+                    ignore.pop();
+                    return FileVisitResult.CONTINUE;
                 }
-                results.add(relPath);
-            }
 
-            private boolean matches(Path candidate) {
-                if (!isPathPattern) {
-                    Path name = candidate.getFileName();
-                    return name != null && matcher.matches(name.toString());
+                private void add(String relPath) {
+                    // One result past the limit tells "exactly N" apart from "more than N"（#7121）。
+                    if (localResults.size() >= effectiveLimit) {
+                        limitReached = true;
+                        throw new LimitReached();
+                    }
+                    localResults.add(relPath);
                 }
-                String target = isRelativePathPattern
-                    ? rel(candidate)
-                    : ToolIgnoreFilter.toPosix(candidate.toAbsolutePath().normalize());
-                return matcher.matches(target);
+
+                private boolean matches(Path candidate) {
+                    if (!isPathPattern) {
+                        Path name = candidate.getFileName();
+                        return name != null && matcher.matches(name.toString());
+                    }
+                    String target = isRelativePathPattern
+                        ? rel(candidate)
+                        : ToolIgnoreFilter.toPosix(candidate.toAbsolutePath().normalize());
+                    return matcher.matches(target);
+                }
+
+                private String rel(Path candidate) {
+                    return ToolIgnoreFilter.toPosix(root.relativize(candidate));
+                }
             }
 
-            private String rel(Path candidate) {
-                return ToolIgnoreFilter.toPosix(root.relativize(candidate));
+            var walker = new Walker();
+            try {
+                Files.walkFileTree(root, walker);
+            } catch (LimitReached e) {
+                // 达 limit 提前终止（fd --max-results 对位），结果即终局。
             }
+            results = localResults;
+            resultLimitReached = walker.limitReached;
         }
-
-        var walker = new Walker();
-        try {
-            Files.walkFileTree(root, walker);
-        } catch (LimitReached e) {
-            // 达 limit 提前终止（fd --max-results 对位），结果即终局。
-        }
-
-        boolean resultLimitReached = walker.limitReached;
         if (results.isEmpty()) {
             return ToolResult.success("No files found matching pattern"); // find.ts:261 逐字
         }
@@ -221,6 +266,17 @@ public final class FindTool {
             : new FindDetails(truncation.truncated() ? truncation : null, limitDetail);
         return new ToolResult<>(List.of(new ContentBlock.TextContent(output)),
             details, null, false, List.of());
+    }
+
+    /** custom-ops 分支的 {@code relative(searchPath, match)}：按字符串前缀剥离，避免本地路径解析。 */
+    private static String relativize(String root, String match) {
+        String rel = match;
+        if (rel.equals(root)) {
+            rel = "";
+        } else if (rel.startsWith(root + "/") || rel.startsWith(root + "\\")) {
+            rel = rel.substring(root.length() + 1);
+        }
+        return rel.replace('\\', '/');
     }
 
     /**

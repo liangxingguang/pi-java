@@ -2,9 +2,8 @@ package com.pijava.agent.tool.builtin;
 
 import com.pijava.ai.AbortSignal;
 
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -13,6 +12,8 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pijava.agent.tool.AgentTool;
 import com.pijava.agent.tool.ExecutionMode;
+import com.pijava.agent.tool.FileInfo;
+import com.pijava.agent.tool.FileSystem;
 import com.pijava.agent.tool.PathUtils;
 import com.pijava.agent.tool.ToolContext;
 import com.pijava.agent.tool.ToolResult;
@@ -51,8 +52,42 @@ public final class EditTool {
     public record Edit(String oldText, String newText) {}
     public record EditDetails(String diff, String patch, int firstChangedLine) {}
 
+    /**
+     * 文件编辑接缝（对位 pi {@code EditOperations}，B287）：默认实现走
+     * {@link ToolContext#fs()}；远程后端可注入自己的实现。
+     */
+    public interface Operations {
+        byte[] readFile(String absolutePath) throws IOException;
+        void writeFile(String absolutePath, String content) throws IOException;
+        void access(String absolutePath) throws IOException;
+
+        static Operations from(ToolContext context) {
+            FileSystem fs = context.fs();
+            return new Operations() {
+                @Override public byte[] readFile(String absolutePath) throws IOException {
+                    return fs.readBinary(absolutePath);
+                }
+                @Override public void writeFile(String absolutePath, String content)
+                        throws IOException {
+                    fs.writeFile(absolutePath, content);
+                }
+                @Override public void access(String absolutePath) throws IOException {
+                    FileInfo info = fs.fileInfo(absolutePath);
+                    if (!"file".equals(info.kind()) && !"symlink".equals(info.kind())) {
+                        throw new IOException("Path is not a file.");
+                    }
+                }
+            };
+        }
+    }
+
     /** Create the edit tool. */
     public static AgentTool<EditInput, EditDetails> create() {
+        return create(null);
+    }
+
+    /** Create the edit tool with an injectable filesystem seam. */
+    public static AgentTool<EditInput, EditDetails> create(Operations operations) {
         return new AgentTool<>() {
             @Override public String name() { return "edit"; }
             @Override public String label() { return "edit"; }
@@ -156,17 +191,18 @@ public final class EditTool {
                 }
 
                 String absolutePath = PathUtils.resolveToolPath(context, params.path());
-                var info = context.fs().fileInfo(absolutePath);
-                if (!"file".equals(info.kind()) && !"symlink".equals(info.kind())) {
+                Operations ops = operations != null ? operations : Operations.from(context);
+                try {
+                    ops.access(absolutePath);
+                } catch (IOException e) {
                     throw new IllegalArgumentException(
-                        "Could not edit file: " + params.path() + ". Path is not a file.");
+                        "Could not edit file: " + params.path() + ". " + e.getMessage(), e);
                 }
 
-                final Path target = Path.of(absolutePath);
                 // The read→apply→write is atomic under the queue so two concurrent
                 // edits to the same file never read stale content and overwrite each other.
                 return QUEUE.withQueue(absolutePath, () -> {
-                    String read = Files.readString(target);
+                    String read = new String(ops.readFile(absolutePath), StandardCharsets.UTF_8);
                     var bom = EditDiff.stripBom(read);
                     String normalizedContent = EditDiff.normalizeToLF(bom.text());
 
@@ -189,9 +225,8 @@ public final class EditTool {
                         ? applied.newContent()
                         : EditDiff.applyReplacementsToOriginal(bom.text(), applied.replacements()));
 
-                    Files.copy(target, Path.of(absolutePath + ".bak"),
-                        StandardCopyOption.REPLACE_EXISTING);
-                    context.fs().writeFile(absolutePath, newContent);
+                    ops.writeFile(absolutePath + ".bak", read);
+                    ops.writeFile(absolutePath, newContent);
 
                     var blocks = new ArrayList<ContentBlock>();
                     blocks.add(new ContentBlock.TextContent(

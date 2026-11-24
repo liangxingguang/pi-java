@@ -104,10 +104,9 @@ final class McpConnector {
                 // Already failing.
             }
             if (transport instanceof StdioTransport stdio) {
-                var tail = stdio.stderr().strip();
-                conn.stderrTail = tail.length() <= STDERR_TAIL_CHARS
-                        ? McpConnectionSupport.nullIfEmpty(tail)
-                        : tail.substring(tail.length() - STDERR_TAIL_CHARS);
+                // pi runtime.ts:403：sliceTail(transport.stderr.trim(), STDERR_TAIL_CHARS)。
+                conn.stderrTail = McpConnectionSupport.nullIfEmpty(McpConnectionSupport.sliceTail(
+                        McpConnectionSupport.trim(stdio.stderr()), STDERR_TAIL_CHARS));
             }
             throw failure;
         }
@@ -135,7 +134,10 @@ final class McpConnector {
         }
         conn.client = null;
         conn.state = McpServerState.DISCONNECTED;
-        var tail = stdio == null ? null : McpConnectionSupport.nullIfEmpty(stdio.stderr().strip());
+        // pi runtime.ts:427：同样 trim 后 sliceTail。
+        var tail = stdio == null ? null : McpConnectionSupport.nullIfEmpty(
+                McpConnectionSupport.sliceTail(McpConnectionSupport.trim(stdio.stderr()),
+                        STDERR_TAIL_CHARS));
         conn.error = tail == null ? "Connection closed" : "Connection closed\n" + tail;
         conn.changed();
     }

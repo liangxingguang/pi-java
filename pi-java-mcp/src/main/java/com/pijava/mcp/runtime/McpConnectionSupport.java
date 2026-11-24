@@ -153,6 +153,49 @@ final class McpConnectionSupport {
         return value == null || value.isEmpty() ? null : value;
     }
 
+    /**
+     * ECMAScript {@code String.prototype.trim()}：去掉首尾 WhiteSpace＋LineTerminator。
+     * 与 {@link String#strip()} 的差异是 B220 的窄角空格边界——NBSP／figure space／
+     * narrow no-break space／BOM 在 JS 算空白，而 Java 的 {@code Character.isWhitespace}
+     * 不算；反之 U+001C–U+001F Java 算、JS 不算。
+     */
+    static String trim(String value) {
+        int start = 0;
+        int end = value.length();
+        while (start < end && isEcmaWhitespace(value.charAt(start))) {
+            start++;
+        }
+        while (end > start && isEcmaWhitespace(value.charAt(end - 1))) {
+            end--;
+        }
+        return value.substring(start, end);
+    }
+
+    private static boolean isEcmaWhitespace(char c) {
+        return c == '\t' || c == '\n' || c == '\u000B' || c == '\f' || c == '\r'
+                || c == ' ' || c == '\u00A0' || c == '\u1680'
+                || (c >= '\u2000' && c <= '\u200A')
+                || c == '\u2028' || c == '\u2029' || c == '\u202F'
+                || c == '\u205F' || c == '\u3000' || c == '\uFEFF';
+    }
+
+    /**
+     * pi {@code truncate.ts:288-294} {@code sliceTail}：最多取末尾 {@code maxUnits}
+     * 个 UTF-16 code unit，且不劈开代理对。
+     */
+    static String sliceTail(String value, int maxUnits) {
+        if (maxUnits <= 0) {
+            return "";
+        }
+        int start = Math.max(0, value.length() - maxUnits);
+        if (start > 0 && start < value.length()
+                && Character.isLowSurrogate(value.charAt(start))
+                && Character.isHighSurrogate(value.charAt(start - 1))) {
+            start++;
+        }
+        return value.substring(start);
+    }
+
     /** Servers that do not implement {@code resources/templates/list} have no templates. */
     static <T> CompletableFuture<T> withoutTemplates(
             Supplier<CompletableFuture<T>> list, T empty) {
