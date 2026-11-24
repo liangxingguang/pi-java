@@ -49,4 +49,29 @@
         <Method name="threadsOf"/>
         <Bug pattern="NP_BOOLEAN_RETURN_NULL"/>
     </Match>
+
+    <!-- docs/22（L7 W2/K37）：`cardExpanded` 是刻意的三态 —— TRUE/FALSE 是单卡
+         展开态，null 是「该消息没有 per-card 状态，回落全局 toolsExpanded」。
+         null 从不当「假」用；非视口路径（滚动回放/测试）传 `index -> null` 表达
+         「无 per-card 状态」，因此 NP_BOOLEAN_RETURN_NULL 是误报（与 B144 同形）。
+         改成 Optional<Boolean> 会改公共 API 且语义仍为二态，故按本仓排除机制处理。 -->
+    <Match>
+        <Class name="com.pijava.tui.component.MessageBubble"/>
+        <Method name="~lambda\$lines\$0"/>
+        <Bug pattern="NP_BOOLEAN_RETURN_NULL"/>
+    </Match>
+    <Match>
+        <Class name="com.pijava.tui.component.ChatViewportElement"/>
+        <Method name="~lambda\$flatten\$0"/>
+        <Bug pattern="NP_BOOLEAN_RETURN_NULL"/>
+    </Match>
+
+    <!-- docs/26（L7 W5/K35）：`parseBoolean` 的返回是三态 —— TRUE/FALSE 是显式的
+         终端能力声明，null 是「环境变量未设置」（≙ pi 的 `undefined`），由检测值
+         接住。null 从不当「假」用，NP_BOOLEAN_RETURN_NULL 是误报（与 B144 同形）。 -->
+    <Match>
+        <Class name="com.pijava.tui.util.TerminalCapabilities"/>
+        <Method name="parseBoolean"/>
+        <Bug pattern="NP_BOOLEAN_RETURN_NULL"/>
+    </Match>
 </FindBugsFilter>

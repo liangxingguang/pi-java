@@ -304,7 +304,8 @@ final class FileCompletionPaths {
                 new SimpleFileVisitor<>() {
                     @Override
                     public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
-                        if (dir.getFileName() != null && ".git".equals(dir.getFileName().toString())) {
+                        Path name = dir.getFileName();
+                        if (name != null && ".git".equals(name.toString())) {
                             return FileVisitResult.SKIP_SUBTREE;
                         }
                         if (++visited[0] > WALK_VISIT_CAP || entries.size() >= WALK_RESULT_CAP * 5) {

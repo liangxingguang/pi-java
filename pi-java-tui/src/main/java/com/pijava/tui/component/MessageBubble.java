@@ -384,7 +384,7 @@ public final class MessageBubble {
         var cell = TerminalImage.cellSize(dims, MessageBubbleVisibility.imageWidthCells(), 0,
             protocol == TerminalCapabilities.ImageProtocol.KITTY);
         int imageId = protocol == TerminalCapabilities.ImageProtocol.KITTY
-            ? Math.abs(data.hashCode()) % 0xfffffffe + 1 : 0;
+            ? (data.hashCode() & 0x7fffffff) % 0xfffffffe + 1 : 0;
         var placement = new ImagePlacement(data, mediaType, filename,
             cell.columns(), cell.rows(), imageId);
         return List.of(new LogicalLine("", indent, indent, true, Style.EMPTY, placement));

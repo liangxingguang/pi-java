@@ -255,7 +255,11 @@ public final class FileCompleter {
         List<Suggestion> out = new ArrayList<>();
         try (Stream<Path> stream = Files.list(searchDir)) {
             for (Path entry : stream.sorted().toList()) {
-                String name = entry.getFileName().toString();
+                Path fileName = entry.getFileName();
+                if (fileName == null) {
+                    continue;
+                }
+                String name = fileName.toString();
                 if (!name.toLowerCase(Locale.ROOT).startsWith(searchPrefix.toLowerCase(Locale.ROOT))) {
                     continue;
                 }
