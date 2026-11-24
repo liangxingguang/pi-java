@@ -13,11 +13,20 @@ import dev.tamboui.style.Style;
  * @param subsequentIndent indent of continuation rows (cells)
  * @param preformatted     never wrap; hard-truncate at the content width
  * @param style            whole-line style (EMPTY = default)
+ * @param image            inline image payload (null = text line)
  */
 public record LogicalLine(
     String markup,
     int initialIndent,
     int subsequentIndent,
     boolean preformatted,
-    Style style
-) {}
+    Style style,
+    ImagePlacement image
+) {
+
+    /** 文本行便捷构造（image = null）。 */
+    public LogicalLine(String markup, int initialIndent, int subsequentIndent,
+                       boolean preformatted, Style style) {
+        this(markup, initialIndent, subsequentIndent, preformatted, style, null);
+    }
+}

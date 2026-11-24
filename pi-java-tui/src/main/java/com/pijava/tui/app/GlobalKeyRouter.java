@@ -5,6 +5,7 @@ import com.pijava.coding.agent.core.KeybindingsManager;
 import com.pijava.coding.agent.core.slash.builtin.ThinkingCommands;
 import com.pijava.coding.agent.modes.InteractiveMode;
 import com.pijava.tui.screen.ChatScreen;
+import com.pijava.tui.screen.ClipboardPasteFlow;
 import com.pijava.tui.screen.ModelSelectorScreen;
 import com.pijava.tui.util.ScrollInputNormalizer;
 import com.pijava.tui.util.TamboUIAdapter;
@@ -101,6 +102,15 @@ final class GlobalKeyRouter {
         if (activeOverlay != null) {
             activeOverlay.onKeyEvent(event);
             overlayManager.closeOverlayIfDone();
+            return EventResult.HANDLED;
+        }
+        // L7 W6（S2a/K21）：搜索激活时先吃键（Enter/Esc/文本/退格）；未激活且
+        // 命中 ctrl+shift+f 则打开（pi 全屏 alt-screen 搜索层先于应用快捷键）。
+        if (chatScreen.handleTranscriptSearchKey(event, keys)) {
+            return EventResult.HANDLED;
+        }
+        if (keys.matches(KeybindingsManager.ALT_SEARCH, TamboUIAdapter.toStroke(event))) {
+            chatScreen.toggleTranscriptSearch();
             return EventResult.HANDLED;
         }
         // 批 26（docs/37 T9）：扩展快捷键最先查（pi custom-editor.ts:88-92
@@ -254,7 +264,12 @@ final class GlobalKeyRouter {
                 }
                 chatScreen.clearInput();
             }
-            case KeybindingsManager.CLEAR -> chatScreen.clearInput();
+            case KeybindingsManager.CLEAR -> {
+                // L7 W6（S2b/K22）：有选区 ⇒ 复制而不清输入（pi tui.input.copy）。
+                if (!chatScreen.copyActiveSelection()) {
+                    chatScreen.clearInput();
+                }
+            }
             case KeybindingsManager.EXIT -> {
                 if (chatScreen.isInputEmpty()) {
                     app.exit();
@@ -288,7 +303,38 @@ final class GlobalKeyRouter {
             case KeybindingsManager.THINKING_TOGGLE -> toggleThinkingVisibility();
             // 批 34（K8；pi :4557/:4561 对位）：Ctrl+O 展开/折叠工具输出。
             case KeybindingsManager.TOOLS_EXPAND -> app.toggleToolsExpanded();
+            // L7 W7（K13；pi :3303-3306/:6883-6913 对位）：Ctrl+X 复制选区/最后助手消息。
+            case KeybindingsManager.MESSAGE_COPY -> copyLastAssistantMessage();
+            // L7 W7（K14/R15；pi :3324-3382 对位）：Ctrl+V/Alt+V 粘贴图片→临时文件路径。
+            case KeybindingsManager.PASTE_IMAGE ->
+                ClipboardPasteFlow.paste(chatScreen::insertText, chatScreen::showError);
             default -> { /* 其余动作未接线 */ }
+        }
+    }
+
+    /**
+     * L7 W7（K13；pi {@code handleCopyCommand} :6883-6913 对位）：copy-on-select
+     * 关闭且有选区 ⇒ 复制选区；否则复制最后助手消息（无 ⇒ 逐字报错）。
+     * 成功走全屏 flash {@code "Copied!"}（regular 模式同槽降级为状态行）。
+     */
+    private void copyLastAssistantMessage() {
+        boolean copyOnSelect = app.session.services().settings().uiPrefs()
+            .getFullscreenCopyOnSelect();
+        if (!copyOnSelect && chatScreen.hasActiveSelection()) {
+            chatScreen.copyActiveSelection();
+            return;
+        }
+        String text = app.session.lastAssistantText();
+        if (text == null || text.isBlank()) {
+            chatScreen.showError("No agent messages to copy yet.");
+            return;
+        }
+        try {
+            com.pijava.tui.util.ClipboardSupport.copy(text);
+            chatScreen.flash("Copied!");
+        } catch (java.io.IOException e) {
+            chatScreen.showError(e.getMessage() == null
+                ? "Failed to copy to clipboard" : e.getMessage());
         }
     }
 

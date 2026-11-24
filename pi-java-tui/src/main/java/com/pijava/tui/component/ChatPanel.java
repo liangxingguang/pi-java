@@ -56,6 +56,37 @@ public final class ChatPanel {
         messages.clear();
         draft = null;
         element.clearCardState();
+        element.clearSelection();
+    }
+
+    /** L7 W6（S2a）：本帧渲染行快照（搜索语料）。 */
+    public List<RenderRow> rowsSnapshot() {
+        return element.rowsSnapshot();
+    }
+
+    /** L7 W6（S2a）：搜索高亮注入。 */
+    public void setHighlights(List<ChatViewportElement.Highlight> highlights) {
+        element.setHighlights(highlights);
+    }
+
+    /** L7 W6（S2a）：滚动到目标行（命中导航）。 */
+    public void scrollToRow(int row) {
+        element.scrollToRow(row);
+    }
+
+    /** L7 W6（S2b）：copy-on-select 复制回调注入。 */
+    public void setSelectionSink(java.util.function.Consumer<String> sink) {
+        element.setSelectionSink(sink);
+    }
+
+    /** L7 W6（S2b）：是否有非空选区。 */
+    public boolean hasActiveSelection() {
+        return element.hasActiveSelection();
+    }
+
+    /** L7 W6（S2b）：复制当前选区；有选区 ⇒ true。 */
+    public boolean copyActiveSelection() {
+        return element.copyActiveSelection();
     }
 
     /** The number of committed messages (for tests). */

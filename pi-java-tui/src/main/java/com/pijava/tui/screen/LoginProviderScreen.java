@@ -6,6 +6,7 @@ import java.util.function.Consumer;
 import com.pijava.coding.agent.core.AgentSession;
 import com.pijava.coding.agent.core.LoginAuthType;
 import com.pijava.coding.agent.core.LoginProviderOption;
+import com.pijava.coding.agent.core.PreferredProviders;
 import com.pijava.tui.component.SelectList;
 import com.pijava.tui.util.TamboUIAdapter;
 import dev.tamboui.toolkit.element.Element;
@@ -58,9 +59,12 @@ public final class LoginProviderScreen implements ScreenOverlay {
             TamboUIAdapter.text("Sign in"), list.render()));
     }
 
-    private static String label(LoginProviderOption option) {
+    static String label(LoginProviderOption option) {
         var auth = option.authType() == LoginAuthType.OAUTH ? "account" : "API key";
         var status = option.status() == null ? "" : " — " + option.status();
-        return option.name() + " (" + auth + ")" + status;
+        // L7 W8（漏项1后半，pi oauth-selector.ts:190）：伙伴 provider 名后加
+        // U+2726（单宽），与品牌动画同为「伙伴」标记；动画本身未移植（N-W8-1）。
+        var partner = PreferredProviders.isPreferredProvider(option.id()) ? " ✦" : "";
+        return option.name() + partner + " (" + auth + ")" + status;
     }
 }

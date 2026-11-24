@@ -26,6 +26,7 @@ final class FakeBackend implements Backend {
     private char[][] lastGrid = new char[60][160];
     private final Set<Long> cursorCells = new HashSet<>();
     private final Set<Long> backgroundCells = new HashSet<>();
+    private final Set<Long> styledCells = new HashSet<>();
     private final java.util.List<String> rawWrites =
         new java.util.concurrent.CopyOnWriteArrayList<>();
 
@@ -68,12 +69,16 @@ final class FakeBackend implements Backend {
                 Cell cell = diffResult.getCell(i);
                 var symbol = cell.symbol();
                 grid[y][x] = symbol == null || symbol.isEmpty() ? ' ' : symbol.charAt(0);
-                if (cell.style().bg().isPresent()
-                        && isCursorShade(cell.style().bg().get())) {
+                if (cell.style().effectiveModifiers()
+                        .contains(dev.tamboui.style.Modifier.REVERSED)) {
                     cursorCells.add(((long) y << 32) | (x & 0xFFFFFFFFL));
                 }
                 if (cell.style().bg().isPresent()) {
                     backgroundCells.add(((long) y << 32) | (x & 0xFFFFFFFFL));
+                }
+                if (cell.style().fg().isPresent() || cell.style().bg().isPresent()
+                        || !cell.style().effectiveModifiers().isEmpty()) {
+                    styledCells.add(((long) y << 32) | (x & 0xFFFFFFFFL));
                 }
             }
             // Snapshot the latest frame so tests can assert what is currently
@@ -103,7 +108,12 @@ final class FakeBackend implements Backend {
         return lines;
     }
 
-    /** Whether any rendered cell carries the cyan cursor block. */
+    /** Whether any rendered cell carries foreground, background or a modifier. */
+    synchronized boolean hasStyledCells() {
+        return !styledCells.isEmpty();
+    }
+
+    /** Whether any rendered cell carries the reverse-video fake cursor. */
     synchronized boolean hasCursorCell() {
         return !cursorCells.isEmpty();
     }
@@ -111,10 +121,6 @@ final class FakeBackend implements Backend {
     /** Whether any rendered cell has an explicit background (theme active). */
     synchronized boolean hasBackgroundCells() {
         return !backgroundCells.isEmpty();
-    }
-
-    private static boolean isCursorShade(Color color) {
-        return com.pijava.tui.util.EditorElement.CURSOR.equals(color);
     }
 
     @Override

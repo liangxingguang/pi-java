@@ -94,13 +94,23 @@ public final class TextLayout {
         int effectiveWidth = Math.max(1, width);
         var rows = new ArrayList<RenderRow>();
         for (var line : lines) {
-            if (line.preformatted()) {
+            if (line.image() != null) {
+                appendImageRows(line, effectiveWidth, rows);
+            } else if (line.preformatted()) {
                 rows.add(hardTruncate(line, effectiveWidth));
             } else {
                 wrapLogicalLine(line, effectiveWidth, rows);
             }
         }
         return rows;
+    }
+
+    /** L7 W7（R14）：图片行按单元格高占 {@code rows} 个空行，仅首行携带载荷。 */
+    private static void appendImageRows(LogicalLine line, int width, List<RenderRow> out) {
+        var image = line.image().fitWidth(Math.max(1, width - line.initialIndent()));
+        for (int i = 0; i < image.rows(); i++) {
+            out.add(new RenderRow("", line.style(), i == 0 ? image : null));
+        }
     }
 
     /**
@@ -131,6 +141,26 @@ public final class TextLayout {
         return MarkupTokens.displayWidth(markup);
     }
 
+    /** L7 W6（C13/C4）：{@link TextColumns#truncateToWidth} 的稳定入口。 */
+    public static String truncateToWidth(String markup, int width) {
+        return TextColumns.truncateToWidth(markup, width);
+    }
+
+    /** L7 W6（选择/搜索）：{@link TextColumns#plainText} 的稳定入口。 */
+    public static String plainText(String markup) {
+        return TextColumns.plainText(markup);
+    }
+
+    /** L7 W6（选择/搜索）：{@link TextColumns#sliceByColumns} 的稳定入口。 */
+    public static String sliceByColumns(String text, int startCol, int endCol) {
+        return TextColumns.sliceByColumns(text, startCol, endCol);
+    }
+
+    /** 可见文本在列 {@code 0..col} 的字符偏移（光标定位用）。 */
+    public static int charIndexAtColumn(String text, int col) {
+        return TextColumns.charIndexAtColumn(text, col);
+    }
+
     /**
      * {@link RenderRow} → TamboUI {@link Line}（批 25/docs/36 T2 补）：行 style 作底、
      * 行内 markup span 优先（行内标签是更具体意图——pi 的 codespan 色在标题/引用内
@@ -152,7 +182,7 @@ public final class TextLayout {
     // ── 批 25（docs/36 T2）：markup 感知 wrap ────────────────────
 
     /** wrap 原子：标签（零宽）或可见字符（记解码后码点，发射时自重转义）。 */
-    private sealed interface Atom {
+    sealed interface Atom {
         record Tag(String raw, boolean open, String name) implements Atom {}
         record Ch(int cp, int width) implements Atom {
             String emit() {
@@ -232,7 +262,7 @@ public final class TextLayout {
     private static final Atom SPACE = new Atom.Ch(' ', 1);
 
     /** markup → 原子流（标签零宽；文本段解码转义为可见字符）。 */
-    private static List<Atom> atomsOf(String markup) {
+    static List<Atom> atomsOf(String markup) {
         var out = new ArrayList<Atom>();
         for (var token : MarkupTokens.tokenize(markup)) {
             switch (token) {
@@ -427,7 +457,8 @@ public final class TextLayout {
         return new RenderRow(sb.toString(), line.style());
     }
 
-    static boolean isWide(int cp) {
+    /** L7 W6：宽字符判定（2 列；{@link SingleLineInputElement} 等渲染件复用）。 */
+    public static boolean isWide(int cp) {
         return cp >= 0x1100 && (cp <= 0x115F
                 || cp == 0x2329 || cp == 0x232A
                 || (cp >= 0x2E80 && cp <= 0xA4CF && cp != 0x303F)

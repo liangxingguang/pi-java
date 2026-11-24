@@ -8,6 +8,8 @@ import com.pijava.ai.message.ContentBlock;
 import com.pijava.coding.agent.extension.MarkdownTransformContext.MarkdownMessageType;
 import com.pijava.coding.agent.theme.ThemeToken;
 import com.pijava.tui.theme.TuiThemeBridge;
+import com.pijava.tui.util.TerminalCapabilities;
+import com.pijava.tui.util.TerminalImage;
 import com.pijava.tui.util.TextLayout;
 
 import dev.tamboui.style.Color;
@@ -198,8 +200,7 @@ public final class MessageBubble {
                         var toolUseId, var toolName, var content, var isError) ->
                     toolResultLines(toolName, content, isError);
                 case ContentBlock.ImageContent(var mediaType, var data) ->
-                    List.of(new LogicalLine(
-                        "[image: " + mediaType + "]", 0, 0, false, Style.EMPTY.dim()));
+                    imageLines(mediaType, data, null, 0);
                 case ContentBlock.UrlImageContent(var url) ->
                     List.of(new LogicalLine(
                         "[image: " + url + "]", 0, 0, false, Style.EMPTY.dim()));
@@ -350,8 +351,8 @@ public final class MessageBubble {
                     isError ? ThemeToken.TOOL_ERROR_BG : ThemeToken.TOOL_SUCCESS_BG));
                 case ContentBlock.DiffContent(var diff) ->
                     out.addAll(indent(DiffView.lines(diff), TOOL_INDENT));
-                case ContentBlock.ImageContent(var mediaType, var data) -> out.add(new LogicalLine(
-                    "[image: " + mediaType + "]", TOOL_INDENT, TOOL_INDENT, false, Style.EMPTY.dim()));
+                case ContentBlock.ImageContent(var mediaType, var data) ->
+                    out.addAll(imageLines(mediaType, data, null, TOOL_INDENT));
                 case ContentBlock.UrlImageContent(var url) -> out.add(new LogicalLine(
                     "[image: " + url + "]", TOOL_INDENT, TOOL_INDENT, false, Style.EMPTY.dim()));
                 case ContentBlock.ThinkingContent ignored -> { }
@@ -361,6 +362,32 @@ public final class MessageBubble {
         }
         addTiming(out, durationMillis);
         return List.copyOf(out);
+    }
+
+    /**
+     * L7 W7（R14/S2d）：图片块——终端支持图片协议且 {@code showImages} 开时
+     * 产出 image 行（高由 {@link TextLayout#wrap} 展开），否则逐字回落 pi 的
+     * {@code [image: mime]} 占位。Kitty ID 由内容哈希稳定生成（逐帧重投影不
+     * 泄漏新图片）。
+     */
+    private static List<LogicalLine> imageLines(String mediaType, String data,
+                                                String filename, int indent) {
+        var protocol = TerminalCapabilities.get().images();
+        if (protocol == null || !MessageBubbleVisibility.showImages()) {
+            return List.of(new LogicalLine("[image: " + mediaType + "]", indent, indent,
+                false, Style.EMPTY.dim()));
+        }
+        var dims = TerminalImage.dimensions(data, mediaType);
+        if (dims == null) {
+            dims = new TerminalImage.Dimensions(800, 600);
+        }
+        var cell = TerminalImage.cellSize(dims, MessageBubbleVisibility.imageWidthCells(), 0,
+            protocol == TerminalCapabilities.ImageProtocol.KITTY);
+        int imageId = protocol == TerminalCapabilities.ImageProtocol.KITTY
+            ? Math.abs(data.hashCode()) % 0xfffffffe + 1 : 0;
+        var placement = new ImagePlacement(data, mediaType, filename,
+            cell.columns(), cell.rows(), imageId);
+        return List.of(new LogicalLine("", indent, indent, true, Style.EMPTY, placement));
     }
 
     /** L7 W1：结果行末的 {@code Took X.Ys}（{@code null} ≙ 无计时）。 */

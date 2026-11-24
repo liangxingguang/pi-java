@@ -19,16 +19,10 @@ import dev.tamboui.tui.event.MouseEvent;
 import dev.tamboui.tui.event.MouseEventKind;
 
 /**
- * Session transcript viewport (Phase 3 alignment design §5.2), replacing the
- * {@code ListElement} chat container. Aligned with Codex TUI2's HistoryCell:
- * messages are stored as width-agnostic {@link LogicalLine}s, wrapped into
- * {@link RenderRow}s at the current width each frame, and the viewport scrolls
- * by physical rows.
- *
- * <p>This eliminates both documented root causes of the old container: slicing
- * by row index renders the correct continuation of a partially visible message
- * (ListWidget startLine defect), and reflow-at-render keeps content byte-identical
- * across resize/scroll (pre-wrapped width cache defect).</p>
+ * Session transcript viewport (Phase 3 alignment design §5.2): width-agnostic
+ * {@link LogicalLine}s are wrapped into {@link RenderRow}s each frame and the
+ * viewport scrolls by physical rows (fixes ListWidget slicing and pre-wrapped
+ * width-cache defects). Also hosts inline images via the raw-output channel.
  */
 public final class ChatViewportElement extends StyledElement<ChatViewportElement> {
 
@@ -83,6 +77,20 @@ public final class ChatViewportElement extends StyledElement<ChatViewportElement
         }
 
         /**
+         * L7 W6（S2a）：把目标行滚入视口（尽量居中），并暂停跟随底部。
+         *
+         * @param row         目标行号
+         * @param totalRows   当前总行数
+         * @param visibleRows 视口高度
+         */
+        public void scrollToRow(int row, int totalRows, int visibleRows) {
+            int max = maxOffset(totalRows, visibleRows);
+            int target = Math.max(0, row - Math.max(0, visibleRows / 2));
+            offset = Math.max(0, Math.min(target, max));
+            userScrolledAway = offset < max;
+        }
+
+        /**
          * Clamps the offset after resize or new content. While following, the
          * viewport pins to the bottom; while scrolled away, the offset is only
          * bounded so the user does not lose their place.
@@ -105,13 +113,8 @@ public final class ChatViewportElement extends StyledElement<ChatViewportElement
         }
     }
 
-    /**
-     * 批 12 T11（docs/23 §3）：pi {@code fullscreenScrollbar} 三态
-     * （scroll-view.ts:75-77,94 对位）。AUTO/ALWAYS 同形常驻（窄差 D61，
-     * 裁决⑧：pi auto＝内容超高且刚滚动过短暂显示 transient；java 无
-     * transient 计时面，现状即常驻）；HIDDEN＝永不渲染、命中恒 false、
-     * 内容区不让列。
-     */
+    /** 批 12 T11：pi {@code fullscreenScrollbar} 三态（AUTO/ALWAYS 常驻；HIDDEN
+     *  永不渲染且不让列；窄差 D61＝无 transient 计时面）。 */
     public enum ScrollbarMode { AUTO, ALWAYS, HIDDEN }
 
     private final ScrollState scrollState = new ScrollState();
@@ -134,6 +137,12 @@ public final class ChatViewportElement extends StyledElement<ChatViewportElement
     private java.util.function.IntConsumer cardToggler;
     /** L7 W3（R31）：Markdown 顶层块缓存（视口独占，帧界裁剪）。 */
     private final MarkdownRenderCache markdownCache = new MarkdownRenderCache();
+    /** L7 W7（R14）：本帧图片锚点（绝对行 + 载荷）。 */
+    private List<ImageRenderSupport.Anchor> imageRows = List.of();
+    /** L7 W6（S2a）：搜索/选区高亮（显示列区间；本帧渲染时应用）。 */
+    public record Highlight(int row, int startCol, int endCol, boolean current) {}
+    private final ViewportInteraction interaction = new ViewportInteraction();
+    private int lastContentWidth = 1;
 
     /** Creates a chat viewport with scrollbar-drag (Codex-CLI style) handling. */
     public ChatViewportElement() {
@@ -148,6 +157,13 @@ public final class ChatViewportElement extends StyledElement<ChatViewportElement
                     scrollbarDragging = true;
                     scrollbarHovered = true;
                     scrollToMouseY(startY);
+                    return;
+                }
+                // L7 W6（S2b）：内容区按下＝选区锚点；Windows X10 对每个拖拽位置
+                // 重复 PRESS ⇒ 已按下时按拖动处理。
+                if (lastArea != null && lastArea.contains(startX, startY)) {
+                    interaction.press(startX, startY, lastArea,
+                        scrollState.offset(), lastContentWidth);
                 }
             }
 
@@ -155,6 +171,11 @@ public final class ChatViewportElement extends StyledElement<ChatViewportElement
             public void onDrag(int currentX, int currentY, int deltaX, int deltaY) {
                 if (scrollbarDragging) {
                     scrollToMouseY(currentY);
+                    return;
+                }
+                if (lastArea != null) {
+                    interaction.drag(currentX, currentY, lastArea,
+                        scrollState.offset(), lastContentWidth);
                 }
             }
 
@@ -163,6 +184,10 @@ public final class ChatViewportElement extends StyledElement<ChatViewportElement
                 if (scrollbarDragging) {
                     scrollbarDragging = false;
                     scrollbarHovered = inScrollbar(endX, endY);
+                    return;
+                }
+                // L7 W6（S2b）：拖出非空选区 ⇒ copy-on-select（pi 默认 true）。
+                if (interaction.finishAndCopy()) {
                     return;
                 }
                 // L7 W2（K37/C14）：PRESS 被 toolkit 的 startDrag 吞掉（routeMouseEvent
@@ -223,6 +248,48 @@ public final class ChatViewportElement extends StyledElement<ChatViewportElement
     /** 清空 per-card 展开态（{@code ChatPanel.clear()} 对位）。 */
     public void clearCardState() {
         cardExpanded.clear();
+    }
+
+    // ── L7 W6：搜索高亮 / 选区（S2a/S2b） ─────────────────────────
+
+    /** 注入搜索高亮（本帧渲染应用；空列表清除）。 */
+    public void setHighlights(List<Highlight> value) {
+        interaction.setHighlights(value);
+    }
+
+    /** 当前搜索高亮（测试观察点）。 */
+    public List<Highlight> highlights() {
+        return interaction.highlights();
+    }
+
+    /** 本帧渲染行快照（搜索语料/选区提取读面）。 */
+    public List<RenderRow> rowsSnapshot() {
+        return interaction.rows();
+    }
+
+    /** 把目标行滚入视口（搜索命中导航）。 */
+    public void scrollToRow(int row) {
+        scrollState.scrollToRow(row, lastRowCount, Math.max(1, lastVisibleRows));
+    }
+
+    /** 注入复制回调（copy-on-select；由 ChatScreenLayout 接到剪贴板＋flash）。 */
+    public void setSelectionSink(java.util.function.Consumer<String> sink) {
+        interaction.setSink(sink);
+    }
+
+    /** 是否有非空选区。 */
+    public boolean hasActiveSelection() {
+        return interaction.hasActiveSelection();
+    }
+
+    /** 复制当前选区；有选区 ⇒ true（{@code ctrl+c} 用）。 */
+    public boolean copyActiveSelection() {
+        return interaction.copyActiveSelection();
+    }
+
+    /** 清空选区（{@code /clear}/整表重建）。 */
+    public void clearSelection() {
+        interaction.clearSelection();
     }
 
     /** 滚动条本帧是否占位（HIDDEN ⇒ 不渲染、内容区不让列）。 */
@@ -320,17 +387,27 @@ public final class ChatViewportElement extends StyledElement<ChatViewportElement
         int scrollbarWidth = scrollbarVisible() ? currentScrollbarWidth() : 0;
         int contentWidth = Math.max(1, area.width() - scrollbarWidth);
         var rows = flatten(contentWidth);
+        interaction.setRows(rows);
+        lastContentWidth = contentWidth;
         lastRowCount = rows.size();
         lastVisibleRows = area.height();
         scrollState.clamp(rows.size(), area.height());
 
         for (int i = 0; i < area.height() && scrollState.offset() + i < rows.size(); i++) {
-            frame.buffer().setLine(area.x(), area.y() + i, toLine(rows.get(scrollState.offset() + i)));
+            int rowIndex = scrollState.offset() + i;
+            frame.buffer().setLine(area.x(), area.y() + i, toLine(rows.get(rowIndex), rowIndex));
         }
+
+        renderImages(frame, area, contentWidth);
 
         if (scrollbarWidth > 0) {
             renderScrollbar(frame, area, rows.size(), context, scrollbarWidth);
         }
+    }
+
+    /** L7 W7（R14/S2d）：把落在视口内的图片锚点交给原始输出通道绘制。 */
+    private void renderImages(Frame frame, Rect area, int contentWidth) {
+        ImageRenderSupport.render(frame, area, contentWidth, scrollState.offset(), imageRows);
     }
 
     private List<RenderRow> flatten(int contentWidth) {
@@ -353,6 +430,7 @@ public final class ChatViewportElement extends StyledElement<ChatViewportElement
                 ranges.add(new int[] {start, rows.size()});
             }
             messageRowRanges = ranges;
+            imageRows = ImageRenderSupport.collect(rows);
             if (draft != null) {
                 rows.addAll(TextLayout.wrap(
                     MessageBubble.lines(draft, -1, index -> null, markdownCache), contentWidth));
@@ -368,10 +446,13 @@ public final class ChatViewportElement extends StyledElement<ChatViewportElement
         return markdownCache;
     }
 
-    /** Parses markup into a styled, single-row line (visible rows only). */
-    private static Line toLine(RenderRow row) {
+    /** Parses markup into a styled, single-row line; applies search/selection ranges (L7 W6). */
+    private Line toLine(RenderRow row, int rowIndex) {
         // 批 25（docs/36 T2 补）：共享口——行 style 作底、span 优先。
-        return TextLayout.toLine(row);
+        var ranges = interaction.rangesForRow(rowIndex);
+        return ranges.isEmpty()
+            ? TextLayout.toLine(row)
+            : com.pijava.tui.util.LineHighlighter.apply(row, ranges);
     }
 
     private void renderScrollbar(Frame frame, Rect area, int rowCount,

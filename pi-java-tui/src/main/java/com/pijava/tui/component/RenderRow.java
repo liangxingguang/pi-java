@@ -8,5 +8,12 @@ import dev.tamboui.style.Style;
  *
  * @param text  the row content (may contain TamboUI markup tags)
  * @param style the style to patch onto the rendered row
+ * @param image inline image payload carried by the first row of an image block
  */
-public record RenderRow(String text, Style style) {}
+public record RenderRow(String text, Style style, ImagePlacement image) {
+
+    /** 文本行便捷构造（image = null）。 */
+    public RenderRow(String text, Style style) {
+        this(text, style, null);
+    }
+}

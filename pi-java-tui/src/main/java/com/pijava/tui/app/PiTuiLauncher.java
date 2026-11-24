@@ -32,13 +32,16 @@ public final class PiTuiLauncher {
                 + "(run from Windows Terminal / cmd / PowerShell)");
             return 1;
         }
+        // L7 W7（S18；pi main.ts:719-722 对位）：首次设置向导先于会话装配，
+        // 主题/分析写盘后 AgentSession.create 自然读到。
+        FirstTimeSetupRunner.runIfNeeded();
         // 批 17（T7，docs/28 §3-T7.1）：ChatScreen/dispatcher/host/UI 提前到
         // AgentSession.create 之前构造——扩展在 create 内加载，UI/mode 构造期烘入
         //（pi bindings.uiContext 对位，agent-session.ts:3260）。渲染循环未起步时
         // 扩展阻塞对话不可用（裁决⑤：明确失败）；非阻塞注入入队、首帧生效。
         var chatScreen = new ChatScreen();
         var dispatcher = new TuiEventDispatcher();
-        var keybindings = new KeybindingsManager();
+        var keybindings = KeybindingsManager.create();
         // settings 尚未加载（session 未建）——externalEditor 命令源晚读 session
         //（host 的 Supplier 在对话框打开时才取值，此时 session 早已装配完）。
         var sessionRef = new java.util.concurrent.atomic.AtomicReference<AgentSession>();
@@ -73,6 +76,11 @@ public final class PiTuiLauncher {
             TamboUIAdapter.isWindows() ? 1 : 3,
             session.services().settings().uiPrefs().getFullscreenWheelScrollLines());
         var app = new PiTuiApp(mode, chatScreen, keybindings, dispatcher, scrollConfig);
+        // L7 W6（C15/C20）：编辑器边框随思考等级、假光标随硬件光标开关（现读）。
+        chatScreen.configureEditor(
+            () -> com.pijava.tui.theme.ThinkingBorderPalette.forLevel(
+                session.harness().getThinkingLevel()),
+            () -> session.services().settings().uiPrefs().getShowHardwareCursor());
         // 批 17（T7）：overlay 开合/外部编辑器往返/终端几何回填（晚绑定 holder）。
         app.bindExtensionUi(extensionUiHost);
 
@@ -339,7 +347,11 @@ public final class PiTuiLauncher {
         if (session.sessionFile() == null) {
             return;
         }
-        out.println("To resume this session: pi-java -r");
+        // L7 W8（漏项8，pi #12237）：命令独立成行，便于三击选中复制。
+        out.println("To resume this session:");
+        out.println("pi-java -r");
+        // L7 W8（漏项9，pi flushStdout #12133）：exit 前把队列里的终端恢复序列刷出去。
+        out.flush();
     }
 
     private static String tuiModeFrom(Args args, AgentSession session) {

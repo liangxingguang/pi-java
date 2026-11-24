@@ -1,9 +1,13 @@
 package com.pijava.coding.agent.core;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -42,8 +46,9 @@ class KeybindingsManagerTest {
     void exposesAllActionIds() {
         // 11 实键全局＋4 空绑定 session＋12 tree/copy＋6 选择器 session
         // ＋5 扩展对话框＋6 scoped-models（批 31）＋1 thinking-save（批 34）
-        // ＋2 选择器翻页（docs/22，均 overlay 表）。
-        assertThat(keys.actionIds()).hasSize(47);
+        // ＋2 选择器翻页（docs/22）＋4 转录搜索（L7 W6，均 overlay 表）
+        // ＋pasteImage（L7 W7）；copy 在两表各注册一次 ⇒ 并集 53 项。
+        assertThat(keys.actionIds()).hasSize(53);
         assertThat(keys.actionIds()).contains(KeybindingsManager.INTERRUPT);
     }
 
@@ -135,8 +140,9 @@ class KeybindingsManagerTest {
             .isNull();
         assertThat(keys.resolve(KeybindingsManager.KeyStroke.of("a", true, false, false)))
             .isNull();
+        // L7 W7（K13）：ctrl+x 已是全局复制动作（tree 过滤仍按 overlay matches 各解各的）。
         assertThat(keys.resolve(KeybindingsManager.KeyStroke.of("x", true, false, false)))
-            .isNull();
+            .isEqualTo(KeybindingsManager.MESSAGE_COPY);
         // tree 动作仍按 pi matches 形可查（overlay 语境）。
         assertThat(keys.matches(KeybindingsManager.TREE_FILTER_LABELED,
             KeybindingsManager.KeyStroke.of("l", true, false, false))).isTrue();
@@ -188,5 +194,110 @@ class KeybindingsManagerTest {
             KeybindingsManager.KeyStroke.of("d", true, false, false))).isTrue();
         assertThat(keys.strokeFor(KeybindingsManager.TREE_FOLD_OR_UP))
             .isEqualTo(KeybindingsManager.KeyStroke.of("left", true, false, false));
+    }
+
+    // ── L7 W8（K17）：keybindings.json 用户覆盖 ─────────────────
+
+    private static void writeBindings(Path dir, String json) throws IOException {
+        Files.writeString(dir.resolve("keybindings.json"), json);
+    }
+
+    /** 单键覆盖替换默认；数组多键两键都命中；`$schema` 跳过。 */
+    @Test
+    void userOverridesReplaceDefaultsAndSupportKeyArrays(@TempDir Path dir) throws IOException {
+        writeBindings(dir, """
+            {"$schema": "https://example/keybindings.schema.json",
+             "app.interrupt": "ctrl+k",
+             "app.message.copy": ["ctrl+y", "alt+y"]}
+            """);
+        var keys = KeybindingsManager.create(dir);
+
+        assertThat(keys.resolve(KeybindingsManager.KeyStroke.of("k", true, false, false)))
+            .isEqualTo(KeybindingsManager.INTERRUPT);
+        assertThat(keys.resolve(KeybindingsManager.KeyStroke.of("esc", false, false, false)))
+            .as("默认 esc 被覆盖").isNull();
+        // copy 在全局＋overlay 两表同有 ⇒ 两表都替换。
+        assertThat(keys.resolve(KeybindingsManager.KeyStroke.of("y", true, false, false)))
+            .isEqualTo(KeybindingsManager.MESSAGE_COPY);
+        assertThat(keys.matches(KeybindingsManager.MESSAGE_COPY,
+            KeybindingsManager.KeyStroke.of("y", false, true, false))).isTrue();
+        assertThat(keys.matches(KeybindingsManager.MESSAGE_COPY,
+            KeybindingsManager.KeyStroke.of("x", true, false, false))).isFalse();
+    }
+
+    /** 空数组＝解绑（动作仍在，键表为空）。 */
+    @Test
+    void emptyArrayUnbindsTheAction(@TempDir Path dir) throws IOException {
+        writeBindings(dir, "{\"app.interrupt\": []}");
+        var keys = KeybindingsManager.create(dir);
+
+        assertThat(keys.resolve(KeybindingsManager.KeyStroke.of("esc", false, false, false))).isNull();
+        assertThat(keys.strokeFor(KeybindingsManager.INTERRUPT)).isNull();
+        assertThat(keys.actionIds()).contains(KeybindingsManager.INTERRUPT);
+    }
+
+    /** 非法值/未知键名整项丢弃；文件损坏 ⇒ 零覆盖。 */
+    @Test
+    void invalidEntriesAreDropped(@TempDir Path dir) throws IOException {
+        writeBindings(dir, """
+            {"app.interrupt": 42, "app.clear": "ctrl+hyper+c", "app.exit": ["ctrl+d", 7]}
+            """);
+        var keys = KeybindingsManager.create(dir);
+
+        assertThat(keys.resolve(KeybindingsManager.KeyStroke.of("esc", false, false, false)))
+            .as("默认保留").isEqualTo(KeybindingsManager.INTERRUPT);
+        assertThat(keys.resolve(KeybindingsManager.KeyStroke.of("c", true, false, false)))
+            .isEqualTo(KeybindingsManager.CLEAR);
+        assertThat(keys.resolve(KeybindingsManager.KeyStroke.of("d", true, false, false)))
+            .isEqualTo(KeybindingsManager.EXIT);
+
+        writeBindings(dir, "{not json");
+        var broken = KeybindingsManager.create(dir);
+        assertThat(broken.resolve(KeybindingsManager.KeyStroke.of("esc", false, false, false)))
+            .isEqualTo(KeybindingsManager.INTERRUPT);
+    }
+
+    /** legacy 名迁移；新旧同存 ⇒ 新名优先、legacy 丢弃。 */
+    @Test
+    void legacyNamesMigrateWithNewNameWinning(@TempDir Path dir) throws IOException {
+        writeBindings(dir, "{\"interrupt\": \"ctrl+k\"}");
+        var legacy = KeybindingsManager.create(dir);
+        assertThat(legacy.resolve(KeybindingsManager.KeyStroke.of("k", true, false, false)))
+            .isEqualTo(KeybindingsManager.INTERRUPT);
+
+        writeBindings(dir, "{\"interrupt\": \"ctrl+k\", \"app.interrupt\": \"ctrl+j\"}");
+        var both = KeybindingsManager.create(dir);
+        assertThat(both.resolve(KeybindingsManager.KeyStroke.of("j", true, false, false)))
+            .isEqualTo(KeybindingsManager.INTERRUPT);
+        assertThat(both.resolve(KeybindingsManager.KeyStroke.of("k", true, false, false))).isNull();
+    }
+
+    /** reload 重读文件；未知动作忽略且不新增绑定。 */
+    @Test
+    void reloadRereadsTheFileAndUnknownActionsAreIgnored(@TempDir Path dir) throws IOException {
+        writeBindings(dir, "{\"app.interrupt\": \"ctrl+k\", \"nope.action\": \"ctrl+n\"}");
+        var keys = KeybindingsManager.create(dir);
+        assertThat(keys.effectiveBindings()).doesNotContainKey("nope.action");
+
+        writeBindings(dir, "{\"app.interrupt\": \"ctrl+m\"}");
+        keys.reload();
+        assertThat(keys.resolve(KeybindingsManager.KeyStroke.of("m", true, false, false)))
+            .isEqualTo(KeybindingsManager.INTERRUPT);
+        assertThat(keys.resolve(KeybindingsManager.KeyStroke.of("k", true, false, false))).isNull();
+    }
+
+    /** pi KeyId 解析：escape 归一、修饰字与命名键。 */
+    @Test
+    void parsesKeyIdsLikePi() {
+        assertThat(KeybindingsManager.parseStroke("escape"))
+            .isEqualTo(KeybindingsManager.KeyStroke.of("esc", false, false, false));
+        assertThat(KeybindingsManager.parseStroke("shift+ctrl+o"))
+            .isEqualTo(KeybindingsManager.KeyStroke.of("o", true, false, true));
+        assertThat(KeybindingsManager.parseStroke("alt+left"))
+            .isEqualTo(KeybindingsManager.KeyStroke.of("left", false, true, false));
+        assertThat(KeybindingsManager.parseStroke("ctrl+backspace"))
+            .isEqualTo(KeybindingsManager.KeyStroke.of("backspace", true, false, false));
+        assertThat(KeybindingsManager.parseStroke("meta+x")).isNull();
+        assertThat(KeybindingsManager.parseStroke("ctrl+nope")).isNull();
     }
 }

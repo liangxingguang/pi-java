@@ -35,4 +35,20 @@ class KeybindingHintsTest {
         assertThat(KeybindingHints.keyText(null)).isEmpty();
         assertThat(KeybindingHints.keyText(KeyStroke.of("", false, false, false))).isEmpty();
     }
+
+    @Test
+    void formatsRawKeyTextWithAlternativesAndCapitals() {
+        assertThat(KeybindingHints.formatKeyText("ctrl+shift+f", false))
+            .isEqualTo("ctrl+shift+f");
+        assertThat(KeybindingHints.formatKeyText("enter/ctrl+g", true))
+            .isEqualTo("Enter/Ctrl+G");
+    }
+
+    @Test
+    void rawKeyHintCarriesKeyAndDescription() {
+        var element = KeybindingHints.rawKeyHint("esc", "close");
+        assertThat(element).isNotNull();
+        assertThat(KeybindingHints.keyHint(KeyStroke.of("p", true, false, false), "palette"))
+            .isNotNull();
+    }
 }

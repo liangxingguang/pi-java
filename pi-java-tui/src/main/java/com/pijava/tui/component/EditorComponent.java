@@ -3,10 +3,14 @@ package com.pijava.tui.component;
 import java.util.ArrayDeque;
 import java.util.Map;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
+import com.pijava.tui.theme.SemanticColors;
 import com.pijava.tui.util.TamboUIAdapter;
 import com.pijava.tui.util.EditorElement;
 
+import dev.tamboui.style.Style;
+import dev.tamboui.toolkit.element.Element;
 import dev.tamboui.toolkit.elements.Row;
 import dev.tamboui.tui.event.KeyCode;
 import dev.tamboui.tui.event.KeyEvent;
@@ -50,6 +54,8 @@ public final class EditorComponent {
     /** 批 12 T4（docs/23 §3）：pi {@code editorPaddingX}（editor.ts:523-524
      *  双侧留白对位）——live-read 热更；默认 0。 */
     private java.util.function.IntSupplier paddingX = () -> 0;
+    /** L7 W6（C15）：思考等级边框色现读源；默认主题 border。 */
+    private Supplier<Style> borderStyleSource = SemanticColors::border;
 
     /** Creates the editor component backed by a fresh {@link TextAreaState}. */
     public EditorComponent() {
@@ -59,21 +65,37 @@ public final class EditorComponent {
             .addClass("EditorComponent");
     }
 
-    /** The input row for the render tree: a {@code >} prompt plus the editor. */
-    public Row render() {
+    /** The input row for the render tree: thinking-colored rules plus the editor. */
+    public Element render() {
         // pi editor.ts:523-524/560：双侧 paddingX 留白（clamp 0..3 在 accessor；
         // 这里再夹一次防 live-read 越界）。java 编辑器无鼠标命中面，仅渲染留白；
         // 内容可用宽度随 Row 布局自然收缩。
         int pad = Math.min(3, Math.max(0, paddingX.getAsInt()));
+        Row row;
         if (pad == 0) {
-            return TamboUIAdapter.row(
+            row = TamboUIAdapter.row(
                 TamboUIAdapter.text("> ").cyan(),
                 element);
+        } else {
+            row = TamboUIAdapter.row(
+                TamboUIAdapter.text(" ".repeat(pad) + "> ").cyan(),
+                element,
+                TamboUIAdapter.text(" ".repeat(pad)));
         }
-        return TamboUIAdapter.row(
-            TamboUIAdapter.text(" ".repeat(pad) + "> ").cyan(),
-            element,
-            TamboUIAdapter.text(" ".repeat(pad)));
+        // L7 W6（C15）：上下各一条 thinking 色横线（pi editor.ts borderColor 对位）。
+        Element top = new DynamicBorder(borderStyleSource);
+        Element bottom = new DynamicBorder(borderStyleSource);
+        return TamboUIAdapter.column(top, row, bottom);
+    }
+
+    /** L7 W6（C15）：注入 editor border 色现读源（thinking 等级；null ⇒ 主题 border）。 */
+    public void setBorderStyleSource(Supplier<Style> source) {
+        borderStyleSource = source == null ? SemanticColors::border : source;
+    }
+
+    /** L7 W6（C20）：注入硬件光标开关现读源（true ⇒ 不画假光标）。 */
+    public void setShowHardwareCursorSource(java.util.function.BooleanSupplier source) {
+        element.showHardwareCursor(source);
     }
 
     /** 注入 paddingX 现读源（{@code uiPrefs().getEditorPaddingX()} 对位）。 */
@@ -298,9 +320,9 @@ public final class EditorComponent {
         this.submitHandler = handler;
     }
 
-    /** Number of visible editor rows (1 for a single-line prompt). */
+    /** Number of visible editor rows (content rows plus the two border rules). */
     public int lineCount() {
-        return Math.max(1, state.lineCount());
+        return Math.max(1, state.lineCount()) + 2;
     }
 
     /** Current editor text. */

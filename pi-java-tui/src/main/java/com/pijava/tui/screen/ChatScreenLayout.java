@@ -1,17 +1,29 @@
 package com.pijava.tui.screen;
 
 import com.pijava.agent.harness.SessionSnapshot;
+import com.pijava.coding.agent.core.KeybindingsManager;
 import com.pijava.tui.component.ChatMessage;
 import com.pijava.tui.component.ChatPanel;
 import com.pijava.tui.component.MetaKind;
 import com.pijava.tui.component.PendingQueueView;
 import com.pijava.tui.component.StatusBar;
 import com.pijava.tui.component.StatusIndicator;
+import com.pijava.tui.component.TranscriptSearchController;
 import com.pijava.tui.theme.SemanticColors;
+import com.pijava.tui.util.ClipboardSupport;
 import com.pijava.tui.util.TamboUIAdapter;
+import com.pijava.tui.util.TextColumns;
+import dev.tamboui.layout.Rect;
+import dev.tamboui.style.Style;
+import dev.tamboui.terminal.Frame;
 import dev.tamboui.toolkit.element.Element;
+import dev.tamboui.toolkit.element.RenderContext;
+import dev.tamboui.toolkit.element.Size;
+import dev.tamboui.toolkit.element.StyledElement;
 import dev.tamboui.toolkit.elements.Column;
+import dev.tamboui.tui.event.KeyEvent;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -28,6 +40,8 @@ final class ChatScreenLayout {
     private final ExtensionInjectionLayer extensionLayer;
     private final ChatInputPortal inputPortal;
     private final SessionEventRouter sessionEventRouter;
+    private final TranscriptSearchController search;
+    private final FlashNotice flashNotice = new FlashNotice();
     private SessionSnapshot snapshot;
 
     ChatScreenLayout(ChatPanel chatPanel, PendingQueueView pendingQueue,
@@ -38,6 +52,9 @@ final class ChatScreenLayout {
         this.extensionLayer = extensionLayer;
         this.inputPortal = inputPortal;
         this.sessionEventRouter = sessionEventRouter;
+        this.search = new TranscriptSearchController(
+            chatPanel::rowsSnapshot, chatPanel::scrollOffset, chatPanel::scrollToRow);
+        chatPanel.setSelectionSink(this::copySelection);
     }
 
     /**
@@ -47,6 +64,10 @@ final class ChatScreenLayout {
      */
     Column render() {
         var children = new ArrayList<Element>();
+        // L7 W6（S2a）：搜索条在聊天区顶部（pi 浮动 overlay 的顶条承载，窄差 N1）。
+        if (search.active()) {
+            children.add(search.bar());
+        }
         // 批 17（T6）：header 槽在聊天区上方（pi headerContainer 槽位序对位）。
         children.addAll(extensionLayer.headerRows());
         children.add(chatPanel.render().fill());
@@ -63,6 +84,7 @@ final class ChatScreenLayout {
         children.addAll(extensionLayer.widgetRowsAbove(true, true));
         children.add(inputPortal.editorElement());
         children.addAll(extensionLayer.widgetRowsBelow(false, false));
+        addFlash(children);
         return TamboUIAdapter.column(children);
     }
 
@@ -73,6 +95,10 @@ final class ChatScreenLayout {
      */
     Element renderBottomArea() {
         var children = new ArrayList<Element>();
+        // L7 W6（S2a）：inline 模式同样在顶部渲染搜索条。
+        if (search.active()) {
+            children.add(search.bar());
+        }
         // 批 17（T6，窄差 D101）：inline 的 header 槽渲染在底部位顶部
         //（pi 槽位序为聊天上方；java inline 无聊天容器）。
         children.addAll(extensionLayer.headerRows());
@@ -84,6 +110,7 @@ final class ChatScreenLayout {
         children.add(inputPortal.editorElement());
         children.addAll(extensionLayer.widgetRowsBelow(false, false));
         children.add(statusBar());
+        addFlash(children);
         return TamboUIAdapter.column(children);
     }
 
@@ -136,6 +163,105 @@ final class ChatScreenLayout {
     /** Refresh the status bar from a session snapshot. */
     void updateSnapshot(SessionSnapshot snapshot) {
         this.snapshot = snapshot;
+    }
+
+    // ── L7 W6：搜索 / 选择 / flash（S2a/S2b/S2c） ─────────────────
+
+    /** 开关转录搜索（打开/关闭均同步高亮）。 */
+    void toggleTranscriptSearch() {
+        search.toggle();
+        chatPanel.setHighlights(search.highlights());
+    }
+
+    /** 搜索激活时先吃键；返回是否消费。 */
+    boolean handleTranscriptSearchKey(KeyEvent event, KeybindingsManager keys) {
+        if (!search.active()) {
+            return false;
+        }
+        boolean handled = search.handleKey(event, keys);
+        chatPanel.setHighlights(search.highlights());
+        return handled;
+    }
+
+    /** L7 W6（C15/C20）：编辑器边框色（thinking 等级）与硬件光标源注入。 */
+    void configureEditor(java.util.function.Supplier<Style> border,
+                         java.util.function.BooleanSupplier hardwareCursor) {
+        inputPortal.setEditorBorderStyleSource(border);
+        inputPortal.setShowHardwareCursorSource(hardwareCursor);
+    }
+
+    /** 转录搜索控制器（测试观察点）。 */
+    TranscriptSearchController search() {
+        return search;
+    }
+
+    /** 复制当前选区（{@code ctrl+c}）；有选区 ⇒ true。 */
+    boolean copyActiveSelection() {
+        return chatPanel.copyActiveSelection();
+    }
+
+    /** 是否有非空选区（测试观察点）。 */
+    boolean hasActiveSelection() {
+        return chatPanel.hasActiveSelection();
+    }
+
+    /** 显示 flash（默认 1000 ms）。 */
+    void flash(String message) {
+        flashNotice.show(message);
+    }
+
+    /** 显示 flash（定制时长）。 */
+    void flash(String message, long durationMs) {
+        flashNotice.show(message, durationMs);
+    }
+
+    /** flash 文本（测试观察点；过期 ⇒ null）。 */
+    String flashMessageAt(long nowNanos) {
+        return flashNotice.messageAt(nowNanos);
+    }
+
+    private void copySelection(String text) {
+        try {
+            ClipboardSupport.copy(text);
+            flashNotice.show("Copied!");
+        } catch (IOException e) {
+            var detail = e.getMessage() == null ? "Copy failed"
+                : "Copy failed: " + e.getMessage();
+            flashNotice.show(detail, 5000);
+        }
+    }
+
+    private void addFlash(List<Element> children) {
+        String message = flashNotice.messageAt(System.nanoTime());
+        if (message != null) {
+            children.add(new FlashLine(message));
+        }
+    }
+
+    /** 反白单行 flash（pi {@code alt-screen-flash} 的 {@code \x1b[7m} 对位）。 */
+    private static final class FlashLine extends StyledElement<FlashLine> {
+        private final String message;
+
+        FlashLine(String message) {
+            this.message = message;
+        }
+
+        @Override
+        public Size preferredSize(int availableWidth, int availableHeight,
+                                  RenderContext context) {
+            return Size.of(availableWidth, 1);
+        }
+
+        @Override
+        protected void renderContent(Frame frame, Rect area, RenderContext context) {
+            if (area.width() <= 0) {
+                return;
+            }
+            String text = TextColumns.truncateToWidth(" " + message + " ", area.width());
+            int width = TextColumns.width(text);
+            String padded = text + " ".repeat(Math.max(0, area.width() - width));
+            frame.buffer().setString(area.left(), area.top(), padded, Style.EMPTY.reversed());
+        }
     }
 
     /** The current snapshot (for tree selectors). */

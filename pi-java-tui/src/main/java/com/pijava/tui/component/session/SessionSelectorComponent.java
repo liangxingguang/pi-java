@@ -190,8 +190,7 @@ public final class SessionSelectorComponent {
         // 8. ctrl+backspace（pi :600-609）：查询非空 ⇒ 转发输入框；空 ⇒ 同 delete。
         if (keybindings.matches(KeybindingsManager.SESSION_DELETE_NONINVASIVE, stroke)) {
             if (!searchEditor.getText().isEmpty()) {
-                searchEditor.onKeyEvent(event);
-                model.filterSessions(searchEditor.getText());
+                handleSearchInput(event);
             } else {
                 startDeleteConfirmationForSelected();
             }
@@ -227,10 +226,26 @@ public final class SessionSelectorComponent {
             cancelSelection();
             return true;
         }
-        // 其余 ⇒ 全转发搜索输入框并重新过滤（pi :642-645）。
-        searchEditor.onKeyEvent(event);
-        model.filterSessions(searchEditor.getText());
+        // 其余 ⇒ 全转发搜索输入框；查询真变了才重滤/置顶（pi :642-645）。
+        handleSearchInput(event);
         return true;
+    }
+
+    /**
+     * pi {@code handleSearchInput}（session-selector.ts:652-663）：光标键不改变
+     * 查询 ⇒ 不重滤、不动选中；查询变化且非空 ⇒ 选中置顶。
+     */
+    private void handleSearchInput(KeyEvent event) {
+        var previousQuery = searchEditor.getText();
+        searchEditor.onKeyEvent(event);
+        var query = searchEditor.getText();
+        if (query.equals(previousQuery)) {
+            return;
+        }
+        model.filterSessions(query);
+        if (!query.isBlank()) {
+            model.selectTopForSearch();
+        }
     }
 
     // ── 结局（pi :800-814）───────────────────────────────────
@@ -377,7 +392,7 @@ public final class SessionSelectorComponent {
                 allSessions = sessions;
             }
             if (target == scope) {
-                model.setSessions(sessions, target == Scope.ALL, searchEditor.getText());
+                model.setSessions(sessions, target == Scope.ALL, searchEditor.getText(), true);
             }
         }
         if (target != scope) {

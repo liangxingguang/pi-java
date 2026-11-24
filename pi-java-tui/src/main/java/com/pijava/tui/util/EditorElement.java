@@ -2,7 +2,6 @@ package com.pijava.tui.util;
 
 import dev.tamboui.buffer.Buffer;
 import dev.tamboui.layout.Rect;
-import dev.tamboui.style.Color;
 import dev.tamboui.style.Style;
 import dev.tamboui.terminal.Frame;
 import dev.tamboui.text.CharWidth;
@@ -30,11 +29,10 @@ import dev.tamboui.widgets.input.TextAreaState;
  */
 public final class EditorElement extends StyledElement<EditorElement> {
 
-    /** Static cursor block color (steady, Codex-CLI style). */
-    public static final Color CURSOR = Color.hex("#00FFD7");
-
     private final TextAreaState state;
     private String placeholder = "";
+    /** L7 W6（C20）：硬件光标开 ⇒ 不画假光标（pi showHardwareCursor 对位）。 */
+    private java.util.function.BooleanSupplier showHardwareCursor = () -> false;
 
     /**
      * Creates the editor element rendering the given state.
@@ -48,6 +46,12 @@ public final class EditorElement extends StyledElement<EditorElement> {
     /** Sets the placeholder text shown while the editor is empty. */
     public EditorElement placeholder(String placeholder) {
         this.placeholder = placeholder != null ? placeholder : "";
+        return this;
+    }
+
+    /** L7 W6（C20）：注入硬件光标开关现读源（true ⇒ 抑制假光标）。 */
+    public EditorElement showHardwareCursor(java.util.function.BooleanSupplier source) {
+        this.showHardwareCursor = source == null ? () -> false : source;
         return this;
     }
 
@@ -90,8 +94,11 @@ public final class EditorElement extends StyledElement<EditorElement> {
         renderCursor(frame.buffer(), area);
     }
 
-    /** 渲染光标块（对齐 TamboUI TextArea 的几何计算，永不闪烁）。 */
+    /** 渲染假光标（反白，pi {@code \x1b[7m} 对位）；硬件光标开时让位。 */
     private void renderCursor(Buffer buffer, Rect area) {
+        if (showHardwareCursor.getAsBoolean()) {
+            return;
+        }
         int cursorRow = state.cursorRow();
         int cursorCol = state.cursorCol();
         int relativeRow = cursorRow - state.scrollRow();
@@ -112,8 +119,7 @@ public final class EditorElement extends StyledElement<EditorElement> {
         }
         int x = area.left() + relativeCol;
         int y = area.top() + relativeRow;
-        buffer.set(x, y, buffer.get(x, y).patchStyle(
-            Style.EMPTY.bg(EditorElement.CURSOR).fg(Color.BLACK)));
+        buffer.set(x, y, buffer.get(x, y).patchStyle(Style.EMPTY.reversed()));
     }
 
     /** 按 SyntaxHighlighter 片段逐段写缓冲，超出区域宽度即停。 */

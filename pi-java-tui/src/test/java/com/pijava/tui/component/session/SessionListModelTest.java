@@ -116,4 +116,59 @@ class SessionListModelTest {
         // recent 保入序（a 先入）
         assertThat(model.filtered().stream().map(n -> n.session().id())).containsExactly("a", "b");
     }
+
+    /** L7 W8（漏项10，pi :354-378）：渐进加载中选中的会话未到货 ⇒ 保留 pending。 */
+    @Test
+    void partialReloadKeepsTheSelectedSessionAsPendingTarget() {
+        var model = new SessionListModel(null);
+        model.setSessions(List.of(session("a", 100), session("b", 200), session("c", 300)),
+            false, "");
+        model.touchSelection();
+        model.moveDown();   // threaded 序 c,b,a ⇒ 选中 b
+        assertThat(model.selectedNode().session().id()).isEqualTo("b");
+
+        model.setSessions(List.of(session("c", 300)), false, "", true);
+        assertThat(model.selectedNode().session().id()).as("下标暂落别处").isEqualTo("c");
+        assertThat(model.pendingSelectedPath()).isEqualTo("b");
+
+        model.setSessions(List.of(session("c", 300), session("b", 200)), false, "", true);
+        assertThat(model.selectedNode().session().id()).as("到货即回到原选中").isEqualTo("b");
+        assertThat(model.pendingSelectedPath()).isNull();
+    }
+
+    /** 加载完成仍缺该会话 ⇒ 清 pending，采用 clamp 后的下标。 */
+    @Test
+    void completedReloadClearsAPendingTargetThatNeverArrived() {
+        var model = new SessionListModel(null);
+        model.setSessions(List.of(session("a", 100), session("b", 200), session("c", 300)),
+            false, "");
+        model.touchSelection();
+        model.moveDown();
+        model.moveDown();   // threaded 序 c,b,a ⇒ 选中 a
+        assertThat(model.selectedNode().session().id()).isEqualTo("a");
+
+        model.setSessions(List.of(session("c", 300)), false, "", true);
+        assertThat(model.pendingSelectedPath()).isEqualTo("a");
+
+        model.setSessions(List.of(session("c", 300)), false, "", false);
+        assertThat(model.pendingSelectedPath()).isNull();
+        assertThat(model.selectedNode().session().id()).isEqualTo("c");
+    }
+
+    /** L7 W8（漏项10，pi :660-663）：查询变化且非空 ⇒ 选中置顶并回到未摸过态。 */
+    @Test
+    void searchSelectionMovesToTheTopRow() {
+        var model = new SessionListModel(null);
+        model.setSessions(List.of(session("a", 100), session("b", 200), session("c", 300)),
+            false, "");
+        model.touchSelection();
+        model.moveDown();
+        model.moveDown();
+        assertThat(model.selectedIndex()).isEqualTo(2);
+
+        model.selectTopForSearch();
+        assertThat(model.selectedIndex()).isZero();
+        assertThat(model.selectionTouched()).isFalse();
+        assertThat(model.pendingSelectedPath()).isNull();
+    }
 }

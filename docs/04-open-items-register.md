@@ -88,6 +88,43 @@
   N2 OSC 8 不输出、N3 `baseLayoutKey` 不消费、N4 helper→平台 CLI、N5 登录 auth、N6 APC 标记无对应物；
   D60 `"auto"` 维持 Codex 有界加速模型。以上 D/N 编号统一在 P12 落。未新开 B 号；`map/05` 读数
   **210.5/252＝83.5%**（未加权 112/153；投影回算 214.0/260＝82.3%）。
+- **L7 W6 收口（2026-11-24）**：全屏长尾按 [`docs/27`](27-w6-design.md) 落地——S2a/K21 转录搜索
+  （`TranscriptSearchIndex`＋`TranscriptSearchController`＋三行搜索条；`ctrl+shift+f`／Enter／`ctrl+g`／
+  Shift+Enter／`ctrl+shift+g`／Esc）、S2b/K22 拖拽选区＋copy-on-select（`ViewportInteraction`＋
+  `TranscriptSelection`，W5 `ClipboardSupport` 复制，`ctrl+c` 有选区不清输入）、S2c flash（`FlashNotice`，
+  默认 1000 ms、复制失败 5000 ms）、C3 设置列表宽度感知（`SettingsListElement`：标签对齐≤36、值截断、
+  描述折行、`(i/n)`、滚轮/点击）、C4 单行输入（`SingleLineInput`＋`SingleLineInputElement`，搜索条消费）、
+  C13 `TruncatedText`＋`TextColumns`、C15 `DynamicBorder`＋`ThinkingBorderPalette`（编辑器上下横线随
+  思考等级）、C20 `EditorElement` 反白假光标与 `showHardwareCursor` 互斥、K18 `keyHint/rawKeyHint`
+  ⇒ 十一行**对齐**（＋12.0，未新增分母）。窄差 N：N1 搜索条位置（顶部条代替浮动 overlay）、N2 非 ASCII
+  码点粒度、N3 选择长尾（双击选词/边缘自动滚动）、N4 flash tick 计时/单条、N5 无 APC 光标标记、
+  N6 子菜单 `navigateTo`、N7 提示返回 `Element`；D2 bash-mode 边框（Java 无 bash 输入模式态）。
+  #20（L6 context footer）顺延 W8（`SessionSnapshot` 无上下文窗口字段，改 record 不属 W6）。以上 D/N
+  编号统一在 P12 落。未新开 B 号；`map/05` 读数 **222.5/252＝88.3%**（未加权 123/153；投影回算
+  226.0/260＝86.9%）。
+- **L7 W7 收口（2026-11-24）**：屏幕与图按 [`docs/28`](28-w7-design.md) 落地——R14/S2d 图片协议
+  （`TerminalImage` 编码/尺寸/单元格/降级＋`ImageElement`（`RawOutputCapable`）＋`ImageRenderSupport`
+  视口装配，`showImages`/能力双门控）、R15/K14 剪贴板图片（`ClipboardImage`＋`ClipboardPasteFlow`，
+  Windows PowerShell/wl-paste/xclip → 临时 png → 路径插编辑器，文本兜底）、S18 首次设置向导
+  （`FirstRunSetup`＋`FirstTimeSetupScreen`＋`FirstTimeSetupRunner`，`PI_EXPERIMENTAL=1` 且无
+  settings.json）、S21 show-images（设置布尔项已对位，独立导出组件不移植）、K13 `Ctrl+X`
+  （`MESSAGE_COPY` 全局＋`copyLastAssistantMessage`）、R8 LaTeX（`util/latex/` 符号/解析/布局/扫描，
+  行内与块级接入 Markdown）⇒ 八行**对齐**（＋8.0）。窄差 N：N-W7-1 图片实机验收、N-W7-2 macOS
+  Finder 路径、N-W7-3 主题预览不重查 system 色、N-W7-4 LaTeX 符号长尾；D-W7-1 Mermaid
+  （`lovely-mermaid` 无 Java 等价）、D-W7-2 独立 show-images 组件。以上 D/N 编号统一在 P12 落。
+  未新开 B 号；`map/05` 读数 **230.5/252＝91.5%**（未加权 131/153；投影回算 234.0/260＝90.0%）。
+- **L7 W8 收口（2026-11-24）**：收尾段按 [`docs/29`](29-w8-design.md) 落地——K17
+  `keybindings.json` 用户覆盖（`KeybindingsManager.create/reload`＋`KeybindingsNames` 迁移表；
+  跳过 `$schema`、字符串/数组值、空数组解绑、新旧同存新名优先）缺失→**对齐**；S27 `/share`
+  复核（`SessionShareService` 的 `destination` 现读＋`Stage`、`ShareFlow` 的 W1 loader）存疑→**对齐**
+  ⇒ 两行翻正（＋2.0）。同段对账：missing-cwd 三选／reasoning drop 泛化／changelog 写回／
+  model-selector 刷新保偏好均已在 W2–W5 落地（零代码）；"to resume" 独立成行＋exit flush、
+  伙伴 provider `✦` 标记落地。窄差：N-W8-1（品牌 shimmer/glow 动画，`SelectList` 纯字符串行不可达）、
+  N-W8-2（`tui.editor.*` 等编辑器直读键不消费覆盖）；D-W8-2（R22/R27 彩蛋不移植）、
+  D-W8-3（`/export` HTML 输出形状未逐项核）、D-W8-4（R28 流式 bash/工具组件不进 pending 区）。
+  **#20（L6 context footer）仍开放**：`SessionSnapshot` 无上下文窗口字段，未在本段改 record。
+  以上 D/N 编号统一在 P12 落。未新开 B 号；`map/05` 读数 **232.5/252＝92.3%**（未加权 133/153；
+  投影回算 236.0/260＝90.8%）。**L7 W1–W8 分段收口。**
 - **F**：需要用户拍板的事项。
 - **R1**：pi 已删除的面，不为旧参照物补功能。
 - **R2**：Provider 只覆盖已批准的主流范围。Qwen／Xiaomi Token Plan 家族（团队／个人、国际／中国、AMS／SGP）已按 `docs/09` P3 余项纳入（26 个内置 provider）；其余长尾 provider 仍排除。

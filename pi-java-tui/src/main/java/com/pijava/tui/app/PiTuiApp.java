@@ -30,19 +30,12 @@ import dev.tamboui.toolkit.event.EventResult;
 import dev.tamboui.tui.event.Event;
 
 /**
- * TUI application shell (Phase 3 design §7.1).
+ * TUI application shell (Phase 3 design §7.1): owns the render loop, drains
+ * cross-thread events, intercepts global keybindings, drives interactive mode,
+ * hosts modal overlays, and routes wheel/keys to the chat viewport.
  *
- * <p>Owns the render loop: drains cross-thread events each frame, intercepts
- * global keybindings, drives the interactive mode, and hosts modal overlays
- * (model/session/tree/settings selectors). Since the alignment refactor, it
- * also owns transcript scrolling: raw wheel/trackpad events go through the
- * {@link ScrollInputNormalizer} and keyboard navigation drives the chat
- * viewport directly (the old ListElement key/mouse handlers are gone).</p>
- *
- * <p>批 29（E1 结构债拆分）：启动通知（{@link StartupNotices}）、全局键分派
- * （{@link GlobalKeyRouter}）、overlay 开合（{@link OverlayManager}）、扩展宿主接线
- * （{@link ExtensionHostWiring}）、prompt/slash 流（{@link SlashFlowRouter}）移出成件；
- * 本类只留装配、渲染帧面与对外委托桩——public/包私有 API 签名全保留。</p>
+ * <p>批 29（E1 结构债拆分）：启动通知、全局键分派、overlay 开合、扩展宿主接线、
+ * prompt/slash 流均已移出成件；本类只留装配、渲染帧面与对外委托桩。</p>
  */
 public final class PiTuiApp {
 
@@ -135,6 +128,10 @@ public final class PiTuiApp {
             Boolean.TRUE.equals(session.services().settings().accessors().getHideThinkingBlock()));
         // 批 34（K8）：工具输出展开态现读缝（Ctrl+O 翻转 ⇒ 下一帧重投影）。
         com.pijava.tui.component.MessageBubbleVisibility.installToolsExpanded(() -> toolOutputExpanded);
+        // L7 W7（R14/S21）：内联图片渲染开关与宽度现读（terminal.showImages/imageWidthCells）。
+        com.pijava.tui.component.MessageBubbleVisibility.installImages(
+            () -> session.services().settings().uiPrefs().getShowImages(),
+            () -> session.services().settings().uiPrefs().getImageWidthCells());
         this.sessionEvents = new SessionEventChannel(dispatcher, chatScreen::onSessionEvent);
         // 批 12（docs/23）：settings 消费键 live-read 注入——先于补全目录装配
         //（switchSession 后新会话的设置面自然生效）。

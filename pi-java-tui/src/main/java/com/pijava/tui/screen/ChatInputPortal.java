@@ -93,6 +93,16 @@ final class ChatInputPortal {
         editor.setPaddingXSource(source);
     }
 
+    /** L7 W6（C15）：编辑器边框色现读源（thinking 等级）。 */
+    void setEditorBorderStyleSource(java.util.function.Supplier<dev.tamboui.style.Style> source) {
+        editor.setBorderStyleSource(source);
+    }
+
+    /** L7 W6（C20）：硬件光标开关现读源（true ⇒ 不画假光标）。 */
+    void setShowHardwareCursorSource(java.util.function.BooleanSupplier source) {
+        editor.setShowHardwareCursorSource(source);
+    }
+
     /**
      * 批 12 T5：{@code autocompleteMaxVisible} 现读源——对<b>之后</b>的
      * {@link #setSlashCommands} 重建生效（PiTuiApp 装配时先注入再建目录；

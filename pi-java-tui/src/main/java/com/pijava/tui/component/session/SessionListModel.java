@@ -34,6 +34,8 @@ public final class SessionListModel {
     private NameFilter nameFilter = NameFilter.ALL;
     private boolean showPath;
     private String confirmingDeletePath;
+    /** 渐进加载中「等它到货」的选中会话（pi {@code pendingSelectedPath}，L7 W8）。 */
+    private String pendingSelectedPath;
     /** picker 恒 null（裁决⑦）——「当前会话」高亮与删除守卫同形留白。 */
     private final String currentSessionCanonicalPath;
 
@@ -80,13 +82,29 @@ public final class SessionListModel {
         return confirmingDeletePath;
     }
 
+    /** 渐进加载中等待到货的选中会话路径（null ⇒ 无 pending）。 */
+    public String pendingSelectedPath() {
+        return pendingSelectedPath;
+    }
+
     public void setShowPath(boolean showPath) {
         this.showPath = showPath;
     }
 
-    /** pi :611：导航/定案/取消/输入转发前统一置位。 */
+    /** pi :611：导航/定案/取消/输入转发前统一置位（同时清 pending，pi :614）。 */
     public void touchSelection() {
         this.selectionTouched = true;
+        this.pendingSelectedPath = null;
+    }
+
+    /**
+     * pi {@code handleSearchInput} 的置顶臂（:660-663）：查询变化且非空 ⇒
+     * 选中第一行（最佳匹配），并回到「未摸过」态，让后续渐进加载继续钉顶部。
+     */
+    public void selectTopForSearch() {
+        this.selectedIndex = 0;
+        this.selectionTouched = false;
+        this.pendingSelectedPath = null;
     }
 
     /** 当前选中节点；空表 ⇒ {@code null}（pi {@code filtered[selectedIndex]} 的 undefined 对位）。 */
@@ -126,22 +144,46 @@ public final class SessionListModel {
     }
 
     /**
-     * pi {@code setSessions}（:362-373）逐字：未摸过选择 ⇒ 重置 0；摸过 ⇒
-     * 按 path 找回选中项（找不到保持当前下标——已被 clamp）。
+     * pi {@code setSessions}（:354-378）逐字：未摸过选择 ⇒ 重置 0；摸过 ⇒
+     * 按 path 找回选中项。{@code partial}（渐进加载中）时，选中会话还没到货
+     * 就保留为 pending，避免下标落到别的会话上。
+     *
+     * @param sessions 本次（可能是部分）会话表
+     * @param showCwd  是否显示 cwd 列
+     * @param query    当前搜索词
      */
     public void setSessions(List<RichSessionInfo> sessions, boolean showCwd, String query) {
-        var selectedPath = selectionTouched ? selectedSessionPath() : null;
+        setSessions(sessions, showCwd, query, false);
+    }
+
+    /** {@link #setSessions(List, boolean, String)} 的 partial 形（pi :354-378）。 */
+    public void setSessions(List<RichSessionInfo> sessions, boolean showCwd, String query,
+                            boolean partial) {
+        var pendingPath = selectionTouched ? pendingSelectedPath : null;
+        var selectedPath = selectionTouched
+            ? (pendingPath != null ? pendingPath : selectedSessionPath())
+            : null;
         this.allSessions = List.copyOf(sessions);
         this.showCwd = showCwd;
         filterSessions(query);
         if (!selectionTouched) {
             selectedIndex = 0;
         } else if (selectedPath != null) {
+            var found = -1;
             for (int i = 0; i < filtered.size(); i++) {
                 if (filtered.get(i).session().path().equals(selectedPath)) {
-                    selectedIndex = i;
+                    found = i;
                     break;
                 }
+            }
+            if (found >= 0) {
+                selectedIndex = found;
+                pendingSelectedPath = null;
+            } else if (partial) {
+                // 选中的会话可能还没加载到：保留为下一次到货的目标。
+                pendingSelectedPath = selectedPath;
+            } else {
+                pendingSelectedPath = null;
             }
         }
     }

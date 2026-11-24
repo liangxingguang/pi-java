@@ -135,6 +135,26 @@ class SessionSelectorComponentTest {
             .containsExactly("banana");
     }
 
+    /** L7 W8（漏项10）：查询变化 ⇒ 选中置顶；光标键不改查询 ⇒ 不动选中。 */
+    @Test
+    void searchQueryChangeSelectsTopRowAndCursorKeysDoNot() {
+        var c = component(fixed(List.of(session("apple", 100), session("banana", 200),
+            session("cherry", 300))), fixed(List.of()));
+        c.onKeyEvent(KeyEvent.ofKey(KeyCode.DOWN));
+        c.onKeyEvent(KeyEvent.ofKey(KeyCode.DOWN));
+        assertThat(c.model().selectedIndex()).isEqualTo(2);
+
+        c.onKeyEvent(KeyEvent.ofChar('a'));
+        assertThat(c.model().selectedIndex()).as("查询变化 ⇒ 置顶").isZero();
+        assertThat(c.model().selectionTouched()).isFalse();
+
+        c.onKeyEvent(KeyEvent.ofKey(KeyCode.DOWN));
+        assertThat(c.model().selectedIndex()).isEqualTo(1);
+        c.onKeyEvent(KeyEvent.ofKey(KeyCode.LEFT));
+        assertThat(c.searchText()).isEqualTo("a");
+        assertThat(c.model().selectedIndex()).as("光标键不重滤").isEqualTo(1);
+    }
+
     @Test
     void renameKeyIsAConsumedNoOpInPicker() {
         var c = component(fixed(List.of(session("one", 100))), fixed(List.of()));

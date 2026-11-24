@@ -210,6 +210,7 @@ public final class SettingsScreen implements ScreenOverlay {
 
     @Override
     public Element render() {
-        return submenu == null ? SettingsListView.render(model) : submenu.render();
+        return submenu == null
+            ? SettingsListView.render(model, this::activateSelected) : submenu.render();
     }
 }

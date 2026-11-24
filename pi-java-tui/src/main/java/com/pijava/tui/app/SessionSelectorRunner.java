@@ -62,7 +62,7 @@ public final class SessionSelectorRunner {
 
         var dispatcher = new TuiEventDispatcher();
         var executor = Executors.newVirtualThreadPerTaskExecutor();
-        var component = new SessionSelectorComponent(current, all, new KeybindingsManager(),
+        var component = new SessionSelectorComponent(current, all, KeybindingsManager.create(),
             executor, dispatcher::dispatch, System::currentTimeMillis, null);
         var cols = new AtomicInteger(80);   // ResizeEvent 跟踪（批 9 裁决⑧同手法，初值 80）
         runner.eventRouter().addGlobalHandler(event -> {

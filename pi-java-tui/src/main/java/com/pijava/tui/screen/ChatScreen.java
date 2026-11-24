@@ -24,21 +24,14 @@ import java.util.function.Consumer;
  * Implements the coding-agent observers; all mutations happen on the render
  * thread via {@code TuiEventDispatcher}.
  *
- * <p>批 29（E2 结构债拆分，行为零变化纯移动）：扩展注入层
- * （{@link ExtensionInjectionLayer}）、会话事件面（{@link SessionEventRouter}）、
- * cache 通知收口（{@link CacheNoticeRenderer}）、输入口面（{@link ChatInputPortal}）、
- * 转录投影核（{@link TranscriptProjector}）、渲染装配（{@link ChatScreenLayout}）
- * 移出成件；本类为装配根＋对外委托面——public/包私有 API 签名全保留
- * （约 30 个测试类直接 new ChatScreen）。</p>
+ * <p>批 29（E2）把扩展注入层、会话事件面、cache 通知、输入口、转录投影核与
+ * 渲染装配下沉成件；本类为装配根＋对外委托面（约 30 个测试类直接 new ChatScreen）。</p>
  */
 public final class ChatScreen implements EntryObserver, StreamObserver {
 
     private final ChatPanel chatPanel = new ChatPanel();
     private final PendingQueueView pendingQueue = new PendingQueueView();
-    // 批 12（docs/23）：settings 消费键的 live-read 源（PiTuiApp 装配注入；
-    // 默认值保持批 12 前行为——直构 ChatScreen 的测试面零变化）。
     private java.util.function.IntSupplier outputPad = () -> 0;
-    // 批 29（E2）：责任件（字段初始化仅持引用——outputPad 先声明，供应器现读）。
     private final CacheNoticeRenderer cacheNotices =
         new CacheNoticeRenderer(chatPanel, () -> outputPad.getAsInt());
     private final ExtensionInjectionLayer extensionLayer = new ExtensionInjectionLayer();
@@ -63,10 +56,8 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
         projector.onStreamEvent(event);
     }
 
-    /**
-     * Appends the startup card (Codex-CLI style: version, model, directory,
-     * tips) as the first message of the transcript.
-     */
+    /** Appends the startup card (Codex-CLI style: version, model, directory, tips)
+     *  as the first message of the transcript. */
     public void showWelcome(String cardText) {
         projector.showWelcome(cardText);
     }
@@ -113,11 +104,8 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
         return layout.render();
     }
 
-    /**
-     * Bottom region for regular (raw-scrollback) mode: editor + status bar.
-     * The transcript lives in the terminal scrollback, so only this fixed
-     * region is redrawn in place.
-     */
+    /** Bottom region for regular (raw-scrollback) mode: editor + status bar; the transcript
+     *  lives in the terminal scrollback, so only this fixed region is redrawn in place. */
     public Element renderBottomArea() {
         return layout.renderBottomArea();
     }
@@ -182,11 +170,7 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
         layout.appendSystemText(text);
     }
 
-    /**
-     * 批 25（docs/36 T8）：markdown 源气泡（pi 的 {@code Markdown} 组件对位，
-     * /hotkeys interactive-mode.ts:6921）——消费面＝/help /hotkeys 等
-     * markdown 源命令结果。
-     */
+    /** markdown 源气泡（pi {@code Markdown} 组件对位；/help /hotkeys 结果）。 */
     public void appendMarkdownText(String text) {
         layout.appendMarkdownText(text);
     }
@@ -206,7 +190,36 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
         return layout.messageCount();
     }
 
-    // ── 批 29（E2）：扩展注入层委托（本体在 {@link ExtensionInjectionLayer}）──
+    /** 开关转录搜索（{@code ctrl+shift+f}）。 */
+    public void toggleTranscriptSearch() {
+        layout.toggleTranscriptSearch();
+    }
+
+    /** 搜索激活时先吃键（GlobalKeyRouter 在 resolve 之前调用）。 */
+    public boolean handleTranscriptSearchKey(KeyEvent event, com.pijava.coding.agent.core.KeybindingsManager keys) {
+        return layout.handleTranscriptSearchKey(event, keys);
+    }
+
+    /** L7 W7（K13）：全屏 flash 提示（复制成功反馈）。 */
+    public void flash(String message) {
+        layout.flash(message);
+    }
+
+    /** 复制当前选区（{@code ctrl+c}）；有选区 ⇒ true。 */
+    public boolean copyActiveSelection() {
+        return layout.copyActiveSelection();
+    }
+
+    /** 是否有非空选区（测试钩子）。 */
+    public boolean hasActiveSelection() {
+        return layout.hasActiveSelection();
+    }
+
+    /** L7 W6（C15/C20）：编辑器边框色（thinking 等级）与硬件光标源注入。 */
+    public void configureEditor(java.util.function.Supplier<dev.tamboui.style.Style> border,
+                                java.util.function.BooleanSupplier hardwareCursor) {
+        layout.configureEditor(border, hardwareCursor);
+    }
 
     /** pi {@code setExtensionWidget}（interactive-mode.ts:2398-2438 逐字序）。 */
     public void setExtensionWidget(String key,
@@ -238,11 +251,8 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
     /** pi {@code resetExtensionUI} 的 ChatScreen 段（interactive-mode.ts:2452-2483）。 */
     public void resetExtensionUi() {
         extensionLayer.resetExtensionUi();
-        // L7 W1（docs/22 §4.4）：working 三态复位是 pi 同函数的一段（:2673-2682）。
         sessionEventRouter.resetWorkingState();
     }
-
-    // ── L7 W1（docs/22 §4.4，C6）：扩展 working 三方法委托 ───────
 
     /** pi {@code setWorkingMessage}（interactive-mode.ts:2840）：null ⇒ 回默认。 */
     public void setWorkingMessage(String message) {
@@ -270,10 +280,7 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
         return extensionLayer.terminalCols();
     }
 
-    /**
-     * 批 17（T6）：扩展注入层在 inline 底部位的行数（高度驱动——
-     * {@code PiTuiApp.updateBottomHeight} 的加项）。
-     */
+    /** 批 17（T6）：扩展注入层在 inline 底部位的行数（高度驱动加项）。 */
     public int extensionAreaLineCount() {
         return extensionLayer.extensionAreaLineCount();
     }
@@ -308,14 +315,7 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
         return extensionLayer.hasCustomHeader();
     }
 
-    // ── 批 29（E2）：会话事件面委托（本体在 {@link SessionEventRouter}）──
-
-    /**
-     * 会话级事件 → 指示器 / 聊天区。**只在渲染线程被调用**（经 {@code SessionEventChannel}）——
-     * 批 29 起本体在 {@link SessionEventRouter}（pi interactive-mode.ts:3173-3503 的 switch）。
-     *
-     * @param event 会话事件
-     */
+    /** 会话级事件 → 指示器 / 聊天区（只在渲染线程调用；本体在 SessionEventRouter）。 */
     public void onSessionEvent(AgentSessionEvent event) {
         sessionEventRouter.onSessionEvent(event);
     }
@@ -441,8 +441,6 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
 
     /** Editor row count (bottom-region height driver). */
     public int editorLineCount() { return inputPortal.editorLineCount(); }
-
-    // ── Input portal API (PiTuiApp only touches ChatScreen) ──
 
     /** Clears the editor and closes the slash completer. */
     public void clearInput() {

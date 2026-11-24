@@ -1,12 +1,15 @@
 package com.pijava.tui.component;
 
 import java.util.function.BooleanSupplier;
+import java.util.function.IntSupplier;
 
-/** assistant 消息投影的现读设置（thinking 显隐＋工具输出展开）。 */
+/** assistant 消息投影的现读设置（thinking 显隐＋工具输出展开＋图片渲染）。 */
 public final class MessageBubbleVisibility {
 
     private static volatile BooleanSupplier hideThinking = () -> false;
     private static volatile BooleanSupplier toolsExpansion = () -> false;
+    private static volatile BooleanSupplier showImages = () -> false;
+    private static volatile IntSupplier imageWidthCells = () -> 60;
 
     private MessageBubbleVisibility() {}
 
@@ -28,5 +31,21 @@ public final class MessageBubbleVisibility {
     /** 批 34（K8）：工具输出投影是否按展开臂渲染。 */
     static boolean toolsExpanded() {
         return toolsExpansion.getAsBoolean();
+    }
+
+    /** L7 W7（R14）：terminal.showImages 现读缝（默认关）。 */
+    public static void installImages(BooleanSupplier show, IntSupplier widthCells) {
+        showImages = show == null ? () -> false : show;
+        imageWidthCells = widthCells == null ? () -> 60 : widthCells;
+    }
+
+    /** 是否渲染内联图片。 */
+    static boolean showImages() {
+        return showImages.getAsBoolean();
+    }
+
+    /** 图片首选宽度（单元格）。 */
+    static int imageWidthCells() {
+        return Math.max(1, imageWidthCells.getAsInt());
     }
 }

@@ -40,10 +40,11 @@ class EditorElementTest {
 
         // Text renders at the start of the area.
         assertThat(buffer.get(0, 0).symbol()).isEqualTo("h");
-        // The cursor block sits right after the text as a steady cyan block.
+        // The fake cursor is reverse-video (pi \x1b[7m), not a fixed color block.
         var cursorStyle = buffer.get(5, 0).style();
-        assertThat(cursorStyle.bg()).contains(EditorElement.CURSOR);
-        assertThat(cursorStyle.fg()).contains(dev.tamboui.style.Color.BLACK);
+        assertThat(cursorStyle.effectiveModifiers())
+            .contains(dev.tamboui.style.Modifier.REVERSED);
+        assertThat(cursorStyle.bg()).isEmpty();
     }
 
     @Test
@@ -71,7 +72,8 @@ class EditorElementTest {
         // "return" is a highlighted keyword: the cell carries a foreground color.
         assertThat(buffer.get(0, 0).symbol()).isEqualTo("r");
         assertThat(buffer.get(0, 0).style().fg()).isPresent();
-        // The cursor still sits after the text.
-        assertThat(buffer.get(6, 0).style().bg()).contains(EditorElement.CURSOR);
+        // The cursor still sits after the text (reverse-video).
+        assertThat(buffer.get(6, 0).style().effectiveModifiers())
+            .contains(dev.tamboui.style.Modifier.REVERSED);
     }
 }

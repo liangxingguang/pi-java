@@ -1,8 +1,15 @@
 package com.pijava.coding.agent.core;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Application-level keybindings, aligned with pi's {@code app.*} namespace
@@ -11,8 +18,9 @@ import java.util.Map;
  * <p>The coding-agent module defines the key IDs and default strokes using a
  * neutral {@link KeyStroke} (no TamboUI dependency); the TUI module maps its
  * {@code KeyEvent} to {@link KeyStroke} via its adapter and asks this class
- * which action fired. User overrides from {@code keybindings.json} → Phase 6
- * （既有约束，tree 键同源——窄差 D45）。</p>
+ * which action fired. L7 W8（K17）起 {@link #create()} 读
+ * {@code <agentDir>/keybindings.json} 用户覆盖（legacy 名迁移、空数组解绑；
+ * 仅覆盖本类两表内的动作）。</p>
  *
  * <p>批 9（docs/19 §3.11）：一动作可配**多键**（pi 的 foldOrUp/unfoldOrDown
  * 各有 ctrl／alt 两键）；新增 12 个 app.tree.*／app.message.copy 动作。
@@ -50,6 +58,8 @@ public final class KeybindingsManager {
     public static final String TREE_FILTER_CYCLE_FORWARD = "app.tree.filter.cycleForward";   // ctrl+o
     public static final String TREE_FILTER_CYCLE_BACKWARD = "app.tree.filter.cycleBackward"; // shift+ctrl+o
     public static final String MESSAGE_COPY = "app.message.copy";         // ctrl+x
+    // L7 W7（K14；pi keybindings.ts:75-78 app.clipboard.pasteImage）：ctrl+v / alt+v。
+    public static final String PASTE_IMAGE = "app.clipboard.pasteImage";
 
     // ── app.session.*（批 14，docs/25 T3；pi core/keybindings.ts 默认键）─
     // 选择器六键（overlay 表——ctrl+p/ctrl+d 与全局 MODEL_CYCLE/EXIT 撞名，批 9 C1 同构）
@@ -84,6 +94,12 @@ public final class KeybindingsManager {
     public static final String SELECT_PAGE_DOWN = "tui.select.pageDown"; // pagedown
     public static final String INPUT_NEW_LINE = "tui.input.newLine";  // shift+enter, ctrl+j
 
+    // ── tui.altScreen.*（L7 W6 S2a/K21；pi tui/keybindings.ts 默认键）────
+    public static final String ALT_SEARCH = "tui.altScreen.search";              // ctrl+shift+f
+    public static final String ALT_SEARCH_NEXT = "tui.altScreen.searchNext";     // enter, ctrl+g
+    public static final String ALT_SEARCH_PREVIOUS = "tui.altScreen.searchPrevious"; // shift+enter, ctrl+shift+g
+    public static final String ALT_SEARCH_CLOSE = "tui.altScreen.searchClose";   // escape
+
     /**
      * Neutral key representation produced by the TUI adapter.
      *
@@ -116,6 +132,7 @@ public final class KeybindingsManager {
      */
     private final Map<String, List<KeyStroke>> bindings = new HashMap<>();
     private final Map<String, List<KeyStroke>> overlayBindings = new HashMap<>();
+    private final @Nullable Path configPath;
 
     /** Create a manager pre-populated with the default keybindings. */
     public KeybindingsManager() {
@@ -128,6 +145,177 @@ public final class KeybindingsManager {
      * @param windowsKeybindings pi 的 {@code windowsKeybindings} 模块级常量对位
      */
     KeybindingsManager(boolean windowsKeybindings) {
+        this(windowsKeybindings, null);
+    }
+
+    private KeybindingsManager(boolean windowsKeybindings, @Nullable Path configPath) {
+        this.configPath = configPath;
+        installDefaults(windowsKeybindings);
+        if (configPath != null) {
+            applyUserBindings(loadUserBindings(configPath));
+        }
+    }
+
+    /**
+     * pi {@code KeybindingsManager.create}（keybindings.ts:392-396）：从
+     * {@code <agentDir>/keybindings.json} 读用户覆盖；文件缺失/损坏 ⇒ 零覆盖。
+     *
+     * @return the manager with user overrides applied
+     */
+    public static KeybindingsManager create() {
+        return create(FileSettingsStorage.defaultAgentDir());
+    }
+
+    /** 可注入 agent 目录的构造（测试缝）。 */
+    static KeybindingsManager create(Path agentDir) {
+        return new KeybindingsManager(
+            useWindowsKeybindings(System.getProperty("os.name", ""), System.getenv()),
+            agentDir.resolve("keybindings.json"));
+    }
+
+    /** pi {@code reload}：重建默认表后重新应用文件覆盖。 */
+    public void reload() {
+        if (configPath == null) {
+            return;
+        }
+        bindings.clear();
+        overlayBindings.clear();
+        installDefaults(useWindowsKeybindings(System.getProperty("os.name", ""), System.getenv()));
+        applyUserBindings(loadUserBindings(configPath));
+    }
+
+    /** pi {@code getEffectiveConfig}：全局＋overlay 两表的只读合并视图。 */
+    public Map<String, List<KeyStroke>> effectiveBindings() {
+        var merged = new LinkedHashMap<String, List<KeyStroke>>(bindings);
+        merged.putAll(overlayBindings);
+        return Map.copyOf(merged);
+    }
+
+    /**
+     * 读并迁移用户在 {@code keybindings.json} 里的覆盖。
+     *
+     * <p>pi {@code loadFromFile}／{@code migrateKeybindingsConfig}／
+     * {@code toKeybindingsConfig} 对位：跳过 {@code $schema}，值必须是
+     * 字符串或字符串数组；legacy 名迁移；新旧同存以新名为准。</p>
+     */
+    private static Map<String, List<KeyStroke>> loadUserBindings(Path path) {
+        if (!Files.isRegularFile(path)) {
+            return Map.of();
+        }
+        JsonNode root;
+        try {
+            var text = Files.readString(path);
+            if (!text.isEmpty() && text.charAt(0) == '\uFEFF') {
+                text = text.substring(1);
+            }
+            root = Json.mapper().readTree(text);
+        } catch (Exception e) {
+            return Map.of();
+        }
+        if (root == null || !root.isObject()) {
+            return Map.of();
+        }
+        var raw = new LinkedHashMap<String, JsonNode>();
+        for (var it = root.fields(); it.hasNext();) {
+            var entry = it.next();
+            if ("$schema".equals(entry.getKey())) {
+                continue;
+            }
+            var value = entry.getValue();
+            if (value.isTextual() || value.isArray()) {
+                raw.put(entry.getKey(), value);
+            }
+        }
+        var migrated = new LinkedHashMap<String, JsonNode>();
+        for (var entry : raw.entrySet()) {
+            var target = KeybindingsNames.LEGACY_NAMES.getOrDefault(
+                entry.getKey(), entry.getKey());
+            if (!target.equals(entry.getKey()) && raw.containsKey(target)) {
+                continue;
+            }
+            migrated.put(target, entry.getValue());
+        }
+        var result = new HashMap<String, List<KeyStroke>>();
+        for (var entry : migrated.entrySet()) {
+            var strokes = parseValue(entry.getValue());
+            if (strokes != null) {
+                result.put(entry.getKey(), strokes);
+            }
+        }
+        return result;
+    }
+
+    /** 值解析：字符串 ⇒ 单击；数组 ⇒ 多键（任一非法整项丢弃）；空数组 ⇒ 解绑。 */
+    private static @Nullable List<KeyStroke> parseValue(JsonNode value) {
+        if (value.isTextual()) {
+            var stroke = parseStroke(value.asText());
+            return stroke == null ? null : List.of(stroke);
+        }
+        var strokes = new java.util.ArrayList<KeyStroke>();
+        for (var element : value) {
+            if (!element.isTextual()) {
+                return null;
+            }
+            var stroke = parseStroke(element.asText());
+            if (stroke == null) {
+                return null;
+            }
+            strokes.add(stroke);
+        }
+        return List.copyOf(strokes);
+    }
+
+    /**
+     * pi {@code KeyId} 串 ⇒ 中立 {@link KeyStroke}（{@code ctrl+alt+shift+key}）。
+     * {@code escape} 归一为 {@code esc}；未知修饰/键名 ⇒ null。
+     */
+    static @Nullable KeyStroke parseStroke(String text) {
+        if (text == null || text.isBlank()) {
+            return null;
+        }
+        var parts = text.trim().toLowerCase(Locale.ROOT).split("\\+");
+        if (parts.length == 0 || parts[parts.length - 1].isEmpty()) {
+            return null;
+        }
+        boolean ctrl = false;
+        boolean alt = false;
+        boolean shift = false;
+        for (int i = 0; i < parts.length - 1; i++) {
+            switch (parts[i]) {
+                case "ctrl" -> ctrl = true;
+                case "alt" -> alt = true;
+                case "shift" -> shift = true;
+                default -> {
+                    return null;
+                }
+            }
+        }
+        var key = parts[parts.length - 1];
+        if ("escape".equals(key)) {
+            key = "esc";
+        } else if ("space".equals(key)) {
+            key = " ";
+        }
+        if (key.length() != 1 && !KeybindingsNames.NAMED_KEYS.contains(key)) {
+            return null;
+        }
+        return new KeyStroke(key, ctrl, alt, shift);
+    }
+
+    /** 覆盖落位：动作在哪个表就替换哪个表；两表同有（copy）两表都换；未知动作忽略。 */
+    private void applyUserBindings(Map<String, List<KeyStroke>> userBindings) {
+        for (var entry : userBindings.entrySet()) {
+            if (bindings.containsKey(entry.getKey())) {
+                bindings.put(entry.getKey(), entry.getValue());
+            }
+            if (overlayBindings.containsKey(entry.getKey())) {
+                overlayBindings.put(entry.getKey(), entry.getValue());
+            }
+        }
+    }
+
+    /** 默认两表（pi keybindings.ts 默认键逐字）。 */
+    private void installDefaults(boolean windowsKeybindings) {
         bindings.put(INTERRUPT, List.of(KeyStroke.of("esc", false, false, false)));
         bindings.put(CLEAR, List.of(KeyStroke.of("c", true, false, false)));
         bindings.put(EXIT, List.of(KeyStroke.of("d", true, false, false)));
@@ -138,6 +326,12 @@ public final class KeybindingsManager {
         bindings.put(THINKING_TOGGLE, List.of(KeyStroke.of("t", true, false, false)));
         bindings.put(EXTERNAL_EDITOR, List.of(KeyStroke.of("g", true, false, false)));
         bindings.put(FOLLOW_UP, List.of(KeyStroke.of("enter", false, true, false)));
+        // L7 W7（K13/K14；pi keybindings.ts:63,75-78）：全局复制/粘贴图片。
+        // MESSAGE_COPY 另在 overlay 表（tree 选择器语境）同键，两表各解各的。
+        bindings.put(MESSAGE_COPY, List.of(KeyStroke.of("x", true, false, false)));
+        bindings.put(PASTE_IMAGE, List.of(
+            KeyStroke.of("v", true, false, false),
+            KeyStroke.of("v", false, true, false)));
         // pi keybindings.ts:71-74（裁决③）：Windows/WSL ⇒ alt+q，其余 alt+up——
         // 单键不双绑（双绑会让 Alt+Q 在非 Windows 吃掉编辑器输入）。
         bindings.put(DEQUEUE, windowsKeybindings
@@ -199,6 +393,15 @@ public final class KeybindingsManager {
         overlayBindings.put(INPUT_NEW_LINE, List.of(
             KeyStroke.of("enter", false, false, true),
             KeyStroke.of("j", true, false, false)));
+        // L7 W6（S2a/K21）：转录搜索四动作（overlay 语境；主屏 resolve 不命中）。
+        overlayBindings.put(ALT_SEARCH, List.of(KeyStroke.of("f", true, false, true)));
+        overlayBindings.put(ALT_SEARCH_NEXT, List.of(
+            KeyStroke.of("enter", false, false, false),
+            KeyStroke.of("g", true, false, false)));
+        overlayBindings.put(ALT_SEARCH_PREVIOUS, List.of(
+            KeyStroke.of("enter", false, false, true),
+            KeyStroke.of("g", true, false, true)));
+        overlayBindings.put(ALT_SEARCH_CLOSE, List.of(KeyStroke.of("esc", false, false, false)));
     }
 
     /**

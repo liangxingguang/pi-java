@@ -98,7 +98,7 @@ class PiTuiLauncherExitTest {
         var out = capture(buffer);
 
         assertThat(out).contains("exit-dump-marker");
-        assertThat(out).contains("To resume this session: pi-java -r");
+        assertThat(out.replace("\r\n", "\n")).contains("To resume this session:\npi-java -r");
     }
 
     /** resume-hint 臂：不倾倒对话，只留提示行（pi :406-408 alt 屏内容丢弃）。 */
@@ -113,7 +113,7 @@ class PiTuiLauncherExitTest {
         var out = capture(buffer);
 
         assertThat(out).doesNotContain("should-not-appear");
-        assertThat(out).contains("To resume this session: pi-java -r");
+        assertThat(out.replace("\r\n", "\n")).contains("To resume this session:\npi-java -r");
     }
 
     /** 未持久化会话（--no-session）：两臂都不打提示行（pi 仅已持久化）。 */

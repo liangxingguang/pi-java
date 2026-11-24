@@ -5,6 +5,7 @@ import java.util.List;
 
 import com.pijava.tui.util.MarkupTokens;
 import com.pijava.tui.util.TextLayout;
+import com.pijava.tui.util.latex.LatexInline;
 
 import dev.tamboui.style.Style;
 
@@ -93,10 +94,19 @@ public final class MarkdownRenderer {
         switch (block) {
             case MarkdownBlocks.Block.Heading h -> emitHeading(h, theme, defaultStyle, out);
             case MarkdownBlocks.Block.Paragraph p -> {
-                // 软换行分行排放（pi 的 wrapTextWithAnsi 按 \n 分行对位）
-                for (var line : p.text().split("\n", -1)) {
-                    out.add(new LogicalLine(InlineMarkup.render(line, theme),
-                        0, 0, false, defaultStyle));
+                // L7 W7（R8）：块级 $$…$$ 多行布局；否则行内 $…$ 替换后走行内标记。
+                var blockMath = LatexInline.block(p.text());
+                if (!blockMath.isEmpty()) {
+                    for (var line : blockMath) {
+                        out.add(new LogicalLine(TextLayout.escapeMarkup(line),
+                            0, 0, true, defaultStyle));
+                    }
+                } else {
+                    // 软换行分行排放（pi 的 wrapTextWithAnsi 按 \n 分行对位）
+                    for (var line : p.text().split("\n", -1)) {
+                        out.add(new LogicalLine(InlineMarkup.render(LatexInline.inline(line), theme),
+                            0, 0, false, defaultStyle));
+                    }
                 }
             }
             case MarkdownBlocks.Block.Code c -> emitCode(c, theme, out);
@@ -121,7 +131,7 @@ public final class MarkdownRenderer {
             style = style.underlined();
         }
         var prefix = h.level() >= 3 ? "#".repeat(h.level()) + " " : "";
-        out.add(new LogicalLine(prefix + InlineMarkup.render(h.text(), theme),
+        out.add(new LogicalLine(prefix + InlineMarkup.render(LatexInline.inline(h.text()), theme),
             0, 0, false, style));
     }
 
@@ -171,7 +181,7 @@ public final class MarkdownRenderer {
             var marker = item.marker();
             var markup = MarkdownTheme.tag(theme.listBullet())
                 + TextLayout.escapeMarkup(marker) + "[/]"
-                + InlineMarkup.render(item.text(), theme);
+                + InlineMarkup.render(LatexInline.inline(item.text()), theme);
             out.add(new LogicalLine(markup, base, base + marker.length(),
                 false, defaultStyle));
         }
@@ -184,7 +194,7 @@ public final class MarkdownRenderer {
         var border = MarkdownTheme.tag(theme.quoteBorder()) + "│ [/]";
         var contentStyle = fg(theme.quote()).italic();
         for (var line : q.lines()) {
-            out.add(new LogicalLine(border + InlineMarkup.render(line, theme),
+            out.add(new LogicalLine(border + InlineMarkup.render(LatexInline.inline(line), theme),
                 0, 2, false, contentStyle));
         }
     }
@@ -199,7 +209,8 @@ public final class MarkdownRenderer {
         int cols = t.rows().stream().mapToInt(List::size).max().orElse(0);
         // 单元格先过行内渲染（pi 单元格走 renderInlineTokens）
         var rendered = t.rows().stream()
-            .map(row -> row.stream().map(cell -> InlineMarkup.render(cell, theme)).toList())
+            .map(row -> row.stream()
+                .map(cell -> InlineMarkup.render(LatexInline.inline(cell), theme)).toList())
             .toList();
         int[] widths = new int[cols];
         for (var row : rendered) {

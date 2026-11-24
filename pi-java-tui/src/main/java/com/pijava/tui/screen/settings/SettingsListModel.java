@@ -135,6 +135,24 @@ public final class SettingsListModel {
         return filteredItems;
     }
 
+    /** L7 W6（C3）：当前选中索引（0 基）。 */
+    public int selectedIndex() {
+        return selectedIndex;
+    }
+
+    /** L7 W6（C3）：按索引选中（clamp；空表忽略）。 */
+    public void selectIndex(int index) {
+        if (filteredItems.isEmpty()) {
+            return;
+        }
+        selectedIndex = Math.max(0, Math.min(index, filteredItems.size() - 1));
+    }
+
+    /** L7 W6（C3）：可见窗口首行的全局索引。 */
+    public int visibleStartIndex() {
+        return visibleStart();
+    }
+
     /** Current search text. */
     public String query() {
         return query;

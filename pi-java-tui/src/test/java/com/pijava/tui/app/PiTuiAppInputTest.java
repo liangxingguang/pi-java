@@ -338,7 +338,7 @@ class PiTuiAppInputTest {
             assertThat(backend.hasLineContaining("你")).isTrue();
             // The theme must actually style the bubble (regression for the
             // white-box look when TCSS selectors didn't match).
-            assertThat(backend.hasBackgroundCells()).isTrue();
+            assertThat(backend.hasStyledCells()).isTrue();
             // No white border around bubbles; the themed background is enough.
             // The startup card legitimately uses a rounded box, so scope the
             // check to the user-message row.
