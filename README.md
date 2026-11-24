@@ -13,7 +13,6 @@ English | [简体中文](README_zh-CN.md)
 - **Terminal UI** — a Ratatui-style TUI built on [TamboUI](https://tamboui.dev/): interactive chat, settings, slash commands, and theming.
 - **Web UI** — a browser client served by the same agent session, with a gateway token and `--mode web --port <port>`.
 - **Durable sessions** — SQLite + JSONL double-track storage, full-text search, branch caching, and crash recovery.
-- **Remote sessions** — CBOR protocol with client/server modules and an RPC mode (`--mode rpc`).
 - **Self-contained distribution** — a shaded fat jar plus a jlink-reduced JRE, packaged per platform by `dist.sh` / `install.sh` / `install.cmd`.
 
 ## Requirements
@@ -79,9 +78,6 @@ Dependencies flow bottom-up; each module depends only on the modules listed.
 | `pi-java-coding-agent` | `pi-java` CLI entry point + `AgentSession` | `agent-core`, `mcp`, `session-backend-sqlite` |
 | `pi-java-tui` | terminal UI on TamboUI | `agent-core`, `coding-agent` |
 | `pi-java-web` | browser UI and gateway server | `agent-core`, `ai`, `coding-agent` |
-| `pi-java-protocol` | CBOR codec and framing | — |
-| `pi-java-client` | remote session client | `protocol` |
-| `pi-java-server` | remote session server | `protocol`, `client`, `agent-core` |
 | `pi-java-evals` | evaluation framework — conformance, smoke, extension tests | `agent-core`, `coding-agent` |
 | `pi-java-examples` | extension examples (not bundled into `dist`) | `coding-agent`, `tui` |
 | `pi-java-dist` | fat-jar assembly and distribution launchers | `coding-agent`, `tui`, `session-backend-sqlite`, `web` |

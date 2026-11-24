@@ -79,21 +79,6 @@
             </dependency>
             <dependency>
                 <groupId>com.pi-java</groupId>
-                <artifactId>pi-java-protocol</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.pi-java</groupId>
-                <artifactId>pi-java-client</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.pi-java</groupId>
-                <artifactId>pi-java-server</artifactId>
-                <version>${project.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>com.pi-java</groupId>
                 <artifactId>pi-java-coding-agent</artifactId>
                 <version>${project.version}</version>
             </dependency>

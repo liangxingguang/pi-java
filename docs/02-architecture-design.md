@@ -44,15 +44,6 @@ graph TB
         API --> AUTH
     end
 
-    subgraph proto["pi-java-protocol"]
-        CBOR["CBOR codec + framing"]
-    end
-
-    subgraph remote["Remote Session"]
-        CLIENT["pi-java-client"]
-        SERVER["pi-java-server"]
-    end
-
     subgraph telemetry["pi-java-telemetry"]
         TEL["contracts · noop · otel"]
     end
@@ -62,8 +53,6 @@ graph TB
     coding --> tui
     agent --> ai
     ai --> telemetry
-    CBOR --> CLIENT
-    CBOR --> SERVER
 ```
 
 ### 1.2 模块依赖方向
@@ -77,8 +66,6 @@ telemetry ← ai ← mcp ← coding-agent ← tui
                      └ session-backend-sqlite
 coding-agent ← evals
 coding-agent + tui ← examples
-protocol ← client
-protocol ← server
 ```
 
 禁止反向依赖，禁止循环依赖，禁止跨层穿透调用。
@@ -87,7 +74,7 @@ protocol ← server
 
 ## 2. Maven 模块结构
 
-根 `pom.xml` 当前声明 **15 个子模块**；连同根 POM，reactor 共 16 个。
+根 `pom.xml` 当前声明 **12 个子模块**；连同根 POM，reactor 共 13 个。
 
 ```
 pi-java/
@@ -100,9 +87,6 @@ pi-java/
 ├── pi-java-session-backend-sqlite/  ← 独立 SQLite 后端
 ├── pi-java-coding-agent/            ← CLI、AgentSession、扩展与 MCP 工具适配
 ├── pi-java-tui/                     ← 终端 UI
-├── pi-java-protocol/                ← CBOR 协议（R1 历史面）
-├── pi-java-client/                  ← 远程会话客户端（R1 历史面）
-├── pi-java-server/                  ← 远程会话服务端（R1 历史面）
 ├── pi-java-web/                     ← 本仓独有的 Web UI
 ├── pi-java-evals/                   ← 评估框架
 ├── pi-java-examples/                ← Java 示例与验收规格，不进 dist
@@ -119,7 +103,6 @@ pi-java/
 | sqlite-backend | —（pi 参照后端已删） | 独立 SQLite 后端 |
 | coding-agent | `packages/coding-agent` | CLI 与 AgentSession |
 | tui | `packages/tui`＋coding-agent 交互面 | 终端 UI |
-| protocol/client/server | pi 旧实验发布面 | 保留现有代码，按 R1 不对齐 |
 | web | — | 本仓独有 Web UI |
 | evals | `packages/evals` | 评估框架 |
 | examples | `packages/coding-agent/examples` | Java 验收规格 |

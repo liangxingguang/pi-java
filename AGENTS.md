@@ -4,21 +4,19 @@ Guidance for AI coding agents working in this repository.
 
 ## Architecture Overview
 
-**pi-java** is a Pure Java (JDK 25) port of [pi](https://github.com/earendil-works/pi), an AI coding agent. The project has 11 Maven modules (no JPMS; modules run on the classpath) with strict bottom-up dependencies:
+**pi-java** is a Pure Java (JDK 25) port of [pi](https://github.com/earendil-works/pi), an AI coding agent. The project has 12 Maven submodules (no JPMS; modules run on the classpath) with strict bottom-up dependencies:
 
 ```
 telemetry ← ai ← agent ← coding-agent
                          ← tui
               agent ← session-backend-sqlite
               coding-agent ← evals
-              protocol ← client
-              protocol ← server
 ```
 
 ## Key Resources
 
 - **CLAUDE.md** — commands, coding conventions, SDK entry points
-- **docs/01-requirements-analysis.md** — 35 functional + 10 non-functional requirements
+- **docs/01-requirements-analysis.md** — 32 functional + 10 non-functional requirements
 - **docs/02-architecture-design.md** — module structure, layer dependencies, core interfaces
 - **docs/03-detailed-design.md** — class-level design: Entry/LaneRecord, AgentHarness, SessionStorage/Repository, SQLite schema, JSONL format, TamboUI components, slash commands, CLI parameters
 - **docs/04-open-items-register.md** — open items register (the "what is still not aligned" ledger)

@@ -13,7 +13,6 @@
 - **终端 UI** —— 基于 [TamboUI](https://tamboui.dev/) 的 Ratatui 风格 TUI：交互对话、设置、slash 命令与主题。
 - **Web UI** —— 与同一 agent 会话相连的浏览器客户端，带网关 token，使用 `--mode web --port <port>` 启动。
 - **持久化会话** —— SQLite + JSONL 双轨存储、全文检索、分支缓存与崩溃恢复。
-- **远程会话** —— CBOR 协议与 client/server 模块，并提供 RPC 模式（`--mode rpc`）。
 - **自包含分发** —— 阴影打包的 fat jar 加 jlink 精简 JRE，由 `dist.sh` / `install.sh` / `install.cmd` 按平台打包。
 
 ## 环境要求
@@ -79,9 +78,6 @@ java -jar pi-java-dist/target/pi-java.jar --mode web --port 8787
 | `pi-java-coding-agent` | `pi-java` CLI 入口 + `AgentSession` | `agent-core`、`mcp`、`session-backend-sqlite` |
 | `pi-java-tui` | 基于 TamboUI 的终端 UI | `agent-core`、`coding-agent` |
 | `pi-java-web` | 浏览器 UI 与网关服务 | `agent-core`、`ai`、`coding-agent` |
-| `pi-java-protocol` | CBOR 编解码与分帧 | — |
-| `pi-java-client` | 远程会话客户端 | `protocol` |
-| `pi-java-server` | 远程会话服务端 | `protocol`、`client`、`agent-core` |
 | `pi-java-evals` | 评测框架 —— 一致性、冒烟、扩展示例测试 | `agent-core`、`coding-agent` |
 | `pi-java-examples` | 扩展示例（不进 `dist`） | `coding-agent`、`tui` |
 | `pi-java-dist` | fat jar 组装与分发启动器 | `coding-agent`、`tui`、`session-backend-sqlite`、`web` |

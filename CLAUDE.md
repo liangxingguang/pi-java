@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **pi-java** — Pure Java (JDK 25) 复刻 [pi](https://github.com/earendil-works/pi) AI 编码代理。代码在 `D:\workplaceForai\pi-java`，参考原项目在 `D:\workplaceForai\pi`。
 
-15 个 Maven 子模块，依赖方向自下而上（`A ← B` 表示 B 依赖 A）：
+12 个 Maven 子模块，依赖方向自下而上（`A ← B` 表示 B 依赖 A）：
 
 ```
 telemetry ← ai ← mcp ← coding-agent ← tui
@@ -15,8 +15,6 @@ telemetry ← ai ← mcp ← coding-agent ← tui
                      └ session-backend-sqlite
 coding-agent ← evals
 coding-agent + tui ← examples
-protocol ← client
-protocol ← server
 ```
 
 命名空间：`com.pijava`（包名） / `com.pi-java`（Maven groupId）。
@@ -43,8 +41,8 @@ commands: `mvn clean verify`, `mvn test -pl <module> -am`, `mvn checkstyle:check
 
 | 文档 | 内容 |
 |------|------|
-| `docs/01-requirements-analysis.md` | 35 功能需求 + 10 非功能需求 |
-| `docs/02-architecture-design.md` | 15 个子模块、分层依赖、核心接口 |
+| `docs/01-requirements-analysis.md` | 32 功能需求 + 10 非功能需求 |
+| `docs/02-architecture-design.md` | 12 个子模块、分层依赖、核心接口 |
 | `docs/03-detailed-design.md` | 类级设计：Entry/LaneRecord、AgentHarness、SessionStorage/Repository、SQLite schema、JSONL 格式、TamboUI 业务组件、slash 命令、CLI 参数 |
 | `docs/04-open-items-register.md` | 当前未结项与有效裁决 |
 | `docs/05-module-alignment-map.md` | 新基线七层读数与计分口径；明细在 `docs/map/` |
