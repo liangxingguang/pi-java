@@ -22,7 +22,7 @@
 >   已在 L1 收口时直接落地：`49336f70`）；
 >   strict 工具「无类型节点降级＋按会话记忆超限」与 lazy 初始化取消映射 `stopReason: aborted`
 >   也仍未落，归 P2 余项/P5。**2026-11-22 复验收口**：lazy 取消映射已落（B291 `c8df0315`）；
->   无类型节点判据与暖请求 `disableContinuation` 已落（[`14-l1-residual-alignment-design.md`](14-l1-residual-alignment-design.md)）。
+>   无类型节点判据与暖请求 `disableContinuation` 已落（docs/14）。
 > - P3 部分完成（2026-11-21）：`fca70024`（catalog 规则按 `a00a5048d` 重新 vendor、上游快照重取、
 >   18 分片重生成：645 chat／74 image，radius 基线 28→39）、`21ec26b0`（默认模型表同步：
 >   Anthropic Opus 5.5、OpenAI GPT-6.2 Sol、Google gemini-4-argon 等）。
@@ -35,7 +35,7 @@
 >   三个新上游键并保留既有 15 键原序（OpenRouter／Radius 快照不重取），故既有 18 个分片
 >   逐字节未变；新增分片首条顺序钉在提交快照上。
 > - P0 预审计完成（2026-11-21）：五组只读取证按 `a00a5048d` 逐项重判（新单元／既有单元重判），
->   投影读数已登记 [`docs/05` §1.2](05-module-alignment-map.md) 与各层地图（全仓约 **91.0%**，
+>   投影读数已登记各层地图（全仓约 **91.0%**，
 >   旧锚点正式读数 94.9%）。**不等同 P0 闭环**：正式逐行重判、编号／权重裁定与
 >   `CURRENT_PI_PIN` 切换仍归 P12。新发现的两处原稿偏差已在上方修正。
 > - P10 已完成（2026-11-21）：`87ae0bfe`（中止批次仍逐调用补 `Operation aborted`
@@ -49,16 +49,16 @@
 > - L1 收口完成（2026-11-22）：B289 `49336f70`、B290 `6d393725`、B291 `c8df0315`、B292 `083d3552`；
 >   L0 的 `telemetryNow` 已由 `f0841d49` 回补。`map/02` 记 L1 **245.5/246＝99.8%**（余 cache 策略单元
 >   0.5，属模块归属）。**复验补记**：strict 无类型节点判据与暖请求
->   `disableContinuation` 于当晚补入（[`14`](14-l1-residual-alignment-design.md)）；第二次复验补
->   #114 根 schema 白名单、`session-resources` 清理与线程记账顺序（[`15`](15-l1-residual-audit-followup-design.md)），
->   读数不变。**收尾**：缓存预热策略按 [`16`](16-l1-cache-warming-policy-design.md) 迁入 ai
+>   `disableContinuation` 于当晚补入（docs/14）；第二次复验补
+>   #114 根 schema 白名单、`session-resources` 清理与线程记账顺序（docs/15），
+>   读数不变。**收尾**：缓存预热策略按 docs/16 迁入 ai
 >   （`CacheWarmingPolicy`）⇒ #6 改判对齐，L1 **246/246＝100%**。
-> - P9 已完成（2026-11-22，[`13-mcp-p9-design.md`](13-mcp-p9-design.md)）：9 项缺口拆成 S1–S7 并按阶段落地
+> - P9 已完成（2026-11-22，docs/13）：9 项缺口拆成 S1–S7 并按阶段落地
 >   ——`02b6bf59`（关闭序列，#22）、`db9f8646`（按块行读取，#21／#22）、`d80b326f`（JSON 限长＋body 取消，
 >   #25／#26）、`cd942ef`（OAuth 刷新＋换码校验，#36）、`f8349e5`（两段式 sign-in＋loopback 拆分，#39／#42）、
 >   `e803730`（CLI provider token，#67／#68）、`e40eea1`（`PipeTransport`，#96）。`map/07` 记 L2
 >   **123/123＝100%**（分母 +1 为 `#96`，按设计稿 D1 计入分母）。
-> - L5 收口完成（2026-11-23，[`19-l5-coding-agent-design.md`](19-l5-coding-agent-design.md)）：11 笔提交
+> - L5 收口完成（2026-11-23，docs/19）：11 笔提交
 >   ——`d119681f`＋`ff71e4d3`（W1 auth login/logout 与 ai 结构化 AuthUrl）、`6f19b8d8`（W3 cwd 缺失三臂）、
 >   `8658dc6e`（W4 选型恢复＋thinking 记录）、`992ccdd5`（W5 替换/诊断/RPC shutdown/信号）、
 >   `7859c0b2`（W2＋W7 cache 默认/暖行合并/changelog/copy/reasoning 提示）、`816bae95`（W8 逐包结果/capture）、
@@ -66,13 +66,13 @@
 >   `edaedc5f`（W11 模型可见文本/引号/摘要输入）、`0f7f6fb4`（cache 测试适配）。`map/04` 记 L5
 >   **461/461＝100%**（llama 1 按 F1／R2 出分母；13 重开单元恢复＋9 新单元落地，其中 N-4 out）。
 >   P6 随 W1/W2/W9/W10 完成；P7 的生命周期/扩展面随 W5/W6/W7 完成，`render()` 契约仍待 P8。
-> - P8 随 L7 W1–W8 完成；P12 于 2026-11-24 收口；P11 已完成（2026-11-24，evals `docs/20`、examples [`docs/30`](30-l8-examples-design.md)）。
+> - P8 随 L7 W1–W8 完成；P12 于 2026-11-24 收口；P11 已完成（2026-11-24，evals `docs/20`、examples docs/30）。
 >
 > **现状速览（2026-11-24，P12 收口＋B293）**：当前锚点 `a00a5048d`，发布读数 **1,369.5/1,389＝98.6%**（D 至 D316、B 至 B293，B293 已销号）；
 > 13 个阶段全部完成（P0–P12），P7 的 `render()` 契约随 L7 W3（R31 投影缓存＋窄差 D287）收口、P8 随 L7 W1–W8 完成；
 > L8 examples **88/88**。旧锚点 `56cae7823` 转参照（94.9%，仅历史对照）。
 >
-> **排序裁决（2026-11-22，用户）**：**由底往上、逐层对齐，能对齐就先对齐**。因此不再按 P5→P8 的横向包序推进，改为**先把 L1 做到 100%**（B289–B292 ＋ cache 策略单元 ＋ P4 threads），再做 L2→L3→…；P5 顺延到 L3 收口时做。L0 的 2 个 S 级项（`telemetryNow`、`renderTrace` 转义）并入同批先清。设计与提交切分见 [`11-l1-ai-completion-design.md`](11-l1-ai-completion-design.md)。
+> **排序裁决（2026-11-22，用户）**：**由底往上、逐层对齐，能对齐就先对齐**。因此不再按 P5→P8 的横向包序推进，改为**先把 L1 做到 100%**（B289–B292 ＋ cache 策略单元 ＋ P4 threads），再做 L2→L3→…；P5 顺延到 L3 收口时做。L0 的 2 个 S 级项（`telemetryNow`、`renderTrace` 转义）并入同批先清。设计与提交切分见 docs/11。
 >
 > 术语释义：
 > - **锚点**：pi 的一个固定 git 提交，pi-java 以它作为行为对照基准，取证只走 `git show <sha>:<path>`。
@@ -155,7 +155,7 @@
 
 ## 3. 分层差异
 
-**完成度总览**（数据源：`docs/05` §1 发布读数与 §1.2 过程读数；本表只作进度视图，数值以 `docs/05` 与各层地图为准）：
+**完成度总览**（数据源：`docs/05` §1 发布读数与各层地图；本表只作进度视图，数值以 `docs/05` 与各层地图为准）：
 
 | 层 | 旧锚点（`56cae7823`） | 预审计投影（`a00a5048d`） | **发布（`a00a5048d`，2026-11-24）** | 主要缺口 | 归属包 |
 |---|---:|---:|---:|---|---|
@@ -276,7 +276,7 @@ Continue/Fork/Cancel（目标锚点扩为两选项＋取消）、thinking level 
 ### L6 evals
 
 `packages/evals` 只有 `package.json` 的版本与依赖更新，`src` 无行为变化。**2026-11-23 已按
-`a00a5048d` 复核（[`docs/20`](20-l6-evals-recheck-design.md)）**：diff 仅 `package.json`（+4/−5，
+`a00a5048d` 复核（docs/20）**：diff 仅 `package.json`（+4/−5，
 版本 1.4.0→1.6.0、依赖同步、`clean` 脚本 shx→node），`src`／`evals/`／`test/` 逐字节未变
 ⇒ 24 行判定与 pi 证据全部续用、零代码，唯一存疑 #20 维持（oracle 未变，收口归 L7 状态行）。
 L6 定格 **48.0/49＝98.0%**（复核读数；2026-11-24 B293 落地后改判 **49.0/49＝100%**）。
@@ -298,31 +298,31 @@ L6 定格 **48.0/49＝98.0%**（复核读数；2026-11-24 B293 落地后改判 *
 
 web 呈现层仍是 pi-java 独有，不计入 pi 分母。新 apps 不改变现有的 16 个 web 事件/线格式单元。
 
-> **2026-11-23 复核（[`docs/21`](21-l7-recheck-plan.md)）**：上表十行逐项核实**全部成立**（4 个行内子机制补记）；
+> **2026-11-23 复核（docs/21）**：上表十行逐项核实**全部成立**（4 个行内子机制补记）；
 > 预审计 12 项成立（C21/R30–R33/K41 主体在 `packages/tui`）；**漏项 11 项**登记待分段定权重；
 > 旧基线 10 行复核：9 行翻正「对齐」、S16 降「存疑」，旧锚点正式读数修正 **178.5/244＝73.2%**。
 > 无法闭环预判：C21/R30（TamboUI 外部框架）、K40/K12（JVM 无 signal API）、R33（性能契约）按窄差 D 处置。
 > **分段计划 W1–W8 见 docs/21 §7，按「状态面→工具卡→缓存契约→补全→平台→全屏→屏幕图→收尾」推进。**
 >
-> **2026-11-23 W1 已收（[`docs/22`](22-w1-status-design.md)）**：C5 loader/spinner、C6 working 指示器
+> **2026-11-23 W1 已收（docs/22）**：C5 loader/spinner、C6 working 指示器
 > （TurnStart 置／AgentEnd 清＋扩展三方法 TUI 臂）、C7 bordered loader、C8 cancellable loader 全部
 > 缺失→对齐（＋8.0 ⇒ 186.5/244＝76.4%；投影回算 190.0/259）；C10 文案复核成立。窄差 D：N1
 > embedded editor indicator、N2 IdleStatus/clearOnShrink。
 >
-> **2026-11-23 W2 已收（[`docs/23`](23-w2-design.md)）**：R10 diff 渲染（parseDiffLine＋1:1 词级
+> **2026-11-23 W2 已收（docs/23）**：R10 diff 渲染（parseDiffLine＋1:1 词级
 > intra-line＋缩进剥离，漏项#5）、R17/R18/R19 三消息卡（transformer＋messageId/timestamp 接线，
 > 漏项#6）、R26 args 渲染、K37/C14 点击展开（拖拽通道等价）翻**对齐**；R25 复核翻正（实现已在）；
 > R12 工具卡三态 bg＋fallback 折叠、R13 bash 卡（漏项#7）缺失→**存疑**（流式通道 D197/无消费面维持）。
 > ＋9.5 ⇒ **196.0/244＝80.3%**（投影回算 199.5/259＝77.0%）。窄差：customMessageBg 不铺底、
 > bg 只铺文本格、skill collapsed label 色压平；`[reversed]` 反白对位 theme.inverse 无窄差。
 >
-> **2026-11-23 W3 已收（[`docs/24`](24-w3-design.md)）**：新增锚点单元 R30(2)/R31(2)/R32(1)/R33(1)/C21(1)；
+> **2026-11-23 W3 已收（docs/24）**：新增锚点单元 R30(2)/R31(2)/R32(1)/R33(1)/C21(1)；
 > R31 Markdown 顶层块缓存（`MarkdownRenderCache`：源词法缓存＋块 record 复用＋帧界裁剪＋主题/默认样式失配）
 > 与 R32 HTML 注释隐藏（`MarkdownBlocks.stripHtmlComments`：围栏/行内代码感知、独占行清空、两侧空白吞后侧）
 > 翻**对齐**（＋3.0）；R30/R33/C21 按 docs/21 §6 登记窄差 D。⇒ **199.0/251＝79.3%**
 > （投影回算 202.5/259＝78.2%）。窄差 N：三消息卡内部 Markdown 仍走静态路径、图片硬换行无观察面（R14）。
 >
-> **2026-11-23 W4 已收（[`docs/25`](25-w4-design.md)）**：S16 query 未变不重过滤（同族核查无同形缺陷）、
+> **2026-11-23 W4 已收（docs/25）**：S16 query 未变不重过滤（同族核查无同形缺陷）、
 > K25 `@文件`/路径补全（`FileCompleter`＋`FileCompletionPaths`；fd→NIO 有界遍历＝窄差 N）、
 > K26 大粘贴折叠（`EditorPaste`：标记/注册表/展开/重编号/撤销快照）、K31 jump mode（`EditorJump`）、
 > 新增 K41(1) 斜杠 Enter 上下文、C2 选择列表复核（pi 无多选/分组，原注误记；补 ↑↓ wrap＋`(i/n)`＋无匹配）
@@ -330,7 +330,7 @@ web 呈现层仍是 pi-java 独有，不计入 pi 分母。新 apps 不改变现
 > ⇒ **205.5/252＝81.5%**（投影回算 209.0/260＝80.4%）。窄差 N：K25 fd/普通路径自然触发、
 > K26 词删/行删原子性与 CSI-u、K31 键位不读 keybindings.json、C2 描述列。
 >
-> **2026-11-24 W5 已收（[`docs/26`](26-w5-design.md)）**：K35 终端能力探测（`TerminalCapabilities`：
+> **2026-11-24 W5 已收（docs/26）**：K35 终端能力探测（`TerminalCapabilities`：
 > tmux/screen/Herdr/Rex/Orca/Kitty/Ghostty/WezTerm/Warp/iTerm2/WT/Alacritty/vscode/zed/JetBrains/
 > Windows/unknown 逐臂＋`PI_*` 覆盖；`SettingsScreen` 图片门、`PiTuiLauncher` truecolor 同源）、
 > K34 原生剪贴板（`NativeClipboard`：Termux/pbcopy/PowerShell+clip/wl-copy/xclip/xsel ⇒ AWT 回退；
@@ -340,7 +340,7 @@ web 呈现层仍是 pi-java 独有，不计入 pi 分母。新 apps 不改变现
 > ⇒ **210.5/252＝83.5%**（投影回算 214.0/260＝82.3%）。窄差：N1 无 7501 握手、N2 OSC 8 不输出、
 > N3 baseLayoutKey、N4 helper→CLI、N5 登录 auth、N6 APC；D60 `"auto"` 模型。
 >
-> **2026-11-24 W6 已收（[`docs/27`](27-w6-design.md)）**：S2a/K21 转录搜索（`TranscriptSearchIndex/
+> **2026-11-24 W6 已收（docs/27）**：S2a/K21 转录搜索（`TranscriptSearchIndex/
 > Controller/Bar`＋`ctrl+shift+f`/Enter/`ctrl+g`）、S2b/K22 拖拽选区＋copy-on-select＋`ctrl+c`、S2c flash
 > （`FlashNotice`，1000/5000 ms）、C3 设置列表宽度感知（对齐/截断/描述折行/滚动指标/鼠标）、
 > C4 单行 `SingleLineInput`、C13 `TruncatedText`＋`TextColumns`、C15 `DynamicBorder`＋
@@ -349,7 +349,7 @@ web 呈现层仍是 pi-java 独有，不计入 pi 分母。新 apps 不改变现
 > ⇒ **222.5/252＝88.3%**（投影回算 226.0/260＝86.9%）。窄差：N1 搜索条位置、N2 非 ASCII 码点粒度、
 > N3 选择长尾、N4 flash 计时/单条、N5 无 APC 光标标记、N6 子菜单 navigateTo、N7 提示返回 Element；D2 bash-mode 边框。
 > **#20（L6 context footer）顺延 W8**（`SessionSnapshot` 无上下文窗口字段；2026-11-24 B293 已落地，见 §3 L6 行）。
-> **W7 收口（2026-11-24，[`docs/28`](28-w7-design.md)）**：S2d/R14 图片协议、R15/K14 粘贴、
+> **W7 收口（2026-11-24，docs/28）**：S2d/R14 图片协议、R15/K14 粘贴、
 > S18 首次设置向导、S21 show-images、K13 复制键、R8 LaTeX 八行翻对齐（＋8.0）⇒
 > **230.5/252＝91.5%**（投影回算 234.0/260＝90.0%）。窄差：N-W7-1 实机验收、N-W7-2 macOS 路径、
 > N-W7-3 主题预览、N-W7-4 LaTeX 符号长尾；D-W7-1 Mermaid（lovely-mermaid 无 Java 等价）、D-W7-2 独立 show-images 组件。
@@ -367,8 +367,8 @@ web 呈现层仍是 pi-java 独有，不计入 pi 分母。新 apps 不改变现
 
 ⇒ 严格重基线 **86/88≈97.7%**（口径见 `docs/07` §5）。
 
-**收口（2026-11-24，[`30-l8-examples-design.md`](30-l8-examples-design.md)）**：两件已按新锚点补齐，
-保留 D235／D244 窄差 ⇒ L8 **88/88＝100%**（`docs/07` §5、`docs/05` §1.2 已同步）。
+**收口（2026-11-24，docs/30）**：两件已按新锚点补齐，
+保留 D235／D244 窄差 ⇒ L8 **88/88＝100%**（`docs/07` §5、`docs/05` §1 已同步）。
 
 ## 4. 执行计划
 
@@ -377,29 +377,29 @@ web 呈现层仍是 pi-java 独有，不计入 pi 分母。新 apps 不改变现
 **进度（2026-11-23，L5 收口后）**：按「由底往上、逐层对齐」裁决，**L1、L2、L3、L4、L5 五批已收口**
 （L0 的 `telemetryNow` ＋ B289–B292 ＋ P4 threads ＋ `docs/16` cache 策略 ⇒ L1 246/246；P9 S1–S7 ⇒ L2 123/123；
 P5 六行工具语义 ⇒ L3 178/178；`docs/18` 复核 ⇒ L4 44/44；`docs/19` W1–W11 ⇒ L5 461/461，llama 出分母）。
-**L6 复核完成（2026-11-23，[`docs/20`](20-l6-evals-recheck-design.md)）**：零代码，24 行判定全部续用，
+**L6 复核完成（2026-11-23，docs/20）**：零代码，24 行判定全部续用，
 48.0/49＝98.0% 转复核读数，#20 维持（收口归 L7；2026-11-24 B293 落地后改判 49.0/49＝100%）。
-**L7 W1 状态面已收（2026-11-23，[`docs/22`](22-w1-status-design.md)）**：C5–C8 缺失→对齐（＋8.0 ⇒
+**L7 W1 状态面已收（2026-11-23，docs/22）**：C5–C8 缺失→对齐（＋8.0 ⇒
 186.5/244＝76.4%，投影回算 190.0/259＝73.4%）；C10 文案复核成立。
-**L7 W2 工具/消息卡已收（2026-11-23，[`docs/23`](23-w2-design.md)）**：R10/R17/R18/R19/R26/K37 翻对齐＋
+**L7 W2 工具/消息卡已收（2026-11-23，docs/23）**：R10/R17/R18/R19/R26/K37 翻对齐＋
 R25 复核翻正＋C14 元素级等价（窄差 N）；R12/R13 缺失→存疑（卡形面，流式 D197/无消费面维持）
 （＋9.5 ⇒ 196.0/244＝80.3%，投影回算 199.5/259＝77.0%）。
-**L7 W3 渲染缓存契约已收（2026-11-23，[`docs/24`](24-w3-design.md)）**：新增 R30–R33/C21 锚点单元，
+**L7 W3 渲染缓存契约已收（2026-11-23，docs/24）**：新增 R30–R33/C21 锚点单元，
 R31 顶层块缓存＋R32 HTML 注释隐藏翻对齐（＋3.0），R30/R33/C21 窄差 D（199.0/251＝79.3%，
 投影回算 202.5/259＝78.2%）。
-**L7 W4 补全与选择器已收（2026-11-23，[`docs/25`](25-w4-design.md)）**：S16 门控、K25 `@文件`、
+**L7 W4 补全与选择器已收（2026-11-23，docs/25）**：S16 门控、K25 `@文件`、
 K26 粘贴标记、K31 jump、新增 K41、C2 复核全部翻对齐（＋6.5，分母 +1）⇒ **205.5/252＝81.5%**
 （投影回算 209.0/260＝80.4%）；extension-selector 10 行窗口＋`(i/n)`。
-**L7 W5 平台/协议已收（2026-11-24，[`docs/26`](26-w5-design.md)）**：K35 终端能力探测、K34 原生剪贴板、
+**L7 W5 平台/协议已收（2026-11-24，docs/26）**：K35 终端能力探测、K34 原生剪贴板、
 K39 OSC 7501＋`custom().blocked`、K32 键盘协议收窄、K38 复核全部翻对齐（＋5.0）⇒ **210.5/252＝83.5%**
 （投影回算 214.0/260＝82.3%）。
-**L7 W6 全屏长尾已收（2026-11-24，[`docs/27`](27-w6-design.md)）**：转录搜索（S2a/K21）、选择复制
+**L7 W6 全屏长尾已收（2026-11-24，docs/27）**：转录搜索（S2a/K21）、选择复制
 （S2b/K22）、flash（S2c）、设置列表（C3）、单行输入（C4）、truncated-text（C13）、思考等级边框（C15）、
 假光标（C20）、键位提示（K18）十一行翻对齐（＋12.0）⇒ **222.5/252＝88.3%**（投影回算 226.0/260＝86.9%）。
 **W7 已收口**（图像协议/粘贴/向导/show-images/复制键/LaTeX，＋8.0 ⇒ **230.5/252＝91.5%**；
-投影 **234.0/260＝90.0%**，[`docs/28`](28-w7-design.md)）。
+投影 **234.0/260＝90.0%**，docs/28）。
 **W8 已收口**（K17 `keybindings.json` 用户覆盖、S27 `/share` 复核翻正，＋2.0 ⇒ **232.5/252＝92.3%**；
-投影 **236.0/260＝90.8%**，[`docs/29`](29-w8-design.md)）。同段对账：missing-cwd 三选／reasoning drop
+投影 **236.0/260＝90.8%**，docs/29）。同段对账：missing-cwd 三选／reasoning drop
 泛化／changelog 写回／model-selector 刷新保偏好已在 W2–W5 落地（零代码）；"to resume" 两行＋flush、
 伙伴 `✦` 落地；品牌动画 N-W8-1、彩蛋 D-W8-2、export 形状 D-W8-3、排队区 D-W8-4 登记窄差。
 **L7 分段收口**（2026-11-24 W8 后 **232.5/252＝92.3%**）；#20（L6 context footer）已随 **B293** 落地销号（`SessionSnapshot` 扩 `ContextUsage`/`autoCompact`，`StatusBar` 显示 `percent%/window (auto)`），L6 改判 **49.0/49＝100%**。
@@ -408,16 +408,16 @@ K39 OSC 7501＋`custom().blocked`、K32 键盘协议收窄、K38 复核全部翻
 
 | 阶段 | 状态 | 证据／剩余 |
 |---|---|---|
-| P0 换锚重测 | **完成（P12 收口）** | `docs/05` §1（`a00a5048d` 发布读数）；`CURRENT_PI_PIN` 已于 2026-11-24 切换；§1.2 保留为过程记录 |
+| P0 换锚重测 | **完成（P12 收口）** | `docs/05` §1（`a00a5048d` 发布读数）；`CURRENT_PI_PIN` 已切换；过程记录归档在 git |
 | P1 schema 语义 | **完成** | `9cccfe23` |
 | P2 AI wire | **完成** | `dc59f0c7`；P2b `734c7a21`；P2c `65857596`／`68eb84ef`／`14e90c8b`；Codex 专属形状不适用（R2 无该车道）；余项 B289–B292 已随 L1 收口落（`49336f70`／`6d393725`／`c8df0315`／`083d3552`） |
 | P3 AI 数据 | **完成** | `fca70024` `21ec26b0` `753bdc30` `d035ffa0`；分片 23／695 chat；26 个内置 provider |
-| P4 Anthropic threads | **完成（2026-11-22，冒烟豁免）** | `177acc36` `25e00d5b` `3f0ac7a6` `ecf4c6f1` `93b4bfe4`；设计／实施口径见 [`12`](12-anthropic-threads-design.md)；真机冒烟经用户裁决豁免 |
+| P4 Anthropic threads | **完成（2026-11-22，冒烟豁免）** | `177acc36` `25e00d5b` `3f0ac7a6` `ecf4c6f1` `93b4bfe4`；设计／实施口径见 docs/12；真机冒烟经用户裁决豁免 |
 | P5 agent-core 工具语义 | **完成（2026-11-22，`docs/17`）** | 六行／17 权重齐活：`1e236a2e` find＋GlobPattern、`3d27b2f3` grep、`592eb5c9` read 流式、`d73907c4` edit EOL、`885d7c9a` bash 超时＋powershell 后缀＋代理对截断；L3 **178/178＝100%** |
 | P6 CLI/认证/设置 | **完成（2026-11-23，`docs/19` W1/W2/W9/W10）** | auth login/logout、`cacheWarming` 默认 idle、选择器光标、登录 URL；L5 **461/461＝100%** |
 | P7 扩展/生命周期 | **主体完成（2026-11-23，`docs/19` W5/W6/W7）** | 替换/诊断/RPC shutdown/信号、恢复 loadout、六面 Markdown、reasoning 提示；`render()` 契约仍待 P8 |
 | P8 TUI | 未开始 | 旧缺口 73.4% 的 C5/C6 与渲染长尾在此收口 |
-| P9 MCP | **完成（2026-11-22，S1–S7）** | L2 **123/123＝100%**（投影 115.0/123 → 收口；分母 +1 为 `#96 PipeTransport`）；设计与逐阶段判据见 [`13`](13-mcp-p9-design.md) §4／§8 |
+| P9 MCP | **完成（2026-11-22，S1–S7）** | L2 **123/123＝100%**（投影 115.0/123 → 收口；分母 +1 为 `#96 PipeTransport`）；设计与逐阶段判据见 docs/13 §4／§8 |
 | P10 agent-core 中止 | **完成** | `87ae0bfe`；`streamProxy` 按 R5 出分母（`map/03` #68） |
 | P11 telemetry/evals/examples | **完成（2026-11-24，`docs/30`）** | telemetry：`f0841d49`（`TelemetryClock.now()` 微秒墙钟，T9 回补，L0 36/36）—— T20（`renderTrace` 转义）维持 R5/w0 出分母；evals 零代码复核（`docs/20`）；L8 plan-mode／subagent 补齐 ⇒ **88/88** |
 | P12 收尾 | 未开始 | 切锚、回填 `docs/04`／`docs/05` 合计、全量 verify |
@@ -458,7 +458,7 @@ K39 OSC 7501＋`custom().blocked`、K32 键盘协议收窄、K38 复核全部翻
 |---|---|---|
 | pi 移动快 | 20 天 818 个提交；本轮刚重新拉取就从 edfe6b2ef 前进到 a00a5048d；锚点一松就再次漂移 | P0 冻结 SHA；本轮期间不追 main；后续按版本另开换锚周期 |
 | pi-schema 完整方言 | `$ref`、相对 `$id`、format、coercion 边角多；完整移植成本高 | 先做模型可见行为；用 pi 夹具逐条钉；Java 不移植构建器 API |
-| Anthropic message threads | 服务端续接、前缀哈希、回退与清理改动请求生命周期 | 已按独立设计稿落地（[`12`](12-anthropic-threads-design.md)）；faux ＋ `RecordingHttpServer` 观测已绿，真实 provider 冒烟经裁决豁免 → **该风险已关闭** |
+| Anthropic message threads | 服务端续接、前缀哈希、回退与清理改动请求生命周期 | 已按独立设计稿落地（docs/12）；faux ＋ `RecordingHttpServer` 观测已绿，真实 provider 冒烟经裁决豁免 → **该风险已关闭** |
 | TUI 框架差异 | Java 用 TamboUI；D255–D257 已登记键位、全屏、SGR 面差异；新 `render()` 契约映射不同 | P8 单独设计；只对可见行为计分，框架面按既有 D 项 |
 | 旧 TUI 缺口被新差异掩盖 | 旧账面 73.4%，新锚点又加 API/性能项 | P0 先分列「旧缺口」与「新差异」；不混算 |
 | 平台面 | Windows/macOS 的 fd、PowerShell、SIGTSTP、终端能力差异 | 沿用 D 项口径；只对可观察行为判定 |

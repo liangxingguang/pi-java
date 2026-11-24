@@ -36,7 +36,7 @@
 
 - 保留（16，pi 侧未变）：hello、structured-output、dynamic-tools；permission-gate、protected-paths、confirm-destructive、dirty-repo-guard、project-trust；input-transform、input-transform-streaming、inline-bash；pirate、claude-rules、prompt-customizer；event-bus、provider-payload。
 - 主动出分母（5，D237）：overlay-test、overlay-qa-tests、snake、space-invaders、mac-system-theme。
-- 其余 **72** 件按 W1–W8 实施并注册（注册表 70 项、模块 401 测 0 失败、SpotBugs 0 告警）；逐批明细见 git 历史与 `docs/map/04`，窄差见 D235–D253。
+- 其余 **72** 件已实施并注册（注册表 70 项、模块 401 测 0 失败、SpotBugs 0 告警）；逐件明细见 `docs/map/04`，窄差见 D235–D253。
 
 ## 4. 新基线验收口径
 
@@ -46,17 +46,5 @@
 4. 优先覆盖流式工具参数、`before_agent_start`、工具加载、MCP 和会话恢复等新行为。
 5. 每个示例都有独立验收测试；外部系统使用假模型、假进程或隔离服务。
 6. 新分母由本次清点产生（**88**＝102 − 8 外部运行时 − 1 R5 − 5 范围面主动出分母，D232／D237），旧 105/102 件不再作为翻“对齐”的条件。
-
-## 5. 新锚点 `a00a5048d` 评估（2026-11-21 预审计 → 2026-11-24 P12 正式）
-
-- **分母仍为 88**：`packages/coding-agent/examples` 在两锚点间有 18 个文件变化（+695/−662），sandbox 整个目录删除——sandbox 早已按 D232（外部运行时）出分母，删除文件不改变计分件数；无新增示例，Java 注册表仍 70 项。
-- **严格重基线：86/88 ≈ 97.7%**（旧锚点正式读数 88/88＝100%）。两件在分母内且被重写、Java 仍是旧行为：
-  - **plan-mode**：新锚点加入 thinking 块、最后一个 `Plan:` 头、整行编号步骤、`[DONE: 1]`/`Step N done` 变体、`allStepsComplete` 回落、`deliverAs: nextTurn`；Java 只支持文本块、首个 Plan 头/50 字符截断/`[DONE:n]`、`triggerTurn=false`。**注意 D237 只排除 overlay/game/mac，不排除 plan-mode**。
-  - **subagent**：563 行重写（状态/启动前中止/失败证据/`truncateHead`/`deliverAs` 变体）；Java 仍只有 error/completion 与字节截断。**D244 只是注入式 runner 的窄差，不排除 subagent**。
-- **收口（2026-11-24，[`30-l8-examples-design.md`](30-l8-examples-design.md)）**：两件已按新锚点补齐——
-  plan-mode（thinking 块、最后一个 `Plan:` 头、整行编号、`[DONE 1]`／`Done: 1`／`Step N done`、`allStepsComplete` 回落、widget 60 截断、`deliverAs: nextTurn`）；
-  subagent（状态机、启动前中止、失败证据、`truncateParallelOutput`／`truncateModelOutput`、`chain` 参数面、unknown agent、project agent 确认、`tool_result` isError）。
-  保留既有窄差 D235（主题/删除线文本降级）与 D244（注入式 runner＋TUI 渲染不移植）⇒ L8 **88/88＝100%**。
-  P12 已于 2026-11-24 发布；口径见 [`05-module-alignment-map.md` §1](05-module-alignment-map.md)。
 
 详细层级顺序见 [`09-pi-latest-reanchor-plan.md`](09-pi-latest-reanchor-plan.md)。
