@@ -160,7 +160,8 @@ class CompactionInFlightTest {
     private static SnapshotService snapshotService(
             LaneState lane, ExecutionContext.TokenCounter tokenCounter) {
         return new SnapshotService(lane, new HarnessEventBus(), tokenCounter,
-            () -> MODEL.modelName(), java.util.Set::of);
+            () -> MODEL.modelName(), java.util.Set::of,
+            m -> 200_000, com.pijava.agent.compaction.CompactionSettings::defaults);
     }
 
     private static LaneState populatedLane() {

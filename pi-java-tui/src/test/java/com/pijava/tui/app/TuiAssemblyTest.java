@@ -19,7 +19,7 @@ class TuiAssemblyTest {
         var screen = new ChatScreen();
         screen.updateSnapshot(new SessionSnapshot(
             "demo", "google/gemini-2.5-flash", "idle",
-            123L, 2, List.of("read", "write"), List.of()));
+            123L, 2, List.of("read", "write"), List.of(), null, false));
 
         assertThat(screen.render()).isNotNull();
         assertThat(screen.statusBar()).isNotNull();

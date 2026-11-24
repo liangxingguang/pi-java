@@ -93,19 +93,6 @@ abstract class HarnessBootstrap implements AutoCloseable {
         this.hookSystem = new HookSystem(lane);
         config.skills().values().forEach(skillManager::register);
 
-        // Build snapshot service first (referenced by execution context)
-        this.snapshotService = new SnapshotService(
-            lane, eventBus, tokenCounter,
-            () -> lane.model != null ? lane.model.modelName() : "unknown",
-            () -> lane.activeTools.stream().map(AgentTool::name)
-                .collect(java.util.stream.Collectors.toSet()));
-
-        // Build queue manager first (referenced by the execution context)
-        this.queueManager = new QueueManager(
-            lane,
-            () -> lane.steeringMode,
-            () -> lane.followUpMode);
-
         // B223（原 docs/47）：压缩设置晚读口 —— 每次决策按 lane 的**当前**模型现解析
         //（pi getCompactionSettings(this.model) 四调用点）；setModel/modelOverrides/
         // 设置文件改动下次决策即生效；resolver == null ⇒ 引擎旧契约「不接＝不压」。
@@ -115,6 +102,23 @@ abstract class HarnessBootstrap implements AutoCloseable {
             ? null
             : compactionResolver.apply(lane.model);
         Supplier<CompactionSettings> compactionSettings = compactionSettingsSupplier;
+
+        // Build snapshot service first (referenced by execution context)。
+        // B293：快照携带 context usage（pi footer 的 `42.2%/272k (auto)`）；窗口与
+        // 压缩开关均复用引擎同一晚读口。
+        this.snapshotService = new SnapshotService(
+            lane, eventBus, tokenCounter,
+            () -> lane.model != null ? lane.model.modelName() : "unknown",
+            () -> lane.activeTools.stream().map(AgentTool::name)
+                .collect(java.util.stream.Collectors.toSet()),
+            config.contextWindow(),
+            compactionSettingsSupplier);
+
+        // Build queue manager first (referenced by the execution context)
+        this.queueManager = new QueueManager(
+            lane,
+            () -> lane.steeringMode,
+            () -> lane.followUpMode);
 
         // Build execution context and the run lifecycle
         var execCtx = new ExecutionContext(

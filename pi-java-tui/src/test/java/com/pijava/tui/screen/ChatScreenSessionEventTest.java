@@ -3,6 +3,7 @@ package com.pijava.tui.screen;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.pijava.agent.context.ContextUsage;
 import com.pijava.agent.harness.SessionSnapshot;
 import com.pijava.coding.agent.core.AgentSessionEvent;
 import com.pijava.coding.agent.core.AgentSessionEvent.CompactionReason;
@@ -339,7 +340,7 @@ class ChatScreenSessionEventTest {
         var screen = new ChatScreen();
         screen.updateSnapshot(new SessionSnapshot(
             "demo", "google/gemini-2.5-flash", "running",
-            123L, 2, List.of(), List.of()));
+            123L, 2, List.of(), List.of(), null, false));
         screen.onSessionEvent(new AgentSessionEvent.TurnStart());
 
         var row = renderRow(screen.statusBar(), 60);
@@ -352,11 +353,24 @@ class ChatScreenSessionEventTest {
     }
 
     @Test
+    void theStatusBarRendersThePiContextFooter() throws Exception {
+        var screen = new ChatScreen();
+        screen.updateSnapshot(new SessionSnapshot(
+            "demo", "google/gemini-2.5-flash", "idle",
+            0L, 0, List.of(), List.of(),
+            new ContextUsage(115_840.0, 272_000, 42.2), true));
+
+        var row = renderRow(screen.statusBar(), 120);
+        assertThat(row).contains("42.2%/272k (auto)");
+        assertThat(row).containsPattern("\\d+(?:\\.\\d+)?%\\/272k(?: \\(auto\\))?");
+    }
+
+    @Test
     void theIndicatorWinsOverTheSnapshotInTheStatusBar() throws Exception {
         var screen = new ChatScreen();
         screen.updateSnapshot(new SessionSnapshot(
             "demo", "google/gemini-2.5-flash", "running",
-            123L, 2, List.of(), List.of()));
+            123L, 2, List.of(), List.of(), null, false));
 
         screen.onSessionEvent(new AgentSessionEvent.AutoRetryStart(1, 3, 4500L, "boom"));
 
