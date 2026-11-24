@@ -8,7 +8,7 @@
 
 pi 是持续演进的 TypeScript AI 编码代理，核心能力分为 LLM API、Agent 运行时和 coding-agent 三层。包数量、Provider 数量与具体行为以固定对齐锚点为准；本文不使用立项时的目录规模作为当前事实。
 
-pi-java 的目标是使用 **JDK 25** 以 **Pure Java** 方式实现相同的主流可观察行为，同时利用 Java 平台的类型、并发与存储能力。当前锚点为 `56cae7823`，范围裁决见 docs/04 §5，取证规则见 `docs/map/ANCHOR.md`。
+pi-java 的目标是使用 **JDK 25** 以 **Pure Java** 方式实现相同的主流可观察行为，同时利用 Java 平台的类型、并发与存储能力。当前锚点为 `a00a5048d`，范围裁决见 docs/04 §5，取证规则见 `docs/map/ANCHOR.md`。
 
 ---
 

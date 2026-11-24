@@ -96,7 +96,7 @@ java -jar pi-java-dist/target/pi-java.jar --mode web --port 8787
 | [`docs/04-open-items-register.md`](docs/04-open-items-register.md) | 开放项与有效裁决 |
 | [`docs/05-module-alignment-map.md`](docs/05-module-alignment-map.md) | 逐模块量化对齐与缺口 |
 | [`docs/07-examples-alignment.md`](docs/07-examples-alignment.md) | examples 对齐口径与能力清单 |
-| [`docs/map/ANCHOR.md`](docs/map/ANCHOR.md) | 当前 `56cae7823` 锚点的取证与切换规则 |
+| [`docs/map/ANCHOR.md`](docs/map/ANCHOR.md) | 当前 `a00a5048d` 锚点的取证与切换规则 |
 | [`docs/08-b161-codemode-mechanism-design.md`](docs/08-b161-codemode-mechanism-design.md) | B161 codemode 设计稿（待审、未实施，保留） |
 
 ## 贡献

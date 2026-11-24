@@ -4,7 +4,7 @@
 
 ## 基准与范围
 
-- **证据锚点＝`TARGET_PI_PIN=a00a5048d`**（2026-11-20）。存储后端 20 行已于 **2026-11-22** 按该锚点逐行复核并随 [`docs/18`](../18-l4-session-recheck-design.md) 收口；`CURRENT_PI_PIN` 仍是 `56cae7823`，切锚仍等七层全部重测（`ANCHOR.md` 完成条件）。java 侧证据见文末「L4 复核」段。
+- **证据锚点＝`CURRENT_PI_PIN=a00a5048d`**（2026-11-20；2026-11-24 P12 切锚）。存储后端 20 行已于 **2026-11-22** 按该锚点逐行复核并随 [`docs/18`](../18-l4-session-recheck-design.md) 收口；java 侧证据见文末「L4 复核」段。
 - 本图**评测域** 24 行按 `56cae7823` 重测并随 docs/26 实施闭环（2026-11-05，L6）；**2026-11-23 已按目标锚点 `a00a5048d` 复核**（[`docs/20`](../20-l6-evals-recheck-design.md)）：两锚点间 `packages/evals` 仅 `package.json` 变化（版本／依赖／clean 脚本），`src`／`evals/`／`test/` 逐字节未变 ⇒ 24 行判定与 pi 证据全部续用，**48.0/49＝98.0% 为复核读数**（不再是投影）。
 - 范围：`pi-java-session-backend-sqlite` ＋ `pi-java-agent-core` 的会话持久化面（主流对照 pi `coding-agent/src/core/session-manager.ts`）；`pi-java-evals` ↔ pi `packages/evals`；pi `packages/chord`（R5 不可达）；pi 仓库根 `scripts/` 与本仓 `docs/map/check-drift.sh`（口径外）。
 - 判定三档：**对齐** / **缺失** / **存疑**。每条给两侧 `file:line`。
@@ -232,10 +232,10 @@ pi `scripts/` 是仓库自身构建/发布/校验工具，按 R5 **不进产品�
 **pi-java 实际存在的漂移预防机制（file:line，本仓工作树）**：
 
 0. **锚点漂移检测**（本仓独有）—— `docs/map/check-drift.sh` ＋ `docs/map/ANCHOR.md`：
-   `CURRENT_PI_PIN=56cae7823`、`TARGET_PI_PIN=a00a5048d`；脚本**优先比 TARGET**，无目标时退回 CURRENT，
+   `CURRENT_PI_PIN=a00a5048d`、`REFERENCE_PI_PIN=56cae7823`；脚本按 CURRENT 比较，
    比 **pi 本地 HEAD vs PIN** 的提交距离（落后即退出 1），再从 7 份地图抽
    `` `foo.ts:行号` `` 引用的 **basename**，按 pi 内同名文件数分两栏：**【确定】**（basename 唯一）／
-   **【可能】**（有同名文件，上界，如 `types.ts` 有 17 个同名）。正式锚点闭环时实测 HEAD＝CURRENT_PI_PIN 报「✓ 无漂移」；换锚期间 TARGET 未闭环，报漂移属预期。
+   **【可能】**（有同名文件，上界，如 `types.ts` 有 17 个同名）。切锚完成后实测 HEAD＝CURRENT_PI_PIN 报「✓ 无漂移」。
    限制：只圈范围，行号是否仍命中要人工核。
 1. **Checkstyle**（Maven `validate`，`failsOnError=true`）—— 根 `pom.xml:142-171`；
    规则 `LineLength max=120`（`checkstyle.xml:12-13`）、`FileLength max=500`（`:18-19`）。

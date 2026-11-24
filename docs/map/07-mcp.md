@@ -4,10 +4,10 @@
 
 ## 基准与口径
 
-- 证据盘点：pi 侧锚点 **`a00a5048dfae964fe89dce593215d0c3d275017c`**（2026-11-20，即 `TARGET_PI_PIN`）。L2 已于 **2026-11-22** 按该锚点逐行重判并收口；`CURRENT_PI_PIN` 仍是 `56cae7823`，切锚要等七层全部重测（`ANCHOR.md` §完成条件）。java 侧证据 = 2026-11-22 的 P9 七阶段收口（`02b6bf59`→`e40eea14`，逐阶段号见文末「重判结论」）。旧锚点证据保留作对照，凡与新锚点冲突以本图为准。
+- 证据盘点：pi 侧锚点 **`a00a5048dfae964fe89dce593215d0c3d275017c`**（2026-11-20，2026-11-24 P12 切为 `CURRENT_PI_PIN`）。L2 已于 **2026-11-22** 按该锚点逐行重判并收口。java 侧证据 = 2026-11-22 的 P9 七阶段收口（`02b6bf59`→`e40eea14`，逐阶段号见文末「重判结论」）。旧锚点证据保留作对照，凡与新锚点冲突以本图为准。
 - 判定三档：**对齐** = pi 有 ∧ pi-java 有 ∧ 行为相同（读代码确认语义）；**缺失** = pi 有 ∧ pi-java 无（或差异有行为后果）；**存疑** = 形状/字节形态未逐字核对，或差异是刻意设计/跨模块/台账在册方言（子标签 **（形状）/（扩展）/（台账）**）。
 - 第四类记账 **转出（非本层）**：差异归属其它层或共享平台方言，行与证据保留在本图供追溯，但**权重 0、不进 MCP 分母**（docs/22 用户裁决）。
-- 所有证据为 `file:line`，两侧均已打开源码确认。**pi 侧一律 `git -C D:/workplaceForai/pi show 56cae7823:<path>` 取证，未读工作树。**
+- 所有证据为 `file:line`，两侧均已打开源码确认。**pi 侧一律 `git -C D:/workplaceForai/pi show a00a5048d:<path>` 取证（旧锚点对照用 `56cae7823`），未读工作树。**
 - **范围**：pi `packages/mcp`（SDK 本体）＋ `packages/coding-agent/src/extensions/mcp/**` 与 `core/mcp-servers.ts`（集成面）↔ pi-java `pi-java-mcp` ＋ `pi-java-coding-agent` 的 `extension/mcp/**` 与 `subcommand/Mcp*`。
 - **权重** = 用户可观察影响 × 频率（不含排期优先级）：**3** = 每轮对话都走/默认路径；**2** = 每次会话走/常用命令/常用配置；**1** = 低频/边缘/纯内部；**0** = 非目标，**排除出分母**。完成系数：对齐 1.0 ／ 存疑 0.5 ／ 缺失 0。
 - **R5 口径**：codemode 及其专用激活路径不做、不进分母；tool_search 和 deferred MCP 工具发现已有实现，属于主流复核面。wire、配置、CLI 和适配形状继续按行为计分。新锚点的 `structuredContent` 还需区分 codemode 消费与 `after_tool` 等主流消费。
@@ -237,7 +237,6 @@ MCP 层无未结计分项。9 条转出行随各自层（L1／L5／平台方言�
   分母与合计不受影响。
 - 已等价的复核结论保留：回调 `closeAllConnections`（`HttpServer.stop(0)`）、CR-only/CRLF SSE、
   8 KiB 错误体长度、工具命名/输入 schema/20 KB 截断/配置校验。
-- **`CURRENT_PI_PIN` 未切换**：按 `ANCHOR.md` §完成条件，需七层全部按目标锚点重测后才切；L2 是第 3 层
-  （L0／L1 之后）。切锚、全仓发布与 `mcp list` 的逐行复核归 P12。汇总视图见
-  [`../05-module-alignment-map.md` §1.2](../05-module-alignment-map.md)、进度视图见
-  [`../09-pi-latest-reanchor-plan.md`](../09-pi-latest-reanchor-plan.md) §3。
+- **切锚已完成（2026-11-24 P12）**：`CURRENT_PI_PIN=a00a5048d`；全仓发布读数与 `mcp list` 的逐行复核均已收口。
+  发布视图见 [`../05-module-alignment-map.md` §1](../05-module-alignment-map.md)、过程视图见
+  [`../09-pi-latest-reanchor-plan.md`](../09-pi-latest-reanchor-plan.md) §3（已归档）。

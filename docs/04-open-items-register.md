@@ -2,15 +2,15 @@
 
 > 【背景摘要】本文档只保留当前未结项、待用户决定事项、已闭环批次的最终读数与仍有效的范围裁决。实施过程与旧账面沿革不在这里保存，历史在 git。
 >
-> 当前锚点为 pi `56cae7823`（2026-11-20 七层 L0–L8 重测闭环后切换，见 `docs/map/ANCHOR.md`）。下方条目均已随所属层重测；个别行仍引 `ea448f454` 作对照证据，冲突时以新锚点为准。
+> 当前锚点为 pi `a00a5048d`（2026-11-24 P12 收口后切换，见 `docs/map/ANCHOR.md`）。下方条目均已随所属层重测；个别行仍引 `56cae7823`／`ea448f454` 作对照证据，冲突时以当前锚点为准。
 >
-> **历史设计稿引用**：现行保留的设计/计划稿——`docs/08-b161-codemode-mechanism-design.md`（B161 codemode 机制设计，**设计待审、尚未实施；已从原 `docs/61` 重编号**）、`docs/09-pi-latest-reanchor-plan.md`（pi 换锚与对齐计划，实施中）、`docs/10-schema-tool-validation-design.md`（P1 工具参数 pi-schema 校验设计），以及换锚实施期各批次的 L1–L6 系列设计稿（`docs/11`–`docs/20`）。其余旧批次设计/进度稿（原 `docs/06`、`docs/62`–`docs/66` 等）已删除。正文与代码注释中残留的 `docs/NN` 只是历史溯源标记，不构成有效链接。**现行结论以本文档 + `docs/map/` + `docs/05` 为准**，历史过程在 git。
+> **历史设计稿引用**：现行保留的设计/计划稿——`docs/08-b161-codemode-mechanism-design.md`（B161 codemode 机制设计，**设计待审、尚未实施；已从原 `docs/61` 重编号**）、`docs/09-pi-latest-reanchor-plan.md`（pi 换锚与对齐计划，**2026-11-24 P12 收口后归档保留**）、`docs/10-schema-tool-validation-design.md`（P1 工具参数 pi-schema 校验设计），以及换锚实施期各批次的 L1–L8 系列设计稿（`docs/11`–`docs/30`）。其余旧批次设计/进度稿（原 `docs/06`、`docs/62`–`docs/66` 等）已删除。正文与代码注释中残留的 `docs/NN` 只是历史溯源标记，不构成有效链接。**现行结论以本文档 + `docs/map/` + `docs/05` 为准**，历史过程在 git。
 
 ## 0. 口径
 
-- **B**：功能或行为缺口。已用到 **B292**（B289–B292 是 L1 收口四项，随 [`docs/11`](11-l1-ai-completion-design.md) 直接在代码里落地、未在 §1 立项，故无销号动作；L1 余项复验（strict 无类型节点判据、暖请求 `disableContinuation`）与第二次复验（Anthropic 非 strict 根 schema、`session-resources` 清理接线）同样直接落地、未新开号，见 [`14`](14-l1-residual-alignment-design.md)、[`15`](15-l1-residual-audit-followup-design.md)；B288 仍是 codemode 提案拟新增接缝，未批准）；新工单从 **B293** 起。
-- **D**：已登记的窄差。已用到 **D278**（L5 收口新增 D274／D275／D277／D278，D276 未用）；新窄差从 **D279** 起，明细存于对应 `docs/map/`。
-- **读数视图（2026-11-22 起）**：真源是各层地图 `docs/map/NN-*.md`；`docs/05` §1.2 是**汇总视图**、`docs/09` §3 是**进度视图**（含「当前」列），两者必须与真源同步改。设计稿（`docs/11`／`docs/12`…）只记设计与收口结论、**不发布读数**，其中的分数一律视为各自写作时的基线。
+- **B**：功能或行为缺口。已用到 **B293**（L6 #20 `context footer` 的 `SessionSnapshot` 上下文窗口字段仍缺，见 §4）；B289–B292 是 L1 收口四项，随 [`docs/11`](11-l1-ai-completion-design.md) 直接在代码里落地、未在 §1 立项，故无销号动作；L1 余项复验（strict 无类型节点判据、暖请求 `disableContinuation`）与第二次复验（Anthropic 非 strict 根 schema、`session-resources` 清理接线）同样直接落地、未新开号，见 [`14`](14-l1-residual-alignment-design.md)、[`15`](15-l1-residual-audit-followup-design.md)；B288 仍是 codemode 提案拟新增接缝，未批准；新工单从 **B294** 起。
+- **D**：已登记的窄差。已用到 **D316**（L7 W1–W8 期间以 N／D-W* 记的窄差已由 P12 统一编号，D279–D316，见 §6.5）；新窄差从 **D317** 起，明细存于对应 `docs/map/`。
+- **读数视图（2026-11-22 起）**：真源是各层地图 `docs/map/NN-*.md`；`docs/05` §1 是**发布读数**、§1.2 是**换锚过程（历史）**、`docs/09` §3 是**进度视图**，三者必须与真源同步改。设计稿（`docs/11`／`docs/12`…）只记设计与收口结论、**不发布读数**，其中的分数一律视为各自写作时的基线。
 - **L1 #6 迁移（2026-11-22）**：缓存预热策略按 [`docs/16`](16-l1-cache-warming-policy-design.md) 迁入 `pi-java-ai`
   （`com.pijava.ai.api.CacheWarmingPolicy`），coding-agent 改为消费者；行为／数字／wire 不变，未新开 B／D 号，
   `map/02` 的 #6 改判对齐 ⇒ L1 **246/246＝100%**。
@@ -32,7 +32,7 @@
   两锚点间 `packages/evals` 仅 `package.json` 变化（版本 1.4.0→1.6.0、依赖同步、`clean` 脚本 shx→node），
   `src`／`evals/`／`test/` 逐字节未变 ⇒ **零代码**、24 行判定与 pi 证据全部续用，未新开 B／D 号；
   唯一存疑 #20（TUI 审计 oracle 形态差）维持，收口条件＝L7 落地 context footer 状态行
-  ⇒ L6 **48.0/49＝98.0%**（复核读数，投影转正式）。L8 examples（plan-mode、subagent 重写未跟）仍归 P11 另批。
+  ⇒ L6 **48.0/49＝98.0%**（复核读数，投影转正式）。L8 examples 已于 2026-11-24 随 P11 收口（见下条）。
 - **L7 对账（2026-11-23）**：UI 层按 [`docs/21`](21-l7-recheck-plan.md) 完成复核对账（不写码）——
   docs/09 十行全部成立（4 子机制补记）；预审计 12 项成立（主体在 `packages/tui`）＋漏项 11 项登记；
   旧基线 10 行复核：S6/S19/S25/T3/T4/T5/T7/T10/W14 翻正「对齐」，S16 降「存疑」（query 门控缺失）
@@ -125,6 +125,13 @@
   **#20（L6 context footer）仍开放**：`SessionSnapshot` 无上下文窗口字段，未在本段改 record。
   以上 D/N 编号统一在 P12 落。未新开 B 号；`map/05` 读数 **232.5/252＝92.3%**（未加权 133/153；
   投影回算 236.0/260＝90.8%）。**L7 W1–W8 分段收口。**
+- **L8 examples 收口（2026-11-24，[`docs/30`](30-l8-examples-design.md)）**：新锚点分母内被重写的两件已补齐——
+  plan-mode（thinking 块、最后一个 `Plan:` 头、整行编号、`[DONE 1]`／`Done: 1`／`Step N done`、`allStepsComplete` 回落、
+  widget 60 截断、`deliverAs: nextTurn`）与 subagent（状态机、启动前中止、失败证据、
+  `truncateParallelOutput`／`truncateModelOutput`、`chain` 参数面、unknown agent、project agent 确认、`tool_result` isError）。
+  D235（主题/删除线文本降级）与 D244（注入式 runner、TUI 渲染不移植）原样保留 ⇒ L8 **88/88＝100%**；
+  模块 412 测 0 失败、Checkstyle 0 error。
+- **P12 收口（2026-11-24）**：全仓 `mvn clean verify -Dfrontend.skip=true` 零失败、零告警；L7 W1–W8 期间以 N／D-W* 记的窄差统一编号 **D279–D316**（§6.5），B238③（OSC 7501）／B238④（假光标）随 W5／W6 落地销号；L6 唯一存疑 #20 立 **B293**。发布读数 **1,368.5/1,389＝98.5%**（L0–L7），L8 按件 **88/88**；`CURRENT_PI_PIN` 切至 `a00a5048d`。`docs/09` 归档保留，不删除。
 - **F**：需要用户拍板的事项。
 - **R1**：pi 已删除的面，不为旧参照物补功能。
 - **R2**：Provider 只覆盖已批准的主流范围。Qwen／Xiaomi Token Plan 家族（团队／个人、国际／中国、AMS／SGP）已按 `docs/09` P3 余项纳入（26 个内置 provider）；其余长尾 provider 仍排除。
@@ -164,7 +171,7 @@ Chord plugin 已按 R5 决定不做，不再是待拍板项。
 
 ## 3. MCP 开放项与复核项
 
-以下条目已按新锚点（`56cae7823`）在 L2 重测。开放项与「已判对齐但必须持续保持」的回归约束分列；B210/B211/B216 已判对齐（`docs/map/07-mcp.md:139-140,170`），按维护规则第 3 条从开放表移除，历史在 git。
+以下条目已在 L2 按当时的换锚目标（`56cae7823`，现为 `REFERENCE_PI_PIN`）重测。开放项与「已判对齐但必须持续保持」的回归约束分列；B210/B211/B216 已判对齐（`docs/map/07-mcp.md:139-140,170`），按维护规则第 3 条从开放表移除，历史在 git。
 
 **仍需动作／补测**
 
@@ -203,8 +210,9 @@ TUI 已在 L7 按新锚点重测；下表只列仍未收口的面。
 | B39 | 压缩窗口的 Esc 行为尚未完成换绑。 |
 | B46 | Bash `onUpdate` 已有生产链和 web 消费，TUI 实时输出消费者仍缺。 |
 | B145 | 启动、登录后等定向模型目录刷新点未全部接线（登录后已落，其余启动点证据不足）。 |
-| B238③ | OSC 7501 程序状态上报未实现。 |
-| B238④ | APC 标记假光标未实现。 |
+| B293 | L6 #20 `context footer` oracle：`SessionSnapshot` 无上下文窗口字段，L7 context footer 状态行未落地（L6 唯一存疑的收口条件）。 |
+
+~~B238③（OSC 7501）／B238④（APC 假光标）~~ 随 L7 W5（`ProgramStatusProtocol`）与 W6（`EditorElement` 反白假光标）落地销号；剩余协议窄差见 D293／D298。
 
 R29 安装变更重启警告维持不做；若新的 `selfUpdateCommand` 形成真实安装变更通道，再重新裁决。
 
@@ -325,6 +333,49 @@ SQLite 后端是 pi-java 独立实现，保留模块，不对齐已删除 schema
 | D271 | `--session <id>` 保留跨项目 `find()` 阶梯（pi 仅项目内精确查找）；项目内命中行为一致 | map/05 |
 | D272 | 扩展对话框 `blocked` 无状态行/输入拦截消费面；栈化生命周期已对齐 | map/05 |
 | D273 | 技能 collision 行尾 ` (source)` 不移植；`--skills` 静态发现的诊断仍未上抛 | map/05 |
+
+**L7 W1–W8 窄差统一编号（P12 落定，D279–D316）**：以下条目在分段收口时以 N／D-W* 临时记法登记于 `docs/22`–`docs/29` 与 `map/05`，现统一并入 D 账；原临时记法作废。
+
+| 编号 | 当前边界 | 证据 |
+|---|---|---|
+| D279 | 无 embedded editor 挂点：指示器恒走状态槽，边框色不随 thinking level | map/05（W1） |
+| D280 | IdleStatus／clearOnShrink 不移植（无对应状态面） | map/05（W1） |
+| D281 | `customMessageBg` 全卡底色不铺底（R17/R18/R19 以 label 色承担区分） | map/05（W2） |
+| D282 | skill 折叠行 label 色压平：markup 无自定义色标签，整行 text 色＋bold 标签 | map/05（W2） |
+| D283 | 卡背景只铺文本格：文本级渲染无 bg 盒模型（R12 三态 bg） | map/05（W2） |
+| D284 | 三消息卡内部 Markdown 仍走静态路径；`WeakRef` 以帧界裁剪替代 | map/05（W3） |
+| D285 | 多行内联图片硬换行无观察面：`Block.Image` 恒单行占位 | map/05（W3） |
+| D286 | R30 全屏滚动帧 O(viewport) 不可达：TamboUI 布局帧缓存无应用层接缝（不进分子） | map/05（W3） |
+| D287 | C21 render 只读/缓存契约：TamboUI 组件协议不可改，应用层以 R31 投影缓存承担 | map/05（W3） |
+| D288 | R33 ASCII/字素快路径：Java 无 `Intl.Segmenter` 等价性能诉求（纯性能契约） | map/05（W3） |
+| D289 | K25 文件补全仅 `@` 自动＋Tab 强制触发；fd/普通路径自然触发未接 | map/05（W4） |
+| D290 | K26 词删/行删非原子；tmux CSI-u 粘贴不解码 | map/05（W4） |
+| D291 | K31 jump mode 键位内置，不读 `keybindings.json`（K17 覆盖另账） | map/05（W4） |
+| D292 | C2 选择列表描述列：Java 消费点无 description | map/05（W4） |
+| D293 | K39 OSC 7501 无查询/DA 握手（TamboUI 独占 stdin）；以 `PI_PROGRAM_STATUS` 覆盖＋缺省乐观 | map/05（W5） |
+| D294 | OSC 8 超链接不输出：已探测但 `InlineMarkup` 只显文本 | map/05（W5） |
+| D295 | K32 `baseLayoutKey` 解析但不消费；非拉丁布局 alternate match 不做 | map/05（W5） |
+| D296 | K34 原生剪贴板由预编译 `.node` helper 改平台 CLI 链；Termux 路径/报错文案近似 | map/05（W5） |
+| D297 | OSC 7501 登录态 `auth` 不做 | map/05（W5） |
+| D298 | APC 光标定位标记无对应物；假光标以反白实现 | map/05（W5/W6） |
+| D299 | 搜索条以上方三行条代替浮动 overlay | map/05（W6） |
+| D300 | 搜索匹配按码点而非字素（非 ASCII 粒度） | map/05（W6） |
+| D301 | 选择长尾：无双击选词／边缘自动滚动定时器 | map/05（W6） |
+| D302 | flash 由 tick 驱动到期、单条覆盖非栈 | map/05（W6） |
+| D303 | 设置子菜单 `navigateTo` 未接、hover 无高亮 | map/05（W6） |
+| D304 | `KeybindingHints` 返回 TamboUI `Element` 而非 ANSI 串 | map/05（W6） |
+| D305 | 图片实机终端验收不在自动化面（Kitty/iTerm2） | map/05（W7） |
+| D306 | macOS Finder 图片粘贴路径不移植（`ClipboardImage` 平台链） | map/05（W7） |
+| D307 | 主题预览不重查 system 主题色 | map/05（W7） |
+| D308 | LaTeX 长尾符号子集；未收录命令回落原文 | map/05（W7） |
+| D309 | Mermaid 不移植：`lovely-mermaid` 无 Java 等价，围栏按代码块渲染（R7 不进分子） | map/05（W7） |
+| D310 | 独立 show-images 导出组件不移植（pi 内置消费面已对位） | map/05（W7） |
+| D311 | 品牌 shimmer/glow 动画不可达：`SelectList` 纯字符串行 | map/05（W8） |
+| D312 | `tui.editor.*` 等编辑器直读键不消费 `keybindings.json` 覆盖 | map/05（W8） |
+| D313 | R22/R27 彩蛋（announcement／3D logo）不移植：无 Java 消费面 | map/05（W8） |
+| D314 | `/export` HTML 输出形状未逐项核（自写转换 vs vendored marked/highlight） | map/05（W8） |
+| D315 | R28 流式 bash／工具组件不进 pending 区 | map/05（W8） |
+| D316 | K12/K40 `Ctrl+Z` 挂起（SIGTSTP）不移植：JVM 无公开信号 API | map/05（W3/W5） |
 
 ### 6.6 其他保留边界（证据：`docs/map/03-agent-core.md`）
 

@@ -327,7 +327,9 @@
 
 权重 3 的当前判定以本表为准：**23 对齐／3 存疑／0 缺失**（L7 W6 后；W6 未触及权重 3）。剩余缺口按可观察影响排序是 K19（模型不同）、C16（大粘贴折叠/jump mode 缺）、T2（token 覆盖未逐键核）。旧基线快照 244／152.5／62.5% 仅作历史，不再作为当前读数。
 
-## 目标锚点 `a00a5048d` 预审计（2026-11-21）
+## 新锚点 `a00a5048d` 重测（2026-11-21 预审计 → 2026-11-24 P12 正式）
+
+> 本节保留预审计过程；最终发布读数见本图「加权汇总」段（2026-11-24 P12）。
 
 - **L7 投影：182/259 ≈ 70.3%**（旧锚点正式读数 179/244＝73.4%）。区间 69.1%–70.3%。
 - **新增 15 权重**：C21 render 只读/缓存契约(1)、K40 SIGTSTP(1)、R30 全屏 O(viewport) 缓存(2)、R31 Markdown 顶层块缓存(2)、R32 HTML 注释隐藏(1)、R33 ASCII/字素快路径(1)、K41 slash 命令 Enter 上下文(1)，另加 `custom().blocked` OSC 7501(1)、`pasteToEditor` 重绘(1)、工具预览主题前景(1)、缓存预热合并提示(1)、Mermaid 升级(2)。已实现/部分约 3.0，其余缺失。
@@ -349,3 +351,4 @@
 - **L7 W7（2026-11-24，[`docs/28`](../28-w7-design.md)）**：R14/S2d 图片协议（`TerminalImage`＋`ImageElement`＋`ImageRenderSupport`）、R15/K14 剪贴板图片（`ClipboardImage`＋`ClipboardPasteFlow`）、S18 首次设置向导、S21 show-images 复核、K13 `Ctrl+X` 复制、R8 LaTeX（`util/latex/`）⇒ 八行**对齐**（＋8.0）。窄差：N-W7-1 实机验收、N-W7-2 macOS Finder 路径、N-W7-3 主题预览 system 色、N-W7-4 LaTeX 长尾；D-W7-1 Mermaid、D-W7-2 独立 show-images 组件。
 - **L7 W8（2026-11-24，[`docs/29`](../29-w8-design.md)）**：收尾段。K17 `keybindings.json` 用户覆盖（`KeybindingsManager.create/reload`＋legacy 名迁移＋空数组解绑；`KeybindingsNames` 拆出保 500 行限）缺失→**对齐**；S27 `/share` 复核（`destination` 现读＋W1 loader）存疑→**对齐** ⇒ **232.5/252＝92.3%**（未加权 133/153）。同段对账：missing-cwd 三选／reasoning drop 泛化／changelog 写回／model-selector 刷新保偏好已在此前落地（零代码）；"to resume" 独立成行＋flush、伙伴 `✦` 标记落地；品牌动画（N-W8-1）、彩蛋（D-W8-2）、`/export` 形状（D-W8-3）、流式组件不进 pending 区（D-W8-4）登记窄差；`tui.editor.*` 等直读键不消费覆盖（N-W8-2）。**#20（L6 context footer）仍开放**：`SessionSnapshot` 无上下文窗口字段，需改 record，未在本段处理。
 - **无法闭环预判**（§6 of docs/21）：C21／R30（TamboUI 外部框架不可达）、K40/K12（JVM 无 signal API）、R33/行10（性能契约）按窄差 D 处置；正式权重归各段设计与 P12。
+- **P12 编号落定（2026-11-24）**：本节 W1–W8 的 N／D-W* 临时记法已统一并入 D 账 **D279–D316**（逐条边界见 `docs/04` §6.5），原记法作废；本表行内仍保留临时标签以便对照，判定与权重不变。

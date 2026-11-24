@@ -49,7 +49,7 @@ commands: `mvn clean verify`, `mvn test -pl <module> -am`, `mvn checkstyle:check
 | `docs/04-open-items-register.md` | 当前未结项与有效裁决 |
 | `docs/05-module-alignment-map.md` | 新基线七层读数与计分口径；明细在 `docs/map/` |
 | `docs/07-examples-alignment.md` | examples 的有效裁决、现有能力与新基线验收口径 |
-| `docs/map/ANCHOR.md` | 当前锚点 `56cae7823` 的取证与切换规则 |
+| `docs/map/ANCHOR.md` | 当前锚点 `a00a5048d` 的取证与切换规则 |
 | `docs/08-b161-codemode-mechanism-design.md` | B161 codemode 设计稿（待审、未实施，保留至闭环） |
 
 遵循 .claude/rules.md 文档写作规则：裁决记录用【场景/决定/风险】三段式，术语首次附释义，分点列出裁决条目，区分模型可见/内部实现。

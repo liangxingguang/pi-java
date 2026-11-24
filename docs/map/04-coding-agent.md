@@ -468,7 +468,7 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 | E5-30 | 扩展注册 CLI flag | `:1664` + `args.ts:186` | ✅ `ExtensionFlagBinder`＋`--help` 段 | 1 | **对齐** | 批 16 T1c–T1e（args.ts:247-271 三态＋agent-session-services.ts:82-128 绑定＋args.ts:273-283 help 面对位） |
 | E5-31 | 扩展 UI 注入（TUI） | `types.ts:149-323` | ⚠️ `TuiExtensionUI`（13 方法：对话四件套＋custom＋notify/setStatus/setWidget/setFooter/setHeader/setEditorText/getEditorText）＋widget/footer/header/状态段注入层；余 15 成员 default＝pi noOp 语义、TUI 臂挂账（docs/28 §4） | **0（转出 L7）** | **转出** | **L5（2026-11-05，docs/25 §1.5）**：新锚点新增 `blocked`、对话框堆叠、`KeybindingHints`，全部是 TUI 渲染/交互面 ⇒ 按 docs/04 归属**转 L7**；API 侧的 `KeybindingHints` 另见 **D220**。批 17 后旧读数：存疑 / 权重 2 |
 | E5-32 | 扩展 UI 通道（RPC，9 method） | `rpc-types.ts:253-297` | ✅ `RpcExtensionUI` 九方法 typed 实现＋`RpcDispatcher` 注入（晚绑定修真——context 现读会话字段） | 1 | **对齐** | 批 17（docs/28 T3）：参数键平铺顶层（pi spread 逐字）＋signal/timeout 本地解除（裁决⑦）＋setWidget 工厂臂静默忽略（pi 同缺） |
-| E5-33 | 扩展示例库（可执行验收规格） | 新锚点 `examples/`（102 个 `.ts`；L8 分母 88） | `pi-java-examples` 已移植 **88 件**（16 保留＋W1 5＋W2 8＋W3 10＋W4 10＋W5 13＋W6 4＋W7 5＋W8 17），见 docs/07 与 docs/27／51／52／54／55／56／57／58 | **0（转出 L8）** | **转出** | **L5（2026-11-05，docs/25 §1.5）**：examples 验收规格归 **L8**，L5 不保留第二计分入口（避免同一工作计两次）；主流 examples 继续全做 Java 移植，Chord plugin 按 R5 排除。**L8（docs/27）**：新分母 88＝102−8 外部运行时（D232）−1 R5−5 范围面主动（D237）；W0–W8 全部实施（**88/88＝100%**），注册表 70 项、模块 401 测 0 失败、SpotBugs 全模块 0 告警；仅剩 docs/05 总表刷新（等全仓 `mvn clean verify`）。旧读数：缺失 / 权重 3 |
+| E5-33 | 扩展示例库（可执行验收规格） | 新锚点 `examples/`（102 个 `.ts`；L8 分母 88） | `pi-java-examples` 已移植 **88 件**（16 保留＋W1 5＋W2 8＋W3 10＋W4 10＋W5 13＋W6 4＋W7 5＋W8 17），见 docs/07 与 docs/27／51／52／54／55／56／57／58 | **0（转出 L8）** | **转出** | **L5（2026-11-05，docs/25 §1.5）**：examples 验收规格归 **L8**，L5 不保留第二计分入口（避免同一工作计两次）；主流 examples 继续全做 Java 移植，Chord plugin 按 R5 排除。**L8（docs/27）**：新分母 88＝102−8 外部运行时（D232）−1 R5−5 范围面主动（D237）；W0–W8 全部实施（**88/88＝100%**），注册表 70 项、模块 412 测 0 失败、Checkstyle 0 error；仅剩 docs/05 总表刷新（等全仓 `mvn clean verify`）。**2026-11-24 补记（docs/30）**：新锚点重写的 plan-mode／subagent 两件已补齐，D235／D244 保留，读数维持 88/88。旧读数：缺失 / 权重 3 |
 | E5-34 | 扩展来源追踪（`SourceInfo`） | `types.ts:1543/2055/2098` | ✅ `ExtensionSourceInfos` 四规则＋注册即盖 sourceInfo 章 | 1 | **对齐** | **批 23（docs/34 T4）**：getDefaultSourceInfoForPath 逐字（builtin:/`<inline:`⇒temporary、`<agentDir>/extensions`⇒user、`<cwd>/.pi-java/extensions`⇒project、包源经元数据携带 origin=package）；`CommandRegistry` 登记目注册即盖章（loader.ts:317 对位） |
 | E5-35 | `on()` 返回退订函数 | `types.ts:1569-1636`（41 条 `() => void`） | ✅ `ExtensionContext.on(spec, handler)`（批 4，docs/14 §3.2）→ `AutoCloseable` 退订：按实例移除、空表删键（loader.ts:272-288 逐字语义） | 2 | **对齐** | — |
 
@@ -595,7 +595,9 @@ pi 面 = `ExtensionAPI`（`core/extensions/types.ts:1564-1891`）；java 面 = `
 
 旧基线最终量化快照见 docs/05；新基线分母须在逐行重测和去重后重新计算。
 
-## 目标锚点 `a00a5048d` 预审计（2026-11-21）
+## 新锚点 `a00a5048d` 重测（2026-11-21 预审计 → 2026-11-24 P12 正式）
+
+> 本节保留预审计过程；最终发布读数见本图「加权汇总」段（2026-11-24 P12）。
 
 - **L5 投影：439.5/462 ≈ 95.1%**（旧锚点正式读数 449.5/452＝99.45%）。区间 94.7%–95.6%。
 - **既有单元重开约 27 权重**：B-7 `auth login/logout`(2)、C-1/C-5/C-10/C-18/C-22（2+1+2+2+2）、E2-14(1)、E2-49(2)、E5-9(2)、E5-18(2)、E6-9(1)、E6-11(2)、E7-2(2)。预计 −8～−12 分；涉及 B、C、E2、E3、E5、E6、E7 域，A/D/E1/E4/G 不变。

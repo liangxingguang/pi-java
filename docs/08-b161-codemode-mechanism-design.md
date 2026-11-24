@@ -16,7 +16,7 @@
 > - **模型可见面 / 内部面**：前者是模型能读到的文本、schema、报错；后者是线程、IO、栈等实现细节。
 > - **SPI**：可替换实现的接口缝；本设计指 `CodemodeVmLauncher`。
 
-- pi 锚点：`56cae782341c339d3bb820081f0f9425d8c5b1ec`
+- pi 锚点：设计时 `56cae7823`（**当前锚点为 `a00a5048d`；实施前须按新锚点复核**，见 `docs/map/ANCHOR.md`）
 - 台账：`docs/04` B161（重开）、B177（MCP 默认 codemode 激活）、R5（修订建议）、拟新增 B288（loadout 接缝）
 - 上游裁决：`docs/01` §R5、`docs/04` §5.1（原 `docs/08` 已清理，现行裁决以 `docs/04` 为准）
 - 相关既有实现：`NestedToolCallRunner`、`ToolExposure.CODEMODE`、`ToolReach`、`tool_search`、`GrammarSampling`
