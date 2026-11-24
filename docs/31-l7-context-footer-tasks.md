@@ -9,7 +9,7 @@
 | [x] T3 | tui：`StatusBar` context 段＋`formatTokens`＋`?`/`0.0`＋颜色阈值 | 新单测通过；`42.2%/272k (auto)` 命中 pi oracle 正则 |
 | [x] T4 | 测试更新：两处 `new SessionSnapshot`；新增 StatusBar/SnapshotService 测试 | `mvn test -pl pi-java-agent-core,pi-java-tui -am` 全绿 |
 | [x] T5 | 文档：B293 文案修正＋销号；map/06 #20 改判；docs/05、docs/09、ANCHOR 读数回填 | 四处读数一致：L6 49/49、全仓 1,369.5/1,389＝98.6% |
-| [ ] T6 | 全仓验证与提交 | `mvn clean verify "-Dfrontend.skip=true"` 零失败零告警；按用户指示提交推送 |
+| [x] T6 | 全仓验证与提交 | `mvn clean verify "-Dfrontend.skip=true"` 零失败零告警；按用户指示提交推送 |
 
 ## 完成判据
 

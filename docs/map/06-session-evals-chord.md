@@ -5,7 +5,7 @@
 ## 基准与范围
 
 - **证据锚点＝`CURRENT_PI_PIN=a00a5048d`**（2026-11-20；2026-11-24 P12 切锚）。存储后端 20 行已于 **2026-11-22** 按该锚点逐行复核并随 [`docs/18`](../18-l4-session-recheck-design.md) 收口；java 侧证据见文末「L4 复核」段。
-- 本图**评测域** 24 行按 `56cae7823` 重测并随 docs/26 实施闭环（2026-11-05，L6）；**2026-11-23 已按目标锚点 `a00a5048d` 复核**（[`docs/20`](../20-l6-evals-recheck-design.md)）：两锚点间 `packages/evals` 仅 `package.json` 变化（版本／依赖／clean 脚本），`src`／`evals/`／`test/` 逐字节未变 ⇒ 24 行判定与 pi 证据全部续用，**48.0/49＝98.0% 为复核读数**（不再是投影）。
+- 本图**评测域** 24 行按 `56cae7823` 重测并随 docs/26 实施闭环（2026-11-05，L6）；**2026-11-23 已按目标锚点 `a00a5048d` 复核**（[`docs/20`](../20-l6-evals-recheck-design.md)）：两锚点间 `packages/evals` 仅 `package.json` 变化（版本／依赖／clean 脚本），`src`／`evals/`／`test/` 逐字节未变 ⇒ 24 行判定与 pi 证据全部续用，**48.0/49＝98.0% 为复核读数**（不再是投影）；**2026-11-24 B293 落地后 #20 改判「对齐（形状不同）」⇒ 49.0/49＝100%**。
 - 范围：`pi-java-session-backend-sqlite` ＋ `pi-java-agent-core` 的会话持久化面（主流对照 pi `coding-agent/src/core/session-manager.ts`）；`pi-java-evals` ↔ pi `packages/evals`；pi `packages/chord`（R5 不可达）；pi 仓库根 `scripts/` 与本仓 `docs/map/check-drift.sh`（口径外）。
 - 判定三档：**对齐** / **缺失** / **存疑**。每条给两侧 `file:line`。
 - 目标锚点评测参照版本：`1.6.0`（`packages/evals/package.json`；旧锚点 `1.4.0`）。
@@ -162,20 +162,22 @@ L6 落地的对应面见 §上表 #5/#21–#24。
 | 17 | 1 | 框架单测 | `test/*.test.ts`（830 行，本锚点 +15） | `src/test/...`（harness/judge/plan/report/docker/contents/fixtures 七组） | 对齐 | — |
 | 18 | 3 | **Docker eval 执行** | `src/docker.ts:38`＋`docker/Dockerfile`＋`docker/entrypoint.ts`（三件两锚点逐字节相同） | `docker/{DockerContext,DockerImageSpec,DockerCommandBuilder,DockerProcess,DockerEvalRunner,JUnitXmlReader}.java`＋`docker/Dockerfile` | **对齐** | D182 |
 | 19 | 2 | **文档变体任务计划** | `src/plan.ts:1`（`DOCUMENTATION_VARIANTS`）、`:39`（`createTaskPlan`） | `plan/TaskPlan.java`＋`plan/DocumentationVariant.java`＋`harness/DocumentationVariants.java` | **对齐** | — |
-| 20 | 2 | **TUI 文档审计 eval** | `evals/tui.docs.eval.ts:23-37/207-260`（context-footer oracle） | `contents/TuiDocsEval.java`（Java 文档问答＋Levenshtein 0.75）＋`fixtures/RecordingFooterOracle.java` | **存疑** | D183/D189 |
+| 20 | 2 | **TUI 文档审计 eval** | `evals/tui.docs.eval.ts:23-37/207-260`（context-footer oracle） | `contents/TuiDocsEval.java`（Java 文档问答＋Levenshtein 0.75）＋`fixtures/RecordingFooterOracle.java`＋`tui/component/StatusBar.java`（B293：内置 `percent%/window (auto)` 状态行，pi oracle 同形） | **对齐（形状不同）** | D183/D189 |
 | 21 | 2 | **审计取证断言（读过页面＋读过实现源）** | `evals/documentation-audit.eval.ts:34/60-71` | `contents/{DocumentationAuditEval,AuditSourceIndex}.java`（`AuditJudge` 前置断言＋按页源选集） | **对齐**（L6 W3） | D230 |
 | 22 | 2 | **prompt template 文档 eval** | `evals/prompt-templates.docs.eval.ts:1-79`（project/user 双 scope、reload、展开逐字比对） | `contents/PromptTemplatesDocsEval.java`（两 case＋`HarnessOptions.output` 观测面） | **对齐**（L6 W4） | D231 |
 | 23 | 1 | **按变体的运行总量与覆盖度** | `src/report.ts:62-73`（`VariantTotals`）、`:431-435`（覆盖度渲染） | `report/VariantTotals.java`＋`report/OperationalMetricTotal.java`（`availableRuns`，不折零） | **对齐**（L6 W2） | — |
 | 24 | 1 | **audit 独立执行档** | `vitest.evals.config.ts:22-43`（`host` 排除审计、新增 `audit` 项目）；`package.json:11` `eval:audit` | `EvalSuite.expensive()`＋`EvalCliOptions --audit`＋`EvalCli.byAuditGate` | **对齐**（L6 W5） | D188 |
 
-**行数**：24 行 —— 对齐 **23** / 缺失 **0** / 存疑 **1**。
-**权重**：**Σ = 49** ⇒ **Σ(w×c) = 47.0（对齐）＋ 1.0（存疑 #20）＝ 48.0** ⇒ **加权完成度 = 48.0/49 ≈ 97.96%**。
+**行数**：24 行 —— 对齐 **24** / 缺失 **0** / 存疑 **0**。
+**权重**：**Σ = 49** ⇒ **Σ(w×c) = 49.0（对齐）＝ 49.0** ⇒ **加权完成度 = 49.0/49 ＝ 100%**。
 
 > **重判说明**：旧读数（20 行 / Σ43 / 42.0 = 97.7%）把 #5 记成「对齐」过宽——pi 的四组
 > 配对标量、按变体运行总量与 **pass-rate 定义的 lift** 在 Java 侧当时都不存在，按新锚点
 > 证据应为缺失。L6 W1/W2 补齐后 #5 恢复对齐，并新增 #21–#24 四行（Σ+6）。
-> 唯一存疑 #20（TUI 审计 oracle 形态差）在 docs/26 §1.4 复核后维持，理由未变。
-> 5 × 0.5 = 2.5 之外的缺口不存在——**唯一 −1.0 来自 #20 的存疑系数**。
+> ~~唯一存疑 #20（TUI 审计 oracle 形态差）在 docs/26 §1.4 复核后维持，理由未变。~~
+> **2026-11-24 B293 落地**：L7 `StatusBar` 已显示 pi 同形的 `42.2%/272k (auto)` context
+> 段（`SessionSnapshot` 携带 `ContextUsage`/`autoCompact`），#20 改判「对齐（形状不同）」；
+> 原 −1.0 缺口消除。eval 任务形态仍为文档问答（D183 保留），不新增 `evals → tui` 依赖。
 >
 > **目标锚点复核补记（2026-11-23，docs/20）**：`56cae7823..a00a5048d` 间 `packages/evals` 仅
 > `package.json` 变化（+4/−5：版本 1.4.0→1.6.0、`pi-ai`/`pi-coding-agent` 依赖同步、`clean`
@@ -183,7 +185,7 @@ L6 落地的对应面见 §上表 #5/#21–#24。
 > `docker/`／`vitest.evals.config.ts` 逐字节未变 ⇒ 上表 pi 证据 `file:line` 全部续用、24 行
 > 零改判。Java 侧证据续用：`51dc0f7c` 后触及 `pi-java-evals` 的仅 `6867078c`／`d035ffa0`
 > 两笔 provider 目录计数断言同步（`ProviderCatalogConformance`／`ProviderCatalogTest`），
-> 不触判定。读数 **48.0/49＝98.0%**（复核读数，非投影）。
+> 不触判定。读数 **48.0/49＝98.0%**（复核读数，非投影；后由 2026-11-24 B293 改判 **49.0/49＝100%**）。
 
 ---
 
@@ -255,13 +257,13 @@ pi `scripts/` 是仓库自身构建/发布/校验工具，按 R5 **不进产品�
 
 | 档 | 存储后端（新锚点） | 评测（新锚点） | 合计 |
 |---|---|---|---|
-| **对齐** | 20 | 23 | **43** |
+| **对齐** | 20 | 24 | **44** |
 | **缺失** | 0 | 0 | **0** |
-| **存疑** | 0 | 1 | **1** |
+| **存疑** | 0 | 0 | **0** |
 | 合计 | 20 | 24 | **44** |
 
-**未加权完成度（按行数）= 43 / 44 = 97.73%**；**按系数（对齐 1 / 存疑 0.5 / 缺失 0）
-= (43 + 0.5) / 44 = 98.86%**（存储后端单独 100%，见下节；评测单独 97.96%，见上表）。
+**未加权完成度（按行数）= 44 / 44 = 100%**；**按系数（对齐 1 / 存疑 0.5 / 缺失 0）
+= 44 / 44 = 100%**（存储后端单独 100%，见下节；评测单独 100%，见上表，B293 后）。
 
 ### 移出分母的整块（R1 / R5 / 口径外）
 
@@ -285,8 +287,8 @@ pi `scripts/` 是仓库自身构建/发布/校验工具，按 R5 **不进产品�
 |---|---:|---:|---:|---:|
 | 存储后端（新锚点，docs/24） | **44（20 行）** | **44.0** | **100%** | 100%（20/20） |
 | ~~SQLite schema~~ | **0（作废）** | 0 | — | — |
-| 评测（新锚点，docs/26） | **49（24 行）** | **48.0** | **97.96%** | 95.83%（23/24） |
-| 合并快照（两域均新锚点） | **93（44 行）** | **92.0** | **98.92%** | **97.73%（43/44）** |
+| 评测（新锚点，docs/26） | **49（24 行）** | **49.0** | **100%** | 100%（24/24） |
+| 合并快照（两域均新锚点） | **93（44 行）** | **93.0** | **100%** | **100%（44/44）** |
 
 
 ### 权重 0（排除出分母）的行
@@ -300,18 +302,18 @@ pi `scripts/` 是仓库自身构建/发布/校验工具，按 R5 **不进产品�
 | harness-only / `durable` / pico3 / micro | 全部 59 行 | R1（删除）/ R5（不可达） |
 | 防漂移脚本 | 全部 | 非 `bin pi` 产品面 |
 
-## 存疑清单（1 个判定单元，1 行）
+## 存疑清单（0 个判定单元；S7 已随 B293 销号）
 
 | # | 能力 | 存疑点 |
 |---|---|---|
-| S7 | TUI 文档审计（评测 #20） | pi 用 context-footer oracle（`42.2%/272k` 状态行）；java TUI 无该行，以 Java 文档问答＋Levenshtein 0.75 替代（D183／D189；L6 §1.4 已按新锚点复核，判分核心未变，维持存疑）。**2026-11-23 按 `a00a5048d` 再复核（docs/20）**：`tui.docs.eval.ts` 两锚点零 diff，oracle 形态未变（`BUILT_IN_CONTEXT_PATTERN` `:13-15`、内联 `levenshteinSimilarity` `:19-30`），维持存疑；收口条件＝L7 落地 context footer 状态行 |
+| S7 | TUI 文档审计（评测 #20） | pi 用 context-footer oracle（`42.2%/272k` 状态行）；**2026-11-24 B293 已落地**：L7 `StatusBar` 显示同形 `percent%/window (auto)`（`SessionSnapshot` 携带 `ContextUsage`/`autoCompact`），#20 改判「对齐（形状不同）」。eval 仍用 Java 文档问答＋Levenshtein 0.75 替代 pi 的代码修改任务（D183／D189 保留）。**2026-11-23 按 `a00a5048d` 复核（docs/20）**：`tui.docs.eval.ts` 两锚点零 diff，oracle 形态未变（`BUILT_IN_CONTEXT_PATTERN` `:13-15`、内联 `levenshteinSimilarity` `:19-30`） |
 
 > #6 已按 docs/24 §1.5 改判「对齐（形状不同）」并登记 D218；S1 销号。
-> 评测域唯一存疑是 #20；其余 23 行全部对齐，**没有第二个缺口**。
+> #20 已于 2026-11-24 随 B293 改判「对齐（形状不同）」；评测域 24 行全部对齐，**没有剩余缺口**。
 
 ## 目标锚点 `a00a5048d` 预审计（2026-11-21）
 
 - **L4 session：44/44＝100%**，新锚点无 L4 行为变化（`packages/durable` 仍 R5 出分母，会话变更归 L5）。
-- **L6 evals：48.0/49≈98.0%**，`packages/evals/src` 零行为变化，唯一存疑 #20（TUI context-footer oracle）不变。
-  **已于 2026-11-23 复核确认（docs/20）**：`56cae7823..a00a5048d` 仅 `package.json` 变化，24 行判定全部续用，读数转正式。
+- **L6 evals：49.0/49＝100%**（2026-11-24 B293 落地后），`packages/evals/src` 零行为变化，24 行判定续用；#20 原存疑随 L7 context footer 改判「对齐（形状不同）」。
+  **2026-11-23 复核确认（docs/20）**：`56cae7823..a00a5048d` 仅 `package.json` 变化，24 行 pi 证据全部续用。
 - 正式行级重判归 P12；口径见 [`../05-module-alignment-map.md` §1.2](../05-module-alignment-map.md)。
