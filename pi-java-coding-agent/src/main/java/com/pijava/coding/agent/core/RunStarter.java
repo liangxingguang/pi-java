@@ -8,7 +8,9 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.stream.Stream;
 
 import com.pijava.agent.entry.Entry;
+import com.pijava.agent.harness.LaneInfo;
 import com.pijava.ai.stream.StreamEvent;
+import com.pijava.coding.agent.extension.event.ExtensionResults;
 
 /**
  * L5 W1（pi {@code _startRun}/{@code _prepareRun}，agent-session.ts:1894-2013）：
@@ -57,8 +59,7 @@ final class RunStarter {
                                        EntryObserver entryObserver) {
         owner.agentRunActive.set(true);
         owner.agentRunAbortRequested.set(false);
-        var handlerDrafts = new ArrayList<com.pijava.coding.agent.extension.event
-            .ExtensionResults.CustomMessageDraft>();
+        var handlerDrafts = new ArrayList<ExtensionResults.CustomMessageDraft>();
         try {
             if (owner.extensionFirer() != null) {
                 // 批 16（T3c）：sections 基线＝harness 当前自定义段的拷贝，处理器改写
@@ -96,13 +97,6 @@ final class RunStarter {
             owner.harness().appendLaneEntry(owner.laneName(), pendingBash);
         }
         owner.flushPendingCustomMessages();
-        // prompt 臂保留既有落盘序（处理器消息先于用户消息，窄差 D19）；custom 臂
-        // 按 pi 序排在起始 custom 与 nextTurn 之后。
-        if (trigger.custom() == null) {
-            for (var draft : handlerDrafts) {
-                owner.messaging().appendCustomDraft(draft);
-            }
-        }
         if (onStarted != null) {
             onStarted.run();
         }
@@ -114,24 +108,29 @@ final class RunStarter {
         var statusFuture = new CompletableFuture<RunStatus>();
 
         if (trigger.custom() != null) {
-            // pi custom 臂（:1977-1980）：起始消息是 custom 本体（先落盘，续跑驱动）；
-            // nextTurn 与处理器消息按 pi 的 messages 序排在其后。
+            // pi custom 臂（_prepareRun:2030-2057）：起始 custom → nextTurn → 处理器
+            // 消息；三者同属本次运行的待发消息（D19 后两臂同序）。
             owner.messaging().appendCustomMessageNow(trigger.custom());
             for (var nextTurn : owner.drainPendingNextTurnMessages()) {
                 owner.messaging().appendCustomMessageNow(nextTurn);
             }
             for (var draft : handlerDrafts) {
-                owner.messaging().appendCustomDraft(draft);
+                owner.messaging().appendCustomMessageNow(toQueued(draft));
             }
             Thread.startVirtualThread(() -> SessionRunner.driveContinuation(
                 owner, queue, entriesFuture, statusFuture, streamObserver, entryObserver));
         } else {
-            // 批 26（docs/37 T2，pi :2088-2092 对位）：nextTurn custom 消息随本次起跑
-            // 注入（排在起始消息之后，经 initialMessages 进待发列表）。
-            var nextTurnCustoms = owner.drainPendingNextTurnMessages().stream()
-                .map(QueuedCustomMessage::toQueuedItem).toList();
+            // pi _prepareRun:2038-2057（批 26 T2 的 nextTurn 臂扩展为 D19 序）：
+            // 用户消息 → nextTurn → 处理器消息，同属本次运行的待发列表。
+            var customs = new ArrayList<LaneInfo.QueuedItem.Custom>();
+            for (var nextTurn : owner.drainPendingNextTurnMessages()) {
+                customs.add(nextTurn.toQueuedItem());
+            }
+            for (var draft : handlerDrafts) {
+                customs.add(toQueued(draft).toQueuedItem());
+            }
             Thread.startVirtualThread(() -> SessionRunner.drive(
-                owner, trigger.prompt(), trigger.images(), nextTurnCustoms, queue,
+                owner, trigger.prompt(), trigger.images(), customs, queue,
                 entriesFuture, statusFuture, streamObserver, entryObserver));
         }
 
@@ -144,6 +143,15 @@ final class RunStarter {
             }
         }).takeWhile(Optional::isPresent).map(Optional::get);
         return new SessionResult(stream, entriesFuture, statusFuture, "started");
+    }
+
+    /**
+     * 处理器草稿 → 待投递载荷：复用 {@link QueuedCustomMessage} 的 content 归一
+     * （null ⇒ 空 Blocks，pi {@code content ?? []} 同义）。
+     */
+    private static QueuedCustomMessage toQueued(ExtensionResults.CustomMessageDraft draft) {
+        return new QueuedCustomMessage(draft.customType(), draft.content(),
+            draft.display(), draft.details());
     }
 
     /**

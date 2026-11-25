@@ -50,6 +50,8 @@ public final class DefaultExtensionContext implements ExtensionContext {
     private volatile Supplier<com.pijava.coding.agent.core.AgentSession> toolControl;
     /** L5 W4：扩展路径 → 包元数据（pi {@code resourceMetadataByPath} 对位）。 */
     private volatile java.util.Map<String, com.pijava.coding.agent.pkg.PathMetadata> extensionMetadata;
+    /** D29：换装/关闭后的失效状态（pi {@code runner.staleMessage}，runner.ts:398）。 */
+    private final ExtensionContextStaleness staleness = new ExtensionContextStaleness();
     /** 按扩展名分桶的注册表集合＋宿主会话晚读面（结构债拆分，本体全在其中）。 */
     private final ExtensionSurfaceRegistries surface = new ExtensionSurfaceRegistries(this);
     /** 批 16（T4b）：工具渲染器责任链（pi extension.toolRenderers 拍平对位）。 */
@@ -106,32 +108,21 @@ public final class DefaultExtensionContext implements ExtensionContext {
         this.sessionSupplier = sessionSupplier;
     }
 
-    @Override
-    public ToolRegistry tools() {
-        return services.tools();
-    }
+    @Override public ToolRegistry tools() { assertActive(); return services.tools(); }
 
     @Override
     public CommandRegistry slashCommands() {
+        assertActive();
         // 批 20（B237）：扩展注册走打标视图（register 即 EXTENSION）——
         // pi 的扩展命令表与内置件是两个注册面，java 同池 ⇒ 标签区分执行面。
         return services.slashCommands().extensionView();
     }
 
-    @Override
-    public ProviderRegistry providers() {
-        return services.providers();
-    }
+    @Override public ProviderRegistry providers() { assertActive(); return services.providers(); }
 
-    @Override
-    public SkillManager skills() {
-        return skills;
-    }
+    @Override public SkillManager skills() { assertActive(); return skills; }
 
-    @Override
-    public SettingsManager settings() {
-        return services.settings();
-    }
+    @Override public SettingsManager settings() { assertActive(); return services.settings(); }
 
     /**
      * 批 17（T1/T2）：晚绑定现取＋ui_prompt 包装——pi {@code setUIContext} 的
@@ -141,6 +132,7 @@ public final class DefaultExtensionContext implements ExtensionContext {
      */
     @Override
     public ExtensionUI ui() {
+        assertActive();
         var delegate = uiSupplier.get();
         if (delegate == null || delegate == ExtensionUI.NOOP) {
             return ExtensionUI.NOOP;
@@ -152,17 +144,10 @@ public final class DefaultExtensionContext implements ExtensionContext {
     }
 
     /** pi {@code hasUI}（runner.ts:622 恒等比较对位——读<b>未包装</b>的 delegate）。 */
-    @Override
-    public boolean hasUi() {
-        var delegate = uiSupplier.get();
-        return delegate != null && delegate != ExtensionUI.NOOP;
-    }
+    @Override public boolean hasUi() { assertActive(); var d = uiSupplier.get(); return d != null && d != ExtensionUI.NOOP; }
 
     /** pi {@code ExtensionContext.mode}（现读）。 */
-    @Override
-    public String mode() {
-        return modeSupplier.get();
-    }
+    @Override public String mode() { assertActive(); return modeSupplier.get(); }
 
     /** 批 17（T2）：loadExtensions 尾部回填 ui_prompt 发射器（firer 晚于 context 诞生）。 */
     public void bindUiPromptFirer(SessionEventFirer firer) {
@@ -181,6 +166,7 @@ public final class DefaultExtensionContext implements ExtensionContext {
 
     /** per-extension 委托（{@link PerExtensionContext}）触达注册表本体的口。 */
     ExtensionSurfaceRegistries surface() {
+        assertActive();
         return surface;
     }
 
@@ -207,17 +193,10 @@ public final class DefaultExtensionContext implements ExtensionContext {
         return map == null ? null : map.get(path);
     }
 
-    public java.util.Map<String, Object> flagValues() {
-        return surface.flagValues();
-    }
-
-    public java.util.List<ExtensionFlag> allFlags() {
-        return surface.allFlags();
-    }
-
-    public ExtensionFlag findFlag(String name) {
-        return surface.findFlag(name);
-    }
+    /** flag 注册面读取（binder 装配期使用；D29 stale 检查不覆盖注册期工具）。 */
+    java.util.Map<String, Object> flagValues() { return surface.flagValues(); }
+    java.util.List<ExtensionFlag> allFlags() { return surface.allFlags(); }
+    ExtensionFlag findFlag(String name) { return surface.findFlag(name); }
 
     /** 工具渲染器责任链（T4b；装配点注册内置 MCP resolver，扩展经 registerToolRenderer 追加）。 */
     public ToolRendererRegistry toolRenderers() {
@@ -250,8 +229,7 @@ public final class DefaultExtensionContext implements ExtensionContext {
     public String cwd() { return requireToolControl().cwd(); }
 
     /** 批 28：pi {@code ExtensionContext.sessionManager}——惰性只读视图。 */
-    @Override
-    public ExtensionSessionView sessionManager() { return sessionView; }
+    @Override public ExtensionSessionView sessionManager() { assertActive(); return sessionView; }
 
     /**
      * 批 27（B162/T4）：嵌套调用——路由到宿主会话（pi 的 executeToolFn 对位）；
@@ -261,6 +239,7 @@ public final class DefaultExtensionContext implements ExtensionContext {
     public com.pijava.agent.harness.PiLoop.ToolOutcome executeTool(
             String callerToolCallId, com.pijava.ai.AbortSignal signal, String name,
             Map<String, Object> args, java.util.function.Consumer<Object> onUpdate) {
+        assertActive();
         var session = hostSessionOrNull();
         if (session == null) {
             return ExtensionContext.super.executeTool(callerToolCallId, signal, name, args, onUpdate);
@@ -271,6 +250,7 @@ public final class DefaultExtensionContext implements ExtensionContext {
     }
     @Override
     public java.util.List<com.pijava.agent.tool.AgentTool<?, ?>> callableTools() {
+        assertActive();
         var session = hostSessionOrNull();
         return session == null ? java.util.List.of() : session.callableTools();
     }
@@ -278,12 +258,12 @@ public final class DefaultExtensionContext implements ExtensionContext {
     /** 基础上下文直调（无扩展名归属）时路由上下文即本上下文。 */
     @Override
     public void registerVirtualModel(ExtensionVirtualModel model) {
-        surface.registerVirtualModel(model, this);
+        surface().registerVirtualModel(model, this);
     }
 
     @Override
     public void unregisterVirtualModel(String provider, String id) {
-        surface.unregisterVirtualModel(provider, id);
+        surface().unregisterVirtualModel(provider, id);
     }
 
     @Override
@@ -304,6 +284,7 @@ public final class DefaultExtensionContext implements ExtensionContext {
     }
 
     com.pijava.coding.agent.core.AgentSession requireToolControl() {
+        assertActive();
         var session = hostSessionOrNull();
         if (session == null) {
             throw new IllegalStateException(
@@ -350,70 +331,46 @@ public final class DefaultExtensionContext implements ExtensionContext {
      */
     @Override
     public ExtensionContext forExtension(String extensionName) {
+        assertActive();
         return PerExtensionContext.of(this, extensionName, extensionName);
     }
 
     /** 批 23（T1）：带路径身份的派生（pi {@code extension.path} 对位）。 */
     @Override
     public ExtensionContext forExtension(String extensionName, String extensionPath) {
+        assertActive();
         return PerExtensionContext.of(this, extensionName, extensionPath);
     }
 
     @Override
-    public java.util.List<com.pijava.coding.agent.core.slash.SlashCommandInfo> getCommands() {
-        return surface.getCommands();
-    }
+    public java.util.List<com.pijava.coding.agent.core.slash.SlashCommandInfo> getCommands() { return surface().getCommands(); }
 
     @Override
     public String sendMessage(String customType, CustomMessageContent content, boolean display,
                               Map<String, Object> details, SendMessageOptions options) {
-        return surface.sendMessage(customType, content, display, details, options);
+        return surface().sendMessage(customType, content, display, details, options);
     }
 
-    @Override
-    public void sendUserMessage(CustomMessageContent content, SendUserMessageOptions options) {
-        surface.sendUserMessage(content, options);
-    }
+    @Override public void sendUserMessage(CustomMessageContent content, SendUserMessageOptions options) { surface().sendUserMessage(content, options); }
 
-    @Override
-    public void appendEntry(String customType, Map<String, Object> data) {
-        surface.appendEntry(customType, data);
-    }
+    @Override public void appendEntry(String customType, Map<String, Object> data) { surface().appendEntry(customType, data); }
 
-    @Override
-    public void setSessionName(String name) {
-        surface.setSessionName(name);
-    }
+    @Override public void setSessionName(String name) { surface().setSessionName(name); }
 
-    @Override
-    public String getSessionName() {
-        return surface.getSessionName();
-    }
+    @Override public String getSessionName() { return surface().getSessionName(); }
 
-    @Override
-    public void setLabel(String entryId, String label) {
-        surface.setLabel(entryId, label);
-    }
+    @Override public void setLabel(String entryId, String label) { surface().setLabel(entryId, label); }
 
-    @Override
-    public boolean setModel(com.pijava.ai.model.ModelId<?> model) {
-        return surface.setModel(model);
-    }
+    @Override public boolean setModel(com.pijava.ai.model.ModelId<?> model) { return surface().setModel(model); }
 
-    @Override
-    public com.pijava.ai.thinking.ModelThinkingLevel getThinkingLevel() {
-        return surface.getThinkingLevel();
-    }
+    @Override public com.pijava.ai.thinking.ModelThinkingLevel getThinkingLevel() { return surface().getThinkingLevel(); }
 
-    @Override
-    public void setThinkingLevel(com.pijava.ai.thinking.ModelThinkingLevel level) {
-        surface.setThinkingLevel(level);
-    }
+    @Override public void setThinkingLevel(com.pijava.ai.thinking.ModelThinkingLevel level) { surface().setThinkingLevel(level); }
 
     @Override
     public ExtensionExec.ExecResult exec(String command, java.util.List<String> args,
                                          ExtensionExec.ExecOptions options) {
-        return surface.exec(command, args, options);
+        return surface().exec(command, args, options);
     }
 
     /** 批 26（docs/37 T8，E5-5）：pi {@code unregisterProvider}——删注册（未注册静默，pi 同）。 */
@@ -477,6 +434,24 @@ public final class DefaultExtensionContext implements ExtensionContext {
         return surface.resolvedShortcuts(keys, hasUi);
     }
 
+    /**
+     * D29（pi {@code runner.invalidate}：runner.ts:733-740 → runtime loader.ts:200-207）：
+     * 置失效文案（**首条胜出**）并退订全部 eventBus 订阅。会话替换/关闭后，扩展持有的
+     * 旧 ctx 调用宿主面即抛 {@link IllegalStateException}。{@code switchTo} 的原地 attach
+     * 只走 {@link #invalidateChannels()}——同一会话对象、同一 ctx 仍在使用，置 stale 会误伤。
+     */
+    public void invalidate(String message) {
+        staleness.invalidate(message, surface::invalidateChannels);
+    }
+
+    /** pi {@code runner.assertActive}（runner.ts:742-746）：失效后统一错文。 */
+    private void assertActive() {
+        staleness.assertActive();
+    }
+
+    /** pi 默认失效文案（runner.ts:733-735／loader.ts:204 同文，逐字）。 */
+    public static final String STALE_MESSAGE = ExtensionContextStaleness.STALE_MESSAGE;
+
     /** pi {@code runtime.invalidate} 的 eventBus 半（loader.ts:193-196；本体在
      *  {@link ExtensionSurfaceRegistries}）。 */
     public void invalidateChannels() {
@@ -486,9 +461,9 @@ public final class DefaultExtensionContext implements ExtensionContext {
     // ── docs/50 B284：10 成员（实现簇在 ExtensionHostOperations）──
     private final ExtensionHostOperations host = new ExtensionHostOperations(this);
 
-    AgentSession requireHost(String member) { return host.requireHost(member); }
+    AgentSession requireHost(String member) { assertActive(); return host.requireHost(member); }
     @Override public java.util.Optional<ExtensionModelInfo> getModel() { return host.getModel(); }
-    @Override public ExtensionModelRegistry modelRegistry() { return modelRegistry; }
+    @Override public ExtensionModelRegistry modelRegistry() { assertActive(); return modelRegistry; }
     @Override public java.util.Optional<ExtensionContextUsage> getContextUsage() { return host.getContextUsage(); }
     @Override public void compact(ExtensionCompactOptions o) { host.compact(o); }
     @Override public void reload() { host.reload(); }

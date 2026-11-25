@@ -142,7 +142,10 @@ class PlanModeExtensionTest {
             session.extensionUI(ui, "tui");
             runCommand(session, "plan", "");
 
-            session.processPrompt("look around", PromptConfig.defaults());
+            // D19 后处理器消息随本轮落盘 ⇒ 必须等这次运行收口再断言（pi 同样在
+            // message_end 才写条目）。
+            var run = session.processPrompt("look around", PromptConfig.defaults());
+            assertThat(run.status().exitCode()).isZero();
             assertThat(customMessageTexts(session, "plan-mode-context"))
                 .anySatisfy(text -> assertThat(text).contains("[PLAN MODE ACTIVE]"));
 

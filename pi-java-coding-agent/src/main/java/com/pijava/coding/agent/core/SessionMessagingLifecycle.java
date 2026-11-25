@@ -362,25 +362,6 @@ final class SessionMessagingLifecycle {
     }
 
     /**
-     * docs/15（before_agent_start 的 result.message 落盘点，pi :2092-2104 对位）：
-     * 追加 custom message 条目。持久会话走 {@code SessionTree.appendCustomMessageEntry}
-     * （含落盘）；无持久会话时退化为 harness 追加（内存态）。
-     */
-    void appendCustomDraft(
-            com.pijava.coding.agent.extension.event.ExtensionResults.CustomMessageDraft draft) {
-        var content = draft.content() != null ? draft.content()
-            : new com.pijava.agent.entry.CustomMessageContent.Text("");
-        if (owner.session() != null) {
-            owner.session().appendCustomMessageEntry(draft.customType(), content, draft.display(),
-                draft.details());
-            return;
-        }
-        owner.harness().appendLaneEntry(owner.laneName(), new Entry.CustomMessage(
-            java.util.UUID.randomUUID().toString(), 0, null, Instant.now(),
-            draft.customType(), content, draft.display(), draft.details()));
-    }
-
-    /**
      * pi {@code recordBashResult}（agent-session.ts:3878-3899）：会话级 bash 结果落会话——
      * 空闲 ⇒ 追加 bashExecution 条目＋刷新工作副本＋即刻落盘；运行中 ⇒ 暂存
      * （pendingBashMessages），settled 时由 {@code SessionRunner} flush

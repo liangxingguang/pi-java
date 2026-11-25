@@ -230,7 +230,8 @@ final class SessionDiscoveryFork {
         var previousId = owner.sessionId();
         // 批 17（T7）：pi setBeforeSessionInvalidate 对位——切换前复位扩展 UI。
         owner.extensionUI().onSessionInvalidated();
-        // 批 26（docs/37 T7）：pi runtime.invalidate 的 eventBus 半——通道订阅统一退订。
+        // 批 26／D29：原地 attach 复用同一 ctx ⇒ 只走通道退订半（置 stale 会误伤在用
+        // 的上下文；pi 的旧 runner 失效见 closeWith 臂）。
         if (owner.extensionContext() != null) {
             owner.extensionContext().invalidateChannels();
         }
@@ -292,12 +293,12 @@ final class SessionDiscoveryFork {
 
     /**
      * docs/16（T1）：fork 臂的 wireSession 调用 —— 携带父会话当前 model/thinkingLevel
-     * （裁决①），注册表 fresh、进程级件共享（裁决②）。
+     * （裁决①），注册表取父会话副本（各 fork 一棵树，重复注册互不叠加）。
      */
     private AgentSession wireForkSession(String name) {
         var currentModel = owner.harness().getModel();
         return SessionWiring.wireSession(owner.sessionArgs(), owner.services().settings(),
-            owner.services().providers(), baseToolContext,
+            owner.services().providers().copy(), baseToolContext,
             owner.services().sessionRepository(), true, name,
             currentModel == null ? null
                 : currentModel.provider() + "/" + currentModel.modelName(),
@@ -434,10 +435,6 @@ final class SessionDiscoveryFork {
         // 批 17（T7，docs/28 §3-T7.2）：pi setBeforeSessionInvalidate 对位——
         // 会话失效前复位扩展 UI（活动对话框/注入槽位/状态段）。
         owner.extensionUI().onSessionInvalidated();
-        // 批 26（docs/37 T7）：pi runtime.invalidate 的 eventBus 半——通道订阅统一退订。
-        if (owner.extensionContext() != null) {
-            owner.extensionContext().invalidateChannels();
-        }
         closeWith(reason, targetSessionFile, true);
     }
 
@@ -450,10 +447,6 @@ final class SessionDiscoveryFork {
         // 扩展 UI 先复位（Ruling：设计稿 T7.2 只列 closeForReplacement/switchTo，
         // fork 臂补上以对齐 pi「一切 swap 前复位」语义）。
         owner.extensionUI().onSessionInvalidated();
-        // 批 26（docs/37 T7）：pi runtime.invalidate 的 eventBus 半——通道订阅统一退订。
-        if (owner.extensionContext() != null) {
-            owner.extensionContext().invalidateChannels();
-        }
         closeWith("fork", forkedSessionId, false);
     }
 
@@ -486,6 +479,12 @@ final class SessionDiscoveryFork {
         owner.messaging().cancelCacheWarmer();
         // pi dispose/teardownCurrent：shutdown 事件在 dispose 之前（:258-267）。
         fireSessionShutdown(reason, targetSessionFile);
+        // D29（pi dispose :1492-1494）：shutdown 处理器之后置 stale——旧 ctx 再调宿主
+        // 面即抛；同时完成通道退订（原 eventBus 半）。失效晚于 shutdown 处理器，
+        // 处理器内仍可用 ctx（pi 同序）。
+        if (owner.extensionContext() != null) {
+            owner.extensionContext().invalidate(null);
+        }
         if (owner.session() != null) {
             SessionPersistence.persistPending(owner, owner.session(), owner.laneName());
             owner.session().close();

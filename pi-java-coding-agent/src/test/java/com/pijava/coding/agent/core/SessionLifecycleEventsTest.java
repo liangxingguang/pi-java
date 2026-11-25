@@ -292,6 +292,21 @@ class SessionLifecycleEventsTest {
                 .toList();
             assertThat(customs).hasSize(1);
             assertThat(customs.get(0).customType()).isEqualTo("hook-note");
+            // D19：处理器条目按 pi _prepareRun 的 messages 序落在用户消息之后。
+            var transcript = s.harness().snapshot(s.laneName()).transcript();
+            int userIndex = -1;
+            int customIndex = -1;
+            for (int i = 0; i < transcript.size(); i++) {
+                if (transcript.get(i) instanceof Entry.Message message
+                        && message.message() instanceof com.pijava.ai.message.Message.UserMessage) {
+                    userIndex = i;
+                }
+                if (transcript.get(i) instanceof Entry.CustomMessage) {
+                    customIndex = i;
+                }
+            }
+            assertThat(userIndex).isGreaterThanOrEqualTo(0);
+            assertThat(customIndex).isGreaterThan(userIndex);
         }
     }
 
@@ -303,9 +318,11 @@ class SessionLifecycleEventsTest {
             s.processPrompt("hello").status();
             // sink 适配器统一发射：每个定案消息恰火一次（loadout 系统消息也在
             // sink 过——pi 同样对每个 AgentMessage 火 message_end），无双发。
+            // D19 后处理器 custom 也随本轮待发列表过 sink ⇒ 多一条 message_end；
+            // custom 投影是 UserMessage，pi 的 role 是 "custom"（见 D322）。
             assertThat(EVENTS.stream().filter(e -> e.startsWith("message_end:")).toList())
                 .containsExactly("message_end:system", "message_end:user",
-                    "message_end:assistant");
+                    "message_end:user", "message_end:assistant");
             var assistantTexts = s.harness().snapshot(s.laneName()).transcript().stream()
                 .filter(e -> e instanceof Entry.Message)
                 .map(e -> ((Entry.Message) e).message())

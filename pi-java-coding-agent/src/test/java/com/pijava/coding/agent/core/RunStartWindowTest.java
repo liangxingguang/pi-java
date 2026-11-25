@@ -18,6 +18,7 @@ import com.pijava.agent.tool.ShellResult;
 import com.pijava.agent.tool.ToolContext;
 import com.pijava.ai.message.AssistantMessage;
 import com.pijava.ai.message.ContentBlock;
+import com.pijava.ai.message.MessageTexts;
 import com.pijava.ai.message.StopReason;
 import com.pijava.ai.provider.FauxProvider;
 import com.pijava.ai.provider.ProviderRegistry;
@@ -155,6 +156,15 @@ class RunStartWindowTest {
         return content instanceof CustomMessageContent.Text text ? text.text() : "";
     }
 
+    /** 车道工作副本（本轮 LLM 上下文）里的用户消息文本。 */
+    private static List<String> contextUserTexts(AgentSession s) {
+        return s.harness().getMessages().stream()
+            .filter(m -> m instanceof com.pijava.ai.message.Message.UserMessage)
+            .map(m -> MessageTexts.contentText(
+                ((com.pijava.ai.message.Message.UserMessage) m).content()))
+            .toList();
+    }
+
     @Test
     void sendMessageInHookIsQueuedIntoThisRun() throws Exception {
         try (var s = session()) {
@@ -207,6 +217,40 @@ class RunStartWindowTest {
             assertThat(customs(s).stream().map(RunStartWindowTest::textOf).toList())
                 .as("起始 custom ⇒ 处理器消息（pi messages 序）")
                 .containsExactly("trigger", "from-hook");
+            assertThat(contextUserTexts(s))
+                .as("custom 臂处理器消息进入本轮上下文")
+                .contains("from-hook");
+        }
+    }
+
+    @Test
+    void promptArmOrdersHookMessagesAfterUserAndNextTurn() throws Exception {
+        try (var s = session()) {
+            s.sendCustomMessage("next-turn", CustomMessageContent.of("next-turn-msg"),
+                true, Map.of(), null, CustomMessageDelivery.NEXT_TURN);
+            s.processPrompt("hi").statusFuture().get(30, TimeUnit.SECONDS);
+            var transcript = s.harness().snapshot(s.laneName()).transcript();
+            int userIndex = -1;
+            int firstCustomIndex = Integer.MAX_VALUE;
+            for (int i = 0; i < transcript.size(); i++) {
+                if (transcript.get(i) instanceof Entry.Message message
+                        && message.message() instanceof com.pijava.ai.message.Message.UserMessage) {
+                    userIndex = i;
+                }
+                if (transcript.get(i) instanceof Entry.CustomMessage) {
+                    firstCustomIndex = Math.min(firstCustomIndex, i);
+                }
+            }
+            assertThat(userIndex).isGreaterThanOrEqualTo(0);
+            assertThat(firstCustomIndex)
+                .as("nextTurn／处理器消息排在起始用户消息之后（D19）")
+                .isGreaterThan(userIndex);
+            assertThat(customs(s).stream().map(RunStartWindowTest::textOf).toList())
+                .as("pi _prepareRun：user → nextTurn → handler")
+                .containsExactly("next-turn-msg", "from-hook");
+            assertThat(contextUserTexts(s))
+                .as("处理器消息进入本轮上下文（pi messages 含 result.message）")
+                .contains("from-hook");
         }
     }
 
