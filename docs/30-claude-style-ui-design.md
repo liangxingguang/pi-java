@@ -103,10 +103,10 @@
 > 【风险/代价】`Ctrl+O` 展开提示等旧文案位置变化；不影响 pi 模式。[用户可见]
 
 **R8 常驻状态行：上下文用量与 cwd**
-> 【场景】`SessionSnapshot` 无上下文窗口字段，无法显示 `42% ctx`（`docs/09` 的 L6 #20 也卡在同一处）。
+> 【场景】`SessionSnapshot` 无上下文窗口字段，无法显示 `42% ctx`（L6 #20 也卡在同一处，已随 B293 关闭）。
 > 【决定】`SessionSnapshot` 追加四个字段：`contextTokens`（用 `ContextUsageEstimator.estimateContextTokens(lane.messages)` 估算）、`contextWindow`（`config.contextWindow()` 按当前模型解析）、`cwd`、`queuedCount`；`SnapshotService` 构造参数补一个窗口供应器。`contextWindow<=0` ⇒ 只显示 token 数，不显示百分比。
 > 【风险/代价】record 加组件会触发全部构造点（`SnapshotService:96` 与测试夹具）编译错误；`queuedCount` 需接 `QueueManager` 现读。[用户可见]
-> [注] 该字段同时解 `docs/09` 的「context footer 顺延」悬案，属附带收益，不在本稿验收口径内。
+> [注] 该字段同时解 L6 #20 的「context footer 顺延」悬案（已随 B293 关闭），属附带收益，不在本稿验收口径内。
 
 **R9 inline 流式草稿（默认开，可关）**
 > 【场景】inline 现状要等 TextEnd 才出整段回复，长回答期间界面静止。

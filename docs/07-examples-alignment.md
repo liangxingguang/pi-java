@@ -47,4 +47,4 @@
 5. 每个示例都有独立验收测试；外部系统使用假模型、假进程或隔离服务。
 6. 新分母由本次清点产生（**88**＝102 − 8 外部运行时 − 1 R5 − 5 范围面主动出分母，D232／D237），旧 105/102 件不再作为翻“对齐”的条件。
 
-详细层级顺序见 [`09-pi-latest-reanchor-plan.md`](09-pi-latest-reanchor-plan.md)。
+模块与层序见 [`05-module-alignment-map.md` §1](05-module-alignment-map.md)。

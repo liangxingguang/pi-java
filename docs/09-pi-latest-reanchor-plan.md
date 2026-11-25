@@ -1,484 +1,80 @@
-# 09 - pi 最新代码换锚差异与对齐计划
+# 09 - 未对齐项清单（目标锚点 a00a5048d）
 
-> 【背景摘要】2026-11-20 重新拉取 pi `main` 到 `a00a5048d`（v1.6.0 发布后 12 个提交，距 v1.5.2 约 380 个提交），与立项时锚点 `56cae7823` 对比，给出结构差异、七层差异和对齐排期。
+> 【背景摘要】本稿只保留**尚未对齐**的单元与仍可动作的窄差；已对齐或已完成的批次记录全部移除，历史在 git。
 >
-> **状态：已收口归档（2026-11-24，P12）。** `CURRENT_PI_PIN` 已切至 `a00a5048d`；本稿保留作换锚过程记录，不再作为执行计划。发布读数以 [`docs/05` §1](05-module-alignment-map.md) 为准。
->
-> **实施记录（按时间，2026-11-21 起）：** 阶段状态看 §4 开头的「进度」，分层完成度看 §3 开头的「完成度总览」。
-> - P1 已完成：`9cccfe23 feat(ai): validate tool arguments with pi-schema semantics`。
-> - P2 首批已完成：`dc59f0c7 feat(ai): align v1.6.0 retry patterns and instruction role`。
-> - P2b 已完成：`734c7a21 feat(ai): support v1.6.0 prompt cache key mode and assistant/tools compat keys`
->   （三个新 compat 键贯穿 ModelCompat／models.json／四条车道解析与读点；响应车道 `disabled` 生效）。
-> - P2c 已完成（2026-11-21）：`65857596`（token 上限 15% 余量、responses `session-id`、Copilot 顶层 reasoning tokens）、
->   `68eb84ef`（Mistral strict 显式 opt-in）、`14e90c8b`（`openai_input_transformations` 诊断）。
-> - P2 余项结论：Codex 专属形状（developer item／`max_output_tokens`／`configuration_update`／WS 60 分钟）
->   **不适用** —— pi-java 无 `openai-codex-responses` 车道（R5 范围外）；共享的 responses 部分已逐项核对
->   （`max_output_tokens ≥16`、显式 prompt cache、亲和头）。Copilot 的顶层 `reasoning_tokens`
->   已落；**新锚点 `providers/github-copilot.ts` 的 diff 只有 classifier 与模型列表，没有 strict
->   分支**，原稿「strict/reasoning 两条」中的 strict 属误记；剩余分类器（Microsoft-Decision-1）
->   按计划属 R5。
-> - P2 余项审计补充（2026-11-21）：新锚点 `error-body.ts:60` 的 **`withCauseDetail`（最深
->   cause＋code 追加到错误文本）Java 无等价实现**，编号 B289（⚠️ 实际未进 `docs/04` §1 台账，
->   已在 L1 收口时直接落地：`49336f70`）；
->   strict 工具「无类型节点降级＋按会话记忆超限」与 lazy 初始化取消映射 `stopReason: aborted`
->   也仍未落，归 P2 余项/P5。**2026-11-22 复验收口**：lazy 取消映射已落（B291 `c8df0315`）；
->   无类型节点判据与暖请求 `disableContinuation` 已落（docs/14）。
-> - P3 部分完成（2026-11-21）：`fca70024`（catalog 规则按 `a00a5048d` 重新 vendor、上游快照重取、
->   18 分片重生成：645 chat／74 image，radius 基线 28→39）、`21ec26b0`（默认模型表同步：
->   Anthropic Opus 5.5、OpenAI GPT-6.2 Sol、Google gemini-4-argon 等）。
-> - P3 余项已完成（2026-11-21，`docs/11` 闭环）：`753bdc30`（多变量密钥回落链）、`d035ffa0`。
->   Qwen Token Plan Team／Team CN／Individual／
->   Individual CN 与 Xiaomi AMS／SGP 六个 provider 注册（共 26 个内置 provider）；`qwen-token-plan-cn`
->   显示名、中国端点与密钥链按 `a00a5048d` 更新；`ProviderConfig` 支持多变量密钥回落链
->   （`apiKeyEnvVars`），主人确认 `source` 记实际命中的变量；分片 18→23（645→695 chat）、
->   默认模型表 17→22 键。生成器 `--check`／`--verify-vendor` 零差异。models.dev 快照只补进
->   三个新上游键并保留既有 15 键原序（OpenRouter／Radius 快照不重取），故既有 18 个分片
->   逐字节未变；新增分片首条顺序钉在提交快照上。
-> - P0 预审计完成（2026-11-21）：五组只读取证按 `a00a5048d` 逐项重判（新单元／既有单元重判），
->   投影读数已登记各层地图（全仓约 **91.0%**，
->   旧锚点正式读数 94.9%）。**不等同 P0 闭环**：正式逐行重判、编号／权重裁定与
->   `CURRENT_PI_PIN` 切换仍归 P12。新发现的两处原稿偏差已在上方修正。
-> - P10 已完成（2026-11-21）：`87ae0bfe`（中止批次仍逐调用补 `Operation aborted`
->   的 start/end/结果；准备相顶端中止门先于查找与钩子，pi #9986）。`streamProxy` 按 R5
->   出分母（`docs/04` §5.1、`map/03` #68），不随 P4；Anthropic threads 仍归 P4。
-> - 另：`5ee385a8`（Gemini `CONTINUATION` 结束映射为 `length`，pi #12103/`f72f799a4`；
->   Java SDK 无 `automaticContinuation` 开关，该 SDK 特性不存在）。
-> - P4 已完成（2026-11-22，`docs/12` 五段落地）：`177acc36`（会话态＋前缀哈希）、`25e00d5b`（builder 三态）、
->   `3f0ac7a6`（车道接入）、`ecf4c6f1`（回退矩阵＋`off`）、`93b4bfe4`（`disableContinuation`）；
->   真机冒烟经用户裁决豁免（以 `mvn test -pl pi-java-ai` 2241 全绿收口）。
-> - L1 收口完成（2026-11-22）：B289 `49336f70`、B290 `6d393725`、B291 `c8df0315`、B292 `083d3552`；
->   L0 的 `telemetryNow` 已由 `f0841d49` 回补。`map/02` 记 L1 **245.5/246＝99.8%**（余 cache 策略单元
->   0.5，属模块归属）。**复验补记**：strict 无类型节点判据与暖请求
->   `disableContinuation` 于当晚补入（docs/14）；第二次复验补
->   #114 根 schema 白名单、`session-resources` 清理与线程记账顺序（docs/15），
->   读数不变。**收尾**：缓存预热策略按 docs/16 迁入 ai
->   （`CacheWarmingPolicy`）⇒ #6 改判对齐，L1 **246/246＝100%**。
-> - P9 已完成（2026-11-22，docs/13）：9 项缺口拆成 S1–S7 并按阶段落地
->   ——`02b6bf59`（关闭序列，#22）、`db9f8646`（按块行读取，#21／#22）、`d80b326f`（JSON 限长＋body 取消，
->   #25／#26）、`cd942ef`（OAuth 刷新＋换码校验，#36）、`f8349e5`（两段式 sign-in＋loopback 拆分，#39／#42）、
->   `e803730`（CLI provider token，#67／#68）、`e40eea1`（`PipeTransport`，#96）。`map/07` 记 L2
->   **123/123＝100%**（分母 +1 为 `#96`，按设计稿 D1 计入分母）。
-> - L5 收口完成（2026-11-23，docs/19）：11 笔提交
->   ——`d119681f`＋`ff71e4d3`（W1 auth login/logout 与 ai 结构化 AuthUrl）、`6f19b8d8`（W3 cwd 缺失三臂）、
->   `8658dc6e`（W4 选型恢复＋thinking 记录）、`992ccdd5`（W5 替换/诊断/RPC shutdown/信号）、
->   `7859c0b2`（W2＋W7 cache 默认/暖行合并/changelog/copy/reasoning 提示）、`816bae95`（W8 逐包结果/capture）、
->   `e2c8d097`（W6 恢复 loadout＋六面 Markdown）、`c2d6ae89`（W9/W10 选择器光标＋登录 URL）、
->   `edaedc5f`（W11 模型可见文本/引号/摘要输入）、`0f7f6fb4`（cache 测试适配）。`map/04` 记 L5
->   **461/461＝100%**（llama 1 按 F1／R2 出分母；13 重开单元恢复＋9 新单元落地，其中 N-4 out）。
->   P6 随 W1/W2/W9/W10 完成；P7 的生命周期/扩展面随 W5/W6/W7 完成，`render()` 契约仍待 P8。
-> - P8 随 L7 W1–W8 完成；P12 于 2026-11-24 收口；P11 已完成（2026-11-24，evals `docs/20`、examples docs/30）。
->
-> **P12 收口时快照（2026-11-24）**：锚点 `a00a5048d`，当时发布读数 **1,369.5/1,389＝98.6%**（D 至 D316、B 至 B293，B293 已销号）；
-> 13 个阶段全部完成（P0–P12），P7 的 `render()` 契约随 L7 W3（R31 投影缓存＋窄差 D287）收口、P8 随 L7 W1–W8 完成；
-> L8 examples **88/88**。旧锚点 `56cae7823` 转参照（94.9%，仅历史对照）。
->
-> **排序裁决（2026-11-22，用户）**：**由底往上、逐层对齐，能对齐就先对齐**。因此不再按 P5→P8 的横向包序推进，改为**先把 L1 做到 100%**（B289–B292 ＋ cache 策略单元 ＋ P4 threads），再做 L2→L3→…；P5 顺延到 L3 收口时做。L0 的 2 个 S 级项（`telemetryNow`、`renderTrace` 转义）并入同批先清。设计与提交切分见 docs/11。
->
-> 术语释义：
-> - **锚点**：pi 的一个固定 git 提交，pi-java 以它作为行为对照基准，取证只走 `git show <sha>:<path>`。
-> - **模型可见面**：模型能读到的系统提示、工具声明、工具结果和报错文本；其余算【内部，模型不可见】。
-> - **窄差（D 项）**：Java 平台无法消除的差异，登记在 `docs/04` 和对应地图，不重复扣分。
-> - **R5**：面外子系统裁决——不做、不进分母；共享主流行为不能借 R5 跳过。
-> - **pi-schema**：pi 1.5.0 新增的 JSON Schema 构建/校验包，不用 eval（动态执行代码），替代 TypeBox。
+> 读数真源：`docs/05` §1（发布读数）；逐行证据：`docs/map/05-tui-web.md`、`docs/map/04-coding-agent.md`；未结项权威表：`docs/04` §1。当前锚点 `a00a5048d`（`CURRENT_PI_PIN`）。范围裁决（R1/R2/R5 等）见 `docs/04` §3，本稿不复写。
 
-## 0. 结论
+## 1. 剩余差距总览
 
-1. **新锚点候选为 `a00a5048d`（2026-11-20，main HEAD）**。它包含 v1.6.0 发布提交及其后的 12 个修复提交，比 v1.5.2 多约 380 个提交；建议直接钉 HEAD，不钉发布 tag。
-2. **结构上必须对齐的新增项只有一个：`pi-schema` 的校验语义**。它已被 `ai` 和 `agent` 直接依赖，校验结果和报错文本对模型可见，不能按 R5 跳过。
-3. **`env`／`chord`／`durable`／`apps/p2`／`apps/p2-mac`／`apps/p3` 继续出分母**。它们不在 `coding-agent`／`agent`／`ai`／`tui` 的依赖链上；建议把 `env` 和 apps 明确写进 R5 清单。
-4. **codemode 沙箱仍出分母**，但 `tool_search` 用到的 `resolveSchemaRef`（跟随本地 `$ref`）必须在 Java 侧单独实现，不能随沙箱一起跳过。
-5. **规模**：锚点以来 818 个提交、3,463 个文件、+461,742/−41,486 行；剔除 R5 与 apps 后，八个在册包的 `src` 变更约 **15,700 行**（其中新包 schema 4,852 行）。
-6. **排期顺序**：先换锚重测（P0），再跨层 schema 语义（P1），然后 AI wire（P2/P3）、coding-agent（P4–P7）、TUI（P8）、MCP/agent/session（P9/P10）、telemetry/evals/examples（P11），最后收尾（P12）。Anthropic message threads 单独成包，可延后（**2026-11-22 已随 L1 收口完成**）。
-7. **最大风险**：`pi-schema` 完整方言、Anthropic message threads、TUI 渲染缓存契约、pi 的移动速度。
+> L0–L4、L6 与 L8（88/88，按件）已全部对齐，不在本稿范围。
 
-## 1. 锚点与差异规模
-
-| 项目 | 旧锚点（`REFERENCE_PI_PIN`） | 新锚点（`CURRENT_PI_PIN`） |
-|---|---|---|
-| 提交 | `56cae782341c339d3bb820081f0f9425d8c5b1ec` | `a00a5048dfae964fe89dce593215d0c3d275017c` |
-| 日期 | 2026-10-31 | 2026-11-20 |
-| `package.json` 版本 | 1.4.0（不是 v1.4.0 tag；该 tag 在 2026-10-21） | 1.6.0（v1.6.0 发布后 12 个提交） |
-| 距上一个发布 tag | v1.4.0 之后 265 个提交 | v1.6.0 之后 12 个提交（v1.5.2 之后约 380 个） |
-| 两锚点之间 | — | **818 个提交** |
-
-全仓 diff：3,463 个文件，+461,742/−41,486 行。大头来自面外包和 apps：
-
-| 范围 | 源码行数变化（约） | 处置 |
+| 层 | 发布读数 | 未对齐项 |
 |---|---:|---|
-| chord | +38,051 / −14,999 | R5，出分母 |
-| schema | +4,852（新包） | **在册，必须对齐校验语义** |
-| durable | +3,172 / −965 | R5，出分母 |
-| env | 约 +220（包总量 2,575 行） | R5，出分母 |
-| apps/p2、p2-mac、p3 | 新增约 4.4 万 TS 行 | 面外，出分母 |
-| coding-agent src | +3,742 / −1,983 | 在册 |
-| ai src | +1,606 / −982 | 在册 |
-| mcp src | +1,540 / −72 | 在册 |
-| tui src | +570 / −183 | 在册 |
-| agent src | +32 / −25 | 在册 |
-| telemetry src | +69 / −11 | 在册 |
-| evals src | 0（仅 `package.json`） | 在册，无行为变化 |
+| L5 coding-agent（map/04） | **457.0/459＝99.6%** | 4 条 settings 存疑＋1 条仍可动作窄差（§2） |
+| L7 TUI/web（map/05） | **232.5/252＝92.3%** | 20 个非对齐计分单元＋5 个开放缺口（§3） |
+| **全仓 L0–L7** | **1,365.5/1,387＝98.4%** | 仅 L5 与 L7 |
 
-> 取证口径：changelog 只用于圈定候选差异。很多 `[1.5.0]` 条目是对锚点前已有代码的补记，不能当作新增。本文差异均以 `56cae7823..a00a5048d` 的提交与源码 diff 为准。
+## 2. L5 coding-agent 未对齐（2.0 分）
 
-## 2. 结构差异与范围裁决
+### 2.1 settings 4 键存疑（各扣 0.5）
 
-### 2.1 包与依赖变化
+| 键 | 当前边界 |
+|---|---|
+| `terminal` | 7/7 字段齐；消费面依赖 TamboUI 后端能力（超链接／trueColor／图像／OSC 9;4／clearOnShrink）。 |
+| `markdown` | `codeBlockIndent` 已消费；`mermaid` 只有 accessor，不渲染（围栏按普通代码块；R7）。 |
+| `websocketConnectTimeoutMs` | 字段与访问器齐；无 WS 传输（Codex 车道走 HTTP/SSE）。 |
+| `fullscreenCopyOnSelect` | 字段与访问器齐；缺全屏选区/复制子系统。 |
 
-| 包／目录 | 锚点时 | 现在 | 与在册包的依赖关系 | 建议 |
-|---|---|---|---|---|
-| `packages/schema` | 不存在 | 新包，43 个源文件、4,852 行 | `ai`、`agent` 直接依赖 | **在册**：只对齐校验行为 |
-| `packages/env` | 存在 | SSH `ExecutionEnv`，2,575 行 | 只被 `durable` 依赖 | R5 出分母 |
-| `packages/chord` | 存在 | 对象/插件运行时，66,984 行 | 只被 apps/durable/env 依赖 | R5 出分母 |
-| `packages/durable` | 存在 | 实验性会话/任务运行时 | 只被 apps/env 依赖 | R5 出分母 |
-| `packages/codemode` | 存在 | 17 个源文件、3,051 行，几乎未变 | `coding-agent` 静态依赖 | 沙箱 R5；其 `$ref` helper 在册 |
-| `apps/p2` | 不存在 | 实验性 Web UI，35k 行 | 只依赖面外包 | 出分母 |
-| `apps/p2-mac` | 不存在 | Swift/AppKit 原型 | 无 | 出分母 |
-| `apps/p3` | 不存在 | p2 的后继、无页面 | 只依赖面外包 | 出分母 |
+### 2.2 仍可动作的窄差
 
-关键依赖边（来自各 `package.json` 与源码 import）：
+| 编号 | 边界 |
+|---|---|
+| D322 | custom 队列项的 LLM 投影是 `UserMessage` ⇒ `message_end` 扩展事件里 role 为 `user`（pi 为 `custom`）；条目、落盘序与上下文不受影响。 |
 
-- `ai` → `pi-schema`：`packages/ai/src/utils/validation.ts`、`providers/model-schema.ts`、`providers/compat-schema.ts`、`providers/schema-builders.ts`。
-- `agent` → `pi-schema`：只在类型层使用 `Static`；运行时校验在 `ai`。
-- `coding-agent` → `pi-codemode`：仅 `extensions/codemode/*` 与 `extensions/tool-search/tool.ts`。
-- `coding-agent`／`ai`／`agent`／`tui` 均不依赖 `env`／`durable`／`chord`；因此这些包里的行为变化不进入本仓的对齐分母。
+## 3. L7 TUI/web 未对齐（19.5 分）
 
-### 2.2 待用户裁决事项
+> 153 个计分单元中 20 个非对齐（对齐 133，未加权 133/153＝86.9%）。逐行证据与 D 账见 `map/05`。
 
-| 编号 | 问题 | 建议 |
-|---|---|---|
-| F1 | 新锚点钉 `a00a5048d` 还是 v1.6.0 发布提交 `faac58588`？ | 钉 `a00a5048d`。发布后又落了 12 个提交，含重试、编辑器重绘和工具预览可读性修复；钉发布提交会立刻欠一笔。 |
-| F2 | `pi-schema` 对齐到什么程度？ | 先对齐**模型可见行为**：参数强制转换、报错文案、点路径、悬空 `$ref` 本地拒绝、标准 format。Java 不移植构建器 API（Java 侧 schema 本来就是 JSON `Map`）。完整方言只在夹具暴露缺口时再扩。 |
-| F3 | `env`、apps 是否入 R5？ | 建议入 R5，并把「codemode 沙箱出分母、`resolveSchemaRef` 入册」写成同一行的例外说明。 |
-| F4 | Anthropic message threads 是否本周期实施？ | 建议单独设计、排在 P1/P2 之后；它改动请求生命周期，风险独立。若周期预算紧，可先登记 B 延后。 |
-| F5 | TUI 旧缺口（73.4%）与新差异如何排序？ | 先按新锚点重测，再把新差异分成「API 契约/性能」和「新 UI 能力」；旧 C5/C6 状态面与渲染长尾维持现有优先级，不因新锚点重新洗牌。 |
-| F6 | examples 是否按新锚点重清点？ | 是，但只复核，不重开已完成批次。新锚点 examples 只改动 18 个文件，其中 sandbox 已按 D232 出分母；**D237 只排除 overlay／game／mac，不排除 plan-mode；D244 只是注入式 runner 的窄差，不排除 subagent**——两件均被重写，严格重基线为 **86/88**，P11 补齐后回落 88/88。 |
+### 3.1 非对齐计分单元
 
-## 3. 分层差异
+| 域 | 编号 | 判定 | 权重 | 当前缺口 |
+|---|---|---:|---:|---|
+| 屏幕/面板 | S2 | 存疑 | 2 | TamboUI 通用 runner 与 pi alt-screen 自带搜索/选择/复制/图像/闪烁的形状差（搜索选择长尾同族，D299–D301）。 |
+| 屏幕/面板 | S28 | 存疑 | 1 | `/export` HTML 输出形状未逐项核：pi 用 vendored marked/highlight，java 自写 `MarkdownToHtml`（D-W8-3）。 |
+| 屏幕/面板 | S32 | 存疑 | 1 | 登录 URL 独立复制键未证实；Radius 登录/MCP 入口已落地。 |
+| 渲染特性 | R7 | 缺失 | 1 | Mermaid 渲染：pi 依赖 `lovely-mermaid`，Java 无等价库（D309；围栏按代码块渲染）。 |
+| 渲染特性 | R12 | 存疑 | 2 | 工具执行卡流式部分结果缺（`ToolCallRenderer` 无 `isPartial` 通道，D197）；卡形面按 1/2 计。 |
+| 渲染特性 | R13 | 存疑 | 2 | bash 卡运行中流式增量臂缺（`BashExecutionUpdate` 无消费面）；卡形面按 1/2 计。 |
+| 渲染特性 | R22 | 缺失 | 1 | 启动公告组件无 Java 消费面，不移植（D-W8-2）。 |
+| 渲染特性 | R27 | 缺失 | 1 | 3D 彩蛋/header logo（1292 行）无等价/消费面，不移植（D-W8-2）。 |
+| 渲染特性 | R28 | 存疑 | 1 | 流式期间 bash/工具组件挂排队消息区仍缺（D-W8-4）。 |
+| 渲染特性 | R30 | 缺失（窄差 D） | 2 | 全屏滚动帧 O(viewport)：TamboUI 布局内部无应用层接缝（D286–D288）。 |
+| 渲染特性 | R33 | 缺失（窄差 D） | 1 | ASCII/字素快路径与 `Text.setText` 性能契约无 Java 等价（D286–D288）。 |
+| 键绑定/交互 | K5 | 存疑 | 2 | Windows 上 pi 绑 `ctrl+q`，java 绑 `alt+enter`（H-9.2-②）。 |
+| 键绑定/交互 | K12 | 缺失 | 1 | `Ctrl+Z` 挂起进程：JVM 无 signal API（D316）。 |
+| 键绑定/交互 | K19 | 存疑 | 3 | 滚轮/触控板归一化模型不同（Codex TUI2 移植 vs pi `wheel-scroll`）。 |
+| TUI 组件 | C16 | 存疑 | 3 | 编辑组件（pi 2473 行 vs java 500 行）仍有形状差；逐项见 `map/05` C16。 |
+| TUI 组件 | C21 | 缺失（窄差 D） | 1 | render 只读/缓存契约：TamboUI 组件协议不可改，无应用层接缝（D286–D288）。 |
+| 主题/样式 | T2 | 存疑 | 3 | 约 70 个语义色 token 覆盖未逐键复核。 |
+| 主题/样式 | T6 | 存疑 | 2 | 语法高亮 10 token 覆盖未复核。 |
+| 主题/样式 | T11 | 存疑 | 1 | system 主题终端查询面未复核；无 OSC 探测时走既有 tier-3（D123）。 |
+| web 对齐面 | W16 | 存疑 | 1 | `find()` 阶梯③保留跨项目扫描；项目内命中与 pi 一致（D271）。 |
 
-**完成度总览**（数据源：`docs/05` §1 发布读数与各层地图；本表只作进度视图，数值以 `docs/05` 与各层地图为准）：
+**权重 3 优先项**：K19、C16、T2。
 
-| 层 | 旧锚点（`56cae7823`） | 预审计投影（`a00a5048d`） | **发布（`a00a5048d`，2026-11-24）** | 主要缺口 | 归属包 |
-|---|---:|---:|---:|---|---|
-| L0 telemetry | 36/36＝**100%** | 35.5/36＝**98.6%** | **36/36＝100%**（`f0841d49` 回补） | — | P11（已清） |
-| L1 AI | 232/232＝**100%** | 237.5/246＝**96.5%** | **246/246＝100%**（`docs/12` 收口；cache 策略于 `docs/16` 迁入 ai） | — | L1 收口／P4＋`docs/16` |
-| L2 MCP | 122/122＝**100%** | 115.0/123＝**93.5%** | **123/123＝100%**（P9 S1–S7 收口；分母 +1 为 `#96`） | — | P9 |
-| L3 agent-core | 177/177＝**100%** | 169.5/178＝**95.2%** | **178/178＝100%**（P5 六行工具语义收口，`docs/17`） | — | P5 |
-| L4 session | 44/44＝**100%** | 44/44＝**100%** | **44/44＝100%**（2026-11-22 复核，`docs/18`） | — | P10 |
-| L5 coding-agent | 449.5/452＝**99.4%** | 461/461＝**100%**（llama 1 出分母） | **461/461＝100%**（`docs/19`；13 重开单元恢复＋9 新单元） | 窄差 D274／D275／D277／D278 | P6／P7 |
-| L6 evals | 48.0/49＝**98.0%** | 48.0/49＝**98.0%** | **49.0/49＝100%**（`docs/20` 复核＋2026-11-24 B293 落地；#20 改判「对齐（形状不同）」） | — | P11 |
-| L7 TUI/web | 178.5/244＝**73.2%**（`docs/21` 修正） | 190.0/259→236.0/260＝**90.8%**（W1–W8 过程值） | **232.5/252＝92.3%**（`docs/22`–`docs/29`；P12 收敛分母） | render 性能契约（D286–D288）、Mermaid（D309）、SIGTSTP（D316）、搜索选择长尾（D299–D301）等 | P7／P8 |
-| **全仓 L0–L7** | **1,287.0/1,356＝94.9%** | **1,372.0/1,397＝98.2%**（过程值，含 L7 预审计分母） | **1,369.5/1,389＝98.6%** | 仅 L7 余量 | — |
-| L8 examples（按件，不进加权） | 88/88＝**100%** | 86/88＝**97.7%** | **88/88＝100%**（`docs/30`；D235／D244 保留） | — | P11 |
+### 3.2 开放缺口（未收口，`docs/04` §1.2）
 
-> **发布列**即 `docs/05` §1；预审计投影列冻结为换锚过程值（L7 分母 260 含未获正式裁定的候选单元，P12 按逐行证据收敛为 252）。
-> 分母变动：L1 ＋14、L2 ＋1、L3 ＋1、L5 ＋9、L7 ＋8（均相对旧锚点），L4／L6 不变。
->
-> **怎么读这张表**：L0–L6 与 L8 已全部 100%；剩余余量只有 L7 的 7.7%（D 账窄差与性能契约，见 `docs/04` §6.5）。13 个阶段全部收口，无下一分段。
+| 编号 | 当前缺口 |
+|---|---|
+| E5-31 | 扩展 UI 的 working 指示器、终端输入、补全、编辑器替换等 TUI 成员未收口（`map/04`：13 个已有实现，其余 default＝noOp；权重 0）。 |
+| B38 | compaction 后缺少整表重建和完整压缩摘要消息卡。 |
+| B39 | 压缩窗口的 Esc 行为尚未完成换绑。 |
+| B46 | Bash `onUpdate` 已有生产链和 web 消费，TUI 实时输出消费者仍缺。 |
+| B145 | 启动、登录后等定向模型目录刷新点未全部接线（登录后已落，其余启动点证据不足）。 |
 
-### L0 telemetry（两项变化）
+## 4. 关闭口径
 
-| 变化 | 证据 | 可见性 | 规模 |
-|---|---|---|---|
-| 新增 `telemetryNow()`：微秒级墙钟时间，内存 span 的 `startedMs`／`endedMs` 改为微秒取整墙钟 | `ff33ef42c`；`packages/telemetry/src/memory.ts:116`、`index.ts:466` | 观察者可见 | M |
-| `renderTrace` 把 C0/C1/DEL 转义为 `\uXXXX`（span/event 名、trace/span id、属性键、错误文本） | `ff33ef42c`、`378d45a05`；`render.ts:8,28` | 观察者可见 | S |
-
-telemetry 的事件名和 schema 未变。`renderTrace` 的消费者历史上按 R5／T20 出分母，重测时复核是否仍在分母。
-
-### L1 AI（模型可见面为主）
-
-| 变化 | 证据 | 可见性 | 规模 |
-|---|---|---|---|
-| **破坏性**：工具参数校验从 TypeBox 改为 pi-schema；新增强制转换（`null`→`"null"`、`"3.5"`→`3`、单值包成数组等）；错误文本改为 `- edits.0.oldText: missing` 形式，外层为 `Validation failed for tool "..."` | `6536f8012`；`packages/ai/src/utils/validation.ts:1-29,54-68`；`packages/agent/src/agent-loop.ts:736` | **模型可见** | L |
-| 悬空 `$ref` 只在该位置拒绝，并报 `unresolved reference #/...`，不再让整个工具调用失败 | `packages/ai/src/utils/validation.ts:12-18` | 模型可见 | S |
-| Anthropic message threads：`thread` 的 create/continue 两态、beta 头、前缀哈希、每会话上限、线程错误回退整请求、`cleanupSessionResources`；`api.anthropic.com` 默认开启，`disableContinuation` 可关 | `a758f3ae4`、`64c96d00d`；`anthropic-messages.ts:249,847`、约 `:280-430` | 模型可见（请求形状） | L |
-| strict 工具降级规则：`prefer` 遇到无类型节点改发非 strict；`require` 本地抛错；裸 `enum` 仍 strict；strict 超限按 session 记忆，后续直接非 strict | `406e719a6`、`45344bd3a`；`constrained-sampling.ts:75,251-271`、`strict-tool-limits.ts:51` | 模型可见（wire） | M |
-| Anthropic 非 strict 工具保留根 `additionalProperties`／`$defs`／`definitions` | `aa47cedce`、`4a6a58eb5`；`anthropic-messages.ts:1911-1920` | 模型可见（wire） | S |
-| OpenAI completions 默认省略空 `tools: []`；新增 `compat.requiresToolsWithToolHistory` 恢复旧行为 | `7a6bd5a97`；`openai-completions.ts:852` | 模型可见（wire） | S |
-| 新增 compat：`requiresNonNullAssistantContent`（空串代替 `null`）、`promptCacheKeyMode`（auto/enabled/disabled） | `14b804d80`、`0f4d5e960`；`openai-completions.ts:1287,808` | 模型可见（wire） | S |
-| OpenAI Responses 认可度头改为 `session-id`（连字符） | `c5d397835`；`openai-responses.ts:320` | 模型可见（wire） | S |
-| Codex：系统提示改为首个 developer item，不再放顶层 instructions；WS 连接 60 分钟上限重试、45 分钟复用 socket | `edfe6b2ef`、`bb1a2b354`；`openai-codex-responses.ts:555,60,881` | 模型可见（wire） | M |
-| GitHub Copilot：strict false/true 分支、`reasoning_effort` 与 reasoning tokens、Microsoft-Decision-1 分类器 | `86918f9ee`、`0ec20e157`；`providers/github-copilot.ts:118-121` | 模型可见（wire）／分类器属 R5 | M |
-| Mistral 工具默认非 strict，`compat.supportsStrictMode` 才 strict | `2c2a77f9f`；`mistral-conversations.ts:534` | 模型可见（wire） | S |
-| 重试与错误文本：裸 socket 错误码、`Connection closed.`、回复开始后断流；连接底层原因附加到错误文本 | `4699b5b26`、`9b88b94e2`、`566344046`、`4c992154d`；`retry.ts:79-118`、`error-body.ts:60` | 模型可见（错误文本） | S |
-| v1.6.0 重试扩展：Cloudflare 525、网关 `provider is temporarily unavailable`／响应未完成／连接重置／生成失败、流内 Anthropic `api_error`、OpenRouter 空/提前停止、`finish_reason: "error"`、`admission ceiling`；`backoff` 后移除 abort listener **N/A**（Java 无 `AbortSignal` 通道，D216） | `a00a5048d`、`25190b72c`、`fb62c069b`、`51ba3ab5b`；`retry.ts` | 模型可见（错误文本） | S |
-| `openai-completions` 指令角色：推理模型的系统消息只对 `api.openai.com` 发 `developer`，其他主机（Azure/OpenRouter 等）默认 `system`；`compat.supportsDeveloperRole` 可覆盖 | `b82477b7b`；`openai-completions.ts:1226,1641-1648,1706` | 模型可见（wire） | S |
-| Codex：`maxTokens` 作为 `max_output_tokens` 发送（最小 16），除非 `compat.supportsMaxOutputTokens: false`；thinking level 改走固定 `reasoning.effort` 的 `configuration_update`，保住提示缓存 | `fcc33744b`；`openai-codex-responses.ts:62-64,535,548,613` | 模型可见（wire） | M |
-| OpenAI Responses/Azure/Codex 新增 `openai_input_transformations` 诊断：列出被 API 丢弃的 reasoning 项及原因（`prefix_mismatch`、`organization_mismatch`；不记录 `turn_boundary`） | `03de604b8`；`openai-responses-shared.ts:831,850` | 诊断数据；coding-agent 转录提示 | M |
-| Google：关闭 SDK 自动续写，`CONTINUATION` 结束为 `length`；自定义 fetch（Java 不适用） | `f72f799a4`；`google-generative-ai.ts:343,397`、`google-shared.ts:505` | 模型可见（stop reason） | S |
-| lazy 鉴权期间被取消从 error 改为 `stopReason: aborted` | `f3a64af07`；`lazy.ts:80` | 模型可见 | S |
-| 缓存预热策略从 ai 暴露；`refreshModelsAuth` 对内置 provider 跳过 OAuth 刷新，签出时告警不失败 | `c9552c7d8`、`6382d8706`；`cache-warming.ts`、`models.ts:204,648` | 内部／UI 可见 | M |
-| 模型与 Provider 数据：GPT-6.2 Astra/Sol、qwen4-max-preview、Qwen Token Plan 新网关与 Individual CN、Fable 5.2、GLM 5.3、DeepSeek v4.1、默认 Anthropic Opus 5.5、OpenAI/Azure/Codex 默认 GPT-6.2 Sol、models.dev v2 目录 | `e56d35ce5`、`139707002`、`3e4f87265`、`b4afdddf4`；`models.generated.ts`、`providers/qwen*.ts`、`env-api-keys.ts:81-95` | 模型可见（数据/默认值） | M |
-| 流式工具参数改为增量解析；OpenRouter 输出上限按输入 15% 留白、接近满窗时最多 32K | `9265`（1.5.0）、`0a4fad548`；`simple-options.ts:18-31` | 内部／wire | M |
-
-### L2 MCP
-
-| 变化 | 证据 | 可见性 | 规模 |
-|---|---|---|---|
-| 新增 `PipeTransport`：对调用方启动的程序做 MCP stdio 帧，与 `StdioTransport` 共用行读取器 | `c158fa2ee`；`transports/pipe.ts:38`、`lines.ts:19` | 内部（传输能力） | L |
-| stdio 健壮性：大消息线性读取；按 `close` 而非 `exit` 清理进程组；POSIX 下服务器已退出也走 SIGTERM | `42849bb84`、`f6278a472`；`stdio.ts:115,161` | 内部（孤儿进程修复） | M |
-| Streamable HTTP：`application/json` 也执行 `maxMessageBytes`；超限取消 body；接受 CR-only/拆分行尾；HTTP 错误体只读前 8 KiB | `4a8b60bc3`、`f40984747`、`b64e6badd`；`streamable-http.ts:309-312,131,86-130` | 模型可见（超限报错） | M |
-| OAuth：回调服务器关闭时 `closeAllConnections()`；`refreshOnly` 不重复注册；重定向 URI 校验；刷新锁等待可被 abort 取消 | `63ea042ce`、`797e122cb`；`oauth/callback.ts:115`、`flow.ts:96,101,387,396,453` | 内部（签入体验） | M |
-| 共享助手从 coding-agent 搬到 pi-mcp：工具命名、input schema 归一、20KB 输出上限、配置校验；OAuth 登录拆成 `startMcpSignIn`／`completeMcpSignIn` | `76c040a2a`、`bb266bf35`；`naming.ts:18,33,41`、`input-schema.ts:7`、`output-limit.ts:9,28`、`config.ts:113,241` | 多为代码搬移；行为不变 | M |
-| `pi mcp list` 发送 provider 令牌并按 `/login <provider>` 提示 | `4d72d05bc`；`runtime.ts:173-200` | CLI 可见 | S |
-
-> 收口注记（2026-11-22）：上述各行对应 P9 的 S1–S7 七个阶段，已全部落地（提交映射见 §3 开头 P9 条目）；
-> `map/07` 读数 **123/123＝100%**。`PipeTransport` 即新增计分单元 `#96`（w1，按 `docs/13` D1 计入分母）。
-
-### L3 agent-core
-
-| 变化 | 证据 | 可见性 | 规模 |
-|---|---|---|---|
-| 工具参数类型从 TypeBox 改为任意 JSON Schema／pi-schema `Static`；移除 `typebox` 依赖 | `6536f8012`、`6291b9bcc`；`types.ts:469,475,485,497` | 扩展作者可见（Java 侧只是泛型形状） | M |
-| **Esc 中止批量工具调用时，未开始的调用也逐个补 `Operation aborted` 结果与事件** | `4438c58ba`；`agent-loop.ts:713-726` | **模型可见**（转录） | S |
-| `streamProxy()` 透传 `disableContinuation` | `a758f3ae4`；`proxy.ts:55,99` | 模型可见（请求行为） | S |
-
-### L4 session
-
-`packages/durable` 出分母，L4 没有来自新包的行为变化。会话存储面在目标锚点只有 `session-manager.ts` 两个 hunk：
-`projectContextEntry` 导出（无行为）＋ `buildSessionInfo` 的 abort 处理（#11956）。L4 复核（`docs/18`）另发现
-两条早已存在、未登记的列表误差（错误吞噬、候选 stat 失败语义），三处一并落地；20 行判定与权重不变，
-L4 维持 **44/44＝100%**。其余会话相关变更都落在 `coding-agent`，归 L5 计分，包括：会话目录消失后的
-Continue/Fork/Cancel（目标锚点扩为两选项＋取消）、thinking level 写分支、分支摘要应用 context edits、
-失败写入回滚（旧锚点已对齐）。
-
-### L5 coding-agent
-
-| 主题 | 变化 | 证据 | 可见性 | 规模 |
-|---|---|---|---|---|
-| 工具语义 | `find` 路径模式锚定搜索目录，`./` 前缀忽略，Windows 分隔符与 fd 版本一致，`limit` 边界修正 | `282b01c80`、`bbfc6c7ce`、`463b8f893`、`676af1d77`；`find.ts:27-29,205-250` | 模型可见 | M |
-| 工具语义 | `grep` 的 `glob` 相对 `path`；上下文行改由 ripgrep 提供，不再读整文件；`readFile` 钩子废弃 | `6bf2ab9bb`、`8da141c2a`、`244e5f5db`；`grep.ts:26,61-63,167-172` | 模型可见 | M |
-| 工具语义 | `read` 流式读取，只保留展示行；新增 `createReadStream` 可选操作；中止不再因未监听流崩溃 | `3a7bb6f48`、`ef9361ab7`；`read.ts:65,301` | 模型可见／扩展可见 | M |
-| 工具语义 | `edit` 保留未改动行的行尾，写前算 diff，只围绕改动窗口 | `d448c51e2`；`edit-diff.ts`、`edit.ts` | 模型可见（结果） | M |
-| 工具语义 | bash 超时后报告 shell 退出码/退出时间；超长尾行保留；`pi.exec` 信号退出记为失败；PowerShell 5.1 原生退出码 | `06aa6563e`、`935f0ac0c`、`a83b75a07`、`c9dd2c530`；`bash.ts:97-105,408-413`、`output-accumulator.ts:89-94` | 模型可见 | S |
-| 提示文本 | **系统提示收紧**：更短的前言/工具/文档段，编辑指南合并 | `705d047cb`；`system-prompt.ts:156,160,168` | **模型可见** | S |
-| 截断 | 不再切断代理对（emoji 等） | `9e870f6f0`；`tools/truncate.ts` | 模型可见 | S |
-| 扩展 API | **破坏性**：组件 `render()` 返回只读 `string[]`，`Container` 缓存并复用数组；就地修改须先复制 | `b7bb7ca90`；`tui/src/tui.ts:130`、`docs/tui.md:24` | UI/扩展可见 | M |
-| 扩展 API | `registerMarkdownTransformer({messageTypes})` 可进入 custom/summary/changelog 面 | `eebd5d90c`；`extensions/types.ts:1586` | UI 可见 | M |
-| 扩展 API | 内联 `ctx.ui.custom()` 的 `blocked` 上报 OSC 7501；overlay 忽略该项 | `7f47a2ed0`；`extensions/types.ts:243-247` | UI 可见 | S |
-| 会话/RPC/SDK | 替换会话时 `session_start` 只发一次；`--mode json` 也流式发出；reload 在 `bindExtensions({})` 后补发；替换诊断经 `takeUnreportedDiagnostics()` 上报；空闲 `ctx.shutdown()` 立即处理；进行中的 shutdown/SIGTERM 不被二次信号打断 | `beffcde92`、`6aab551a7`、`e03dca7a3`、`c47ad0432`、`1708b4788`、`ace560c30` | 扩展/宿主可见 | M |
-| 会话/RPC/SDK | `/copy` 与 RPC `get_last_assistant_text` 跳过 aborted/error/toolUse/length 且无文本的回合 | `ede360e4d` | 用户/客户端可见 | S |
-| 会话/RPC/SDK | 恢复会话时保回被扩展只隐藏自身工具而丢掉的 MCP 工具 | `3345c2925` | 模型可见（工具表） | S |
-| 会话 | 原 cwd 消失时可 Continue/Fork/Cancel；Fork 改写 cwd 并生成新 ID；`/import` 残留副本修复 | `4ea883792`；`docs/sessions.md:26-27`、`core/session-cwd.ts` | 用户可见 | M |
-| 会话 | 每个提示前把当前 thinking level 记录到新分支；模型回退在 resume 后和所有模式都上报 | `7860ff528`、`c8c456c85` | 用户可见 | S |
-| CLI/认证 | 新增 `pi auth login/logout <provider>`：`--api-key`、`--no-browser`；Radius 登录同时配置 Radius MCP | `9b9cb30ae`；`cli/auth-login.ts`（277 行）、`auth-logout.ts`（72 行） | CLI 可见 | L |
-| CLI/设置 | `cacheWarming` 默认从 `streaming` 改为 `idle`，最多保温 30 分钟；连续预热合并为一行 | `7bcc15c92`、`a013448fb`；`settings-defaults.ts:61`、`settings-schema.ts:414` | 用户可见（成本/UI） | S |
-| CLI/设置 | `pi update` 报告每个包的 npm 版本或 git commit 变化；区分 unchanged/warned/offline；交互模式下捕获 git/npm 输出 | `342514bdf`、`806cdd68e`、`b513b64d8`、`e3da248ea`；`package-manager.ts:130-142,1311` | CLI/UI 可见 | M |
-| CLI/设置 | llama.cpp 扩展默认端口从 8080 改为 **9931**（llama-server 当前默认） | `12001`（v1.6.0）；`extensions/llama/*`、`docs/llama-cpp.md` | 用户可见 | S |
-| 转录/UI | OpenAI 丢弃 reasoning 项时显示转录提示，例如 `OpenAI dropped 2 reasoning items: prefix_mismatch (details in session)`；受 `showCacheMissNotices` 控制，且只在丢弃数比上一响应多时显示，提示带原因 | `03de604b8`；`interactive-mode.ts:485` | 用户可见 | S |
-| UI | 扩展 `ctx.ui.pasteToEditor()`／`setEditorText()` 在非终端输入处理中调用（如命令处理器 `await` 之后）也会重绘编辑器 | `8c1afaae5`；`interactive-mode.ts` | UI 可见 | S |
-| UI | 工具预览文本在浅色/深色主题下保持可读（语法高亮主题映射补一项） | `562da75f9`；`theme.ts` | UI 可见 | S |
-| 选择器 UX | `/login`、`/logout`、`/scoped-models`、`/resume` 搜索高亮最佳匹配，左右/Home/End 保持选择；渐进加载不跳选；伙伴 Provider 置顶与品牌样式 | `37b74c546`、`5bcf370a5`、`a635f3901`、`683a7a868`；`oauth-selector.ts`、`session-selector.ts`、`preferred-providers.ts` | UI 可见 | M |
-| 模型默认值 | Anthropic 默认 Opus 5.5；OpenAI/Azure/Codex 默认 GPT-6.2 Sol；一批同价或降价迁移 | `b425754a2`、`d84123b32`、`e56d35ce5`；`model-resolver.ts:21-58` | 模型可见（默认值） | S |
-| 渲染 | Mermaid 支持饼图、作者样式、可点击标签，并进入摘要；HTML 注释隐藏；流式高亮/Markdown 块复用；新增 Dart/Nix/Groovy/Gradle 高亮 | `aceb1bd12`、`54280c4ff`、`0f21a3319`、`c13f6acfb`；`mermaid.ts`、`theme.ts:1008` | UI 可见 | M |
-| 导出 | `/export` HTML 把 OSC 8 链接转为可点击 `<a>`，剥离其他转义 | `0e1e3fc81`；`export-html/ansi-to-html.ts` | UI 可见 | S |
-| 安全 | glob 放大 DoS 防护；OAuth URL 只允许 `http:`/`https:`；登录 URL/终端标题控制字符清洗；`auth.json` 锁按真实路径共享 | `10947`、`11521` 系列、`11787`；`glob`、`login-dialog`、`auth-storage.ts` | 内部/安全 | S |
-
-### L6 evals
-
-`packages/evals` 只有 `package.json` 的版本与依赖更新，`src` 无行为变化。**2026-11-23 已按
-`a00a5048d` 复核（docs/20）**：diff 仅 `package.json`（+4/−5，
-版本 1.4.0→1.6.0、依赖同步、`clean` 脚本 shx→node），`src`／`evals/`／`test/` 逐字节未变
-⇒ 24 行判定与 pi 证据全部续用、零代码，唯一存疑 #20 维持（oracle 未变，收口归 L7 状态行）。
-L6 定格 **48.0/49＝98.0%**（复核读数；2026-11-24 B293 落地后改判 **49.0/49＝100%**）。
-
-### L7 TUI/web
-
-| 变化 | 证据 | 可见性 | 规模 |
-|---|---|---|---|
-| **破坏性**：`Component.render()` 返回只读 `string[]`；`Container` 在子节点/行未变时复用缓存数组 | `b7bb7ca90`；`tui.ts:130,393,470`、`box.ts:90,100` | UI/扩展可见 | M |
-| 新增 `TUI.setSuspendSignalHandler()`：只在 TUI 占有终端期间接管 SIGTSTP，停止时移除；外部 `kill -TSTP` 等同 Ctrl+Z | `3107a58d2`、`e4f50d76d`；`tui.ts:577,1099` | UI 可见 | S |
-| 全屏滚动帧改为 O(viewport)：内容未变时复用 `LayoutFrame.renderCache` | `b7bb7ca90`；`tui.ts:613,1163`、`layout.ts:398` | UI 可见（性能） | L |
-| Markdown 顶层块渲染缓存：流式只重排最后一块，代码高亮在 resize 后保留；主题切换须 `invalidate()` | `0f21a3319`；`markdown.ts:300,445` | UI 可见 | M |
-| Markdown 隐藏 `<!--…-->` 注释并清理两侧空格；多行内联图片按硬换行分行 | `54280c4ff`、`5b4d7d3df`；`markdown.ts:201,212` | UI/内容可见 | S |
-| overlay 与图片互斥：overlay 打开时裁掉相交图片、关闭后重绘；Kitty 图片最后绘制并跨全量重绘保留 | `787005a40`、`4622edb79`、`be2744d95`；`tui.ts:520`、`terminal-image.ts:246,276` | UI 可见 | M |
-| 编辑器：斜杠命令只在命令名上下文按 Enter 提交，Tab 不再误提交；粘贴标记重编号保留短标记 | `9a7cfba47`、`a77207d9c`；`editor.ts:807,1433` | UI 可见 | S |
-| 带搜索的设置列表：左右/Home/End 不再触发重新过滤和选中重置 | `5bcf370a5`；`settings-list.ts:253` | UI 可见 | S |
-| 终端识别与渗漏：Alacritty 超链接按 `TERM`/`ALACRITTY_WINDOW_ID` 识别；APC 光标标记不再跨切片泄漏 | `2af8a42f5`、`25490ea49`；`terminal-image.ts:134`、`utils.ts:1440` | UI 可见 | S |
-| ASCII 快路径与 `Text.setText()` 相同文本保留换行 | `b7bb7ca90`、`0f21a3319`；`utils.ts:174-280`、`text.ts:27` | UI 可见（性能） | S |
-
-web 呈现层仍是 pi-java 独有，不计入 pi 分母。新 apps 不改变现有的 16 个 web 事件/线格式单元。
-
-> **2026-11-23 复核（docs/21）**：上表十行逐项核实**全部成立**（4 个行内子机制补记）；
-> 预审计 12 项成立（C21/R30–R33/K41 主体在 `packages/tui`）；**漏项 11 项**登记待分段定权重；
-> 旧基线 10 行复核：9 行翻正「对齐」、S16 降「存疑」，旧锚点正式读数修正 **178.5/244＝73.2%**。
-> 无法闭环预判：C21/R30（TamboUI 外部框架）、K40/K12（JVM 无 signal API）、R33（性能契约）按窄差 D 处置。
-> **分段计划 W1–W8 见 docs/21 §7，按「状态面→工具卡→缓存契约→补全→平台→全屏→屏幕图→收尾」推进。**
->
-> **2026-11-23 W1 已收（docs/22）**：C5 loader/spinner、C6 working 指示器
-> （TurnStart 置／AgentEnd 清＋扩展三方法 TUI 臂）、C7 bordered loader、C8 cancellable loader 全部
-> 缺失→对齐（＋8.0 ⇒ 186.5/244＝76.4%；投影回算 190.0/259）；C10 文案复核成立。窄差 D：N1
-> embedded editor indicator、N2 IdleStatus/clearOnShrink。
->
-> **2026-11-23 W2 已收（docs/23）**：R10 diff 渲染（parseDiffLine＋1:1 词级
-> intra-line＋缩进剥离，漏项#5）、R17/R18/R19 三消息卡（transformer＋messageId/timestamp 接线，
-> 漏项#6）、R26 args 渲染、K37/C14 点击展开（拖拽通道等价）翻**对齐**；R25 复核翻正（实现已在）；
-> R12 工具卡三态 bg＋fallback 折叠、R13 bash 卡（漏项#7）缺失→**存疑**（流式通道 D197/无消费面维持）。
-> ＋9.5 ⇒ **196.0/244＝80.3%**（投影回算 199.5/259＝77.0%）。窄差：customMessageBg 不铺底、
-> bg 只铺文本格、skill collapsed label 色压平；`[reversed]` 反白对位 theme.inverse 无窄差。
->
-> **2026-11-23 W3 已收（docs/24）**：新增锚点单元 R30(2)/R31(2)/R32(1)/R33(1)/C21(1)；
-> R31 Markdown 顶层块缓存（`MarkdownRenderCache`：源词法缓存＋块 record 复用＋帧界裁剪＋主题/默认样式失配）
-> 与 R32 HTML 注释隐藏（`MarkdownBlocks.stripHtmlComments`：围栏/行内代码感知、独占行清空、两侧空白吞后侧）
-> 翻**对齐**（＋3.0）；R30/R33/C21 按 docs/21 §6 登记窄差 D。⇒ **199.0/251＝79.3%**
-> （投影回算 202.5/259＝78.2%）。窄差 N：三消息卡内部 Markdown 仍走静态路径、图片硬换行无观察面（R14）。
->
-> **2026-11-23 W4 已收（docs/25）**：S16 query 未变不重过滤（同族核查无同形缺陷）、
-> K25 `@文件`/路径补全（`FileCompleter`＋`FileCompletionPaths`；fd→NIO 有界遍历＝窄差 N）、
-> K26 大粘贴折叠（`EditorPaste`：标记/注册表/展开/重编号/撤销快照）、K31 jump mode（`EditorJump`）、
-> 新增 K41(1) 斜杠 Enter 上下文、C2 选择列表复核（pi 无多选/分组，原注误记；补 ↑↓ wrap＋`(i/n)`＋无匹配）
-> 全部翻**对齐**（＋6.5，分母 +1）；extension-selector 补 10 行居中窗口＋`(i/n)`（漏项#4）。
-> ⇒ **205.5/252＝81.5%**（投影回算 209.0/260＝80.4%）。窄差 N：K25 fd/普通路径自然触发、
-> K26 词删/行删原子性与 CSI-u、K31 键位不读 keybindings.json、C2 描述列。
->
-> **2026-11-24 W5 已收（docs/26）**：K35 终端能力探测（`TerminalCapabilities`：
-> tmux/screen/Herdr/Rex/Orca/Kitty/Ghostty/WezTerm/Warp/iTerm2/WT/Alacritty/vscode/zed/JetBrains/
-> Windows/unknown 逐臂＋`PI_*` 覆盖；`SettingsScreen` 图片门、`PiTuiLauncher` truecolor 同源）、
-> K34 原生剪贴板（`NativeClipboard`：Termux/pbcopy/PowerShell+clip/wl-copy/xclip/xsel ⇒ AWT 回退；
-> `/copy`/`ClipboardSupport` 同源）、K39 OSC 7501（`ProgramStatusProtocol`＋`ProgramStatusReporter`；
-> `extension-dialog`/`extension-overlay:N`＋`custom().blocked`）、K32 `modifyOtherKeys`＋CSI-u 备用键组
-> ＋Shift 符号归一、K38 复核确认设置面已实现 ⇒ 五行**对齐**（＋5.0）。
-> ⇒ **210.5/252＝83.5%**（投影回算 214.0/260＝82.3%）。窄差：N1 无 7501 握手、N2 OSC 8 不输出、
-> N3 baseLayoutKey、N4 helper→CLI、N5 登录 auth、N6 APC；D60 `"auto"` 模型。
->
-> **2026-11-24 W6 已收（docs/27）**：S2a/K21 转录搜索（`TranscriptSearchIndex/
-> Controller/Bar`＋`ctrl+shift+f`/Enter/`ctrl+g`）、S2b/K22 拖拽选区＋copy-on-select＋`ctrl+c`、S2c flash
-> （`FlashNotice`，1000/5000 ms）、C3 设置列表宽度感知（对齐/截断/描述折行/滚动指标/鼠标）、
-> C4 单行 `SingleLineInput`、C13 `TruncatedText`＋`TextColumns`、C15 `DynamicBorder`＋
-> `ThinkingBorderPalette`（编辑器上下横线）、C20 反白假光标与硬件光标互斥、K18 `keyHint/rawKeyHint`
-> ⇒ 十一行**对齐**（＋12.0）。
-> ⇒ **222.5/252＝88.3%**（投影回算 226.0/260＝86.9%）。窄差：N1 搜索条位置、N2 非 ASCII 码点粒度、
-> N3 选择长尾、N4 flash 计时/单条、N5 无 APC 光标标记、N6 子菜单 navigateTo、N7 提示返回 Element；D2 bash-mode 边框。
-> **#20（L6 context footer）顺延 W8**（`SessionSnapshot` 无上下文窗口字段；2026-11-24 B293 已落地，见 §3 L6 行）。
-> **W7 收口（2026-11-24，docs/28）**：S2d/R14 图片协议、R15/K14 粘贴、
-> S18 首次设置向导、S21 show-images、K13 复制键、R8 LaTeX 八行翻对齐（＋8.0）⇒
-> **230.5/252＝91.5%**（投影回算 234.0/260＝90.0%）。窄差：N-W7-1 实机验收、N-W7-2 macOS 路径、
-> N-W7-3 主题预览、N-W7-4 LaTeX 符号长尾；D-W7-1 Mermaid（lovely-mermaid 无 Java 等价）、D-W7-2 独立 show-images 组件。
-> **下一分段：W8（新增小单元＋复核收尾）。**
-
-### L8 examples
-
-两锚点间 examples 只有 18 个文件变化：
-
-- `extensions/sandbox/` 整个删除（该件已按 D232 出分母）。
-- `extensions/subagent/` 563 行大幅重写（状态机／启动前中止／失败证据／`truncateHead`／`deliverAs` 变体）：D244 只记注入式 runner 的窄差，**不排除该件**，属分母内需重判。
-- `plan-mode/` 修改（thinking 块、最后一个 `Plan:` 头、整行编号步骤、`[DONE: 1]`／`Step N done` 变体、`allStepsComplete` 回落、`deliverAs: nextTurn`）：**D237 只排除 overlay／game／mac，不排除 plan-mode**，属分母内需重判。
-- 新增 `examples/tsconfig.json`；其余是 lockfile 与 README。
-- 注册表条数基本不变；不新增需要重开 W0–W8 的件。
-
-⇒ 严格重基线 **86/88≈97.7%**（口径见 `docs/07` §5）。
-
-**收口（2026-11-24，docs/30）**：两件已按新锚点补齐，
-保留 D235／D244 窄差 ⇒ L8 **88/88＝100%**（`docs/07` §5、`docs/05` §1 已同步）。
-
-## 4. 执行计划
-
-> 每个 P 是一个可独立编译、可独立审核的工作包。每个提交控制在 200–500 行，按 `feat/fix(module): ...` 提交。每包先设计稿、用户审核、再写码（`docs/00` 流程）。
-
-**进度（2026-11-23，L5 收口后）**：按「由底往上、逐层对齐」裁决，**L1、L2、L3、L4、L5 五批已收口**
-（L0 的 `telemetryNow` ＋ B289–B292 ＋ P4 threads ＋ `docs/16` cache 策略 ⇒ L1 246/246；P9 S1–S7 ⇒ L2 123/123；
-P5 六行工具语义 ⇒ L3 178/178；`docs/18` 复核 ⇒ L4 44/44；`docs/19` W1–W11 ⇒ L5 461/461，llama 出分母）。
-**L6 复核完成（2026-11-23，docs/20）**：零代码，24 行判定全部续用，
-48.0/49＝98.0% 转复核读数，#20 维持（收口归 L7；2026-11-24 B293 落地后改判 49.0/49＝100%）。
-**L7 W1 状态面已收（2026-11-23，docs/22）**：C5–C8 缺失→对齐（＋8.0 ⇒
-186.5/244＝76.4%，投影回算 190.0/259＝73.4%）；C10 文案复核成立。
-**L7 W2 工具/消息卡已收（2026-11-23，docs/23）**：R10/R17/R18/R19/R26/K37 翻对齐＋
-R25 复核翻正＋C14 元素级等价（窄差 N）；R12/R13 缺失→存疑（卡形面，流式 D197/无消费面维持）
-（＋9.5 ⇒ 196.0/244＝80.3%，投影回算 199.5/259＝77.0%）。
-**L7 W3 渲染缓存契约已收（2026-11-23，docs/24）**：新增 R30–R33/C21 锚点单元，
-R31 顶层块缓存＋R32 HTML 注释隐藏翻对齐（＋3.0），R30/R33/C21 窄差 D（199.0/251＝79.3%，
-投影回算 202.5/259＝78.2%）。
-**L7 W4 补全与选择器已收（2026-11-23，docs/25）**：S16 门控、K25 `@文件`、
-K26 粘贴标记、K31 jump、新增 K41、C2 复核全部翻对齐（＋6.5，分母 +1）⇒ **205.5/252＝81.5%**
-（投影回算 209.0/260＝80.4%）；extension-selector 10 行窗口＋`(i/n)`。
-**L7 W5 平台/协议已收（2026-11-24，docs/26）**：K35 终端能力探测、K34 原生剪贴板、
-K39 OSC 7501＋`custom().blocked`、K32 键盘协议收窄、K38 复核全部翻对齐（＋5.0）⇒ **210.5/252＝83.5%**
-（投影回算 214.0/260＝82.3%）。
-**L7 W6 全屏长尾已收（2026-11-24，docs/27）**：转录搜索（S2a/K21）、选择复制
-（S2b/K22）、flash（S2c）、设置列表（C3）、单行输入（C4）、truncated-text（C13）、思考等级边框（C15）、
-假光标（C20）、键位提示（K18）十一行翻对齐（＋12.0）⇒ **222.5/252＝88.3%**（投影回算 226.0/260＝86.9%）。
-**W7 已收口**（图像协议/粘贴/向导/show-images/复制键/LaTeX，＋8.0 ⇒ **230.5/252＝91.5%**；
-投影 **234.0/260＝90.0%**，docs/28）。
-**W8 已收口**（K17 `keybindings.json` 用户覆盖、S27 `/share` 复核翻正，＋2.0 ⇒ **232.5/252＝92.3%**；
-投影 **236.0/260＝90.8%**，docs/29）。同段对账：missing-cwd 三选／reasoning drop
-泛化／changelog 写回／model-selector 刷新保偏好已在 W2–W5 落地（零代码）；"to resume" 两行＋flush、
-伙伴 `✦` 落地；品牌动画 N-W8-1、彩蛋 D-W8-2、export 形状 D-W8-3、排队区 D-W8-4 登记窄差。
-**L7 分段收口**（2026-11-24 W8 后 **232.5/252＝92.3%**）；#20（L6 context footer）已随 **B293** 落地销号（`SessionSnapshot` 扩 `ContextUsage`/`autoCompact`，`StatusBar` 显示 `percent%/window (auto)`），L6 改判 **49.0/49＝100%**。
-**P12 收尾完成（2026-11-24）**：全仓 `mvn clean verify -Dfrontend.skip=true` BUILD SUCCESS（零失败、零告警）；
-`docs/05` §1 发布 **1,369.5/1,389＝98.6%**（B293 后；P12 当口为 1,368.5/98.5%）；`CURRENT_PI_PIN` 切至 `a00a5048d`；L7 窄差统一编号 **D279–D316**（`docs/04` §6.5）；本稿归档保留。
-
-| 阶段 | 状态 | 证据／剩余 |
-|---|---|---|
-| P0 换锚重测 | **完成（P12 收口）** | `docs/05` §1（`a00a5048d` 发布读数）；`CURRENT_PI_PIN` 已切换；过程记录归档在 git |
-| P1 schema 语义 | **完成** | `9cccfe23` |
-| P2 AI wire | **完成** | `dc59f0c7`；P2b `734c7a21`；P2c `65857596`／`68eb84ef`／`14e90c8b`；Codex 专属形状不适用（R2 无该车道）；余项 B289–B292 已随 L1 收口落（`49336f70`／`6d393725`／`c8df0315`／`083d3552`） |
-| P3 AI 数据 | **完成** | `fca70024` `21ec26b0` `753bdc30` `d035ffa0`；分片 23／695 chat；26 个内置 provider |
-| P4 Anthropic threads | **完成（2026-11-22，冒烟豁免）** | `177acc36` `25e00d5b` `3f0ac7a6` `ecf4c6f1` `93b4bfe4`；设计／实施口径见 docs/12；真机冒烟经用户裁决豁免 |
-| P5 agent-core 工具语义 | **完成（2026-11-22，`docs/17`）** | 六行／17 权重齐活：`1e236a2e` find＋GlobPattern、`3d27b2f3` grep、`592eb5c9` read 流式、`d73907c4` edit EOL、`885d7c9a` bash 超时＋powershell 后缀＋代理对截断；L3 **178/178＝100%** |
-| P6 CLI/认证/设置 | **完成（2026-11-23，`docs/19` W1/W2/W9/W10）** | auth login/logout、`cacheWarming` 默认 idle、选择器光标、登录 URL；L5 **461/461＝100%** |
-| P7 扩展/生命周期 | **主体完成（2026-11-23，`docs/19` W5/W6/W7）** | 替换/诊断/RPC shutdown/信号、恢复 loadout、六面 Markdown、reasoning 提示；`render()` 契约仍待 P8 |
-| P8 TUI | 未开始 | 旧缺口 73.4% 的 C5/C6 与渲染长尾在此收口 |
-| P9 MCP | **完成（2026-11-22，S1–S7）** | L2 **123/123＝100%**（投影 115.0/123 → 收口；分母 +1 为 `#96 PipeTransport`）；设计与逐阶段判据见 docs/13 §4／§8 |
-| P10 agent-core 中止 | **完成** | `87ae0bfe`；`streamProxy` 按 R5 出分母（`map/03` #68） |
-| P11 telemetry/evals/examples | **完成（2026-11-24，`docs/30`）** | telemetry：`f0841d49`（`TelemetryClock.now()` 微秒墙钟，T9 回补，L0 36/36）—— T20（`renderTrace` 转义）维持 R5/w0 出分母；evals 零代码复核（`docs/20`）；L8 plan-mode／subagent 补齐 ⇒ **88/88** |
-| P12 收尾 | 未开始 | 切锚、回填 `docs/04`／`docs/05` 合计、全量 verify |
-
-**排期与验收（原始计划表，状态以上表为准）**：
-
-| 阶段 | 内容 | 依赖 | 产出／验收 |
-|---|---|---|---|
-| **P0 换锚重测** | 钉 `a00a5048d`；更新 `docs/map/ANCHOR.md` 的目标；按 L0–L8 逐层重测七份地图；登记新 B／D；确认 F1–F6 裁决。**只改文档。** | 用户批准本文 | 七层新读数；新分母与缺口清单；旧读数保留对照 |
-| **P1 schema 语义（跨层）** | Java 侧实现 pi-schema 兼容的「强制转换＋校验＋错误模型」：点路径、`Validation failed for tool "..."`、悬空 `$ref` 本地拒绝、标准 format；`agent-core` 的 `ToolArgumentsValidator` 改为委托。 | P0 | 夹具覆盖 coercion 与错误文本；工具参数失败逐字对齐；L1/L3/L5 共用一套校验 |
-| **P2 AI wire 一批** | 重试与错误原因（含 v1.6.0 的 525/网关/流内错误）、stop reason、`session-id`、指令角色（developer 仅 api.openai.com）、Codex developer item／`max_output_tokens`／`configuration_update`、Copilot strict/reasoning、Mistral strict opt-in、OpenAI compat 开关、token 上限、`openai_input_transformations` 诊断。 | P1 | 请求体与错误文本夹具 |
-| **P3 AI 数据一批** | 模型目录与默认值：GPT-6.2 Astra/Sol、Qwen 网关/Individual CN/env 键、Fable 5.2、GLM 5.3、DeepSeek v4.1、Anthropic Opus 5.5、models.dev v2。 | P2 | vendor 目录重生成；默认模型断言 |
-| **P4 Anthropic threads（已完成 2026-11-22，见上表）** | 单独设计 thread 创建/续接、前缀哈希、上限、回退、清理与 `disableContinuation`。 | P1、P2 | faux／夹具 ＋ `RecordingHttpServer` 两轮观测；真实 provider 冒烟经裁决豁免 |
-| **P5 agent-core 工具语义（已完成 2026-11-22，`docs/17`）** | L3 六行：`find`/`grep`/`read`/`edit`/`bash`/截断（含 powershell 5.1 后缀）；`grep` 的 `readFile` 废弃与 `createReadStream` 以 `FileSystem.openRead` 落地。`pi.exec` 归 L5、`tool_search` 的 `resolveSchemaRef` 已随 L2 收口。 | P1 | 工具输出与错误夹具；纯 Java 引擎（裁决①） |
-| **P6 coding-agent CLI/认证/设置** | `pi auth login/logout`、伙伴 Provider 排序、`cacheWarming=idle` 与合并提示、`pi update` 版本摘要、模型默认值接线。 | P5 | CLI 参数与进程退出；settings 默认值 |
-| **P7 coding-agent 扩展/生命周期** | `render()` 只读契约、Markdown transformer 面、`blocked`、扩展更新日志、session_start/diagnostics/RPC shutdown、overlay 清理、系统提示收紧。 | P5、P8（TUI 契约） | 扩展夹具；模型提示逐字 |
-| **P8 TUI** | render 缓存契约、SIGTSTP、全屏滚动 O(viewport)、Markdown 缓存/注释/图片、编辑器与选择器键位、终端识别。 | P7 契约先行 | TUI 单测＋字体/宽度回归 |
-| **P9 MCP** | PipeTransport、stdio/HTTP 健壮性、OAuth 刷新与回调关闭、共享助手落位、`pi mcp list` 令牌。 | P1 | 传输夹具；OAuth 夹具 |
-| **P10 agent-core/session** | 中止批量补结果、`streamProxy` 透传、L4 单元归属复核；无新增 L4 代码则只登记结论。 | P1 | 中止转录夹具 |
-| **P11 telemetry/evals/examples** | `telemetryNow` 与 `renderTrace` 转义；L6 零代码复核；L8 只复核 18 个文件。 | P0 | 重测结论；无代码或仅窄差 |
-| **P12 收尾（已完成 2026-11-24）** | 全仓 `mvn clean verify -Dfrontend.skip=true`；回填 `docs/04`／`docs/05`／各地图；切 `CURRENT_PI_PIN`；归档本计划稿（保留，不删除）。 | 全部 | 零失败、零告警；总分可逐行复算（B293 后 1,369.5/1,389＝98.6%） |
-
-**建议提交量**：约 22–30 个可独立编译提交。P1 与 P4 是仅有的两个 L 级包；其余以 S/M 为主。
-
-**编号约定**：B288 已被 `docs/08` 的 codemode `prepareLoadout` 提案预占，本计划的新工单从 **B289** 起分配；新窄差从 **D274** 起。若 P0 重测发现某些项只是旧 D 的延续，则原位复核，不新开号。实际落点：B 至 **B293**（L6 #20）、D 至 **D316**（L7 W1–W8 统一编号，`docs/04` §6.5）。
-
-**排序理由**：
-
-1. 先做 P0，因为现有 94.9% 是按旧锚点算的，不先重测会把「新分母」和「旧缺口」混在一起。
-2. P1 必须最先写码：它同时改 AI 和 agent 的工具调用路径，后续所有工具夹具都依赖它的错误文本。
-3. P5 的 `find`／`grep`／`read` 是模型每轮都可能触发的工具，排在扩展 API 和 UI 之前。
-4. TUI 放在 coding-agent 之后，因为 `render()` 只读契约横跨两层，先定 coding-agent 侧消费点再改 TUI 更省返工。
-5. Anthropic threads 是唯一会改请求生命周期的 L 级功能，单独设计、允许延后（**已于 2026-11-22 完成**）。
-
-## 5. 风险
-
-| 风险 | 说明 | 缓解 |
-|---|---|---|
-| pi 移动快 | 20 天 818 个提交；本轮刚重新拉取就从 edfe6b2ef 前进到 a00a5048d；锚点一松就再次漂移 | P0 冻结 SHA；本轮期间不追 main；后续按版本另开换锚周期 |
-| pi-schema 完整方言 | `$ref`、相对 `$id`、format、coercion 边角多；完整移植成本高 | 先做模型可见行为；用 pi 夹具逐条钉；Java 不移植构建器 API |
-| Anthropic message threads | 服务端续接、前缀哈希、回退与清理改动请求生命周期 | 已按独立设计稿落地（docs/12）；faux ＋ `RecordingHttpServer` 观测已绿，真实 provider 冒烟经裁决豁免 → **该风险已关闭** |
-| TUI 框架差异 | Java 用 TamboUI；D255–D257 已登记键位、全屏、SGR 面差异；新 `render()` 契约映射不同 | P8 单独设计；只对可见行为计分，框架面按既有 D 项 |
-| 旧 TUI 缺口被新差异掩盖 | 旧账面 73.4%，新锚点又加 API/性能项 | P0 先分列「旧缺口」与「新差异」；不混算 |
-| 平台面 | Windows/macOS 的 fd、PowerShell、SIGTSTP、终端能力差异 | 沿用 D 项口径；只对可观察行为判定 |
-| 验证成本 | 全仓 verify 约 34 分钟；新增夹具多 | 每包先跑模块 `mvn test -pl <module> -am`；收尾一次性全量 |
-
-## 6. 完成定义
-
-只有同时满足以下条件，才允许切锚点并发布新读数：
-
-1. 七份地图均以 `a00a5048d` 重测，逐行有证据。
-2. `docs/04` 的新 B／D 与 F 裁决已登记；`docs/05` 总表可由逐行权重复算。
-3. `docs/map/ANCHOR.md` 的 `CURRENT_PI_PIN` 切到新 SHA。
-4. 全仓 `mvn clean verify -Dfrontend.skip=true` 零错误、零警告、测试通过。
-5. 本计划稿归档保留（用户裁决：`docs/09` 被多处文档引用，改为归档不删除），历史在 git（`docs/00`／`docs/04` §7 的维护规则）。
-
-**P12 验收结果（2026-11-24）**：条件 1–4 满足（全仓 16 模块 `clean verify` BUILD SUCCESS，SpotBugs 每模块 0 实例、Checkstyle 0 error、测试全绿）；条件 5 按上述修正执行（归档，未删除）。
-
-## 7. 明确不做
-
-- `chord`、`durable`、`env`、`codemode` 沙箱、`apps/p2`、`apps/p2-mac`、`apps/p3`：不实现、不进分母。
-- apps 的 web/durable UI：不追踪；pi-java web 仍是独立实现，只保留 16 个线格式单元。
-- TypeBox 构建器 API、Node 打包/lazy import、安装器与 standalone binary：不适用 Java。
-- 发布 tag 之外的 Unreleased 变更若在本轮冻结后继续进入 main：不在本轮追。
+1. 逐项修完后回填对应 `docs/map/` 行、`docs/05` §1 与 `docs/04` §1，读数按加权公式复算。
+2. 无法消除的差异登记 D 窄差后再复算；未编号前不进入发布读数。
+3. 范围裁决（R1/R2/R5、模型可见面优先等）维持 `docs/04` §3，不因本稿变化。
+4. 验证：分模块 `mvn test -pl <module> -am`；收口时全仓 `mvn clean verify -Dfrontend.skip=true`（零错误、零告警）。
