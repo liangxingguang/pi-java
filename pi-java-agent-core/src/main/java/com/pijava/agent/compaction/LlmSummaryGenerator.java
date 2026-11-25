@@ -121,9 +121,17 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
     @Override
     public SummaryResult summarize(List<Message> compressed, String previousSummary,
                                    String customInstructions, int reserveTokens, String reason) {
+        return summarize(compressed, previousSummary, customInstructions, reserveTokens, reason,
+            null);
+    }
+
+    @Override
+    public SummaryResult summarize(List<Message> compressed, String previousSummary,
+                                   String customInstructions, int reserveTokens, String reason,
+                                   AttemptSpans attempts) {
         // B272（docs/24 W2）：reserveTokens 不再参与输出上限（pi #9512）。
         var response = callWithRetries(() -> produceOnce(compressed, previousSummary,
-            customInstructions), reason);
+            customInstructions), reason, attempts);
         // pi generateSummaryWithUsage 的后半（:715-725）：failure 文案 → toolCall 守卫 → 文本。
         var failure = getSummarizationFailure(response, "Summarization");
         if (failure != null) {
@@ -146,6 +154,13 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
     @Override
     public SummaryResult summarizeTurnPrefix(List<Message> messages, int reserveTokens,
                                              String customInstructions, String reason) {
+        return summarizeTurnPrefix(messages, reserveTokens, customInstructions, reason, null);
+    }
+
+    @Override
+    public SummaryResult summarizeTurnPrefix(List<Message> messages, int reserveTokens,
+                                             String customInstructions, String reason,
+                                             AttemptSpans attempts) {
         // pi generateTurnPrefixSummary（compaction.ts:1062-1095）：# Conversation/
         // # Instructions 包装的逐字 prompt；B272 去固定输出上限，并接 /compact 指令。
         var promptText = "# Conversation\n" + ConversationSerializer.serialize(messages)
@@ -154,7 +169,7 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
             promptText = promptText + "\n\nAdditional focus: " + customInstructions;
         }
         final var prompt = promptText;
-        var response = callWithRetries(() -> produceOnce(prompt), reason);
+        var response = callWithRetries(() -> produceOnce(prompt), reason, attempts);
         var failure = getSummarizationFailure(response, "Turn prefix summarization");
         if (failure != null) {
             throw new IllegalStateException(failure);
@@ -184,7 +199,7 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
     public Message.AssistantMessage callBranch(String promptText, OptionalInt maxTokens,
                                                ModelThinkingLevel thinkingLevel, String reason) {
         return callWithRetries(() -> request(promptText, maxTokens,
-            reasoningOption(thinkingLevel), SummaryPrompts.SYSTEM), reason);
+            reasoningOption(thinkingLevel), SummaryPrompts.SYSTEM), reason, null);
     }
 
     /**
@@ -196,7 +211,7 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
     public Message.AssistantMessage callBranch(String promptText, int maxTokens, String reason,
                                                String systemPrompt) {
         return callWithRetries(() -> request(promptText, OptionalInt.of(maxTokens),
-            reasoningOption(), systemPrompt), reason);
+            reasoningOption(), systemPrompt), reason, null);
     }
 
     /** pi {@code getSummarizationFailure(response, label)}（compaction.ts:580-588）。 */
@@ -215,14 +230,16 @@ public final class LlmSummaryGenerator implements SummaryGenerator {
 
     /** pi {@code maxAttempts = policy?.enabled ? policy.maxRetries : 0}。 */
     private Message.AssistantMessage callWithRetries(
-            Supplier<Message.AssistantMessage> produce, String reason) {
+            Supplier<Message.AssistantMessage> produce, String reason, AttemptSpans attempts) {
         var policy = retrySettings.get();
         int maxAttempts = policy.enabled() ? policy.maxRetries() : 0;
         int attempt = 0;
         // pi 以 lastRetry 是否有值决定终局要不要发 finished。
         boolean scheduled = false;
         for (;;) {
-            var response = produce.get();
+            // D320：每次尝试（首发 + 每次重试）各有自己的子跨度；attempt 为 0 起序号。
+            var response = attempts == null ? produce.get()
+                : attempts.within(attempt, reason, produce);
 
             // Abort: terminal but not successful. Never retry an aborted message.
             if (response.stopReason() == StopReason.ABORTED) {

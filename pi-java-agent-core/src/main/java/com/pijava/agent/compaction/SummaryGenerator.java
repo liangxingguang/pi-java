@@ -1,6 +1,7 @@
 package com.pijava.agent.compaction;
 
 import java.util.List;
+import java.util.function.Supplier;
 
 import com.pijava.ai.Usage;
 import com.pijava.ai.message.Message;
@@ -61,6 +62,43 @@ public interface SummaryGenerator {
     default SummaryResult summarize(List<Message> compressed, String previousSummary,
                                     String customInstructions, int reserveTokens) {
         return summarize(compressed, previousSummary, customInstructions, reserveTokens, null);
+    }
+
+    /**
+     * D320：带「每次尝试跨度」缝的形态。默认实现忽略跨度缝、回落到无跨度的旧方法；
+     * {@link LlmSummaryGenerator} 覆写后在重试环的<b>每次</b> LLM 尝试外面包一个子跨度
+     * （此前所有尝试都只落在调用方开的 {@code compaction.summary} 一条跨度下）。
+     *
+     * @param attempts 尝试跨度缝；{@code null} ⇒ 不记跨度（测试/非遥测路）
+     */
+    default SummaryResult summarize(List<Message> compressed, String previousSummary,
+                                    String customInstructions, int reserveTokens, String reason,
+                                    AttemptSpans attempts) {
+        return summarize(compressed, previousSummary, customInstructions, reserveTokens, reason);
+    }
+
+    /** {@link #summarize(List, String, String, int, String, AttemptSpans)} 的 turn-prefix 同形。 */
+    default SummaryResult summarizeTurnPrefix(List<Message> messages, int reserveTokens,
+                                              String customInstructions, String reason,
+                                              AttemptSpans attempts) {
+        return summarizeTurnPrefix(messages, reserveTokens, customInstructions, reason);
+    }
+
+    /**
+     * 摘要重试环的尝试跨度缝（D320）。{@link #within} 在 {@code attempt} 次尝试的
+     * 跨度内运行 {@code body}；实现方负责开/关跨度与线程绑定，生成器只管调用。
+     */
+    @FunctionalInterface
+    interface AttemptSpans {
+
+        /**
+         * @param attempt 0 起的尝试序号（首发 0，重试 1、2……）
+         * @param reason  压缩触发原因（"manual"/"threshold"/"overflow"），可为 null
+         * @param body    这次尝试的 LLM 调用
+         * @return {@code body} 的响应
+         */
+        Message.AssistantMessage within(int attempt, String reason,
+                                        Supplier<Message.AssistantMessage> body);
     }
 
     /** Summary text plus the usage of the generating call (may be null). */

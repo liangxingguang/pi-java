@@ -40,6 +40,10 @@
   不置 stale。失效后旧 ctx 的 action/getter/工具/命令面抛 `IllegalStateException`（文案逐字）。
   `map/04` D29 销号、读数不变（D 域 100%，窄差不进分子）；状态机抽到
   `ExtensionContextStaleness`（FileLength 拆分），守卫集中在 `requireToolControl()`／`surface()` 缝。
+- **L1 D320 收口（2026-11-25）**：摘要重试的每次尝试各获一个 `llm.request` 子跨度
+  （父 = `compaction.summary`，属性 `kind=summary`、`attempt` 从 0 起），负载行绑定到
+  那一次尝试；`SummaryGenerator` 增 `AttemptSpans` 缝，`CompactionService` 透传，非遥测
+  路径传 `null` 保持旧形。`map/01` D320 销号、读数不变（T16 仍对齐）。
 - **L6 复核（2026-11-23）**：评测域 24 行按目标锚点 `a00a5048d` 复核（docs/20）：
   两锚点间 `packages/evals` 仅 `package.json` 变化（版本 1.4.0→1.6.0、依赖同步、`clean` 脚本 shx→node），
   `src`／`evals/`／`test/` 逐字节未变 ⇒ **零代码**、24 行判定与 pi 证据全部续用，未新开 B／D 号；
@@ -279,7 +283,7 @@ SQLite 后端是 pi-java 独立实现，保留模块，不对齐已删除 schema
 | 编号 | 当前边界 | 证据 |
 |---|---|---|
 | D201 | telemetry 只保留运行时身份/父绑定/元数据合并；TS 条件类型的编译期约束不复刻 | map/01 |
-| D320 | telemetry 摘要重试的每次尝试没有各自跨度 | map/01 |
+| D320（已关闭） | 摘要重试的每次尝试现有各自 `llm.request` 子跨度（父 = `compaction.summary`） | map/01 |
 | D202 | malformed 工具参数沿用 Jackson 前缀，pi 文案逐字保留 | map/02 |
 | D203（已关闭） | `pi.ai.poll` 已有生产入口（deferred + Faux）；其他 provider 保持「方法不存在」 | map/02 |
 | D204 | identity 合并落在 `DefaultProviders`／`ConfigurableProvider`，请求头行为对齐 | map/02 |

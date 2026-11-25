@@ -72,7 +72,6 @@
 | 台账 | 条目 | 挂点 |
 |---|---|---|
 | D201 | Java 无 TS 条件类型的 exact attributes、required keys、schema 名与 instrument kind 编译期约束；运行时 identity、parent binding 与 metadata 行为已对齐 | T11 |
-| D320 | 摘要重试每次尝试没有各自跨度 | T16 |
 
 ## 加权汇总
 

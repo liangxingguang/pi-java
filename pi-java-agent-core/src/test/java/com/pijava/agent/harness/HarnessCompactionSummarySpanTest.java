@@ -6,6 +6,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -36,7 +37,11 @@ import static org.assertj.core.api.Assertions.assertThat;
  * 但压缩路径此前从不 {@code pushCurrent}，那些行既无 {@code traceId} 也无 {@code spanId}，
  * 事后既连不回哪一次运行、也连不回哪一次压缩。这里钉住修复后的形状：
  * {@code compaction.summary} 子跨度（父 = {@code compaction.apply}）在摘要生成期间
- * 绑定为当前跨度，负载行因此归属到它，跨度结束时还带上摘要长度与 token。</p>
+ * 绑定为当前跨度，跨度结束时还带上摘要长度与 token。</p>
+ *
+ * <p>D320 起重试环的<b>每次尝试</b>再各开一个 {@code llm.request} 子跨度
+ * （{@code kind=summary}），负载行归属到那一次尝试的跨度而不是摘要总跨度 ——
+ * 重试的次数与时序从跨度直接可见。</p>
  *
  * <p>跨线程那条边界（运行中手动 {@code /compact}）由
  * {@code HarnessTelemetryThreadAttributionTest} 的同名用例守着 —— 那里验的是
@@ -108,6 +113,37 @@ class HarnessCompactionSummarySpanTest {
         };
     }
 
+    /**
+     * 摘要第一次尝试返回可重试 error、第二次成功（其余请求照常）—— 用来钉 D320
+     * 「每次尝试各一个跨度」。
+     */
+    private static StreamFn scriptedRetryOnce() {
+        var summaryAttempts = new AtomicInteger();
+        return (model, context, options) -> {
+            var summarization = (context.systemPrompt() == null ? "" : context.systemPrompt())
+                .startsWith(SUMMARIZATION_PROMPT_PREFIX);
+            if (summarization && summaryAttempts.getAndIncrement() == 0) {
+                var error = AssistantMessage.empty()
+                    .withStopReason(StopReason.ERROR)
+                    .withErrorMessage("overloaded");
+                return StreamIterator.from(List.of(
+                    new StreamEvent.Start(AssistantMessage.empty()),
+                    new StreamEvent.StreamError(StopReason.ERROR,
+                        new RuntimeException("overloaded"), error)));
+            }
+            var text = summarization ? SUMMARY_TEXT : "assistant reply";
+            var partial = AssistantMessage.empty()
+                .withContent(List.of(new ContentBlock.TextContent(text)))
+                .withStopReason(StopReason.STOP);
+            return StreamIterator.from(List.of(
+                new StreamEvent.Start(AssistantMessage.empty()),
+                new StreamEvent.TextEnd(0, text, partial),
+                new StreamEvent.UsageInfo(SUMMARY_INPUT_TOKENS, SUMMARY_OUTPUT_TOKENS, partial,
+                    Usage.of(SUMMARY_INPUT_TOKENS, SUMMARY_OUTPUT_TOKENS)),
+                new StreamEvent.StreamDone(StopReason.STOP, null, partial)));
+        };
+    }
+
     /** harness 与摘要生成器共用同一份 exporter + 同一份流（生产的接线形状）。 */
     private static AgentHarness harness(StreamFn streamFn, TelemetryContext recorder) {
         return harness(streamFn, recorder, new LlmSummaryGenerator(streamFn, () -> MODEL));
@@ -150,6 +186,15 @@ class HarnessCompactionSummarySpanTest {
             .findFirst().orElseThrow(() -> new AssertionError("没有 " + name + " 的 span_start"));
     }
 
+    /** 父跨度给定的 {@code name} 子跨度（按出现顺序）。 */
+    private static List<JsonNode> childSpans(List<JsonNode> lines, String name, String parentSpanId) {
+        return lines.stream()
+            .filter(n -> "span_start".equals(n.get("kind").asText()))
+            .filter(n -> name.equals(n.get("name").asText()))
+            .filter(n -> parentSpanId.equals(n.path("parentSpanId").asText()))
+            .toList();
+    }
+
     private static JsonNode spanEnd(List<JsonNode> lines, String spanId) {
         return lines.stream()
             .filter(n -> "span_end".equals(n.get("kind").asText()))
@@ -185,29 +230,37 @@ class HarnessCompactionSummarySpanTest {
         var summarization = summarizationRequests(lines);
         assertThat(summarization).as("手动压缩应当调到摘要生成器").isNotEmpty();
 
-        // 归属：负载行绑在**自己**的跨度上（修复前两处都是缺的）。
+        // D320：摘要尝试是 compaction.summary 下的 llm.request 子跨度
+        var attemptSpans = childSpans(lines, "llm.request",
+            summarySpan.path("spanId").asText());
+        assertThat(attemptSpans).as("摘要尝试应当有自己的跨度").hasSize(1);
+        var attemptSpan = attemptSpans.getFirst();
+
+        // 归属：负载行绑在**那一次尝试**的跨度上（修复前两处都是缺的）。
         // 读用 path(...)：键缺席时得到 MissingNode（"")而不是 NPE —— 回归时读到的
         // 是「expected: <spanId> but was: ""」，一眼看出是没绑上，而不是栈里一个空指针。
         var row = summarization.get(0);
         assertThat(row.path("traceId").asText())
-            .isEqualTo(summarySpan.path("traceId").asText());
+            .isEqualTo(attemptSpan.path("traceId").asText());
         assertThat(row.path("spanId").asText())
-            .isEqualTo(summarySpan.path("spanId").asText());
+            .isEqualTo(attemptSpan.path("spanId").asText());
 
         // 嵌套：compaction.summary 是 compaction.apply 的子跨度，同一条 trace
         assertThat(summarySpan.path("parentSpanId").asText())
             .isEqualTo(applySpan.path("spanId").asText());
         assertThat(summarySpan.path("traceId").asText())
             .isEqualTo(applySpan.path("traceId").asText());
+        assertThat(attemptSpan.path("parentSpanId").asText())
+            .isEqualTo(summarySpan.path("spanId").asText());
 
         // 响应行也绑得住（与请求行同一宿主）
         var response = lines.stream()
             .filter(n -> "event".equals(n.get("kind").asText()))
             .filter(n -> "llm.payload.response".equals(n.get("name").asText()))
-            .filter(n -> summarySpan.path("spanId").asText()
+            .filter(n -> attemptSpan.path("spanId").asText()
                 .equals(n.path("spanId").asText()))
             .toList();
-        assertThat(response).as("摘要的响应行也在同一宿主跨度下").isNotEmpty();
+        assertThat(response).as("摘要的响应行也在同一次尝试的跨度下").isNotEmpty();
 
         // 收尾属性：摘要长度 + 这次调用的用量（修复前 trace 里看不到摘要花掉的 token）
         var attrs = spanEnd(lines, summarySpan.path("spanId").asText()).path("attrs");
@@ -248,6 +301,43 @@ class HarnessCompactionSummarySpanTest {
             .isEqualTo(llmSpan.path("spanId").asText());
         assertThat(llmSpan.path("spanId").asText())
             .isNotEqualTo(summarySpan.path("spanId").asText());
+    }
+
+    /**
+     * D320：摘要重试的每次尝试各有自己的 {@code llm.request} 跨度（父 =
+     * {@code compaction.summary}），{@code attempt} 从 0 递增，负载行分别归属。
+     */
+    @Test
+    void eachSummarizationRetryAttemptGetsItsOwnSpan(@TempDir Path tracesDir) throws IOException {
+        var recorder = JsonlFileTelemetry.create(tracesDir).withPayloads(true);
+        var streamFn = recording(recorder, scriptedRetryOnce());
+        var generator = new LlmSummaryGenerator(streamFn, () -> MODEL,
+            () -> new RetrySettings(true, 1, 1, 1_000L), () -> false, RetryObserver.NOOP);
+        var h = harness(streamFn, recorder, generator);
+
+        h.prompt("hello");
+        h.compact(new CompactionSettings(true, 16_384, 1));
+
+        var lines = readLines(tracesDir);
+        var summarySpan = spanStart(lines, "compaction.summary");
+        var attempts = childSpans(lines, "llm.request", summarySpan.path("spanId").asText());
+
+        assertThat(attempts).as("首发 + 一次重试").hasSize(2);
+        assertThat(attempts.get(0).path("attrs").path("attempt").asInt()).isZero();
+        assertThat(attempts.get(1).path("attrs").path("attempt").asInt()).isEqualTo(1);
+        assertThat(attempts).allSatisfy(span ->
+            assertThat(span.path("attrs").path("kind").asText()).isEqualTo("summary"));
+
+        // 两次请求行分别落在两次尝试的跨度上（不是都堆在摘要总跨度）
+        var requests = summarizationRequests(lines);
+        assertThat(requests).hasSize(2);
+        var attemptIds = attempts.stream()
+            .map(span -> span.path("spanId").asText())
+            .toList();
+        assertThat(requests).allSatisfy(row ->
+            assertThat(attemptIds).contains(row.path("spanId").asText()));
+        assertThat(requests.get(0).path("spanId").asText())
+            .isNotEqualTo(requests.get(1).path("spanId").asText());
     }
 
     /**

@@ -356,22 +356,32 @@ class HarnessTelemetryThreadAttributionTest {
             .filter(n -> "span_start".equals(n.get("kind").asText()))
             .filter(n -> "compaction.summary".equals(n.get("name").asText()))
             .findFirst().orElseThrow();
+        // D320：摘要尝试有自己的 llm.request 子跨度，请求行绑在那一次尝试上
+        // （仍然是压缩自己的归属，不是从在飞请求那里借来的）。
+        var attemptSpan = lines.stream()
+            .filter(n -> "span_start".equals(n.get("kind").asText()))
+            .filter(n -> "llm.request".equals(n.get("name").asText()))
+            .filter(n -> compactionSummarySpan.path("spanId").asText()
+                .equals(n.path("parentSpanId").asText()))
+            .findFirst().orElseThrow();
         assertThat(summarization.get(0).path("spanId").asText())
-            .isEqualTo(compactionSummarySpan.path("spanId").asText());
+            .isEqualTo(attemptSpan.path("spanId").asText());
 
         // 正向对照：在飞那一轮的请求行**带**自己的 traceId（不是「一行都没有」）
-        var llmStart = lines.stream()
-            .filter(n -> "span_start".equals(n.get("kind").asText())
-                && "llm.request".equals(n.get("name").asText()))
-            .reduce((first, second) -> second).orElseThrow();
         var runRequests = eventsNamed(lines, "llm.payload.request").stream()
             .filter(n -> !n.get("payload").get("sys").asText()
                 .startsWith(SUMMARIZATION_PROMPT_PREFIX))
             .toList();
         assertThat(runRequests).isNotEmpty();
-        assertThat(runRequests.get(runRequests.size() - 1).path("spanId").asText())
-            .isEqualTo(llmStart.path("spanId").asText());
+        var runSpanId = runRequests.get(runRequests.size() - 1).path("spanId").asText();
+        assertThat(runSpanId).isNotBlank();
+        var llmStart = lines.stream()
+            .filter(n -> "span_start".equals(n.get("kind").asText())
+                && "llm.request".equals(n.get("name").asText())
+                && runSpanId.equals(n.path("spanId").asText()))
+            .findFirst().orElseThrow();
+        assertThat(llmStart.path("traceId").asText()).isNotBlank();
         assertThat(summarization.get(0).path("spanId").asText())
-            .isNotEqualTo(llmStart.path("spanId").asText());
+            .isNotEqualTo(runSpanId);
     }
 }

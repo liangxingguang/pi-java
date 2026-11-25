@@ -137,6 +137,22 @@ public final class CompactionService {
                                            SummaryGenerator summaryGenerator,
                                            long tokensBefore, String reason,
                                            String customInstructions) {
+        return compact(transcript, settings, summaryGenerator, tokensBefore, reason,
+            customInstructions, null);
+    }
+
+    /**
+     * D320：把每次摘要尝试的跨度缝透传给生成器（调用方开的是
+     * {@code compaction.summary}，尝试跨度是它的子跨度）。
+     *
+     * @param attempts 尝试跨度缝；{@code null} ⇒ 不记尝试跨度（测试/非遥测路）
+     */
+    public static CompactionResult compact(List<Entry> transcript,
+                                           CompactionSettings settings,
+                                           SummaryGenerator summaryGenerator,
+                                           long tokensBefore, String reason,
+                                           String customInstructions,
+                                           SummaryGenerator.AttemptSpans attempts) {
         Plan plan = prepare(transcript, settings);
         if (plan == null) {
             throw new IllegalStateException("Nothing to compact: transcript too small");
@@ -153,13 +169,13 @@ public final class CompactionService {
             if (!plan.toSummarize().isEmpty()) {
                 var historyResult = summaryGenerator.summarize(
                     plan.toSummarize(), plan.previousSummary(), customInstructions,
-                    settings.reserveTokens(), reason);
+                    settings.reserveTokens(), reason, attempts);
                 historyText = historyResult.text();
                 historyUsage = historyResult.usage();
             }
             // B272（docs/24 W2）：split-turn 的 turn-prefix 也接 /compact 指令（pi :1082-1085）。
             var prefixResult = summaryGenerator.summarizeTurnPrefix(
-                plan.turnPrefix(), settings.reserveTokens(), customInstructions, reason);
+                plan.turnPrefix(), settings.reserveTokens(), customInstructions, reason, attempts);
             summary = historyText
                 + "\n\n---\n\n**Turn Context (split turn):**\n\n"
                 + prefixResult.text();
@@ -169,7 +185,7 @@ public final class CompactionService {
         } else {
             var result = summaryGenerator.summarize(
                 plan.toSummarize(), plan.previousSummary(), customInstructions,
-                settings.reserveTokens(), reason);
+                settings.reserveTokens(), reason, attempts);
             summary = result.text();
             usage = result.usage();
         }

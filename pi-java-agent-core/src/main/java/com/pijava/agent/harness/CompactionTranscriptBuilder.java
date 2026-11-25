@@ -2,12 +2,14 @@ package com.pijava.agent.harness;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.UUID;
 
 import com.pijava.agent.compaction.CompactionResult;
 import com.pijava.agent.compaction.CompactionService;
 import com.pijava.agent.compaction.CompactionSettings;
+import com.pijava.agent.compaction.SummaryGenerator;
 import com.pijava.agent.entry.Entry;
 import com.pijava.agent.hook.SuppliedCompaction;
 import com.pijava.agent.session.ContextEntries;
@@ -48,11 +50,12 @@ final class CompactionTranscriptBuilder {
      * 生成期间绑定为当前跨度，与 {@code PiLaneSink.beginRequest} 对主循环请求做的
      * 是同一件事。</p>
      *
-     * <p>三点须留意：① <b>不</b>复用 {@code llm.request} 名 —— 否则「按名数
-     * {@code llm.request} = agent 轮数」这条既有聚合口径静默失效；② 生成器的重试
-     * 环（3d 环 B）在<b>同一条</b>跨度下发生，重试的每次请求行都绑到它，从行数看得见
-     * 重试；③ 非 LLM 的截断兜底生成器（{@code SummaryGenerator.truncating()}）没有
-     * LLM 调用，这条跨度仍然出现但只有 {@code summaryChars}、没有事件行与 token ——
+     * <p>三点须留意：① 摘要这一步本身<b>不</b>复用 {@code llm.request} 名（聚合口径
+     * 保留 {@code compaction.summary} 这一层）；② 生成器的重试环（3d 环 B）此前所有
+     * 尝试都落在同一条跨度下，D320 起<b>每次尝试</b>各开一个 {@code llm.request}
+     * 子跨度（{@code kind=summary}）并把负载行绑到它，重试的次数/时序从跨度看得见；
+     * ③ 非 LLM 的截断兜底生成器（{@code SummaryGenerator.truncating()}）没有 LLM
+     * 调用，这条跨度仍然出现但只有 {@code summaryChars}、没有事件行与 token ——
      * 跨度描述的是「摘要这一步」，不是「一定发生了一次请求」。</p>
      */
     Built compactTranscript(LaneState lane, CompactionSettings settings, String reason,
@@ -67,7 +70,8 @@ final class CompactionTranscriptBuilder {
             // Entry.Compaction.tokensBefore 因此是「用量优先」值，与触发判据同源。
             // reason 透传给摘要生成器（3d 环 B 的 attempt_start 事件装饰）。
             result = CompactionService.compact(lane.transcript, settings,
-                ctx.summaryGenerator(), executor.contextTokens(lane), reason, customInstructions);
+                ctx.summaryGenerator(), executor.contextTokens(lane), reason, customInstructions,
+                attemptSpans(summarySpan));
             summarySpan.addAttribute("summaryChars", result.summary().length());
             var usage = result.usage();
             if (usage != null) {
@@ -94,6 +98,43 @@ final class CompactionTranscriptBuilder {
             systemMessage);
         return new Built(assembleKept(lane.transcript, result.firstKeptEntryId(),
             compactionEntry), result);
+    }
+
+    /**
+     * D320：每次摘要尝试一个 {@code llm.request} 子跨度（{@code kind=summary}），
+     * 绑定为当前跨度后再跑请求，负载行因此归属到<b>那一次</b>尝试；跨度收尾时带上
+     * 本次尝试的 token 与停因。父跨度是 {@code compaction.summary}。
+     */
+    private SummaryGenerator.AttemptSpans attemptSpans(TelemetrySpan summarySpan) {
+        return (attempt, attemptReason, body) ->
+            summarySpan.startSpan(new SpanOptions("llm.request",
+                attemptAttributes(attempt, attemptReason)), span -> {
+                ctx.telemetry().pushCurrent(span);
+                try {
+                    var response = body.get();
+                    var usage = response.usage();
+                    if (usage != null) {
+                        span.addAttribute("inputTokens", usage.input());
+                        span.addAttribute("outputTokens", usage.output());
+                    }
+                    if (response.stopReason() != null) {
+                        span.addAttribute("stopReason", response.stopReason().wireName());
+                    }
+                    return response;
+                } finally {
+                    ctx.telemetry().popCurrent(span);
+                }
+            });
+    }
+
+    private static java.util.Map<String, Object> attemptAttributes(int attempt, String reason) {
+        var attrs = new LinkedHashMap<String, Object>();
+        attrs.put("attempt", attempt);
+        attrs.put("kind", "summary");
+        if (reason != null) {
+            attrs.put("reason", reason);
+        }
+        return attrs;
     }
 
     /**
