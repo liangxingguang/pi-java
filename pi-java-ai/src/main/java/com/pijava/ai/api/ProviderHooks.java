@@ -97,17 +97,17 @@ public final class ProviderHooks {
     }
 
     /**
-     * 响应头摊平（pi {@code headersToRecord}，utils/headers.ts）：同名多值逗号连接
-     * （≈fetch {@code Headers.entries()} 行为）；名按来源原样（SDK/JDK 保留 wire
-     * 大小写，pi fetch 是小写——窄差 D35）。anthropic/openai 两 SDK 的 {@code Headers}
-     * 同为 {@code names()×values(name)} 形状，JDK {@code HttpHeaders} 走
-     * {@link #flattenHeaders(Map)} 重载。
+     * 响应头摊平（pi {@code headersToRecord}，utils/headers.ts）：名统一小写、同名多值
+     * 逗号连接（与 fetch {@code Headers.entries()} 一致）；大小写不同的同名头也合并。
+     * anthropic/openai 两 SDK 的 {@code Headers} 同为 {@code names()×values(name)} 形状，
+     * JDK {@code HttpHeaders} 走 {@link #flattenHeaders(Map)} 重载。
      */
     public static Map<String, String> flattenHeaders(Iterable<String> names,
             java.util.function.Function<String, java.util.List<String>> values) {
         var out = new java.util.LinkedHashMap<String, String>();
         for (var name : names) {
-            out.put(name, String.join(",", values.apply(name)));
+            out.merge(name.toLowerCase(java.util.Locale.ROOT), String.join(",", values.apply(name)),
+                (a, b) -> a + "," + b);
         }
         return out;
     }
@@ -115,7 +115,8 @@ public final class ProviderHooks {
     /** JDK {@code HttpHeaders.map()} 形重载（自备 HTTP 车道用）。 */
     public static Map<String, String> flattenHeaders(Map<String, java.util.List<String>> headers) {
         var out = new java.util.LinkedHashMap<String, String>();
-        headers.forEach((name, values) -> out.put(name, String.join(",", values)));
+        headers.forEach((name, values) -> out.merge(name.toLowerCase(java.util.Locale.ROOT),
+            String.join(",", values), (a, b) -> a + "," + b));
         return out;
     }
 

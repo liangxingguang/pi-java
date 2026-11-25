@@ -141,119 +141,140 @@ final class ModelsJsonCompat {
         if (raw == null) {
             return base;
         }
-        return new ModelCompat(
-            raw.allowEmptySignature() != null
-                ? raw.allowEmptySignature() : base.allowEmptySignature(),
-            raw.requiresReasoningContentOnAssistantMessages() != null
-                ? raw.requiresReasoningContentOnAssistantMessages()
-                : base.requiresReasoningContentOnAssistantMessages(),
-            raw.supportsFinishReason() != null
-                ? raw.supportsFinishReason() : base.supportsFinishReason(),
-            raw.forceAdaptiveThinking() != null
-                ? raw.forceAdaptiveThinking() : base.forceAdaptiveThinking(),
-            raw.supportsMidConvoSystemMessages() != null
-                ? raw.supportsMidConvoSystemMessages()
-                : base.supportsMidConvoSystemMessages(),
-            raw.supportsMidConvoToolAdditions() != null
-                ? raw.supportsMidConvoToolAdditions()
-                : base.supportsMidConvoToolAdditions(),
-            raw.supportsMidConvoToolChanges() != null
-                ? raw.supportsMidConvoToolChanges()
-                : base.supportsMidConvoToolChanges(),
-            raw.supportsAdditionalTools() != null
-                ? raw.supportsAdditionalTools() : base.supportsAdditionalTools(),
-            raw.supportsToolSearch() != null
-                ? raw.supportsToolSearch() : base.supportsToolSearch(),
-            raw.supportsTemperature() != null
-                ? raw.supportsTemperature() : base.supportsTemperature(),
-            raw.maxTokensField() != null
-                ? ModelsJsonCompatFieldParsers.maxTokensFieldOf(providerId, modelId, raw.maxTokensField())
-                : base.maxTokensField(),
-            raw.supportsStore() != null
-                ? raw.supportsStore() : base.supportsStore(),
-            raw.supportsDeveloperRole() != null
-                ? raw.supportsDeveloperRole() : base.supportsDeveloperRole(),
-            raw.supportsStrictMode() != null
-                ? raw.supportsStrictMode() : base.supportsStrictMode(),
-            raw.supportsLongCacheRetention() != null
-                ? raw.supportsLongCacheRetention() : base.supportsLongCacheRetention(),
-            raw.supportsCacheControlOnTools() != null
-                ? raw.supportsCacheControlOnTools()
-                : base.supportsCacheControlOnTools(),
-            raw.thinkingTokenBudgetField() != null
-                ? ModelsJsonCompatFieldParsers.thinkingTokenBudgetFieldOf(providerId, modelId,
-                    raw.thinkingTokenBudgetField())
-                : base.thinkingTokenBudgetField(),
-            raw.supportsThinkingTokenBudget() != null
-                ? raw.supportsThinkingTokenBudget()
-                : base.supportsThinkingTokenBudget(),
-            raw.supportsMaxOutputTokens() != null
-                ? raw.supportsMaxOutputTokens() : base.supportsMaxOutputTokens(),
-            raw.thinkingFormat() != null
-                ? ModelsJsonCompatFieldParsers.thinkingFormatOf(providerId, modelId, raw.thinkingFormat())
-                : base.thinkingFormat(),
-            ModelsJsonCompatFieldParsers.mergeKwargMap(providerId, modelId, "chatTemplateKwargs",
-                base.chatTemplateKwargs(), raw.chatTemplateKwargs()),
-            ModelsJsonCompatFieldParsers.mergeKwargMap(providerId, modelId, "chatTemplateArgs",
-                base.chatTemplateArgs(), raw.chatTemplateArgs()),
-            raw.supportsReasoningEffort() != null
-                ? raw.supportsReasoningEffort() : base.supportsReasoningEffort(),
-            raw.cacheControlFormat() != null
-                ? ModelsJsonCompatFieldParsers.cacheControlFormatOf(providerId, modelId, raw.cacheControlFormat())
-                : base.cacheControlFormat(),
-            mergeJsonMap(base.openRouterRouting(), raw.openRouterRouting()),
-            raw.sendSessionAffinityHeaders() != null
-                ? raw.sendSessionAffinityHeaders() : base.sendSessionAffinityHeaders(),
-            raw.sessionAffinityFormat() != null
-                ? SessionAffinityFormat.parse(raw.sessionAffinityFormat()).orElse(null)
-                : base.sessionAffinityFormat(),
-            raw.supportsStrictTools() != null
-                ? raw.supportsStrictTools() : base.supportsStrictTools(),
-            raw.supportsOpenAIGrammarTools() != null
-                ? raw.supportsOpenAIGrammarTools()
-                : base.supportsOpenAIGrammarTools(),
-            // 包 09：raw 缺席 ⇒ 保留 base（mergeCompat 的逐字段覆盖语义）。
-            raw.supportsEagerToolInputStreaming() != null
-                ? raw.supportsEagerToolInputStreaming()
-                : base.supportsEagerToolInputStreaming(),
-            raw.supportsExplicitPromptCacheMode() != null
-                ? raw.supportsExplicitPromptCacheMode()
-                : base.supportsExplicitPromptCacheMode(),
-            // B98：标量 override ?? base；嵌套两类（vercel 路由 / fallback 列表）
-            // 非 map ⇒ 在场即整值替换（与 pi 的浅合并对非 map 值的语义同形）。
-            raw.requiresToolResultName() != null
-                ? raw.requiresToolResultName() : base.requiresToolResultName(),
-            raw.requiresAssistantAfterToolResult() != null
-                ? raw.requiresAssistantAfterToolResult()
-                : base.requiresAssistantAfterToolResult(),
-            raw.requiresThinkingAsText() != null
-                ? raw.requiresThinkingAsText() : base.requiresThinkingAsText(),
-            raw.supportsUsageInStreaming() != null
-                ? raw.supportsUsageInStreaming() : base.supportsUsageInStreaming(),
-            raw.zaiToolStream() != null
-                ? raw.zaiToolStream() : base.zaiToolStream(),
-            raw.vllmPriority() != null
-                ? raw.vllmPriority() : base.vllmPriority(),
-            raw.vercelGatewayRouting() != null
-                ? ModelsJsonCompatFieldParsers.vercelRoutingOf(providerId, modelId, raw.vercelGatewayRouting())
-                : base.vercelGatewayRouting(),
-            raw.allowedFallbackModels() != null
-                ? ModelsJsonCompatFieldParsers.fallbacksOf(providerId, modelId, raw.allowedFallbackModels())
-                : base.allowedFallbackModels(),
-            // B99：标量 override ?? base。
-            raw.supportsMidConvoEffort() != null
-                ? raw.supportsMidConvoEffort() : base.supportsMidConvoEffort(),
-            // v1.6.0（P2b）：标量 override ?? base；闭集串经解析器。
-            raw.requiresNonNullAssistantContent() != null
-                ? raw.requiresNonNullAssistantContent()
-                : base.requiresNonNullAssistantContent(),
-            raw.requiresToolsWithToolHistory() != null
-                ? raw.requiresToolsWithToolHistory()
-                : base.requiresToolsWithToolHistory(),
-            raw.promptCacheKeyMode() != null
-                ? ModelsJsonCompatFieldParsers.promptCacheKeyModeOf(providerId, modelId,
-                    raw.promptCacheKeyMode())
-                : base.promptCacheKeyMode());
+        var b = base.toBuilder();
+        if (raw.allowEmptySignature() != null) {
+            b.allowEmptySignature(raw.allowEmptySignature());
+        }
+        if (raw.requiresReasoningContentOnAssistantMessages() != null) {
+            b.requiresReasoningContentOnAssistantMessages(raw.requiresReasoningContentOnAssistantMessages());
+        }
+        if (raw.supportsFinishReason() != null) {
+            b.supportsFinishReason(raw.supportsFinishReason());
+        }
+        if (raw.forceAdaptiveThinking() != null) {
+            b.forceAdaptiveThinking(raw.forceAdaptiveThinking());
+        }
+        if (raw.supportsMidConvoSystemMessages() != null) {
+            b.supportsMidConvoSystemMessages(raw.supportsMidConvoSystemMessages());
+        }
+        if (raw.supportsMidConvoToolAdditions() != null) {
+            b.supportsMidConvoToolAdditions(raw.supportsMidConvoToolAdditions());
+        }
+        if (raw.supportsMidConvoToolChanges() != null) {
+            b.supportsMidConvoToolChanges(raw.supportsMidConvoToolChanges());
+        }
+        if (raw.supportsAdditionalTools() != null) {
+            b.supportsAdditionalTools(raw.supportsAdditionalTools());
+        }
+        if (raw.supportsToolSearch() != null) {
+            b.supportsToolSearch(raw.supportsToolSearch());
+        }
+        if (raw.supportsTemperature() != null) {
+            b.supportsTemperature(raw.supportsTemperature());
+        }
+        if (raw.maxTokensField() != null) {
+            b.maxTokensField(ModelsJsonCompatFieldParsers.maxTokensFieldOf(
+                providerId, modelId, raw.maxTokensField()));
+        }
+        if (raw.supportsStore() != null) {
+            b.supportsStore(raw.supportsStore());
+        }
+        if (raw.supportsDeveloperRole() != null) {
+            b.supportsDeveloperRole(raw.supportsDeveloperRole());
+        }
+        if (raw.supportsStrictMode() != null) {
+            b.supportsStrictMode(raw.supportsStrictMode());
+        }
+        if (raw.supportsLongCacheRetention() != null) {
+            b.supportsLongCacheRetention(raw.supportsLongCacheRetention());
+        }
+        if (raw.supportsCacheControlOnTools() != null) {
+            b.supportsCacheControlOnTools(raw.supportsCacheControlOnTools());
+        }
+        if (raw.thinkingTokenBudgetField() != null) {
+            b.thinkingTokenBudgetField(ModelsJsonCompatFieldParsers.thinkingTokenBudgetFieldOf(
+                providerId, modelId, raw.thinkingTokenBudgetField()));
+        }
+        if (raw.supportsThinkingTokenBudget() != null) {
+            b.supportsThinkingTokenBudget(raw.supportsThinkingTokenBudget());
+        }
+        if (raw.supportsMaxOutputTokens() != null) {
+            b.supportsMaxOutputTokens(raw.supportsMaxOutputTokens());
+        }
+        if (raw.thinkingFormat() != null) {
+            b.thinkingFormat(ModelsJsonCompatFieldParsers.thinkingFormatOf(
+                providerId, modelId, raw.thinkingFormat()));
+        }
+        b.chatTemplateKwargs(ModelsJsonCompatFieldParsers.mergeKwargMap(
+            providerId, modelId, "chatTemplateKwargs", base.chatTemplateKwargs(), raw.chatTemplateKwargs()));
+        b.chatTemplateArgs(ModelsJsonCompatFieldParsers.mergeKwargMap(
+            providerId, modelId, "chatTemplateArgs", base.chatTemplateArgs(), raw.chatTemplateArgs()));
+        if (raw.supportsReasoningEffort() != null) {
+            b.supportsReasoningEffort(raw.supportsReasoningEffort());
+        }
+        if (raw.cacheControlFormat() != null) {
+            b.cacheControlFormat(ModelsJsonCompatFieldParsers.cacheControlFormatOf(
+                providerId, modelId, raw.cacheControlFormat()));
+        }
+        b.openRouterRouting(mergeJsonMap(base.openRouterRouting(), raw.openRouterRouting()));
+        if (raw.sendSessionAffinityHeaders() != null) {
+            b.sendSessionAffinityHeaders(raw.sendSessionAffinityHeaders());
+        }
+        if (raw.sessionAffinityFormat() != null) {
+            b.sessionAffinityFormat(SessionAffinityFormat.parse(raw.sessionAffinityFormat()).orElse(null));
+        }
+        if (raw.supportsStrictTools() != null) {
+            b.supportsStrictTools(raw.supportsStrictTools());
+        }
+        if (raw.supportsOpenAIGrammarTools() != null) {
+            b.supportsOpenAIGrammarTools(raw.supportsOpenAIGrammarTools());
+        }
+        if (raw.supportsEagerToolInputStreaming() != null) {
+            b.supportsEagerToolInputStreaming(raw.supportsEagerToolInputStreaming());
+        }
+        if (raw.supportsExplicitPromptCacheMode() != null) {
+            b.supportsExplicitPromptCacheMode(raw.supportsExplicitPromptCacheMode());
+        }
+        if (raw.requiresToolResultName() != null) {
+            b.requiresToolResultName(raw.requiresToolResultName());
+        }
+        if (raw.requiresAssistantAfterToolResult() != null) {
+            b.requiresAssistantAfterToolResult(raw.requiresAssistantAfterToolResult());
+        }
+        if (raw.requiresThinkingAsText() != null) {
+            b.requiresThinkingAsText(raw.requiresThinkingAsText());
+        }
+        if (raw.supportsUsageInStreaming() != null) {
+            b.supportsUsageInStreaming(raw.supportsUsageInStreaming());
+        }
+        if (raw.zaiToolStream() != null) {
+            b.zaiToolStream(raw.zaiToolStream());
+        }
+        if (raw.vllmPriority() != null) {
+            b.vllmPriority(raw.vllmPriority());
+        }
+        if (raw.vercelGatewayRouting() != null) {
+            b.vercelGatewayRouting(ModelsJsonCompatFieldParsers.vercelRoutingOf(
+                providerId, modelId, raw.vercelGatewayRouting()));
+        }
+        if (raw.allowedFallbackModels() != null) {
+            b.allowedFallbackModels(ModelsJsonCompatFieldParsers.fallbacksOf(
+                providerId, modelId, raw.allowedFallbackModels()));
+        }
+        if (raw.supportsMidConvoEffort() != null) {
+            b.supportsMidConvoEffort(raw.supportsMidConvoEffort());
+        }
+        if (raw.requiresNonNullAssistantContent() != null) {
+            b.requiresNonNullAssistantContent(raw.requiresNonNullAssistantContent());
+        }
+        if (raw.requiresToolsWithToolHistory() != null) {
+            b.requiresToolsWithToolHistory(raw.requiresToolsWithToolHistory());
+        }
+        if (raw.promptCacheKeyMode() != null) {
+            b.promptCacheKeyMode(ModelsJsonCompatFieldParsers.promptCacheKeyModeOf(
+                providerId, modelId, raw.promptCacheKeyMode()));
+        }
+        return b.build();
     }
 
     /**

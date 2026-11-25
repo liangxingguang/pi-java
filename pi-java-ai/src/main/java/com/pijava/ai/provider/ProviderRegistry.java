@@ -35,6 +35,13 @@ public final class ProviderRegistry {
         return INSTANCE;
     }
 
+    /** Copy this registry (forked sessions get their own tree; duplicate registrations do not stack). */
+    public ProviderRegistry copy() {
+        var copy = new ProviderRegistry();
+        copy.providers.putAll(providers);
+        return copy;
+    }
+
     /** Register a provider manually. Replaces any existing registration. */
     public void register(Provider provider) {
         providers.put(provider.name(), provider);

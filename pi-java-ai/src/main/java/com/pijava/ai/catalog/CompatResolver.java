@@ -168,55 +168,23 @@ public final class CompatResolver {
                                                Boolean supportsOpenAIGrammarTools,
                                                boolean detectedAffinitySend,
                                                SessionAffinityFormat detectedAffinityFormat) {
-        return new ModelCompat(
-            c.allowEmptySignature(),
-            c.requiresReasoningContentOnAssistantMessages(),
-            c.supportsFinishReason(),
-            c.forceAdaptiveThinking(),
-            c.supportsMidConvoSystemMessages(),
-            c.supportsMidConvoToolAdditions(),
-            c.supportsMidConvoToolChanges(),
-            c.supportsAdditionalTools(),
-            c.supportsToolSearch(),
-            c.supportsTemperature(),
-            c.maxTokensField(),
-            c.supportsStore(),
-            c.supportsDeveloperRole(),
-            c.supportsStrictMode(),
-            c.supportsLongCacheRetention(),
-            c.supportsCacheControlOnTools(),
-            c.thinkingTokenBudgetField(),
-            c.supportsThinkingTokenBudget(),
-            c.supportsMaxOutputTokens(),
-            c.thinkingFormat() != null ? c.thinkingFormat() : detectedFormat,
-            c.chatTemplateKwargs(),
-            c.chatTemplateArgs(),
-            pick(c.supportsReasoningEffort(), detectedSupportsReasoningEffort),
-            // 包 A-02：cacheControlFormat 是 explicit ?? detected（与 thinkingFormat 同形）；
-            // openRouterRouting 只透传（pi 探测面 :1657 的 {} 无读者，原 docs/59 §4.8/R6）。
-            c.cacheControlFormat() != null ? c.cacheControlFormat() : detectedCacheControlFormat,
-            c.openRouterRouting(),
+        return c.toBuilder()
+            .thinkingFormat(c.thinkingFormat() != null ? c.thinkingFormat() : detectedFormat)
+            .supportsReasoningEffort(pick(c.supportsReasoningEffort(), detectedSupportsReasoningEffort))
+            // 包 A-02：cacheControlFormat 是 explicit ?? detected（与 thinkingFormat 同形）。
+            .cacheControlFormat(c.cacheControlFormat() != null
+                ? c.cacheControlFormat() : detectedCacheControlFormat)
             // B103：explicit ?? detected（resolved 现已保留显式值，不覆盖）。
-            pick(c.sendSessionAffinityHeaders(), detectedAffinitySend),
-            c.sessionAffinityFormat() != null ? c.sessionAffinityFormat() : detectedAffinityFormat,
-            false, supportsOpenAIGrammarTools,
-            // 包 09：逐组件重建必须带上新字段（否则静默丢成缺省）。
-            c.supportsEagerToolInputStreaming(), c.supportsExplicitPromptCacheMode(),
-            // B98（docs/51）：completions 七字段在探测面给默认 —— usage 默认 true，
-            // 其余（tool-result name/插桥/thinking-as-text/zaiToolStream/vllm/vercel）
-            // 探测给 false/无 ⇒ 原样透传模型的显式值，由各读点补缺省。
-            c.requiresToolResultName(), c.requiresAssistantAfterToolResult(),
-            c.requiresThinkingAsText(), pick(c.supportsUsageInStreaming(), Boolean.TRUE),
-            c.zaiToolStream(), c.vllmPriority(), c.vercelGatewayRouting(),
+            .sendSessionAffinityHeaders(pick(c.sendSessionAffinityHeaders(), detectedAffinitySend))
+            .sessionAffinityFormat(c.sessionAffinityFormat() != null
+                ? c.sessionAffinityFormat() : detectedAffinityFormat)
+            .supportsStrictTools(false)
+            .supportsOpenAIGrammarTools(supportsOpenAIGrammarTools)
+            // B98：usage 探测默认 true；其余七字段原样透传，由各读点补缺省。
+            .supportsUsageInStreaming(pick(c.supportsUsageInStreaming(), Boolean.TRUE))
             // completions 车道不定义 fallback 列表（pi 同理）。
-            null,
-            // B99：completions 车道不读它，但逐组件重建不许静默丢值。
-            c.supportsMidConvoEffort(),
-            // v1.6.0（P2b）：三个新键无探测面（pi 的 detected 恒 false / undefined）
-            // ⇒ 原样透传显式值，读点补缺省。
-            c.requiresNonNullAssistantContent(),
-            c.requiresToolsWithToolHistory(),
-            c.promptCacheKeyMode());
+            .allowedFallbackModels(null)
+            .build();
     }
 
     /**
@@ -411,62 +379,30 @@ public final class CompatResolver {
                                         Boolean supportsThinkingTokenBudget,
                                         Boolean supportsMaxOutputTokens,
                                         Boolean supportsOpenAIGrammarTools) {
-        return new ModelCompat(
-            c.allowEmptySignature(),
-            pick(c.requiresReasoningContentOnAssistantMessages(), reasoningContentRequired),
-            c.supportsFinishReason(),
-            c.forceAdaptiveThinking(),
-            pick(c.supportsMidConvoSystemMessages(), midConvoSystemMessages),
-            pick(c.supportsMidConvoToolAdditions(), midConvoToolAdditions),
-            pick(c.supportsMidConvoToolChanges(), midConvoToolChanges),
-            pick(c.supportsAdditionalTools(), additionalTools),
-            pick(c.supportsToolSearch(), toolSearch),
-            c.supportsTemperature(),
-            c.maxTokensField() != null ? c.maxTokensField() : maxTokensField,
-            pick(c.supportsStore(), store),
-            pick(c.supportsDeveloperRole(), developerRole),
-            pick(c.supportsStrictMode(), strictMode),
-            pick(c.supportsLongCacheRetention(), longCacheRetention),
-            pick(c.supportsCacheControlOnTools(), cacheControlOnTools),
-            c.thinkingTokenBudgetField() != null
-                ? c.thinkingTokenBudgetField() : thinkingTokenBudgetField,
-            pick(c.supportsThinkingTokenBudget(), supportsThinkingTokenBudget),
-            pick(c.supportsMaxOutputTokens(), supportsMaxOutputTokens),
-            // 包 A-09：四个 completions 专属字段**原样透传** ——「explicit ?? detected」
-            // 的合一发生在 withCompletions（只有 completions 车道调它）；其余三条车道
-            // 拿到的就是模型上的原值（可能是 null —— 而没有读点会碰它们）。
-            c.thinkingFormat(),
-            c.chatTemplateKwargs(),
-            c.chatTemplateArgs(),
-            c.supportsReasoningEffort(),
-            // 包 A-02：两个新组件同样原样透传（cacheControlFormat 的「explicit ?? detected」
-            // 合一在 withCompletions；openRouterRouting 无探测面）。原 docs/69：grammar 能力位
-            // 无探测、显式-only。⚠️ 这里必须走 canonical 29 参构造——退便捷构造会把
-            // cacheControlFormat/openRouterRouting/grammar 三个显式值丢成缺省。
-            c.cacheControlFormat(),
-            c.openRouterRouting(),
-            // B103（docs/52）：两亲和位**原样透传显式值**（此前硬编码 null,null 是
-            // B156 型事故——models.json/目录写的 sendSessionAffinityHeaders/sessionAffinityFormat
-            // 在四条车道全部被静默丢掉，连 responses 车道也不例外）。车道探测缺省在
-            // withCompletions/forAnthropic 里按 explicit ?? detected 合一。
-            c.sendSessionAffinityHeaders(), c.sessionAffinityFormat(),
-            false, supportsOpenAIGrammarTools,
-            // 包 09：两个新字段**无探测面**（pi 只在生成目录与 models.json 里标注）
-            // ⇒ 原样透传模型上的值，缺省由读点补（true / false）。
-            c.supportsEagerToolInputStreaming(),
-            c.supportsExplicitPromptCacheMode(),
-            // B98：resolved 层逐组件重建必须带齐八字段（否则静默丢成缺省）；
-            // completions 专属七字段的「explicit ?? detected」合一在 withCompletions。
-            c.requiresToolResultName(), c.requiresAssistantAfterToolResult(),
-            c.requiresThinkingAsText(), c.supportsUsageInStreaming(),
-            c.zaiToolStream(), c.vllmPriority(), c.vercelGatewayRouting(),
-            c.allowedFallbackModels(),
-            // B99：无探测面，原样透传模型上的显式值（目录/models.json）。
-            c.supportsMidConvoEffort(),
-            // v1.6.0（P2b）：无探测面（detected 恒 false / undefined），原样透传。
-            c.requiresNonNullAssistantContent(),
-            c.requiresToolsWithToolHistory(),
-            c.promptCacheKeyMode());
+        return c.toBuilder()
+            .requiresReasoningContentOnAssistantMessages(
+                pick(c.requiresReasoningContentOnAssistantMessages(), reasoningContentRequired))
+            .supportsMidConvoSystemMessages(pick(c.supportsMidConvoSystemMessages(), midConvoSystemMessages))
+            .supportsMidConvoToolAdditions(pick(c.supportsMidConvoToolAdditions(), midConvoToolAdditions))
+            .supportsMidConvoToolChanges(pick(c.supportsMidConvoToolChanges(), midConvoToolChanges))
+            .supportsAdditionalTools(pick(c.supportsAdditionalTools(), additionalTools))
+            .supportsToolSearch(pick(c.supportsToolSearch(), toolSearch))
+            .maxTokensField(c.maxTokensField() != null ? c.maxTokensField() : maxTokensField)
+            .supportsStore(pick(c.supportsStore(), store))
+            .supportsDeveloperRole(pick(c.supportsDeveloperRole(), developerRole))
+            .supportsStrictMode(pick(c.supportsStrictMode(), strictMode))
+            .supportsLongCacheRetention(pick(c.supportsLongCacheRetention(), longCacheRetention))
+            .supportsCacheControlOnTools(pick(c.supportsCacheControlOnTools(), cacheControlOnTools))
+            .thinkingTokenBudgetField(c.thinkingTokenBudgetField() != null
+                ? c.thinkingTokenBudgetField() : thinkingTokenBudgetField)
+            .supportsThinkingTokenBudget(pick(c.supportsThinkingTokenBudget(), supportsThinkingTokenBudget))
+            .supportsMaxOutputTokens(pick(c.supportsMaxOutputTokens(), supportsMaxOutputTokens))
+            // 包 A-09：completions 专属字段原样透传（合一在 withCompletions）；其余三条
+            // 车道拿到的就是模型上的原值。A-02 的 cacheControlFormat/openRouterRouting
+            // 与 B103 的两个亲和位同理，builder 默认已透传。
+            .supportsStrictTools(false)
+            .supportsOpenAIGrammarTools(supportsOpenAIGrammarTools)
+            .build();
     }
 
     private static Boolean pick(Boolean explicit, Boolean detected) {

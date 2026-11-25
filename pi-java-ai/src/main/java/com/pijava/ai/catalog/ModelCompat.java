@@ -403,6 +403,11 @@ public record ModelCompat(boolean allowEmptySignature,
             ? null : java.util.List.copyOf(allowedFallbackModels);
     }
 
+    /** 逐字段复制入口（B156）：重建点只覆盖本车道要改的组件，其余一次拷齐。 */
+    public ModelCompatBuilder toBuilder() {
+        return ModelCompatBuilder.from(this);
+    }
+
     /**
      * The default for models that declare nothing.
      *
