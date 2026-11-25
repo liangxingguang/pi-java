@@ -141,8 +141,12 @@ final class SessionEventRouter {
                     bugReportHook.accept(am);
                 }
             }
-            // docs/14（窄差 D5）：extension_error 已上 RPC 线；TUI 通知面归 D′ 域，本批先忽略。
-            case AgentSessionEvent.ExtensionError ignored -> { }
+            // 扩展处理器抛错：上聊天区警告（pi 同族 showWarning；文案非模型可见）。
+            case AgentSessionEvent.ExtensionError error -> {
+                var payload = error.error();
+                showWarning("Extension " + payload.extensionName() + " error in "
+                    + payload.event() + ": " + payload.message());
+            }
             default -> { }
         }
     }
