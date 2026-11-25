@@ -9,7 +9,7 @@
 ## 0. 口径
 
 - **B**：功能或行为缺口。已用到 **B293**（L6 #20；2026-11-24 随 L7 内置 context footer 状态行落地销号，见 §0 补记与 §4）；B289–B292 是 L1 收口四项，随 docs/11 直接在代码里落地、未在 §1 立项，故无销号动作；L1 余项复验（strict 无类型节点判据、暖请求 `disableContinuation`）与第二次复验（Anthropic 非 strict 根 schema、`session-resources` 清理接线）直接落地，未新开号；B288 仍是 codemode 提案拟新增接缝，未批准；新工单从 **B294** 起。
-- **D**：已登记的窄差。已用到 **D316**（L7 W1–W8 期间以 N／D-W* 记的窄差已由 P12 统一编号，D279–D316，见 §6.5）；新窄差从 **D317** 起，明细存于对应 `docs/map/`。
+- **D**：已登记的窄差。编号已用到 **D322**（L5 D19 收口暴露的 custom 投影 role 方言，见 §0；D279–D316 见 §6.5，D317–D321 为 telemetry 段，仍在册的见 §6.1）；新窄差从 **D323** 起，明细存于对应 `docs/map/`。
 - **读数视图**：真源是各层地图 `docs/map/NN-*.md`；`docs/05` §1 是**发布读数**、`docs/09` §3 是**进度视图**，三者必须与真源同步改。
 - **L1 #6 迁移（2026-11-22）**：缓存预热策略按 docs/16 迁入 `pi-java-ai`
   行为／数字／wire 不变，未新开 B／D 号，缓存预热 #6 改判对齐 ⇒ L1 **246/246＝100%**。
@@ -23,10 +23,23 @@
   ⇒ L4 **44/44＝100%**。`session-cwd` 的 Continue/Fork/Cancel 与 `session-picker` 的 `flushStdout`
   按归属留给 L5／L7，不影响 L4 读数。
 - **L5 收口（2026-11-23）**：coding-agent 按 docs/19 W1–W11 落地——13 个重开单元
-  恢复「对齐」，9 个新单元落地（llama.cpp 默认端口按 F1／R2 出分母）；`map/04` 记 L5 **461/461＝100%**。
+  恢复「对齐」，9 个新单元落地（llama.cpp 默认端口按 F1／R2 出分母）；`map/04` 现记 L5 **457.0/459＝99.6%**（4 条 settings 存疑）。
   行为不变量保持（工具名/参数集、slash 命令集、RPC 33 命令、session JSONL 线形、扩展注册面不变，无新模块）。
   新窄差 D274（重复信号强退）、D275（`/export` OSC8）、D277（会话内 cwd 三臂只走非交互错误臂）、
   D278（capture 输出无 TUI 安装触发点）；未新开 B 号。
+- **L5 D19 收口（2026-11-25）**：`before_agent_start` 的处理器消息按 pi `_prepareRun`
+  （`agent-session.ts:2029-2057`）并入本轮待发列表（user → nextTurn → handler）：
+  prompt 臂经 `promptWithCustoms` 的 customs 通道，custom 臂改走 `appendCustomMessageNow`；
+  处理器消息由此同时进入本轮 LLM 上下文并按 pi 序落盘。`map/04` D19 销号、读数不变
+  （D 域 100%，窄差不进分子）；同次暴露的方言登记为 **D322**（custom 投影在 `message_end`
+  里的 role 为 `user`，pi 为 `custom`；条目/落盘序/上下文不受影响）。
+- **L5 D29 收口（2026-11-25）**：扩展 ctx 失效（stale）防御按 pi `ExtensionRunner.invalidate`
+  / `assertActive`（`runner.ts:398,733-746`；runtime `loader.ts:164-218`）落地——
+  `DefaultExtensionContext` 增 stale 状态（首条文案 wins＋统一退订通道），会话真关闭
+  （`closeWith`）在 `session_shutdown` 处理器之后置失效；`switchTo` 原地 attach 仅退订通道、
+  不置 stale。失效后旧 ctx 的 action/getter/工具/命令面抛 `IllegalStateException`（文案逐字）。
+  `map/04` D29 销号、读数不变（D 域 100%，窄差不进分子）；状态机抽到
+  `ExtensionContextStaleness`（FileLength 拆分），守卫集中在 `requireToolControl()`／`surface()` 缝。
 - **L6 复核（2026-11-23）**：评测域 24 行按目标锚点 `a00a5048d` 复核（docs/20）：
   两锚点间 `packages/evals` 仅 `package.json` 变化（版本 1.4.0→1.6.0、依赖同步、`clean` 脚本 shx→node），
   `src`／`evals/`／`test/` 逐字节未变 ⇒ **零代码**、24 行判定与 pi 证据全部续用，未新开 B／D 号；
@@ -131,13 +144,13 @@
   `truncateParallelOutput`／`truncateModelOutput`、`chain` 参数面、unknown agent、project agent 确认、`tool_result` isError）。
   D235（主题/删除线文本降级）与 D244（注入式 runner、TUI 渲染不移植）原样保留 ⇒ L8 **88/88＝100%**；
   模块 412 测 0 失败、Checkstyle 0 error。
-- **P12 收口（2026-11-24）**：全仓 `mvn clean verify -Dfrontend.skip=true` 零失败、零告警；L7 W1–W8 期间以 N／D-W* 记的窄差统一编号 **D279–D316**（§6.5），B238③（OSC 7501）／B238④（假光标）随 W5／W6 落地销号；L6 唯一存疑 #20 立 **B293**。发布读数 **1,369.5/1,389＝98.6%**（L0–L7），L8 按件 **88/88**；`CURRENT_PI_PIN` 切至 `a00a5048d`。`docs/09` 归档保留，不删除。
+- **P12 收口（2026-11-24）**：全仓 `mvn clean verify -Dfrontend.skip=true` 零失败、零告警；L7 W1–W8 期间以 N／D-W* 记的窄差统一编号 **D279–D316**（§6.5），B238③（OSC 7501）／B238④（假光标）随 W5／W6 落地销号；L6 唯一存疑 #20 立 **B293**。发布读数 **1,365.5/1,387＝98.4%**（L0–L7），L8 按件 **88/88**；`CURRENT_PI_PIN` 切至 `a00a5048d`。`docs/09` 归档保留，不删除。
 - **L7 context footer／B293 销号（2026-11-24）**：内置状态行落地——`SessionSnapshot` 携带
   `ContextUsage`（`tokens`／`contextWindow`／`percent`）与 `autoCompact`；`SnapshotService` 按 pi
   `getContextUsage` 计算（压缩点后无可信用量 ⇒ `tokens`／`percent` 为 `null`）；`StatusBar` 显示
   `percent%/window (auto)`（未知量 `?`、无 usage `0.0%/0`、`>70` warning、`>90` error）。
   L6 #20 改判「对齐（形状不同）」（eval 仍为文档问答，D183 保留）⇒ L6 **49.0/49＝100%**，
-  全仓发布读数 **1,369.5/1,389＝98.6%**（L0–L7），L8 按件 **88/88**。
+  全仓发布读数 **1,365.5/1,387＝98.4%**（L0–L7），L8 按件 **88/88**。
 - **B58／B287／B220 收口（2026-11-24）**：B58 纯裁决——pi `openaiProvider()` 与 java
   `OpenAIProvider` 默认 wire 同为 `openai-responses`，按现状对齐销号；B287（D243 同族）落地
   read/write/edit 的 `Operations` 工厂注入（edit 改走 read/write/access，`.bak` 不再用 NIO），
@@ -182,7 +195,6 @@ Chord plugin 已按 R5 决定不做，不再是待拍板项。
 | 编号 | 当前结论 | 所属层 |
 |---|---|---|
 | B116 | 对外 JSON usage 已改为 pi 扁平形状；Java 内部 `StreamDone` 嵌套方言**已由 AI 重测裁决保留**（`docs/map/02-ai.md` 差异节），出口由 `JsonEventMapper` 展平；新增投影不得把内部方言直接序列化。 | L1 AI |
-| B156 | `ModelCompat` 逐组件重建存在漏字段风险；新增组件时必须同时检查构造点和 `withPartial` 类重建点。 | L1 AI |
 | E5-31 | 扩展 UI 仍有 working 指示器、终端输入、补全、编辑器替换等 TUI 成员未收口；与 D′ 旧行去重重测。 | L7 TUI |
 
 已闭环批次的账面与台账结论见 `docs/05` §1、`docs/07-examples-alignment.md` 与 `docs/map/`；实施过程按维护规则第 1 条不在此保存，历史在 git。
@@ -260,14 +272,14 @@ SQLite 后端是 pi-java 独立实现，保留模块，不对齐已删除 schema
 
 ## 6. 仍有效的实现边界
 
-> D 编号是**不可消除的窄差总账**，不是实施过程；统一记为「编号 → 一句当前边界 → 证据指针」。完整源码取证在对应 `docs/map/`，编号不复用，新差异从 **D274** 起。
+> D 编号是**不可消除的窄差总账**，不是实施过程；统一记为「编号 → 一句当前边界 → 证据指针」。完整源码取证在对应 `docs/map/`，编号不复用，新差异从 **D323** 起。
 
-### 6.1 AI / 协议 / 会话与 CLI（证据：`docs/map/02-ai.md`、`docs/map/03-agent-core.md`、`docs/map/04-coding-agent.md`）
+### 6.1 telemetry / AI / 协议 / 会话与 CLI（证据：`docs/map/01-infra.md`、`docs/map/02-ai.md`、`docs/map/03-agent-core.md`、`docs/map/04-coding-agent.md`）
 
 | 编号 | 当前边界 | 证据 |
 |---|---|---|
-| B18（已销号） | pi 锚点已有同一 `POST /messages` SSE 协议；旧「pi-java 自有 wire」描述失效，细差归 #110 | map/02 |
-| D201 | telemetry 只保留运行时身份/父绑定/元数据合并；TS 条件类型的编译期约束不复刻 | map/02 |
+| D201 | telemetry 只保留运行时身份/父绑定/元数据合并；TS 条件类型的编译期约束不复刻 | map/01 |
+| D320 | telemetry 摘要重试的每次尝试没有各自跨度 | map/01 |
 | D202 | malformed 工具参数沿用 Jackson 前缀，pi 文案逐字保留 | map/02 |
 | D203（已关闭） | `pi.ai.poll` 已有生产入口（deferred + Faux）；其他 provider 保持「方法不存在」 | map/02 |
 | D204 | identity 合并落在 `DefaultProviders`／`ConfigurableProvider`，请求头行为对齐 | map/02 |
@@ -340,6 +352,7 @@ SQLite 后端是 pi-java 独立实现，保留模块，不对齐已删除 schema
 | D275 | `/export` HTML 工具文本中的 OSC 8 超链接不转 `<a>`（Java 导出无 ANSI/OSC 层，保持纯 escape 文本） | map/04 |
 | D277 | 会话内 `/resume` `/import` 命中 cwd 缺失时只走非交互错误臂；交互式 Continue/Fork/Cancel 仅在启动期三臂提供（TUI 需重启） | map/04 |
 | D278 | capture 输出模式（非交互 git env、尾部 8000 字符、凭据提示）已就绪，但 TUI 无安装触发点，仅 CLI／包命令路径消费 | map/04 |
+| D322 | custom 队列项的 LLM 投影是 `UserMessage` ⇒ `message_end` 扩展事件的 role 为 `user`（pi 为 `custom`）；条目、落盘序与上下文不受影响 | map/04 |
 
 ### 6.5 TUI / Web（证据：`docs/map/05-tui-web.md`）
 

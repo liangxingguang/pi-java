@@ -40,16 +40,10 @@
 
 ### telemetry（20 条；17 条计分＋3 条 R5 出分母）
 
-已对齐 11 条（逐条证据见 git 历史）。
+17 条计分单元全部对齐（逐条证据见 git 历史），下表只列 R5 出分母的缺失项。
 
 | # | 能力单元 | pi `a00a5048d` 证据 | pi-java 证据 | 新判定 | 台账 | 权重 |
 |---|---|---|---|---|---|---:|
-| T11 | 可序列化 schema＋`createTypedSpanStarter`＋`createTypedMetrics` | `telemetry/src/index.ts:128-177,325-456`、`metrics.ts:128-145`；主流消费 `ai/src/telemetry.ts:64,110,151` | `TelemetrySchemaDefinition.java:9-16`、`TelemetrySchemas.java:9-25`、`TypedTelemetrySpanStarter.java:12-24`、`TypedTelemetryMetrics.java:7-46` | **对齐**（运行时行为；TS 编译期约束登记 D201） | D201 | 2 |
-| T12 | `TelemetryContext.openSpan(options)` | 无（Java 扩展） | `TelemetryContext.java:63-70` | **对齐**（扩展·确认） | D3 | 3 |
-| T13 | `recordEvent` / `recordsPayloads` / `pushCurrent` / `popCurrent` | 无（Java 扩展） | `TelemetryContext.java:83-120`、`JsonlFileTelemetry.java:165-225` | **对齐**（扩展·确认；opt-in payload 与 span 小属性事件分离） | — | 2 |
-| T15 | `with(key, value)` 维度上下文 | 无（Java 扩展） | `TelemetryContext.java:78-81`、`JsonlFileTelemetry.java:158-163` | **对齐**（扩展·确认） | D1 | 2 |
-| T16 | `JsonlFileTelemetry` JSONL 导出器 | 无（Java 扩展） | `JsonlFileTelemetry.java:49-487`、`JsonlTelemetryMetrics.java:15-82`；接线 `SessionWiring.java:132-133` | **对齐**（扩展·确认；20 个专项测试＋10 案一致性套件） | D4 / D5 | 3 |
-| T17 | `OtelTelemetryContext` OTel 适配器 | 无（Java 扩展） | `OtelTelemetryContext.java:28-344` | **对齐**（扩展·确认；11 个真实 SDK 测试） | — | 1 |
 | T18 | `SpanLink`＋`TelemetryPropagation`＋noop propagation | `telemetry/src/index.ts:9-28,100-106`、`noop.ts:19-23`、`memory.ts:301-323`；Durable 消费 `durable/src/harness/submissions.ts:107,241,257-260`、`scheduler.ts:2223,2238-2239` | 无 | **缺失，R5 出分母**：生产消费者为 Chord＋Durable；AI exemplar 所需 carrier 不随此项排除，已留 T9/T14 | — | 0 |
 | T19 | `TelemetryStore`＋StoredSpan/Trace/Metric 查询 | `telemetry/src/index.ts:32-95`、`memory.ts:337-429` | 无 | **缺失，R5 出分母**：查询消费者仅 `chord/telemetry-sqlite` | — | 0 |
 | T20 | `renderTrace` 子路径导出 | `telemetry/src/render.ts:10-49`、`telemetry/package.json` 的 `./render` | 无 | **缺失，R5 出分母**：未见主流生产消费者；telemetry README 自身示例不作为生产接线证据 | — | 0 |
@@ -77,12 +71,8 @@
 
 | 台账 | 条目 | 挂点 |
 |---|---|---|
-| D1 | `JsonlFileTelemetry.with(...)` 返回新实例 | T15 |
-| D2 | `JsonlSpan.startSpan` 不碰当前栈 —— 未文档化的局部行为 | T2 |
-| D3 | 接口 `openSpan` 的 default 实现返回**已结束**的 span | T2 / T12 |
-| D4 | 摘要重试每次尝试没有各自跨度 | T16 |
-| D5 | 截断兜底生成器下「无事件、无 token」的跨度形状无测试 | T16 |
 | D201 | Java 无 TS 条件类型的 exact attributes、required keys、schema 名与 instrument kind 编译期约束；运行时 identity、parent binding 与 metadata 行为已对齐 | T11 |
+| D320 | 摘要重试每次尝试没有各自跨度 | T16 |
 
 ## 加权汇总
 

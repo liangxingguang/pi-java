@@ -93,8 +93,8 @@ SDK 新增件：`transports/pipe.ts`（PipeTransport，见 #96）、`oauth/sign-
 
 | # | 能力单元 | 类别 | pi 证据 | java 证据 | 判定 | 权重 | 台账 |
 |---|---|---|---|---|---|---|---|
-| 77 | `tool_call` 就绪等待（按 `tool.reachesTools(input)` 的 `"all"`/词包含命名空间；direct→只等属主服务器） | 接线 | `index.ts:224-232,1186-1207` | `McpExtension.java:303-314,412`（`reachesServer`：`All` 全等、`Words` 词包含 namespace；`ctx.signal` 无对位 ⇒ 窄差 D138） | 对齐（W7） | 1 | ~~B221~~ |
-| 86 | `/mcp` 斜杠命令（manager、login/logout/reconnect）＋管理动作（enable/disable/exposure/project override） | 接线 | `index.ts:1260-1347,743-778` | `McpSlashCommand`＋`McpManagerActions`＋`McpServerOps`＋`McpManagerMenus`（文案逐字；写回经 McpConfig.update；参数补全无 java 面 ⇒ 窄差 D142） | 对齐 | 2 | ~~B221~~ |
+| 77 | `tool_call` 就绪等待（按 `tool.reachesTools(input)` 的 `"all"`/词包含命名空间；direct→只等属主服务器） | 接线 | `index.ts:224-232,1186-1207` | `McpExtension.java:303-314,412`（`reachesServer`：`All` 全等、`Words` 词包含 namespace；`ctx.signal` 无对位 ⇒ 窄差 D138） | 对齐（W7） | 1 | — |
+| 86 | `/mcp` 斜杠命令（manager、login/logout/reconnect）＋管理动作（enable/disable/exposure/project override） | 接线 | `index.ts:1260-1347,743-778` | `McpSlashCommand`＋`McpManagerActions`＋`McpServerOps`＋`McpManagerMenus`（文案逐字；写回经 McpConfig.update；参数补全无 java 面 ⇒ 窄差 D142） | 对齐 | 2 | — |
 
 ## H. 权重 0 与共享主流面
 

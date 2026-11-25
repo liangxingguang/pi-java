@@ -82,12 +82,12 @@ java 契约面：`SessionStorage.java`（`:19-93`）＋ `SessionRepository.java`
 （pi `:978-981`／`:2031-2034`，catch 后先转抛 abort 再返回空）；**L4-R3** 候选 stat 失败
 （`mtimeOf` 返回 `-1` 哨兵，`buildRichInfo` 按 pi `:806` 再试一次，仍失败则排除）。
 
-**转出行（不重新计入分母）**：map/03 **#77**（恢复会话 active tools，w2）→ B271；
-map/03 **#24**（branch summary 生成，w1）→ B272。两者已实施并验证。
+**转出行（不重新计入分母）**：map/03 **#77**（恢复会话 active tools，w2）、
+map/03 **#24**（branch summary 生成，w1）→ 归 L4。
 
 ---
 
-## ~~SQLite schema 逐表对齐~~ —— **整段作废（R1＋R5，移出分母），B59 销号**
+## ~~SQLite schema 逐表对齐~~ —— **整段作废（R1＋R5，移出分母）**
 
 pi 主流没有 SQLite 后端，`packages/session-backends` 已删且删除前从未上 `bin pi`。
 原文 18 行（Σ权重 40）不进任何分母；**不主张删 pi-java 模块**。
@@ -168,7 +168,7 @@ maven-enforcer、L5 跨语言差分一致性框架（`harness/conformance/`）�
 
 | 子系统 | 参照规模 | 旧行数 | 旧 Σw | 处置 |
 |---|---|---:|---:|---|
-| SQLite schema | 参照包不存在（已删、从未主流） | 18 | 40 | **R1＋R5（B59 销号）** |
+| SQLite schema | 参照包不存在（已删、从未主流） | 18 | 40 | **R1＋R5** |
 | chord | 8,817 src（R5 不可达） | 21 | 55 | **R5** |
 | 多进程子系统 | `experimental/**`（R5 不可达） | 4 | 11 | **R5** |
 | harness-only 存储单元 | 旧 harness `session/types.ts`（R1 已删） | 15 | — | **R1**（并入现行 20 行表重判） |
@@ -200,7 +200,7 @@ maven-enforcer、L5 跨语言差分一致性框架（`harness/conformance/`）�
 | harness-only / `durable` / pico3 / micro | 全部 59 行 | R1（删除）/ R5（不可达） |
 | 防漂移脚本 | 全部 | 非 `bin pi` 产品面 |
 
-## 存疑清单（0 个判定单元；S7 已随 B293 销号）
+## 存疑清单（0 个判定单元）
 
 | # | 能力 | 存疑点 |
 |---|---|---|
