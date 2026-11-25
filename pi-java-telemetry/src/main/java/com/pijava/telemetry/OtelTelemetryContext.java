@@ -322,6 +322,14 @@ public final class OtelTelemetryContext implements TelemetryContext, TelemetryMe
         }
 
         @Override
+        public TelemetrySpan openSpan(SpanOptions options) {
+            if (ended) {
+                return NoopTelemetryContext.openInertSpan(metrics());
+            }
+            return openSpanUnder(this.span, options);
+        }
+
+        @Override
         public TelemetryMetrics metrics() {
             return OtelTelemetryContext.this;
         }

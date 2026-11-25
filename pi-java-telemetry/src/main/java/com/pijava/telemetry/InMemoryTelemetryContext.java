@@ -43,8 +43,8 @@ public final class InMemoryTelemetryContext implements TelemetryContext, Telemet
     }
 
     /**
-     * 覆写默认实现：默认的 {@code openSpan} 经 {@code startSpan} 会在回调返回时
-     把跨度提前 settle；{@code openSpan} 必须返回真正未 settle 的跨度。
+     * 返回真正未 settle 的跨度（D319 后 {@code openSpan} 是接口抽象方法，
+     * 不再经 {@code startSpan} 的回调提前结算）。
      */
     @Override
     public TelemetrySpan openSpan(SpanOptions options) {

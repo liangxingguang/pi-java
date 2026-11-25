@@ -81,8 +81,8 @@ class HarnessTelemetryThreadAttributionTest {
         }
 
         /**
-         * 必须显式转发：接口的 `openSpan` 默认实现是「在回调里取到 span 就立刻关掉它」
-         * （{@code TelemetryContext:32-39}），不转发的话 harness 拿到的全是已结束的 span。
+         * 显式转发：{@code openSpan} 是抽象方法，适配器必须返回仍然存活的跨度
+         * （不再有「回调里取到就立刻关掉」的 default，D319）。
          */
         @Override
         public TelemetrySpan openSpan(SpanOptions options) {

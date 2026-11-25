@@ -63,5 +63,10 @@ public final class NoopTelemetryContext implements TelemetryContext {
         public <T> T startSpan(SpanOptions options, Function<? super TelemetrySpan, ? extends T> body) {
             return body.apply(this);
         }
+
+        @Override
+        public TelemetrySpan openSpan(SpanOptions options) {
+            return this;
+        }
     }
 }

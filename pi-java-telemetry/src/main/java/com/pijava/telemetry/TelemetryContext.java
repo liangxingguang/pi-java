@@ -26,7 +26,6 @@ import java.util.function.Function;
  * {@code addEvent}/{@code setAttributes}/{@code setStatus} are ported on
  * {@link TelemetrySpan} (docs/23 §2).</p>
  */
-@FunctionalInterface
 public interface TelemetryContext {
 
     /**
@@ -59,15 +58,12 @@ public interface TelemetryContext {
      * 结束跨度）。用于必须跨 action/线程边界的跨度（如 {@code harness.run} 跨整个
      * 驱动、{@code tool.execute} 跨工具线程）；绑定给 {@link #recordEvent} 用要
      * 显式 {@link #pushCurrent}。
+     *
+     * <p><b>为什么是抽象方法。</b>回调式 {@code startSpan} 在返回前就关闭了跨度，
+     * 用它拼「先开再取」只能拿到<b>已结束</b>的 span（D319 的旧 default 即此形状）。
+     * 适配器必须自行返回仍然存活的跨度。</p>
      */
-    default TelemetrySpan openSpan(SpanOptions options) {
-        var holder = new Object() { TelemetrySpan span; };
-        startSpan(options, span -> {
-            holder.span = span;
-            return null;
-        });
-        return holder.span;
-    }
+    TelemetrySpan openSpan(SpanOptions options);
 
     /** Return the generic metrics capability; unsupported adapters share a noop. */
     default TelemetryMetrics metrics() {

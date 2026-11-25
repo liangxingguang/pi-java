@@ -11,6 +11,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pijava.agent.compaction.CompactionSettings;
 import com.pijava.agent.compaction.LlmSummaryGenerator;
+import com.pijava.agent.compaction.SummaryGenerator;
 import com.pijava.ai.Usage;
 import com.pijava.ai.api.StreamIterator;
 import com.pijava.ai.message.AssistantMessage;
@@ -109,6 +110,12 @@ class HarnessCompactionSummarySpanTest {
 
     /** harness 与摘要生成器共用同一份 exporter + 同一份流（生产的接线形状）。 */
     private static AgentHarness harness(StreamFn streamFn, TelemetryContext recorder) {
+        return harness(streamFn, recorder, new LlmSummaryGenerator(streamFn, () -> MODEL));
+    }
+
+    /** 同上，但换用指定的摘要生成器（截断兜底需要一个不调 LLM 的生成器）。 */
+    private static AgentHarness harness(StreamFn streamFn, TelemetryContext recorder,
+                                        SummaryGenerator generator) {
         return AgentHarness.create(HarnessConfig.builder()
             .streamFn(streamFn)
             .model(MODEL)
@@ -118,7 +125,7 @@ class HarnessCompactionSummarySpanTest {
             .maxInputTokens(200_000)
             .telemetry(recorder)
             .thinkingLevelMap(com.pijava.ai.thinking.ThinkingLevelMap.empty())
-            .summaryGenerator(new LlmSummaryGenerator(streamFn, () -> MODEL))
+            .summaryGenerator(generator)
             .build());
     }
 
@@ -241,5 +248,33 @@ class HarnessCompactionSummarySpanTest {
             .isEqualTo(llmSpan.path("spanId").asText());
         assertThat(llmSpan.path("spanId").asText())
             .isNotEqualTo(summarySpan.path("spanId").asText());
+    }
+
+    /**
+     * 截断兜底（{@code SummaryGenerator.truncating()}）没有 LLM 调用：跨度照样出现，
+     * 但只有 {@code summaryChars}，没有 token，也没有归属它的事件行（D321）。
+     */
+    @Test
+    void truncatingFallbackSpanHasOnlySummaryChars(@TempDir Path tracesDir) throws IOException {
+        var recorder = JsonlFileTelemetry.create(tracesDir).withPayloads(true);
+        var streamFn = recording(recorder, scripted());
+        var h = harness(streamFn, recorder, SummaryGenerator.truncating());
+
+        h.prompt("hello");
+        h.compact(new CompactionSettings(true, 16_384, 1));
+
+        var lines = readLines(tracesDir);
+        var summarySpan = spanStart(lines, "compaction.summary");
+        var spanId = summarySpan.path("spanId").asText();
+        var attrs = spanEnd(lines, spanId).path("attrs");
+
+        assertThat(attrs.path("summaryChars").asInt()).isPositive();
+        assertThat(attrs.has("inputTokens")).as("截断兜底没有 LLM 用量").isFalse();
+        assertThat(attrs.has("outputTokens")).as("截断兜底没有 LLM 用量").isFalse();
+        assertThat(lines.stream()
+            .filter(n -> "event".equals(n.get("kind").asText()))
+            .filter(n -> spanId.equals(n.path("spanId").asText())))
+            .as("截断兜底没有归属该跨度的事件行")
+            .isEmpty();
     }
 }
