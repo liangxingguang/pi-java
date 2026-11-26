@@ -32,20 +32,35 @@ public record TerminalCapabilities(ImageProtocol images, boolean trueColor, bool
     }
 
     private static volatile TerminalCapabilities cached;
+    private static volatile TerminalCapabilityOverrides overrides = TerminalCapabilityOverrides.NONE;
 
-    /** 进程级缓存探测（环境变化需显式 {@link #resetForTest()}）。 */
-    public static TerminalCapabilities get() {
+    /** 进程级缓存探测＋设置侧覆盖（变化需显式 {@link #setOverrides}／{@link #resetForTest()}）。 */
+    public static synchronized TerminalCapabilities get() {
         var value = cached;
         if (value == null) {
-            value = detect(System.getenv(), System.getProperty("os.name", ""));
+            value = overrides.applyTo(detect(System.getenv(), System.getProperty("os.name", "")));
             cached = value;
         }
         return value;
     }
 
-    /** 复位缓存（测试）。 */
-    public static void resetForTest() {
+    /**
+     * 设置侧能力覆盖（pi {@code terminal-image.ts:202-212} {@code setCapabilityOverrides}）：
+     * 覆盖内容变化才清缓存；{@link TerminalCapabilityOverrides#NONE} 恢复纯探测。
+     */
+    public static synchronized void setOverrides(TerminalCapabilityOverrides value) {
+        var next = value == null ? TerminalCapabilityOverrides.NONE : value;
+        if (overrides.equals(next)) {
+            return;
+        }
+        overrides = next;
         cached = null;
+    }
+
+    /** 复位缓存与覆盖（测试）。 */
+    public static synchronized void resetForTest() {
+        cached = null;
+        overrides = TerminalCapabilityOverrides.NONE;
     }
 
     /**

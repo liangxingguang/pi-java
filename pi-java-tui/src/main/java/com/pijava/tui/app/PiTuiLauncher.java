@@ -65,7 +65,12 @@ public final class PiTuiLauncher {
             return bound == null ? null : bound.sessionName();
         });
         extensionUI.setProgramStatusReporter(programStatus);
-        chatScreen.setProgramStatusReporter(programStatus);
+        // E2-32（pi terminal.ts:618-633）：OSC 9;4 进度——设置现读（showTerminalProgress）。
+        var terminalProgress = com.pijava.tui.util.TerminalProgressReporter.stdout(
+            () -> session.services().settings().uiPrefs().getShowTerminalProgress());
+        chatScreen.setTerminalWiring(
+            () -> session.services().settings().uiPrefs().getFullscreenCopyOnSelect(),
+            programStatus, terminalProgress);
         sessionRef.set(session);
         var mode = new InteractiveMode(session);
         // Windows Terminal/ConPTY send about one raw event per wheel notch
@@ -91,11 +96,12 @@ public final class PiTuiLauncher {
         // pi :668-673 对位）。onChanged ⇒ 样式表重生成＋重渲染（pi ui.invalidate
         // ＋requestRender 对位——SemanticColors 访问器现读活跃主题，无须清缓存）。
         com.pijava.coding.agent.theme.Themes.setRegisteredThemes(session.themes());
-        // docs/26 §4.1（K35）：settings 覆盖优先，否则用终端能力探测（rex/Alacritty/
-        // Windows 控制台等的 truecolor 判定与 pi 同源）。
+        // E2-32（pi settings-manager.ts:1198-1208、terminal-image.ts:186-212）：
+        // 设置侧覆盖（hyperlinks/images/trueColor）先叠进能力探测，再据此定色彩档。
+        com.pijava.tui.util.TerminalCapabilities.setOverrides(
+            terminalCapabilityOverrides(session));
         com.pijava.coding.agent.theme.Themes.redetectColorMode(
-            terminalTrueColor(session).orElseGet(
-                () -> com.pijava.tui.util.TerminalCapabilities.get().trueColor()));
+            com.pijava.tui.util.TerminalCapabilities.get().trueColor());
         var themeEngineRef = new java.util.concurrent.atomic.AtomicReference<
             dev.tamboui.css.engine.StyleEngine>();
         var themeController = new com.pijava.coding.agent.theme.ThemeController(
@@ -116,6 +122,11 @@ public final class PiTuiLauncher {
         //（setRegisteredThemes＋applyFromSettings）的模式层收尾。
         session.addReloadListener(() -> dispatcher.dispatch(() -> {
             com.pijava.coding.agent.theme.Themes.setRegisteredThemes(session.themes());
+            // E2-32（pi interactive-mode.ts:2235,2249）：重载后重设能力覆盖并重探测色彩档。
+            com.pijava.tui.util.TerminalCapabilities.setOverrides(
+                terminalCapabilityOverrides(session));
+            com.pijava.coding.agent.theme.Themes.redetectColorMode(
+                com.pijava.tui.util.TerminalCapabilities.get().trueColor());
             themeController.applyFromSettings();
         }));
 
@@ -183,6 +194,8 @@ public final class PiTuiLauncher {
             }
             return runRegular(app, args, session, themeEngineRef);
         } finally {
+            // E2-32：退出停 OSC 9;4（幂等，未 active 不写）。
+            terminalProgress.stop();
             // docs/26 §4.3（K39）：退出移除程序状态（幂等）。
             programStatus.clear();
             // 批 21（T7，pi main.ts:428/971/992 对位）：退出停主题监视器。
@@ -192,12 +205,19 @@ public final class PiTuiLauncher {
         }
     }
 
-    /** 批 21（T9，裁决④）：settings {@code terminal.trueColor}（boolean|"auto"）⇒ 覆盖值。 */
-    private static java.util.Optional<Boolean> terminalTrueColor(AgentSession session) {
-        var terminal = session.services().settings().effective().terminal;
-        // spotbugs NP_BOOLEAN_RETURN_NULL 坑（批 19 先例）：Boolean 返 null ⇒ Optional。
-        return terminal != null && terminal.trueColor() instanceof Boolean value
-            ? java.util.Optional.of(value) : java.util.Optional.empty();
+    /** E2-32：settings {@code terminal} 三键 ⇒ tui 能力覆盖（pi settings-manager.ts:1198-1208）。 */
+    private static com.pijava.tui.util.TerminalCapabilityOverrides terminalCapabilityOverrides(
+            AgentSession session) {
+        var overrides = session.services().settings().uiPrefs()
+            .getTerminalCapabilityOverrides();
+        com.pijava.tui.util.TerminalCapabilities.ImageProtocol images = null;
+        if (overrides.imagesSet() && overrides.imagesProtocol() != null) {
+            images = "iterm2".equals(overrides.imagesProtocol())
+                ? com.pijava.tui.util.TerminalCapabilities.ImageProtocol.ITERM2
+                : com.pijava.tui.util.TerminalCapabilities.ImageProtocol.KITTY;
+        }
+        return new com.pijava.tui.util.TerminalCapabilityOverrides(
+            overrides.imagesSet(), images, overrides.trueColor(), overrides.hyperlinks());
     }
 
     /** 批 15（T2a）：pi {@code new Date(crash.timestamp).toLocaleString()} 对位。 */

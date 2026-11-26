@@ -26,6 +26,31 @@ class TerminalCapabilitiesTest {
         return map;
     }
 
+    // ── E2-32：设置侧能力覆盖（pi terminal-image.ts:186-212） ──────────
+
+    @Test
+    void settingsOverridesBeatDetectedCapabilities() {
+        TerminalCapabilities.setOverrides(
+            new TerminalCapabilityOverrides(false, null, false, false));
+        var caps = TerminalCapabilities.get();
+        assertThat(caps.trueColor()).isFalse();
+        assertThat(caps.hyperlinks()).isFalse();
+    }
+
+    @Test
+    void imagesFalseOverrideClearsImages() {
+        TerminalCapabilities.setOverrides(
+            new TerminalCapabilityOverrides(true, null, null, null));
+        assertThat(TerminalCapabilities.get().images()).isNull();
+    }
+
+    @Test
+    void imagesProtocolOverrideWinsOverEnvironment() {
+        TerminalCapabilities.setOverrides(new TerminalCapabilityOverrides(
+            true, ImageProtocol.ITERM2, null, null));
+        assertThat(TerminalCapabilities.get().images()).isEqualTo(ImageProtocol.ITERM2);
+    }
+
     @Test
     void tmuxDisablesImages() {
         var caps = TerminalCapabilities.detect(

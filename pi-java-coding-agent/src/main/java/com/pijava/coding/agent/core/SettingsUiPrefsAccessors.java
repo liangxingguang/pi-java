@@ -105,6 +105,44 @@ public final class SettingsUiPrefsAccessors {
         manager.markModified("terminal");
     }
 
+    /**
+     * pi {@code getTerminalCapabilityOverrides}（settings-manager.ts:1198-1208）：
+     * 只把 {@code images}/{@code trueColor}/{@code hyperlinks} 转成覆盖项；
+     * {@code images:false} ⇒ {@code imagesSet=true}＋协议缺省（无图片），
+     * {@code "auto"}/其它值不覆盖，{@code trueColor}/{@code hyperlinks} 只认布尔。
+     */
+    public TerminalCapabilityOverrides getTerminalCapabilityOverrides() {
+        var terminal = manager.effective().terminal;
+        Object images = terminal == null ? null : terminal.images();
+        boolean imagesSet = false;
+        String protocol = null;
+        if (images instanceof String value) {
+            if ("kitty".equals(value) || "iterm2".equals(value)) {
+                imagesSet = true;
+                protocol = value;
+            }
+        } else if (Boolean.FALSE.equals(images)) {
+            imagesSet = true;
+        }
+        Boolean trueColor = terminal != null && terminal.trueColor() instanceof Boolean value
+            ? value : null;
+        Boolean hyperlinks = terminal != null && terminal.hyperlinks() instanceof Boolean value
+            ? value : null;
+        return new TerminalCapabilityOverrides(imagesSet, protocol, trueColor, hyperlinks);
+    }
+
+    /**
+     * 设置侧终端能力覆盖（pi {@code getTerminalCapabilityOverrides} 的中间形）。
+     *
+     * @param imagesSet      是否覆盖图片协议
+     * @param imagesProtocol {@code kitty}/{@code iterm2}；{@code imagesSet} 为真且为
+     *                       {@code null} ⇒ 无图片
+     * @param trueColor      truecolor 覆盖（可空）
+     * @param hyperlinks     超链接覆盖（可空）
+     */
+    public record TerminalCapabilityOverrides(
+        boolean imagesSet, String imagesProtocol, Boolean trueColor, Boolean hyperlinks) {}
+
     /** null 组件表示沿用旧值；七个组件完整重建，杜绝静默丢字段。 */
     private void updateTerminal(Settings.Terminal patch) {
         var old = manager.global().terminal;

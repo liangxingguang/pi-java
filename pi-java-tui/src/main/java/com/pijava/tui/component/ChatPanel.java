@@ -79,6 +79,11 @@ public final class ChatPanel {
         element.setSelectionSink(sink);
     }
 
+    /** E2-54：{@code fullscreenCopyOnSelect} 现读源（拖拽释放时按开关复制）。 */
+    public void setCopyOnSelectSource(java.util.function.BooleanSupplier source) {
+        element.setCopyOnSelectSource(source);
+    }
+
     /** L7 W6（S2b）：是否有非空选区。 */
     public boolean hasActiveSelection() {
         return element.hasActiveSelection();

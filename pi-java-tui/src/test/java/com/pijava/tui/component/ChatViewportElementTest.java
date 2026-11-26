@@ -371,6 +371,38 @@ class ChatViewportElementTest {
         return buffer.get(x, y).symbol();
     }
 
+    // ── E2-54：fullscreenCopyOnSelect 门控拖拽释放 ─────────────────────
+
+    /** 开关关闭 ⇒ 拖拽释放只结束选区，不复制；显式复制仍可用。 */
+    @Test
+    void copyOnSelectDisabledDoesNotCopyOnDragRelease() throws Exception {
+        var element = viewport(List.of(USER_HELLO), null);
+        var copied = new ArrayList<String>();
+        element.setSelectionSink(copied::add);
+        element.setCopyOnSelectSource(() -> false);
+        var harness = mouseHarness(element, 40, 2);
+        harness.route(mouse(MouseEventKind.PRESS, MouseButton.LEFT, 2, 0));
+        harness.route(mouse(MouseEventKind.PRESS, MouseButton.LEFT, 7, 0));
+        harness.route(mouse(MouseEventKind.RELEASE, MouseButton.LEFT, 7, 0));
+        assertThat(copied).isEmpty();
+        assertThat(element.hasActiveSelection()).isTrue();
+        assertThat(element.copyActiveSelection()).isTrue();
+        assertThat(copied).containsExactly("hello");
+    }
+
+    /** 缺省开关（true）⇒ 拖拽释放自动复制。 */
+    @Test
+    void copyOnSelectDefaultCopiesOnDragRelease() throws Exception {
+        var element = viewport(List.of(USER_HELLO), null);
+        var copied = new ArrayList<String>();
+        element.setSelectionSink(copied::add);
+        var harness = mouseHarness(element, 40, 2);
+        harness.route(mouse(MouseEventKind.PRESS, MouseButton.LEFT, 2, 0));
+        harness.route(mouse(MouseEventKind.PRESS, MouseButton.LEFT, 7, 0));
+        harness.route(mouse(MouseEventKind.RELEASE, MouseButton.LEFT, 7, 0));
+        assertThat(copied).containsExactly("hello");
+    }
+
     // ── L7 W2（K37/C14）：卡类消息左键点击切换展开 ─────────────────────
 
     /** 点击 compaction 卡行块 ⇒ 展开正文出现；再点 ⇒ 折回（pi setExpanded(!expanded)）。 */

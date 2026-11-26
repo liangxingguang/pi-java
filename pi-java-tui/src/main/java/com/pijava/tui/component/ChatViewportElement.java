@@ -186,7 +186,7 @@ public final class ChatViewportElement extends StyledElement<ChatViewportElement
                     scrollbarHovered = inScrollbar(endX, endY);
                     return;
                 }
-                // L7 W6（S2b）：拖出非空选区 ⇒ copy-on-select（pi 默认 true）。
+                // L7 W6（S2b）＋E2-54：拖出非空选区 ⇒ 按 fullscreenCopyOnSelect 决定是否复制。
                 if (interaction.finishAndCopy()) {
                     return;
                 }
@@ -275,6 +275,9 @@ public final class ChatViewportElement extends StyledElement<ChatViewportElement
     /** 注入复制回调（copy-on-select；由 ChatScreenLayout 接到剪贴板＋flash）。 */
     public void setSelectionSink(java.util.function.Consumer<String> sink) {
         interaction.setSink(sink);
+    }
+    void setCopyOnSelectSource(java.util.function.BooleanSupplier source) {
+        interaction.setCopyOnSelectSource(source);
     }
 
     /** 是否有非空选区。 */

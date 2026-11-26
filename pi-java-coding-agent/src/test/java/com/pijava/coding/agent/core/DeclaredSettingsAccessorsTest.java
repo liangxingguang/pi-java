@@ -69,6 +69,31 @@ class DeclaredSettingsAccessorsTest {
         assertThat(reloaded.network().getWebSocketConnectTimeoutMs()).hasValue(0);
     }
 
+    /** E2-32：terminal 三键 ⇒ 能力覆盖（pi settings-manager.ts:1198-1208）。 */
+    @Test
+    void terminalCapabilityOverridesMapPiShape(@TempDir Path dir) throws Exception {
+        Files.writeString(dir.resolve("settings.json"),
+            "{\"terminal\":{\"images\":\"kitty\",\"trueColor\":false,\"hyperlinks\":\"auto\"}}");
+        var overrides = SettingsManager.withStorage(storage(dir)).uiPrefs()
+            .getTerminalCapabilityOverrides();
+        assertThat(overrides.imagesSet()).isTrue();
+        assertThat(overrides.imagesProtocol()).isEqualTo("kitty");
+        assertThat(overrides.trueColor()).isFalse();
+        // "auto" 不是布尔 ⇒ 不覆盖（pi typeof === "boolean" 判据）。
+        assertThat(overrides.hyperlinks()).isNull();
+    }
+
+    @Test
+    void terminalImagesFalseOverridesToNoImages(@TempDir Path dir) throws Exception {
+        Files.writeString(dir.resolve("settings.json"), "{\"terminal\":{\"images\":false}}");
+        var overrides = SettingsManager.withStorage(storage(dir)).uiPrefs()
+            .getTerminalCapabilityOverrides();
+        assertThat(overrides.imagesSet()).isTrue();
+        assertThat(overrides.imagesProtocol()).isNull();
+        assertThat(overrides.trueColor()).isNull();
+        assertThat(overrides.hyperlinks()).isNull();
+    }
+
     /** 默认面：pi SETTINGS_DEFAULTS 逐键（settings-defaults.ts:27-71）。 */
     @Test
     void defaultsMatchPi(@TempDir Path dir) {

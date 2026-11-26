@@ -57,6 +57,11 @@ final class ChatScreenLayout {
         chatPanel.setSelectionSink(this::copySelection);
     }
 
+    /** E2-54：{@code fullscreenCopyOnSelect} 现读源（PiTuiApp 注入）。 */
+    void setCopyOnSelectSource(java.util.function.BooleanSupplier source) {
+        chatPanel.setCopyOnSelectSource(source);
+    }
+
     /**
      * Render the main chat area: transcript viewport, one blank row, then the
      * input row. There is no standalone draft bubble or separator — the draft

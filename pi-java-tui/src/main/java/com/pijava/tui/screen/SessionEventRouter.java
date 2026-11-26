@@ -39,6 +39,8 @@ final class SessionEventRouter {
         bugReportHook = message -> { };
     // docs/26 §4.3（K39）：OSC 7501 状态机（PiTuiLauncher 装配；可 null ⇒ 不报）。
     private com.pijava.tui.util.ProgramStatusReporter programStatus;
+    // E2-32：OSC 9;4 进度（PiTuiLauncher 装配；可 null ⇒ 不报）。
+    private com.pijava.tui.util.TerminalProgressReporter terminalProgress;
 
     SessionEventRouter(ChatPanel chatPanel, PendingQueueView pendingQueue,
                        CacheNoticeRenderer cacheNotices) {
@@ -65,6 +67,11 @@ final class SessionEventRouter {
         }
         switch (event) {
             case AgentSessionEvent.TurnStart ignored -> {
+                // E2-32（pi interactive-mode.ts:3617-3623）：turn_start 起 OSC 9;4。
+                var progress = terminalProgress;
+                if (progress != null) {
+                    progress.start();
+                }
                 // L7 W1（docs/22 §4.3）：pi turn_start（interactive-mode.ts:3612-3627）逐字——
                 // workingVisible 为真且槽内非 working ⇒ 置 working；不可见 ⇒ 全清。
                 if (workingVisible) {
@@ -76,10 +83,16 @@ final class SessionEventRouter {
                     clearIndicator(null);
                 }
             }
-            case AgentSessionEvent.AgentEnd ignored ->
+            case AgentSessionEvent.AgentEnd ignored -> {
+                // E2-32（pi interactive-mode.ts:3845-3850）：agent_end 停 OSC 9;4。
+                var progress = terminalProgress;
+                if (progress != null) {
+                    progress.stop();
+                }
                 // pi agent_end（:3848）：clearStatusIndicator("working")——kind 守卫
                 // ⇒ 不误清并发中的 compaction 指示器。
                 clearIndicator(StatusIndicator.Kind.WORKING);
+            }
             case AgentSessionEvent.AutoRetryStart start -> setIndicator(
                 StatusIndicator.retry(start.attempt(), start.maxAttempts(),
                     start.delayMs(), interruptHint));
@@ -106,11 +119,23 @@ final class SessionEventRouter {
             }
             case AgentSessionEvent.SummarizationRetryFinished ignored ->
                 clearIndicator(StatusIndicator.Kind.RETRY);
-            case AgentSessionEvent.CompactionStart start ->
+            case AgentSessionEvent.CompactionStart start -> {
+                // E2-32（pi interactive-mode.ts:3867-3872）：压缩开始起进度。
+                var progress = terminalProgress;
+                if (progress != null) {
+                    progress.start();
+                }
                 setIndicator(new StatusIndicator.Compaction(
                     System.nanoTime(), start.reason().name().toLowerCase(), interruptHint));
-            case AgentSessionEvent.CompactionEnd ignored ->
+            }
+            case AgentSessionEvent.CompactionEnd ignored -> {
+                // E2-32（pi interactive-mode.ts:3887-3892）：压缩结束停进度。
+                var progress = terminalProgress;
+                if (progress != null) {
+                    progress.stop();
+                }
                 clearIndicator(StatusIndicator.Kind.COMPACTION);
+            }
             case AgentSessionEvent.QueueUpdate q ->
                 pendingQueue.update(q.steering(), q.followUp());
             case AgentSessionEvent.FlashStatus status -> showStatus(status.message());
@@ -301,6 +326,12 @@ final class SessionEventRouter {
     /** docs/26 §4.3（K39）：接线 OSC 7501 状态机。 */
     void setProgramStatusReporter(com.pijava.tui.util.ProgramStatusReporter reporter) {
         this.programStatus = reporter;
+    }
+
+    /** E2-32：接线 OSC 9;4 进度（PiTuiLauncher 装配）。 */
+    void setTerminalProgressReporter(
+            com.pijava.tui.util.TerminalProgressReporter reporter) {
+        this.terminalProgress = reporter;
     }
 
     /** 往聊天区追加一条错误（pi {@code showError}，{@code :4273-4277}：红字 + {@code Error: } 前缀）。 */

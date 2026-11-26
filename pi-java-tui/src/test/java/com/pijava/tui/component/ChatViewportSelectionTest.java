@@ -43,6 +43,21 @@ class ChatViewportSelectionTest {
         assertThat(sink).isEmpty();
     }
 
+    /** E2-54：开关关闭 ⇒ 释放只结束选区，不复制；显式复制仍可用。 */
+    @Test
+    void copyOnSelectDisabledEndsSelectionWithoutCopy() {
+        var sink = new ArrayList<String>();
+        var interaction = interaction(sink);
+        var area = new Rect(0, 0, 20, 5);
+        interaction.press(0, 0, area, 0, 20);
+        interaction.drag(5, 0, area, 0, 20);
+        assertThat(interaction.finish(false)).isTrue();
+        assertThat(sink).isEmpty();
+        assertThat(interaction.hasActiveSelection()).isTrue();
+        assertThat(interaction.copyActiveSelection()).isTrue();
+        assertThat(sink).containsExactly("hello");
+    }
+
     @Test
     void copyActiveSelectionRepeatsWithoutClearing() {
         var sink = new ArrayList<String>();

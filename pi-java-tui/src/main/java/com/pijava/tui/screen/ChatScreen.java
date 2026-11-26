@@ -319,10 +319,14 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
     public void onSessionEvent(AgentSessionEvent event) {
         sessionEventRouter.onSessionEvent(event);
     }
-    /** docs/26 §4.3（K39）：接线 OSC 7501 状态机（PiTuiLauncher 装配）。 */
-    public void setProgramStatusReporter(
-            com.pijava.tui.util.ProgramStatusReporter reporter) {
-        sessionEventRouter.setProgramStatusReporter(reporter);
+    /** E2-32/E2-54：终端 UI 接线（OSC 7501 状态、OSC 9;4 进度、copy-on-select 开关）。 */
+    public void setTerminalWiring(
+            java.util.function.BooleanSupplier copyOnSelect,
+            com.pijava.tui.util.ProgramStatusReporter status,
+            com.pijava.tui.util.TerminalProgressReporter progress) {
+        layout.setCopyOnSelectSource(copyOnSelect);
+        sessionEventRouter.setProgramStatusReporter(status);
+        sessionEventRouter.setTerminalProgressReporter(progress);
     }
     /** 批 17（T4）：pi {@code showWarning}（interactive-mode.ts:4629-4633）——「Warning: 」前缀。 */
     public void showWarning(String message) {
@@ -408,10 +412,8 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
 
     /** Forward a key event: slash completion first, then the editor. */
     public void onKeyEvent(KeyEvent event) { inputPortal.onKeyEvent(event); }
-
     /** Inject the slash-command catalog for completion (from the registry). */
     public void setSlashCommands(List<SlashCompleter.CommandItem> items) { inputPortal.setSlashCommands(items); }
-
     /** 批 12 T4：{@code editorPaddingX} 现读源（编辑器双侧留白热更）。 */
     public void setEditorPaddingSource(java.util.function.IntSupplier source) {
         inputPortal.setEditorPaddingSource(source);

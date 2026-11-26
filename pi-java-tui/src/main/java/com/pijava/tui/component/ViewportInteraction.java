@@ -57,10 +57,24 @@ final class ViewportInteraction {
         }
     }
 
-    /** 释放：有非空选区 ⇒ 复制并返回 true。 */
+    private java.util.function.BooleanSupplier copyOnSelect = () -> true;
+
+    /** E2-54：{@code fullscreenCopyOnSelect} 现读源（缺省 true）。 */
+    void setCopyOnSelectSource(java.util.function.BooleanSupplier source) {
+        copyOnSelect = source == null ? () -> true : source;
+    }
+
+    /** 释放：有非空选区 ⇒ 结束选区；copy-on-select 开启时复制。 */
     boolean finishAndCopy() {
+        return finish(copyOnSelect.getAsBoolean());
+    }
+
+    /** 释放：有非空选区 ⇒ 结束选区；{@code copyOnSelect} 为真时复制。 */
+    boolean finish(boolean copyOnSelect) {
         if (selection.active() && selection.finish()) {
-            copy();
+            if (copyOnSelect) {
+                copy();
+            }
             return true;
         }
         return false;
