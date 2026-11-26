@@ -82,6 +82,26 @@ final class CacheNoticeRenderer {
     }
 
     /**
+     * B38（pi {@code addCompactionCostNotice}，interactive-mode.ts:4371-4382）：
+     * 压缩摘要生成调用的账单行。门同 cache 通知（{@code showCacheMissNotices}），
+     * 文案逐字「Compaction: N tokens billed (~$x.xx)」。
+     */
+    void appendCompactionCostNotice(com.pijava.ai.Usage usage) {
+        if (!showCacheMissNotices.getAsBoolean() || usage == null) {
+            return;
+        }
+        double tokens = usage.input() + usage.output() + usage.cacheRead() + usage.cacheWrite();
+        var cost = usage.cost().total() >= 0.01
+            ? " (~$" + String.format(java.util.Locale.ROOT, "%.2f", usage.cost().total()) + ")"
+            : "";
+        chatPanel.append(new ChatMessage.System(
+            "Compaction: "
+                + com.pijava.coding.agent.core.CacheWarmingFormatting.formatTokens((long) tokens)
+                + " tokens billed" + cost,
+            MetaKind.GENERIC));
+    }
+
+    /**
      * 批 13（T11，pi interactive-mode.ts:4193-4206 逐字）：miss 通知行——
      * 门：{@code missedTokens<20_000 且 missedCost<0.1 ⇒ 不显示}；label 三态
      * （模型切换／idle 超 TTL／普通）。（pi 用 warning 主题色＋前置 Spacer；java

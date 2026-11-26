@@ -20,7 +20,8 @@ class SessionEventRouterTerminalProgressTest {
         var sink = new ArrayList<String>();
         var panel = new ChatPanel();
         var router = new SessionEventRouter(
-            panel, new PendingQueueView(), new CacheNoticeRenderer(panel, () -> 0));
+            panel, new PendingQueueView(), new CacheNoticeRenderer(panel, () -> 0),
+            new java.util.HashSet<>());
         try (var reporter = new TerminalProgressReporter(sink::add, () -> true)) {
             router.setTerminalProgressReporter(reporter);
 

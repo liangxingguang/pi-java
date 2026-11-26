@@ -110,7 +110,7 @@ class SessionLifecycleEventsTest {
             });
             ctx.on(com.pijava.coding.agent.extension.event.ExtensionEventSpec.MESSAGE_END,
                 (e, c) -> {
-                    EVENTS.add("message_end:" + e.message().role());
+                    EVENTS.add("message_end:" + e.role());
                     if (messageEndReplacement != null
                             && e.message() instanceof com.pijava.ai.message.Message.AssistantMessage) {
                         return new com.pijava.coding.agent.extension.event.ExtensionResults
@@ -319,10 +319,10 @@ class SessionLifecycleEventsTest {
             // sink 适配器统一发射：每个定案消息恰火一次（loadout 系统消息也在
             // sink 过——pi 同样对每个 AgentMessage 火 message_end），无双发。
             // D19 后处理器 custom 也随本轮待发列表过 sink ⇒ 多一条 message_end；
-            // custom 投影是 UserMessage，pi 的 role 是 "custom"（见 D322）。
+            // 其 LLM 投影是 UserMessage，但事件 role 对位 pi 的 "custom"（D322 已收口）。
             assertThat(EVENTS.stream().filter(e -> e.startsWith("message_end:")).toList())
                 .containsExactly("message_end:system", "message_end:user",
-                    "message_end:user", "message_end:assistant");
+                    "message_end:custom", "message_end:assistant");
             var assistantTexts = s.harness().snapshot(s.laneName()).transcript().stream()
                 .filter(e -> e instanceof Entry.Message)
                 .map(e -> ((Entry.Message) e).message())
@@ -347,6 +347,26 @@ class SessionLifecycleEventsTest {
                 .toList();
             assertThat(bashEntries).hasSize(1);
             assertThat(bashEntries.get(0).output()).isEqualTo("ext-bash-output");
+        }
+    }
+
+    @Test
+    void executeBashEmitsIncrementalOutputChunks() throws Exception {
+        try (var s = session(InMemorySessionRepository.create(), "--session-id", "ub3")) {
+            var deltas = new java.util.concurrent.CopyOnWriteArrayList<String>();
+            var chunks = new java.util.concurrent.CopyOnWriteArrayList<String>();
+            try (var sub = s.subscribe(e -> {
+                if (e instanceof AgentSessionEvent.BashExecutionUpdate b) {
+                    deltas.add(b.delta());
+                }
+            })) {
+                s.executeBash("b3", "printf 'a\\n'; sleep 0.05; printf 'b\\n'; sleep 0.05; printf 'c\\n'",
+                    false, chunks::add);
+                assertThat(String.join("", chunks)).isEqualTo("a\nb\nc\n");
+                assertThat(chunks.size()).isGreaterThan(1);
+                assertThat(deltas).containsExactlyElementsOf(chunks);
+                assertThat(String.join("", deltas)).isEqualTo("a\nb\nc\n");
+            }
         }
     }
 

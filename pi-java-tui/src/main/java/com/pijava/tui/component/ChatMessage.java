@@ -36,6 +36,29 @@ public sealed interface ChatMessage {
         }
     }
     record ToolCall(String name, String arguments) implements ChatMessage {}
+
+    /**
+     * B46（pi {@code ToolExecutionComponent} 的 partial 态，interactive-mode.ts:3797-3841）：
+     * 工具执行中的实时卡——参数＋已到达的部分结果；结束时由终态卡替换。
+     */
+    record ToolRunning(String toolName, String arguments, List<ContentBlock> content,
+                       boolean isError, Long startNanos) implements ChatMessage {
+        /** 兼容既有 4 参调用（无计时来源，startNanos 为 null）。 */
+        public ToolRunning(String toolName, String arguments, List<ContentBlock> content,
+                           boolean isError) {
+            this(toolName, arguments, content, isError, null);
+        }
+        /** Defensive copy of the content blocks. */
+        public ToolRunning {
+            content = List.copyOf(content);
+        }
+    }
+
+    /**
+     * R13：bash 执行中的实时卡——命令＋已到达的输出增量（终态由 {@link BashCard} 替换）。
+     */
+    record BashRunning(String command, String output, boolean excludeFromContext)
+            implements ChatMessage {}
     /**
      * Tool result content blocks (text and/or diff), for rich rendering (P6-26).
      *

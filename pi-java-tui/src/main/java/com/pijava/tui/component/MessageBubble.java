@@ -66,6 +66,9 @@ public final class MessageBubble {
             case ChatMessage.Assistant(var blocks, var messageId, var timestamp) ->
                 renderBlocks(blocks, messageId, timestamp, cache);
             case ChatMessage.ToolCall(var name, var arguments) -> toolCallCard(name, arguments);
+            case ChatMessage.ToolRunning(var name, var arguments, var content, var isError,
+                                         var startNanos) ->
+                toolRunning(name, arguments, content, isError, startNanos);
             case ChatMessage.ToolResult(var content, var isError, var durationMillis, var toolName) ->
                 toolResult(content, isError, durationMillis, toolName);
             case ChatMessage.Error(var message) ->
@@ -93,6 +96,9 @@ public final class MessageBubble {
                     var truncated, var fullOutputPath, var excludeFromContext) ->
                 MessageCards.bash(command, output, exitCode, cancelled, truncated,
                     fullOutputPath, excludeFromContext, expanded);
+            // R13：bash 流式卡——复用 bash 卡投影的头部＋输出预览，状态行标 Running。
+            case ChatMessage.BashRunning(var command, var output, var excludeFromContext) ->
+                bashRunning(command, output, excludeFromContext);
             // 批 12 T6：outputPad 烘焙包装——每个 LogicalLine 左 indent 加 pad
             // （右 pad 由 ChatViewportElement.flatten 的内容宽 −2×pad 承担）。
             case ChatMessage.Padded(var inner, var pad) ->
@@ -215,6 +221,31 @@ public final class MessageBubble {
     private static List<LogicalLine> toolCallCard(String name, String arguments) {
         return withBg(new ToolCallCard(toolName(name),
             TextLayout.escapeMarkup(arguments), "running").lines(), ThemeToken.TOOL_PENDING_BG);
+    }
+
+    /** B46：实时工具卡——调用头＋已到达的部分结果（终态前同一张卡原地更新）。 */
+    private static List<LogicalLine> toolRunning(String name, String arguments,
+                                                List<ContentBlock> content, boolean isError,
+                                                Long startNanos) {
+        var out = new ArrayList<LogicalLine>(toolCallCard(name, arguments));
+        if (!content.isEmpty()) {
+            out.addAll(toolResult(content, isError, null, name));
+            if (startNanos != null) {
+                long elapsed = (System.nanoTime() - startNanos) / 1_000_000L;
+                out.add(new LogicalLine("[dim]" + ToolDurations.timerText(true, null, elapsed)
+                    + "[/]", TOOL_INDENT, TOOL_INDENT, false, Style.EMPTY.dim()));
+            }
+        }
+        return List.copyOf(out);
+    }
+
+    /** R13：bash 实时卡——运行中的输出预览与 "Running..." 状态行。 */
+    private static List<LogicalLine> bashRunning(String command, String output,
+                                                 boolean excludeFromContext) {
+        var out = new ArrayList<LogicalLine>(MessageCards.bash(command, output, null, false,
+            false, null, excludeFromContext, false));
+        out.add(new LogicalLine("Running...", 0, 0, false, Style.EMPTY.dim()));
+        return List.copyOf(out);
     }
 
     /**

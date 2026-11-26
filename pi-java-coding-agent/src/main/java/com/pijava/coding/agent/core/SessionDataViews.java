@@ -129,6 +129,14 @@ final class SessionDataViews {
         return owner.harness().snapshot(laneName()).transcript();
     }
 
+    /** B38：UI 整表重建用的上下文条目（pi buildContextEntries 对位）。 */
+    List<Entry> contextEntries() {
+        var leaf = currentLeafId();
+        return leaf == null ? List.of()
+            : com.pijava.agent.session.ContextEntries.contextEntries(
+                com.pijava.agent.session.ContextEntries.pathToLeaf(accumulatedEntries(), leaf));
+    }
+
     /** Full-history messages (accumulatedEntries projected to their payloads). */
     List<com.pijava.ai.message.Message> accumulatedMessages() {
         return accumulatedEntries().stream()

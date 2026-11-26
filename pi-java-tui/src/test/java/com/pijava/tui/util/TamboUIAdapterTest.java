@@ -26,12 +26,15 @@ class TamboUIAdapterTest {
             KeyEvent.ofKey(KeyCode.ENTER, KeyModifiers.CTRL))).isFalse();
         assertThat(TamboUIAdapter.isSendEnter(KeyEvent.ofChar('\r', KeyModifiers.ALT))).isFalse();
 
-        // LF (Shift+Enter/Ctrl+J fallback) and Shift/Alt+Enter insert newlines.
+        // LF (Shift+Enter/Ctrl+J fallback) and Shift+Enter insert newlines;
+        // Alt+Enter is the follow-up action and must not insert a newline.
         assertThat(TamboUIAdapter.isNewlineEnter(KeyEvent.ofChar('\n'))).isTrue();
         assertThat(TamboUIAdapter.isNewlineEnter(
             KeyEvent.ofKey(KeyCode.ENTER, KeyModifiers.SHIFT))).isTrue();
         assertThat(TamboUIAdapter.isNewlineEnter(
-            KeyEvent.ofKey(KeyCode.ENTER, KeyModifiers.ALT))).isTrue();
+            KeyEvent.ofKey(KeyCode.ENTER, KeyModifiers.ALT))).isFalse();
+        assertThat(TamboUIAdapter.isNewlineEnter(
+            KeyEvent.ofKey(KeyCode.ENTER, KeyModifiers.of(false, true, true)))).isTrue();
         assertThat(TamboUIAdapter.isNewlineEnter(KeyEvent.ofKey(KeyCode.ENTER))).isFalse();
         assertThat(TamboUIAdapter.isNewlineEnter(KeyEvent.ofChar('x'))).isFalse();
     }

@@ -17,6 +17,8 @@ public final class PendingQueueView {
 
     private List<String> steering = List.of();
     private List<String> followUp = List.of();
+    // R28：运行中 bash 卡的 Element 槽（流式期间挂入，终局移除）。
+    private final List<Element> runningCards = new ArrayList<>();
     // pi getAppKeyDisplay("app.message.dequeue")（:4736）；默认键显示，
     // 装配处按平台表注入（Windows/WSL ⇒ "Alt+Q"）。
     private String dequeueHint = "Alt+Up";
@@ -34,9 +36,26 @@ public final class PendingQueueView {
         this.followUp = List.copyOf(followUp);
     }
 
-    /** Whether both pending lists are empty. */
+    /** R28：挂入一张运行中卡（每次增量替换前先 clear）。 */
+    public void addRunningCard(Element card) {
+        runningCards.add(card);
+    }
+
+    /** R28：移除最后一张运行中卡（终局清槽）。 */
+    public void removeRunningCard() {
+        if (!runningCards.isEmpty()) {
+            runningCards.remove(runningCards.size() - 1);
+        }
+    }
+
+    /** R28：清空全部运行中卡。 */
+    public void clearRunningCards() {
+        runningCards.clear();
+    }
+
+    /** Whether both pending lists and running cards are empty. */
     public boolean isEmpty() {
-        return steering.isEmpty() && followUp.isEmpty();
+        return steering.isEmpty() && followUp.isEmpty() && runningCards.isEmpty();
     }
 
     /**
@@ -48,6 +67,7 @@ public final class PendingQueueView {
             return null;
         }
         var rows = new ArrayList<Element>();
+        rows.addAll(runningCards);
         for (var text : steering) {
             rows.add(TamboUIAdapter.markupText("[dim]Steering: " + text + "[/]"));
         }

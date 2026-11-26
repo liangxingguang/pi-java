@@ -30,16 +30,19 @@ import java.util.function.Consumer;
 public final class ChatScreen implements EntryObserver, StreamObserver {
 
     private final ChatPanel chatPanel = new ChatPanel();
+    // B46：实时工具卡终局 id（SessionEventRouter 写、TranscriptProjector 读）。
+    private final java.util.Set<String> liveCompletedToolCalls = new java.util.HashSet<>();
     private final PendingQueueView pendingQueue = new PendingQueueView();
     private java.util.function.IntSupplier outputPad = () -> 0;
     private final CacheNoticeRenderer cacheNotices =
         new CacheNoticeRenderer(chatPanel, () -> outputPad.getAsInt());
     private final ExtensionInjectionLayer extensionLayer = new ExtensionInjectionLayer();
     private final SessionEventRouter sessionEventRouter =
-        new SessionEventRouter(chatPanel, pendingQueue, cacheNotices);
+        new SessionEventRouter(chatPanel, pendingQueue, cacheNotices, liveCompletedToolCalls);
     private final ChatInputPortal inputPortal = new ChatInputPortal(pendingQueue);
     private final TranscriptProjector projector =
-        new TranscriptProjector(chatPanel, () -> outputPad.getAsInt(), cacheNotices);
+        new TranscriptProjector(chatPanel, () -> outputPad.getAsInt(), cacheNotices,
+            liveCompletedToolCalls);
     private final ChatScreenLayout layout =
         new ChatScreenLayout(chatPanel, pendingQueue, extensionLayer, inputPortal,
             sessionEventRouter);
@@ -47,6 +50,9 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
     /** Receive a complete transcript entry (dedupes streamed assistant text). */
     @Override
     public void onEntry(Entry entry) {
+        // R13：生产 bash 落盘条目只走 onEntry；Router 有流式卡时原地收口。
+        if (entry instanceof Entry.BashExecution bash
+                && sessionEventRouter.finalizeBashFromEntry(bash)) { return; }
         projector.onEntry(entry);
     }
 
@@ -56,8 +62,7 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
         projector.onStreamEvent(event);
     }
 
-    /** Appends the startup card (Codex-CLI style: version, model, directory, tips)
-     *  as the first message of the transcript. */
+    /** Appends the startup card (version, model, directory, tips) as the first message. */
     public void showWelcome(String cardText) {
         projector.showWelcome(cardText);
     }
@@ -124,9 +129,7 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
     }
 
     /** The current snapshot (for tree selectors). */
-    public SessionSnapshot snapshot() {
-        return layout.snapshot();
-    }
+    public SessionSnapshot snapshot() { return layout.snapshot(); }
 
     /** Committed transcript snapshot for the scrollback printer. */
     public List<ChatMessage> transcriptMessages() {
@@ -156,14 +159,10 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
     }
 
     /** The current first visible row (test hook). */
-    public int scrollOffset() {
-        return layout.scrollOffset();
-    }
+    public int scrollOffset() { return layout.scrollOffset(); }
 
     /** The current viewport height in rows (page-scroll driver). */
-    public int visibleRows() {
-        return layout.visibleRows();
-    }
+    public int visibleRows() { return layout.visibleRows(); }
 
     /** Append a system/info bubble (slash command results). */
     public void appendSystemText(String text) {
@@ -176,9 +175,7 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
     }
 
     /** The last committed message (test hook). */
-    public ChatMessage lastMessage() {
-        return layout.lastMessage();
-    }
+    public ChatMessage lastMessage() { return layout.lastMessage(); }
 
     /** All committed messages (test hook). */
     public java.util.List<ChatMessage> messages() {
@@ -186,9 +183,7 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
     }
 
     /** The committed message count (test hook). */
-    public int messageCount() {
-        return layout.messageCount();
-    }
+    public int messageCount() { return layout.messageCount(); }
 
     /** 开关转录搜索（{@code ctrl+shift+f}）。 */
     public void toggleTranscriptSearch() {
@@ -318,6 +313,12 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
     /** 会话级事件 → 指示器 / 聊天区（只在渲染线程调用；本体在 SessionEventRouter）。 */
     public void onSessionEvent(AgentSessionEvent event) {
         sessionEventRouter.onSessionEvent(event);
+    }
+
+    /** B38：压缩重建接线（上下文条目源＋整表重放；PiTuiApp 装配）。 */
+    public void setCompactionContextSupplier(java.util.function.Supplier<java.util.List<Entry>> s) {
+        sessionEventRouter.setContextReplay(projector::replayEntries);
+        sessionEventRouter.setContextEntriesSupplier(s);
     }
     /** E2-32/E2-54：终端 UI 接线（OSC 7501 状态、OSC 9;4 进度、copy-on-select 开关）。 */
     public void setTerminalWiring(
@@ -483,11 +484,7 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
         inputPortal.setEditorText(text);
     }
 
-    /**
-     * pi {@code restoreQueuedMessagesToEditor} 的编辑器侧合并式
-     * （interactive-mode.ts:4752-4756 逐字，docs/21 裁决⑦）——排队在前、
-     * 草稿在后、空白段丢弃。dequeue／Esc 流式／树导航三臂共用。
-     */
+    /** pi {@code restoreQueuedMessagesToEditor} 合并式：排队在前、草稿在后、空段丢弃（三臂共用）。 */
     public void restoreToEditor(String queuedText) {
         inputPortal.restoreToEditor(queuedText);
     }

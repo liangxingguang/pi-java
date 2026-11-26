@@ -329,6 +329,11 @@ public final class TuiExtensionUI implements ExtensionUI {
         host.dispatcher().dispatch(() -> host.chatScreen().setEditorText(text));
     }
 
+    @Override
+    public void pasteToEditor(String text) {
+        host.dispatcher().dispatch(() -> host.chatScreen().insertText(text));
+    }
+
     /**
      * pi {@code setTitle}（TUI 臂）：docs/65（R23）起直写 OSC 0——控制字符按
      * {@code [\u0000-\u001f\u007f-\u009f]+ → 空格} 过滤（{@link TerminalTitle}）。

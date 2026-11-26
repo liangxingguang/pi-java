@@ -72,9 +72,15 @@ final class SessionMessagingLifecycle {
         }
     }
 
-    /** 会话级 bash 执行（RPC {@code bash}）：经 harness shell 运行并发射一条
-     *  {@link AgentSessionEvent.BashExecutionUpdate}。v1 阻塞执行，不增量流式。 */
+    /** 会话级 bash 执行（RPC {@code bash}）：经 harness shell 运行，逐增量发射
+     *  {@link AgentSessionEvent.BashExecutionUpdate}。 */
     ShellResult executeBash(String id, String command, boolean excludeFromContext) {
+        return executeBash(id, command, excludeFromContext, null);
+    }
+
+    /** R13：带可选输出增量的 bash 执行（3 参重载委托 {@code onChunk=null}）。 */
+    ShellResult executeBash(String id, String command, boolean excludeFromContext,
+                            java.util.function.Consumer<String> onChunk) {
         var toolContext = owner.harness().toolContext();
         // docs/15／B286：pi emitUserBash 拦截（rpc-mode.ts:561-580 同位）——{result} 臂
         // 直接落盘返回、不执行；{operations} 臂换执行后端、宿主照常落会话；处理器异常
@@ -96,8 +102,12 @@ final class SessionMessagingLifecycle {
         try {
             var result = executor.execute(command, new ShellOptions(
                 toolContext.cwd(), toolContext.env(), true,
-                java.util.OptionalLong.empty(), signal));
-            owner.emitSessionEvent(new AgentSessionEvent.BashExecutionUpdate(id, result.output()));
+                java.util.OptionalLong.empty(), signal, delta -> {
+                    if (onChunk != null) {
+                        onChunk.accept(delta);
+                    }
+                    owner.emitSessionEvent(new AgentSessionEvent.BashExecutionUpdate(id, delta));
+                }));
             // pi executeBash 同位调用（agent-session.ts:3878-3899）：结果落会话。
             recordBashResult(command, result, excludeFromContext);
             return result;

@@ -60,6 +60,8 @@ public final class LoginDialogScreen implements ScreenOverlay, LoginInteraction 
     private OAuthEvent.DeviceCode deviceCode;
     private OAuthEvent.DeviceCode deviceCodeAction;
     private String deviceCodeStatus;
+    private String authUrl;
+    private String authUrlStatus;
 
     /** Create a dialog; asynchronous state changes are marshalled through dispatcher. */
     public LoginDialogScreen(LoginProviderOption option,
@@ -86,18 +88,29 @@ public final class LoginDialogScreen implements ScreenOverlay, LoginInteraction 
                 synchronized (this) {
                     deviceCode = device;
                     deviceCodeStatus = null;
+                    authUrl = null;
+                    authUrlStatus = null;
                     deviceCodeAction = device.openBrowserOnConfirm() || device.copyCodeOnConfirm()
                         ? device : null;
                 }
             });
             return;
         }
-        if (event instanceof OAuthEvent.AuthUrl authUrl) {
+        if (event instanceof OAuthEvent.AuthUrl authUrlEvent) {
             // L5 W1：流程不再自己打开浏览器，结构化消费者负责（TUI 保持自动打开）。
-            notify(authUrl.legacyText());
-            com.pijava.coding.agent.cli.WebUrl.webUrl(authUrl.url()).ifPresent(url -> {
+            var url = com.pijava.coding.agent.cli.WebUrl.displayUrl(authUrlEvent.url());
+            dispatcher.accept(() -> {
+                synchronized (this) {
+                    authUrl = url;
+                    authUrlStatus = null;
+                    deviceCodeStatus = null;
+                    deviceCodeAction = null;
+                }
+            });
+            notify(authUrlEvent.legacyText());
+            com.pijava.coding.agent.cli.WebUrl.webUrl(authUrlEvent.url()).ifPresent(openUrl -> {
                 try {
-                    browserOpener.open(url);
+                    browserOpener.open(openUrl);
                 } catch (Exception ignored) {
                     // Launcher failures must not interrupt login.
                 }
@@ -182,6 +195,15 @@ public final class LoginDialogScreen implements ScreenOverlay, LoginInteraction 
             done = true;
             if (pending != null) {
                 pending.completeExceptionally(new CancellationException("Login cancelled"));
+            }
+            return true;
+        }
+        if (authUrl != null && event.hasCtrl() && (event.isChar('x') || event.isChar('X'))) {
+            try {
+                ClipboardSupport.copy(authUrl);
+                authUrlStatus = "Copied URL to clipboard";
+            } catch (IOException e) {
+                authUrlStatus = "Copy URL manually";
             }
             return true;
         }
@@ -282,6 +304,12 @@ public final class LoginDialogScreen implements ScreenOverlay, LoginInteraction 
         for (var message : messages) {
             for (var line : message.split("\n", -1)) {
                 rows.add(TamboUIAdapter.text(line));
+            }
+        }
+        if (authUrl != null) {
+            rows.add(TamboUIAdapter.text("(Ctrl+X to copy)"));
+            if (authUrlStatus != null) {
+                rows.add(TamboUIAdapter.text(authUrlStatus));
             }
         }
         if (deviceCode != null) {

@@ -43,6 +43,13 @@ public final class ChatPanel {
         }
     }
 
+    /** B46：按位置替换（实时工具卡的部分/终态更新；越界忽略）。 */
+    public void replaceAt(int index, ChatMessage message) {
+        if (index >= 0 && index < messages.size()) {
+            messages.set(index, message);
+        }
+    }
+
     /**
      * Sets the in-flight streaming draft (null = none). The draft joins the
      * viewport as the last message; committed messages follow on TextEnd.

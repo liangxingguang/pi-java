@@ -214,6 +214,7 @@ public final class AgentSession implements AutoCloseable {
     /** 委托 {@link SessionDataViews}。 */ public String storedSessionName() { return views.storedSessionName(); }
     /** 委托 {@link SessionDataViews}。 */ public long entryCount() { return views.entryCount(); }
     /** 委托 {@link SessionDataViews}。 */ public List<Entry> accumulatedEntries() { return views.accumulatedEntries(); }
+    /** B38：UI 重建上下文（pi buildContextEntries 对位）。 */ public List<Entry> contextEntries() { return views.contextEntries(); }
     /** 委托 {@link SessionDataViews}。 */ public List<Message> accumulatedMessages() { return views.accumulatedMessages(); }
     /** 委托 {@link SessionDataViews}。 */ public String lastAssistantText() { return views.lastAssistantText(); }
     /** 委托 {@link SessionDataViews}。 */ public List<String> extensionResourcePaths() { return views.extensionResourcePaths(); }
@@ -391,10 +392,10 @@ public final class AgentSession implements AutoCloseable {
         discovery.fireSessionShutdown(reason, targetSessionFile);
     }
     // ── 消息/生命周期委托（→ SessionMessagingLifecycle）──
-    /** 委托 {@link SessionMessagingLifecycle}。 */
-    public ShellResult executeBash(String id, String command, boolean excludeFromContext) {
-        return messaging.executeBash(id, command, excludeFromContext);
-    }
+    /** 委托 {@link SessionMessagingLifecycle}；4 参重载携带可选输出增量。 */
+    public ShellResult executeBash(String id, String command, boolean excludeFromContext) { return messaging.executeBash(id, command, excludeFromContext); }
+    /** R13：带可选输出增量的 bash 执行（测试/扩展面）。 */
+    public ShellResult executeBash(String id, String command, boolean excludeFromContext, java.util.function.Consumer<String> onChunk) { return messaging.executeBash(id, command, excludeFromContext, onChunk); }
     /** 委托 {@link SessionMessagingLifecycle}。 */
     public Entry.Usage appendUsage(String kind, String provider, String model,
                                    Usage usage, String note) {
@@ -473,7 +474,6 @@ public final class AgentSession implements AutoCloseable {
     PromptPipeline prompts() { return prompts; }
     TreeCompaction tree() { return tree; }
     SessionDiscoveryFork discovery() { return discovery; }
-
     SessionCwdPrompter sessionCwdPrompter() { return discovery.sessionCwdPrompter; }
     public void sessionCwdPrompter(SessionCwdPrompter p) { discovery.sessionCwdPrompter = p; }
     SessionMessagingLifecycle messaging() { return messaging; }

@@ -324,7 +324,7 @@ public final class HookSystem {
         for (var hook : registry.get(laneName, "message_end")) {
             try {
                 var r = ((MessageEndHook) hook).messageEnd(
-                    new MessageEndContext(ctx.lane(), ctx.runId(), current));
+                    new MessageEndContext(ctx.lane(), ctx.runId(), current, ctx.role()));
                 if (r != null) {
                     current = r;
                     modified = true;

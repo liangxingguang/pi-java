@@ -133,6 +133,8 @@ public final class PiTuiApp {
             () -> session.services().settings().uiPrefs().getShowImages(),
             () -> session.services().settings().uiPrefs().getImageWidthCells());
         this.sessionEvents = new SessionEventChannel(dispatcher, chatScreen::onSessionEvent);
+        // B38（pi interactive-mode.ts:3902）：压缩成功重建用的上下文条目现读源。
+        chatScreen.setCompactionContextSupplier(session::contextEntries);
         // 批 12（docs/23）：settings 消费键 live-read 注入——先于补全目录装配
         //（switchSession 后新会话的设置面自然生效）。
         chatScreen.setOutputPadSource(

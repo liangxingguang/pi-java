@@ -13,13 +13,14 @@ import dev.tamboui.style.Style;
 /**
  * 轻量代码语法高亮（P6-23）：把一行文本切分为带样式的片段。
  *
- * <p>识别关键字、字符串字面量、数字与 {@code //}、{@code #} 行注释；其余文本
- * 保持基础样式。</p>
+ * <p>按 pi 的九类语法着色：注释、关键字、函数、变量、字符串、数字、类型、
+ * 操作符与标点；保守配色下未识别标识符保持基础样式（不染成变量色）。</p>
  *
  * <p><b>批 25（docs/36 T6）</b>：颜色改走主题令牌（{@code syntaxKeyword}/
- * {@code syntaxString}/{@code syntaxNumber}/{@code syntaxComment}，现读活跃主题），
- * 取代硬编码 VSCode 色板；输入编辑器当前行着色（{@code EditorElement}）与
- * Markdown 代码块高亮（{@code MarkdownRenderer}）两消费点同色。</p>
+ * {@code syntaxString}/{@code syntaxNumber}/{@code syntaxComment} 等九类
+ * {@code syntax*}，现读活跃主题），取代硬编码 VSCode 色板；输入编辑器当前行着色
+ * （{@code EditorElement}）与 Markdown 代码块高亮（{@code MarkdownRenderer}）
+ * 两消费点同色。</p>
  */
 public final class SyntaxHighlighter {
 
@@ -28,10 +29,15 @@ public final class SyntaxHighlighter {
 
     private static final Set<String> KEYWORDS = Set.of(
         "if", "else", "elif", "for", "while", "return", "def", "class", "import",
-        "from", "new", "public", "private", "protected", "static", "final", "void",
-        "int", "string", "boolean", "const", "let", "var", "function", "async",
-        "await", "try", "catch", "finally", "throw", "true", "false", "null",
-        "switch", "case", "break", "continue");
+        "from", "new", "public", "private", "protected", "static", "final",
+        "const", "let", "var", "function", "async", "await", "try", "catch",
+        "finally", "throw", "true", "false", "null", "switch", "case", "break",
+        "continue");
+
+    private static final Set<String> TYPES = Set.of(
+        "int", "long", "float", "double", "boolean", "char", "byte", "short", "void",
+        "String", "Integer", "Boolean", "Long", "Double", "Float", "Character",
+        "Byte", "Short", "List", "Map", "Set");
 
     private SyntaxHighlighter() {}
 
@@ -53,6 +59,31 @@ public final class SyntaxHighlighter {
     /** 注释色（{@code syntaxComment}）。 */
     public static Color commentColor() {
         return TuiThemeBridge.tokenColor(ThemeToken.SYNTAX_COMMENT);
+    }
+
+    /** 函数名色（{@code syntaxFunction}）。 */
+    public static Color functionColor() {
+        return TuiThemeBridge.tokenColor(ThemeToken.SYNTAX_FUNCTION);
+    }
+
+    /** 变量名色（{@code syntaxVariable}）。 */
+    public static Color variableColor() {
+        return TuiThemeBridge.tokenColor(ThemeToken.SYNTAX_VARIABLE);
+    }
+
+    /** 类型名色（{@code syntaxType}）。 */
+    public static Color typeColor() {
+        return TuiThemeBridge.tokenColor(ThemeToken.SYNTAX_TYPE);
+    }
+
+    /** 操作符色（{@code syntaxOperator}）。 */
+    public static Color operatorColor() {
+        return TuiThemeBridge.tokenColor(ThemeToken.SYNTAX_OPERATOR);
+    }
+
+    /** 标点色（{@code syntaxPunctuation}）。 */
+    public static Color punctuationColor() {
+        return TuiThemeBridge.tokenColor(ThemeToken.SYNTAX_PUNCTUATION);
     }
 
     /**
@@ -98,13 +129,35 @@ public final class SyntaxHighlighter {
                     j++;
                 }
                 var word = line.substring(i, j);
+                int k = j;
+                while (k < line.length() && Character.isWhitespace(line.charAt(k))) {
+                    k++;
+                }
                 if (KEYWORDS.contains(word)) {
                     flush(segments, plain, base);
                     segments.add(new Segment(word, base.fg(keywordColor())));
+                } else if (TYPES.contains(word)) {
+                    flush(segments, plain, base);
+                    segments.add(new Segment(word, base.fg(typeColor())));
+                } else if (k < line.length() && line.charAt(k) == '(') {
+                    flush(segments, plain, base);
+                    segments.add(new Segment(word, base.fg(functionColor())));
                 } else {
                     plain.append(word);
                 }
                 i = j;
+                continue;
+            }
+            if ("+-*/%=<>!&|^~?:".indexOf(ch) >= 0) {
+                flush(segments, plain, base);
+                segments.add(new Segment(String.valueOf(ch), base.fg(operatorColor())));
+                i++;
+                continue;
+            }
+            if (",;(){}[]".indexOf(ch) >= 0) {
+                flush(segments, plain, base);
+                segments.add(new Segment(String.valueOf(ch), base.fg(punctuationColor())));
+                i++;
                 continue;
             }
             plain.append(ch);

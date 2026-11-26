@@ -117,8 +117,18 @@ public sealed interface ExtensionEvent {
      * pi {@code message_end}（types.ts:1062）——docs/15 起结果臂落地
      * （{@code MessageEndEventResult} 替换语义见 {@code EngineHookBridge} 的
      * sink 适配器，裁决①）；观察订阅与结果订阅同批火一次。
+     *
+     * <p>{@code role} 是 pi 视角的 message role（D322）：custom 队列项的 LLM 投影是
+     * {@code UserMessage}，{@code message().role()} 仍为 {@code "user"}，而
+     * {@code role()} 报 {@code "custom"}（pi 载荷本体的角色）。替换臂仍按
+     * {@code message} 的 variant 类校验，不受本字段影响。</p>
      */
-    record MessageEndEvent(Message message) implements ExtensionEvent {}
+    record MessageEndEvent(Message message, String role) implements ExtensionEvent {
+        /** 兼容构造器：role 默认取 {@code message.role()}。 */
+        public MessageEndEvent(Message message) {
+            this(message, message.role());
+        }
+    }
 
     /** pi {@code tool_execution_start}（types.ts:1065-1073；批 27 起含 parentToolCallId?）。 */
     record ToolExecutionStartEvent(String toolCallId, String toolName,

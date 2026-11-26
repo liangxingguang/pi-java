@@ -322,8 +322,9 @@ class MarkdownRendererTest {
     @Test
     void highlightLineEscapesBracketsInCode() {
         var markup = MarkdownRenderer.highlightLine("var a = b[0];");
-        // [ → [[，] → ]]（markup 转义），避免 a[0] 被误解析为标签
+        // [ → [[，] → ]]（markup 转义），避免 a[0] 被误解析为标签；
+        // T6 后标点独立成着色段，转义括号与前段文本之间有 markup 开闭标签。
         assertThat(markup).doesNotContain("b[0]");
-        assertThat(markup).contains("b[[");
+        assertThat(markup).contains("[[");
     }
 }

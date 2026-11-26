@@ -183,6 +183,7 @@ final class ChatScreenLayout {
         if (!search.active()) {
             return false;
         }
+        search.setKeybindings(keys);
         boolean handled = search.handleKey(event, keys);
         chatPanel.setHighlights(search.highlights());
         return handled;
@@ -237,8 +238,7 @@ final class ChatScreenLayout {
     }
 
     private void addFlash(List<Element> children) {
-        String message = flashNotice.messageAt(System.nanoTime());
-        if (message != null) {
+        for (String message : flashNotice.messagesAt(System.nanoTime())) {
             children.add(new FlashLine(message));
         }
     }

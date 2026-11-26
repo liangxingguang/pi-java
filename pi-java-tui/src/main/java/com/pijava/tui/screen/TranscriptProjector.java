@@ -22,6 +22,8 @@ final class TranscriptProjector {
     private final ChatPanel chatPanel;
     private final java.util.function.IntSupplier outputPad;
     private final CacheNoticeRenderer cacheNotices;
+    // B46：实时工具卡已出终态的 toolCallId——对应条目不再渲染第二张卡。
+    private final java.util.Set<String> liveCompletedToolCalls;
     private final StringBuilder assistantDraft = new StringBuilder();
     private final StringBuilder thinkingDraft = new StringBuilder();
     // Text of the user message optimistically shown on submit; matched against
@@ -46,10 +48,12 @@ final class TranscriptProjector {
         new java.util.concurrent.atomic.AtomicInteger();
 
     TranscriptProjector(ChatPanel chatPanel, java.util.function.IntSupplier outputPad,
-                        CacheNoticeRenderer cacheNotices) {
+                        CacheNoticeRenderer cacheNotices,
+                        java.util.Set<String> liveCompletedToolCalls) {
         this.chatPanel = chatPanel;
         this.outputPad = outputPad;
         this.cacheNotices = cacheNotices;
+        this.liveCompletedToolCalls = liveCompletedToolCalls;
     }
 
     /** Receive a complete transcript entry (dedupes streamed assistant text). */
@@ -58,6 +62,12 @@ final class TranscriptProjector {
         // 跳过也要 feed（条目客观存在；pi scan 同样遍历全量）。miss 通知在条目
         // 自身气泡<b>之后</b>注入（pi :4062-4065 的序）。
         var trackedMiss = cacheNotices.feed(entry);
+        // B46：实时卡已出终态的 tool result 条目跳过（pi 的 pendingTools 组件即终态）。
+        if (entry instanceof Entry.Message message
+                && message.message() instanceof com.pijava.ai.message.Message.ToolResultMessage toolResult
+                && liveCompletedToolCalls.remove(toolResult.toolUseId())) {
+            return;
+        }
         if (entry instanceof Entry.Message message
                 && "assistant".equals(message.message().role())) {
             // Skip entries already rendered via the streaming path, and empty
@@ -194,6 +204,18 @@ final class TranscriptProjector {
      * @param leafId  导航后的当前叶（null ⇒ 空转录）
      */
     void rebuildTranscript(java.util.List<Entry> entries, String leafId) {
+        replayEntries(leafId == null
+            ? java.util.List.of()
+            : com.pijava.agent.session.ContextEntries.pathToLeaf(entries, leafId));
+    }
+
+    /**
+     * 按给定扁平条目序列整表重放（B38；pi {@code chatContainer.clear()}＋
+     * {@code renderSessionEntries(entries.slice(1))}，interactive-mode.ts:3906-3908）。
+     * 与 {@link #rebuildTranscript} 共用同一重置/投影序，但<b>不做</b> {@code pathToLeaf}——
+     * 压缩结束喂进来的是 {@code buildContextEntries()} 的上下文序。
+     */
+    void replayEntries(java.util.List<Entry> entries) {
         chatPanel.clear();
         assistantDraft.setLength(0);
         thinkingDraft.setLength(0);
@@ -203,29 +225,28 @@ final class TranscriptProjector {
         thinkingRendered = false;
         // 批 13（T10/T11）：重建即新一轮增量流——去重集与 miss 跟踪器归零。
         cacheNotices.reset();
-        if (leafId != null) {
-            for (var e : com.pijava.agent.session.ContextEntries.pathToLeaf(entries, leafId)) {
-                // 批 13（T11 重建臂，pi :3999-4065 对位）：逐条 feed，assistant
-                // 渲染后注入其 miss（aborted/error 不注入，即时臂同实例去重）。
-                var trackedMiss = cacheNotices.feed(e);
-                // 批 13（T10）：usage 条目同走门控收口。
-                if (e instanceof Entry.Usage usage) {
-                    cacheNotices.appendUsageNotice(usage);
-                    continue;
-                }
-                var bubble = ChatMessage.from(e, outputPad.getAsInt());
-                if (bubble != null) {
-                    chatPanel.append(bubble);
-                }
-                if (trackedMiss.isPresent() && cacheNotices.noticesEnabled()
-                        && e instanceof Entry.Message messageEntry
-                        && messageEntry.message()
-                                instanceof com.pijava.ai.message.Message.AssistantMessage am
-                        && !cacheNotices.isLastMissNotified(am)
-                        && am.stopReason() != com.pijava.ai.message.StopReason.ABORTED
-                        && am.stopReason() != com.pijava.ai.message.StopReason.ERROR) {
-                    cacheNotices.appendCacheMissNotice(trackedMiss.get());
-                }
+        liveCompletedToolCalls.clear();
+        for (var e : entries) {
+            // 批 13（T11 重建臂，pi :3999-4065 对位）：逐条 feed，assistant
+            // 渲染后注入其 miss（aborted/error 不注入，即时臂同实例去重）。
+            var trackedMiss = cacheNotices.feed(e);
+            // 批 13（T10）：usage 条目同走门控收口。
+            if (e instanceof Entry.Usage usage) {
+                cacheNotices.appendUsageNotice(usage);
+                continue;
+            }
+            var bubble = ChatMessage.from(e, outputPad.getAsInt());
+            if (bubble != null) {
+                chatPanel.append(bubble);
+            }
+            if (trackedMiss.isPresent() && cacheNotices.noticesEnabled()
+                    && e instanceof Entry.Message messageEntry
+                    && messageEntry.message()
+                            instanceof com.pijava.ai.message.Message.AssistantMessage am
+                    && !cacheNotices.isLastMissNotified(am)
+                    && am.stopReason() != com.pijava.ai.message.StopReason.ABORTED
+                    && am.stopReason() != com.pijava.ai.message.StopReason.ERROR) {
+                cacheNotices.appendCacheMissNotice(trackedMiss.get());
             }
         }
         chatPanel.scrollToBottom();

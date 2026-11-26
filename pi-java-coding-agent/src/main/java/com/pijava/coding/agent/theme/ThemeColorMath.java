@@ -345,6 +345,10 @@ public final class ThemeColorMath {
             prefix.append("\033[9m");
             suffix.insert(0, "\033[29m");
         }
+        if (attrs.contains(TextAttr.BLINK)) {
+            prefix.append("\033[5m");
+            suffix.insert(0, "\033[25m");
+        }
         return prefix.append(text).append(suffix).toString();
     }
 
@@ -355,7 +359,8 @@ public final class ThemeColorMath {
         /** 斜体 SGR 3。 */ ITALIC,
         /** 下划线 SGR 4。 */ UNDERLINE,
         /** 反显 SGR 7。 */ INVERSE,
-        /** 删除线 SGR 9。 */ STRIKETHROUGH
+        /** 删除线 SGR 9。 */ STRIKETHROUGH,
+        /** 闪烁 SGR 5。 */ BLINK
     }
 
     // ============================================================================

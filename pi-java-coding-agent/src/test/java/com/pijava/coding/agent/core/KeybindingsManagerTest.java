@@ -15,7 +15,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class KeybindingsManagerTest {
 
-    private final KeybindingsManager keys = new KeybindingsManager();
+    private final KeybindingsManager keys = new KeybindingsManager(false);
 
     @Test
     void resolvesCoreBindings() {
@@ -176,6 +176,26 @@ class KeybindingsManagerTest {
             KeybindingsManager.KeyStroke.of("up", false, true, false))).isTrue();
         assertThat(nix.matches(KeybindingsManager.DEQUEUE,
             KeybindingsManager.KeyStroke.of("q", false, true, false))).isFalse();
+    }
+
+    /** K5：followUp 键平台分叉——Windows/WSL ⇒ ctrl+q，其余 alt+enter。 */
+    @Test
+    void followUpBindingFollowsThePlatform() {
+        var win = new KeybindingsManager(true);
+        assertThat(win.matches(KeybindingsManager.FOLLOW_UP,
+            KeybindingsManager.KeyStroke.of("q", true, false, false))).isTrue();
+        assertThat(win.matches(KeybindingsManager.FOLLOW_UP,
+            KeybindingsManager.KeyStroke.of("enter", false, true, false))).isFalse();
+        assertThat(win.strokeFor(KeybindingsManager.FOLLOW_UP))
+            .isEqualTo(KeybindingsManager.KeyStroke.of("q", true, false, false));
+
+        var nix = new KeybindingsManager(false);
+        assertThat(nix.matches(KeybindingsManager.FOLLOW_UP,
+            KeybindingsManager.KeyStroke.of("enter", false, true, false))).isTrue();
+        assertThat(nix.matches(KeybindingsManager.FOLLOW_UP,
+            KeybindingsManager.KeyStroke.of("q", true, false, false))).isFalse();
+        assertThat(nix.strokeFor(KeybindingsManager.FOLLOW_UP))
+            .isEqualTo(KeybindingsManager.KeyStroke.of("enter", false, true, false));
     }
 
     @Test

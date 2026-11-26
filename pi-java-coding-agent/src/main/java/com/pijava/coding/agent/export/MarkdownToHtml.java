@@ -7,10 +7,10 @@ import java.util.regex.Pattern;
 /**
  * 紧凑的 Markdown → HTML 渲染器（P6-12 HTML 导出用）。
  *
- * <p>支持块级：ATX 标题、围栏代码块（带语言类名）、无序/有序列表、引用、
- * 水平线、段落；行内：代码 span、粗体、斜体、删除线、链接。所有文本先做
- * HTML 转义，Markdown 结构在转义之后叠加，避免双重转义。行内代码 span 用
- * 拆分法隔离，避免占位符冲突。</p>
+ * <p>支持块级：ATX 标题、围栏代码块（pi 对齐 {@code class="hljs"}）、GFM 表格、
+ * 无序/有序列表、引用、水平线、段落；行内：代码 span、粗体、斜体、删除线、
+ * 安全 scheme 的链接。所有文本先做 HTML 转义，Markdown 结构在转义之后叠加，
+ * 避免双重转义。行内代码 span 用拆分法隔离，避免占位符冲突。</p>
  */
 public final class MarkdownToHtml {
 
@@ -26,6 +26,11 @@ public final class MarkdownToHtml {
     private static final Pattern OL_ITEM = Pattern.compile("^\\s*\\d+\\.\\s+(.*)$");
     private static final Pattern QUOTE = Pattern.compile("^\\s*>\\s?(.*)$");
     private static final Pattern HR = Pattern.compile("^\\s*(?:-{3,}|\\*{3,}|_{3,})\\s*$");
+    private static final Pattern TABLE_DELIMITER = Pattern.compile(
+        "^\\s*\\|?(?:\\s*:?-{3,}:?\\s*\\|)+\\s*:?-{3,}:?\\s*\\|?\\s*$");
+    private static final Pattern URL_SCHEME = Pattern.compile("^([A-Za-z][A-Za-z0-9+.-]*):");
+    private static final Pattern ALLOWED_URL_SCHEME = Pattern.compile(
+        "(?i)^(?:https?|mailto|tel|ftp)$");
 
     private MarkdownToHtml() {}
 
@@ -40,7 +45,8 @@ public final class MarkdownToHtml {
         String listKind = null;
         var listItems = new ArrayList<String>();
 
-        for (var line : lines) {
+        for (int lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+            var line = lines[lineIndex];
             var fence = FENCE.matcher(line);
             if (fence.matches()) {
                 if (!inFence) {
@@ -89,6 +95,13 @@ public final class MarkdownToHtml {
                     .append("</blockquote>\n");
                 continue;
             }
+            if (line.contains("|") && lineIndex + 1 < lines.length
+                    && isTableDelimiter(lines[lineIndex + 1])) {
+                flushParagraph(out, paragraph);
+                flushList(out, listKind, listItems);
+                lineIndex = emitTable(out, lines, lineIndex) - 1;
+                continue;
+            }
             var ul = UL_ITEM.matcher(line);
             if (ul.matches()) {
                 flushParagraph(out, paragraph);
@@ -127,6 +140,52 @@ public final class MarkdownToHtml {
         return out.toString();
     }
 
+    /** GFM 表格：表头取首行，后续连续含管道的行为表体，delimiter 行跳过。 */
+    private static int emitTable(StringBuilder out, String[] lines, int start) {
+        var header = splitCells(lines[start]);
+        var rows = new ArrayList<List<String>>();
+        int i = start + 2;
+        for (; i < lines.length && lines[i].contains("|"); i++) {
+            if (isTableDelimiter(lines[i])) {
+                continue;
+            }
+            rows.add(splitCells(lines[i]));
+        }
+        out.append("<table>\n<thead><tr>");
+        for (var cell : header) {
+            out.append("<th>").append(inline(cell)).append("</th>");
+        }
+        out.append("</tr></thead>\n<tbody>");
+        for (var row : rows) {
+            out.append("<tr>");
+            for (var cell : row) {
+                out.append("<td>").append(inline(cell)).append("</td>");
+            }
+            out.append("</tr>");
+        }
+        out.append("</tbody>\n</table>\n");
+        return i;
+    }
+
+    private static List<String> splitCells(String line) {
+        var trimmed = line.trim();
+        if (trimmed.startsWith("|")) {
+            trimmed = trimmed.substring(1);
+        }
+        if (trimmed.endsWith("|")) {
+            trimmed = trimmed.substring(0, trimmed.length() - 1);
+        }
+        var cells = new ArrayList<String>();
+        for (var cell : trimmed.split("\\|", -1)) {
+            cells.add(cell.trim());
+        }
+        return cells;
+    }
+
+    private static boolean isTableDelimiter(String line) {
+        return TABLE_DELIMITER.matcher(line).matches();
+    }
+
     private static void flushParagraph(StringBuilder out, StringBuilder paragraph) {
         if (paragraph.length() == 0) {
             return;
@@ -149,13 +208,11 @@ public final class MarkdownToHtml {
     }
 
     private static void emitCodeBlock(StringBuilder out, StringBuilder code, StringBuilder lang) {
-        out.append("<pre><code");
-        if (lang.length() > 0) {
-            out.append(" class=\"language-").append(escape(lang.toString())).append('"');
-        }
-        out.append('>').append(escape(stripTrailingNewline(code.toString())))
+        out.append("<pre><code class=\"hljs\">")
+            .append(escape(stripTrailingNewline(code.toString())))
             .append("</code></pre>\n");
         code.setLength(0);
+        lang.setLength(0);
     }
 
     private static String stripTrailingNewline(String s) {
@@ -190,12 +247,28 @@ public final class MarkdownToHtml {
      * 纯拉丁文本（{@code **end.**Then}）仍按 CommonMark 不成立。</p>
      */
     private static String markup(String text) {
-        String result = LINK.matcher(text).replaceAll(m ->
-            "<a href=\"" + m.group(2) + "\">" + m.group(1) + "</a>");
+        String result = LINK.matcher(text).replaceAll(m -> {
+            String href = sanitizeHref(m.group(2));
+            return href == null ? m.group(1)
+                : "<a href=\"" + href + "\">" + m.group(1) + "</a>";
+        });
         result = emphasize(result, BOLD, "<strong>", "</strong>");
         result = emphasize(result, ITALIC_STAR, "<em>", "</em>");
         result = emphasize(result, ITALIC_UNDER, "<em>", "</em>");
         return STRIKE.matcher(result).replaceAll("<del>$1</del>");
+    }
+
+    /** pi {@code sanitizeMarkdownUrl} 对位：剔除控制符并按 scheme 白名单过滤。 */
+    static String sanitizeHref(String value) {
+        String href = value == null ? "" : value.trim().replaceAll("[\\x00-\\x1f\\x7f]", "");
+        if (href.isEmpty()) {
+            return href;
+        }
+        var scheme = URL_SCHEME.matcher(href);
+        if (scheme.find() && !ALLOWED_URL_SCHEME.matcher(scheme.group(1)).matches()) {
+            return null;
+        }
+        return href;
     }
 
     /**

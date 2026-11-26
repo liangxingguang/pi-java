@@ -1,8 +1,9 @@
 # 05 用户界面层（pi-java-tui / pi-java-web）
 
-> 【背景摘要】读数：加权 **232.5/252＝92.3%**（未加权 **133/153＝86.9%**）；已对齐项不再逐条列出。
+> 【背景摘要】读数：加权 **239.5/252＝95.0%**（未加权 **141/153＝92.2%**）；已对齐项不再逐条列出。
 > 范围：用户界面层（pi-java-tui / pi-java-web）的屏幕、渲染、键绑定、TUI 组件、主题、web 面；已对齐证据见 git 历史。
-> 差异结论：仅保留差异/窄差/出分母/web 面差异；剩余缺口为 K19、C16、T2，开放缺口以 [`../04-open-items-register.md`](../04-open-items-register.md) 为准。
+> 差异结论：仅保留差异/窄差/出分母/web 面差异；剩余部分对齐（形状差）按权重为 K19(3)、S2(2)、T6(2)、S28(1)、T11(1)，开放缺口以 [`../04-open-items-register.md`](../04-open-items-register.md) 为准。
+> 开放缺口收口（2026-11-26）：B38／B39／B46 已对齐；E5-31 余 7 个无 TUI 面的成员登记窄差 D323（权重 0）。
 
 
 > 只保留差异：判定为「对齐」的单元不逐条列，逐条证据见 git 历史；窄差 D 项见 `docs/04` §6.5。
@@ -10,7 +11,7 @@
 
 - 判定基准：pi `a00a5048d`（P12 发布锚点）。
 - 判定单位＝**可被外部观察到的行为承诺**（一个屏幕 / 一个键绑定 / 一个渲染特性 / 一个主题能力 / 一个 TUI 组件 / 一个 web 能力）。
-- 三档：**对齐**＝pi 有、pi-java 有、行为相同；**缺失**＝pi 有、pi-java 无；**存疑**＝pi-java 有但行为/形状与 pi 不同或未核。
+- 三档：**对齐**＝pi 有、pi-java 有、行为相同；**缺失**＝pi 有、pi-java 无；**部分对齐（形状差）**＝pi-java 有但行为/形状与 pi 不同（已核对确认差异存在；本档不再承担「未核」含义）。
 - 所有证据均为 `file:line`。pi 侧路径前缀 `D:\workplaceForai\pi\packages\`，java 侧 `D:\workplaceForai\pi-java\`。
 
 ---
@@ -45,9 +46,9 @@
 
 | # | 屏幕 | pi 有 | java 有 | 判定 | 权重 | 证据（pi 侧均对 `a00a5048d` 取数） |
 |---|---|---|---|---|---|---|
-| S2 | 全屏 alt-screen 模式（**默认模式**） | ✓ `tui/src/tui-alt-screen.ts:202 class TuiAltScreen`（1787 行） | ✓ `PiTuiLauncher.java:61 runFullscreen`（TamboUI ToolkitRunner） | **存疑** | 2 | java 用 TamboUI 通用 runner，pi 的 alt-screen 自带搜索/选择/复制/图像/闪烁（见 S2a-d、K20/K21；OSC 7501 状态见 K39）；滚动条由 java 自绘（`ChatViewportElement.java:261 renderScrollbar`）。默认模式两侧一致（pi `cli/args.ts:340` "fullscreen (default)"；java `PiTuiLauncher.java:111` 默认 fullscreen） |
-| S28 | `/export`（HTML 导出） | ✓ `core/export-html/index.ts:236 exportSessionToHtml` | ✓ `export/HtmlExporter.java:21`（288 行） | **存疑** | 1 | pi 用 vendored marked.min.js + highlight.min.js + `template.html/css/js`；java 自写 `MarkdownToHtml.java`（201 行）—— 输出形状未逐项核；**W8 复核维持**（D-W8-3：vendored marked/highlight 与自写转换的输出形状未逐项核） |
-| S32 | 登录 URL 复制＋Radius 登录入口 | ✓ `components/auth-url.ts`＋Radius 登录/MCP 设置 | `LoginFlow`＋`LoginDialogScreen`＋Radius OAuth/MCP 提议已落地；独立 URL 复制键未证实 | **存疑** | 1 | 旧“仅 readPassword”已失效 |
+| S2 | 全屏 alt-screen 模式（**默认模式**） | ✓ `tui/src/tui-alt-screen.ts:202 class TuiAltScreen`（1787 行） | ✓ `PiTuiLauncher.java:61 runFullscreen`（TamboUI ToolkitRunner） | **部分对齐（形状差）** | 2 | 已修：搜索条动态键位提示（`TranscriptSearchBar.hintText` 走 `KeybindingsManager.strokeFor`）、flash 栈式多条（`FlashNotice.messagesAt`）、SGR 5 blink（`ThemeColorMath.TextAttr.BLINK`）。残余：双击选词/行选/边缘自动滚动未实现、图像为 Kitty/iTerm2 子集（D299–D301 中②）。默认模式两侧一致 |
+| S28 | `/export`（HTML 导出） | ✓ `core/export-html/index.ts:236 exportSessionToHtml`＋`template.js:1716-1795`（marked.use breaks/gfm、hljs、scheme 白名单 `:692-701`） | ✓ `export/HtmlExporter.java:21`＋`MarkdownToHtml.java`（333 行） | **部分对齐（形状差）** | 1 | 已修：GFM 表格（`emitTable`/`isTableDelimiter`）、URL scheme 白名单（`sanitizeHref` 放行 http/https/mailto/tel/ftp＋相对路径、拦 javascript/data）、代码块固定 `class="hljs"`（去 `language-*`）。残余：pi 的 hljs 实际高亮 span 未产出，java 仍只转义代码块文本（TUI 侧 `SyntaxHighlighter` 九类着色属另一消费点）（D-W8-3） |
+| S32 | 登录 URL 复制＋Radius 登录入口 | ✓ `components/auth-url.ts:7-34`（`copy()` 复制 URL＋`Copied URL to clipboard` 提示）＋Radius 登录/MCP | ✓ `LoginFlow`＋`LoginDialogScreen`（`authUrl`/`authUrlStatus`）＋Radius OAuth/MCP | **对齐** | 1 | 2026-11-26 修复：`notify(AuthUrl)` 以 `WebUrl.displayUrl` 保存可复制 URL，Ctrl+X 复制并渲染 `Copied URL to clipboard`／`Copy URL manually`；设备码路径按 pi 清空 URL 不提供复制。`LoginDialogDeviceCodeTest` 3 条新测试全过 |
 
 > ~~S31 实验性 micro TUI~~ —— **作废**（pi `7fd478a2e` 删 `experimental/{micro,mini}`，裁决 R1：参照物被删即移出分母）。
 
@@ -60,12 +61,12 @@
 | # | 特性 | pi 有 | java 有 | 判定 | 权重 | 证据（pi 侧均对 `a00a5048d` 取数） |
 |---|---|---|---|---|---|---|
 | R7 | Mermaid 图渲染 | ✓ `components/mermaid.ts:60 createMermaidMarkdownTransformer` + `lovely-mermaid` 依赖 | ✗ | **缺失** | 1 | 不可达 D-W7-1：pi 依赖 `lovely-mermaid` JS 包（布局/主题/警告），Java 无等价库；围栏按代码块渲染（不进分子） |
-| R12 | 工具执行卡：可折叠＋流式部分结果 | ✓ `tool-execution.ts` 的展开态与折叠提示 | 全局 Ctrl+O 展开态已接入渲染参数；折叠预览行＋省略行随 docs/60（工具族）；fallback 臂补**三态 bg**（`TOOL_PENDING/SUCCESS/ERROR_BG`，文本级只铺文本格＝窄差 D）＋**通用回落折叠 10 行**＋`... N more lines` 省略行（`FALLBACK_PREVIEW_LINES`）＋R26 参数形；**流式部分结果仍缺** | **存疑** | 2 | D197（`ToolCallRenderer` 无 `isPartial` 通道）维持——Java 渲染是 entry 投影、无流式卡槽；卡形面按对齐计 1/2 |
-| R13 | bash 执行组件（实时增量输出 + 宽度自适应） | ✓ `components/bash-execution.ts:21`（**223 行**；`!!` 命令 dim 边框、`outputPad` 可配）+ `test/bash-execution-width.test.ts` | ✓ `ChatMessage.BashCard`＋`MessageCards.bash` | **存疑** | 2 | **漏项#7 落地**：bash 条目从 `User` 纯文本改为卡——`$ cmd` 头（`!!` ⇒ dim ≙ pi bashMode→dim）＋输出尾部 20 行预览（展开＝全部）＋状态行逐字（`(cancelled)` warning／`(exit N)` error／`Output truncated. Full output: …` warning）＋K37 点击展开；上下文截断在采集侧已做（Entry 带 truncated/fullOutputPath），卡内不重复；**运行中流式增量臂缺**（`BashExecutionUpdate` 无消费面）＝窄差 D，流式 pending 区随 R28；卡形按 1/2 计 |
+| R12 | 工具执行卡：可折叠＋流式部分结果 | ✓ `tool-execution.ts` 的展开态与折叠提示 | ✓ `ChatMessage.ToolRunning`＋`SessionEventRouter` liveTools 原地 replaceAt＋`MessageBubble` 流中 `Elapsed X.Ys`／终态 `Took X.Ys`（`ToolDurations`）；折叠预览行＋省略行＋三态 bg 同前 | **对齐** | 2 | 2026-11-26 修复：`ToolRunning` 增 `startNanos`，update 事件在保留时刻下原地换部分结果卡，End 收口为终态卡无重复；`ToolExecutionStreamingTest` 7 条全过。窄差：Java 逻辑行模型无 pi 的 1Hz `invalidate` 重绘（计时仅事件到达时刷新），文本级 bg 只铺文本格 |
+| R13 | bash 执行组件（实时增量输出 + 宽度自适应） | ✓ `components/bash-execution.ts:21`（**223 行**；`!!` 命令 dim 边框、`outputPad` 可配）+ `test/bash-execution-width.test.ts` | ✓ `ChatMessage.BashCard`＋`ChatMessage.BashRunning`＋`MessageCards.bash` | **对齐** | 2 | 2026-11-26 修复：`SessionMessagingLifecycle.executeBash` 传 `ShellOptions.outputSink`，每 chunk 发 `BashExecutionUpdate`（删除终局一次性事件）；TUI `SessionEventRouter.handleBashUpdate` 原地累积成 `BashRunning` 卡，`finalizeBash` 收终态；生产 `onEntry`（id 随机 UUID）与 `EntryAppended` 两条路径均经 `finalizedBashIds`/`liveCompletedToolCalls` 去重。`SessionLifecycleEventsTest`＋`ChatScreenSessionEventTest` 全过 |
 | R21 | 回合分隔条（`Worked for Ns • Local tools: N calls`） | ✗（pi 无此构造） | ✓ `ChatScreen.java:170-181` | **非对齐项**（java 独有，Codex 风格） | 0 | 见「pi-java 独有」，**排除出分母** |
 | R22 | 启动公告组件（`earendil-announcement`、`armin`） | ✓ `components/earendil-announcement.ts:27`、`armin.ts:62 class ArminComponent`（384 行） | ✗ | **缺失** | 1 | 旧的 `daxnuts.ts` 已删，彩蛋迁到 R27；**W8 复核维持缺失**（D-W8-2：无 Java 消费面，不移植） |
 | R27 | **3D 彩蛋（pi logo / Armin）+ header logo**（全屏 overlay，惰性加载） | ✓ `components/easter-egg-3d.ts`（**1292 行**）+ `easter-egg-3d.lazy.ts` + `pi-logo.ts:15 piLogoLines`（40 行） | ✗ | **缺失** | 1 | java 无任何彩蛋/logo 动画；取代旧的 daxnuts（R22）；**W8 复核维持缺失**（D-W8-2：1292 行 3D 渲染器无 Java 等价/消费面） |
-| R28 | **排队消息区（streaming 时聊天区与编辑器之间的 dim `Steering:`/`Follow-up:` 行）** | ✓ `interactive-mode.ts:461 pendingMessagesContainer`、`:4724 updatePendingMessagesDisplay`（末尾另有 `↳ <dequeue 键> to edit all queued messages` 提示行）；流式期间 bash/工具组件也挂该区 | ✓ `PendingQueueView.java`（含 hint 行）+ `ChatScreen.java`（`QueueUpdate` 驱动） | **存疑** | 1 | 证据更新：dequeue hint 行（键名随绑定表大写形）＋取回编辑整条流程已补齐（S20/K11 翻对齐）；**「流式 bash/工具组件挂该区」仍缺** ⇒ 判定维持存疑；**W8 复核维持**（D-W8-4） |
+| R28 | **排队消息区（streaming 时聊天区与编辑器之间的 dim `Steering:`/`Follow-up:` 行）** | ✓ `interactive-mode.ts:461 pendingMessagesContainer`、`:4724 updatePendingMessagesDisplay`；流式期间 bash/工具组件也挂该区 | ✓ `PendingQueueView.runningCards`＋`ChatScreen` | **对齐** | 1 | 2026-11-26 修复：`PendingQueueView` 增 `List<Element> runningCards` 槽与 add/remove/clear API，`SessionEventRouter.handleBashUpdate` 流式期间挂卡、`finalizeBash` 终局移出；dequeue hint 与取回编辑同前。`ChatScreenSessionEventTest` 排队区交叉驱动断言通过 |
 | ~~R29~~ | ~~安装变更警告（会话运行中 pi 被升级/替换 → 错误时提示重启命令）~~ | ✓ `interactive-mode.ts:2193 maybeShowInstallChangeWarning`＋`config.ts detectInstallChange` | ✗ | **出分母（不做）** | — | java 无 package.json 安装形态且无自更新通道（E6-10 终裁联动）⇒ 检测前提不成立；`maybeSuggestBugReport` 的恒 false 门即终局；docs/04 §4 C 类登记，触发条件＝分发通道落地 |
 | R30 | 全屏滚动帧 O(viewport)（内容未变时复用 `LayoutFrame.renderCache`） | ✓ `tui.ts:613,1163`；`layout.ts:398 renderLayoutFrame(reusableOutput)`、`:84 renderCached` | ✗（TamboUI 布局内部不可达） | **缺失（窄差 D）** | 2 | Java 侧视口每帧 `TextLayout.wrap` 全量派生；TamboUI 为外部库，布局帧缓存无应用层等价接缝 ⇒ 登记窄差 D，不进分子 |
 | R33 | ASCII/字素快路径＋`Text.setText` 相同文本保留换行 | ✓ `utils.ts:177-241 isStandaloneGraphemeUnit/graphemesOf`、`:251-262` 宽度缓存；`components/text.ts:25-32` | 部分：`TextLayout` 按码点处理（功能等价） | **缺失（窄差 D）** | 1 | Java 无 `Intl.Segmenter` 等价性能诉求、无 pi `Text` 组件；纯性能契约，R31 的源级解析缓存已承担「同源不重渲染」收益 ⇒ 登记窄差 D，不进分子 |
@@ -80,9 +81,9 @@
 
 | # | 能力单元 | 类别 | pi 侧证据 | pi-java 侧证据 | 判定 | 权重 | 台账条目 |
 |---|---|---|---|---|---|---|---|
-| K5 | `Alt+Enter` 排队 follow-up | 键绑定 | `keybindings.ts:67-70`：**Windows 上是 `ctrl+q`**，`alt+enter` 归 `tui.input.newLine` | `KeybindingsManager.java:28` 绑 `alt+enter`（默认表 `:67`）；`TamboUIAdapter.isNewlineEnter` 走 `shift+enter`；followUp 处理 `PiTuiApp.java:427-438`（压缩中也缓冲，B175） | **存疑** | 2 | H-9.2-② |
+| K5 | `Alt+Enter` 排队 follow-up | 键绑定 | `keybindings.ts:67-70`：**Windows 上是 `ctrl+q`**，`alt+enter` 归 `tui.input.newLine` | ✓ `KeybindingsManager.installDefaults` 按 `windowsKeybindings` 分流；`TamboUIAdapter.isNewlineEnter` 只认 Shift/LF；`GlobalKeyRouter` followUp 臂（压缩中缓冲，B175） | **对齐** | 2 | 2026-11-26 修复：`FOLLOW_UP` 默认键 Windows/WSL ⇒ Ctrl+Q、其余 Alt+Enter；`isNewlineEnter` 不再吞 Alt+Enter，followUp 不被提前拦截。`KeybindingsManagerTest`／`TamboUIAdapterTest` 全过。窄差：设置页 followUp 提示仍硬编码 `Alt+Enter`（需跨文件接线，未做） |
 | K12 | `Ctrl+Z` 挂起进程 | 键绑定 | `keybindings.ts:29-32 app.suspend`（非 Windows） | ✗ | **缺失** | 1 | — |
-| K19 | 滚轮/触控板归一化（事件流 → 行滚动） | 交互 | `tui/src/tui-alt-screen.ts:491 scrollBy` + `tui/src/wheel-scroll.ts` | `ScrollInputNormalizer.java:20`（274 行，Codex TUI2 PR#8357 移植）+ `ScrollConfig.java:35` | **存疑** | 3 | — |
+| K19 | 滚轮/触控板归一化（事件流 → 行滚动） | 交互 | `tui/src/tui-alt-screen.ts:491 scrollBy` + `tui/src/wheel-scroll.ts` | `ScrollInputNormalizer.java:20`（274 行，Codex TUI2 PR#8357 移植）+ `ScrollConfig.java:35` | **部分对齐（形状差）** | 3 | — |
 | K36 | 模式 2027 握手规避（ConPTY 字节泄漏修复） | 平台 | —（pi 无此构造） | `NoMode2027Backend.java:20` + `NoMode2027JLineBackend.java:1` | **非对齐项**（java 独有） | 0 | **排除出分母** |
 
 ### TUI 组件
@@ -92,7 +93,7 @@ TUI 组件：已对齐且无差异 14 条（逐条证据见 git 历史）；差�
 | # | 能力单元 | 类别 | pi 侧证据 | pi-java 侧证据 | 判定 | 权重 | 台账条目 |
 |---|---|---|---|---|---|---|---|
 | C14 | mouse-region（把鼠标事件限定到区域） | 组件 | `tui/components/mouse-region.ts:33`（三张消息卡用它，见 K37） | ✓ 元素级等价 | **对齐（窄差 N）** | 1 | `MouseRegion` 组件不移植；`ChatViewportElement` 的 `messageRowRanges` 行区间分发承担同可观察行为（区域＝卡类消息的整行块，点击切换 per-card `cardExpanded` 态，null 回落全局展开态） |
-| C16 | 编辑组件（多行 + 折叠 + 历史） | 组件 | `tui/components/editor.ts:297 class Editor`（2473 行）+ `editor-component.ts:74` + `custom-editor.ts:148` | `EditorComponent.java:27`（500 行）＋`EditorHistory.java`（143 行） | **存疑** | 3 | 补 K27（提示历史）；仍缺 K26 大粘贴折叠／K31 jump mode；见「存疑」清单 |
+| C16 | 编辑组件（多行 + 折叠 + 历史） | 组件 | `tui/components/editor.ts:297 class Editor`（2473 行）+ `editor-component.ts:74` + `custom-editor.ts:148` | `EditorComponent.java`（已拆出 `EditorPaste`/`EditorJump`/`EditorHistory`/`KillOps`/`WordNav`）＋`EditorPaste.java`＋`EditorJump.java`＋`EditorHistory.java` | **对齐** | 3 | 2026-11-26 锚点复核翻正：K26 大粘贴折叠（`EditorPaste.java:21-26` marker 正则、`:76-87` >10 行/>1000 字符阈值、`:124-133` expand、`:150-189` 删后重编号）、K27 提示历史（`EditorHistory.java:19` MAX=100、`:64-90` 浏览）、K31 jump mode（`EditorJump.java:63-69` `ctrl+]`/`ctrl+alt+]`、`:71-101` 多行大小写敏感跳字符）均有实现＋`EditorComponentPasteTest`/`EditorComponentJumpTest`/`EditorHistoryTest` 逐行为测试；pi 侧对位 `editor.ts:31-35/:1314-1332/:1106-1120`、`:347-350/:461-472`、`:359-360/:704-722/:2151-2178`。旧注「仍缺 K26/K31」已失效 |
 | C21 | render 只读/缓存契约（组件 `render` 返回只读 `string[]`；Container 在子节点/行未变时复用缓存数组） | 框架 | `tui.ts:130,369-393,470-472`、`box.ts:100,112` | TamboUI 外部组件协议（不可改） | **缺失（窄差 D）** | 1 | TamboUI 为外部库，组件 render 协议与 Container 缓存无应用层接缝；应用层以 R31 投影缓存承担等价意图 ⇒ 登记窄差 D，不进分子 |
 
 ### 主题 / 样式
@@ -101,9 +102,9 @@ TUI 组件：已对齐且无差异 14 条（逐条证据见 git 历史）；差�
 
 | # | 能力单元 | 类别 | pi 侧证据 | pi-java 侧证据 | 判定 | 权重 | 台账条目 |
 |---|---|---|---|---|---|---|---|
-| T2 | 主题 token 覆盖（约 70 个语义色） | 主题 | `theme/dark.json` 与主题 token 表 | `ThemeToken`＋`SemanticColors`＋`ThemeApplicator` 已接主题消费；覆盖完整性待新锚点逐键复核 | **存疑** | 3 | 旧“仅 8 条 CSS 规则”已失效 |
-| T6 | 语法高亮色板（10 token） | 主题 | `dark.json` 的 syntax token | `SyntaxHighlighter` 已改读 `MarkdownTheme`/主题令牌，不再固定三色；token 覆盖仍需复核 | **存疑** | 2 | — |
-| T11 | system 主题（由终端调色板派生，多层 fallback） | 主题 | `theme/system-theme.ts` 与终端颜色探测 | `SystemTheme`＋`SystemThemeRecipe` 已落地；无 OSC 探测时使用既有 tier-3 路径，终端查询面待复核 | **存疑** | 1 | D123 |
+| T2 | 主题 token 覆盖（56 个语义色） | 主题 | `theme-tokens.ts:24-101` 的 56 键＋`dark.json:15-72` 的 56 色 | `ThemeToken.java:10-122` 的 56 enum＋`fromPiName:165-226`／`piName:228-288` 双向映射 | **对齐** | 3 | 2026-11-26 锚点复核翻正：pi 与 java 的 token 名集合、顺序、槽位、5 个 fallback 全量逐键相等（脚本比对 pi-only=[]／java-only=[]／顺序一致）；旧「约 70 个」与 java 注释「57 个」均为误记，实际两侧各 56。消费层裁剪（`SemanticColors` 现读 10 键）属另立窄差，不折入 token 表覆盖 |
+| T6 | 语法高亮色板（10 token） | 主题 | `dark.json:55-63` 的 9 个 syntax token＋`theme.ts:892-918` 的 hljs 20+ 类映射 | `MarkdownTheme.java` 10 md* 键一致；`SyntaxHighlighter.java`（187 行）九类 accessor＋type/function/operator/punctuation 词法分支 | **部分对齐（形状差）** | 2 | 2026-11-26 修复：五个新 accessor 现读主题令牌，词法器识别类型（缺口已补）、函数名（后随 `(`）、操作符与标点；`SyntaxHighlighterTest` 7 条全过。残余：保守配色下未识别标识符保持 plain（不染 variable 色），无 hljs 20+ 类按语言 grammar 映射 |
+| T11 | system 主题（由终端调色板派生，多层 fallback） | 主题 | `tui/src/terminal-colors.ts:11-15,38-49` OSC 10/11/4 解析＋`theme-controller.ts:20-39` 查询/超时/回落 | `SystemTheme`＋`SystemThemeRecipe` 算法层逐项对位；`TerminalColors.parseOscReply`＋`ThemeController` 注入缝 | **部分对齐（形状差）** | 1 | 2026-11-26 修复半面：`parseOscReply` 解析 OSC 10/11/4 回复（BEL/ST、hex6/12、rgb/rgba），`ThemeController.setTerminalColorsSource`/`queryTerminalColors` 提供注入缝。残余：TamboUI 0.4 后端无 OSC 查询发送与 stdin reply 队列，仍走 COLORFGBG／tier-3（D123） |
 
 ### web 面（对齐相关部分）
 
@@ -114,7 +115,7 @@ web 对齐面：已对齐且无差异 13 条（逐条证据见 git 历史）；�
 | # | 能力单元 | 类别 | pi 侧证据 | pi-java 侧证据 | 判定 | 权重 | 台账条目 |
 |---|---|---|---|---|---|---|---|
 | W3 | `turn_end` 带 `{message, toolResults}` | web 协议 | `agent/types.ts:438` | `AgentEventTranslator.java:149-160` | **对齐**（残余：错误路 `message` 为 null ⇒ 省键） | 3 | B42/B49（已结案，残余登记） |
-| W16 | `find()` 的范围（`--session <id>` 跨项目查找） | 行为 | pi `findLocalSessionByExactId(id, cwd, sessionDir)` 项目内 | 精确臂已是 header-only 项目内（`findById`），但阶梯 ③ 仍跨项目扫描；`findWithScope` 带 `global` 标＋确认提示 | **存疑** | 1 | 登记 **D271**——保留跨项目能力（显式可感知），项目内命中路径与 pi 一致；新增 `exactIdLaneStaysInsideTheProject` 断言钉住 header-only/项目内；**W8 复核维持**（跨项目能力保留的既有裁决不变） |
+| W16 | `find()` 的范围（`--session <id>` 跨项目查找） | 行为 | pi `main.ts:284-291 findLocalSessionByExactId`（①项目内）＋`:293-324 resolveSessionPath`（③ `listAll` 跨项目，`{type:"global"}`）＋`:441-445` 的 fork 确认 | `findById` header-only 项目内＋`findWithScope`（`PersistentSessionRepositories.java:82-134`）同构阶梯③＋`SessionPersistence.java:301-329` 的 `Session found in different project`／fork 确认 | **对齐** | 1 | 2026-11-26 锚点复核翻正：旧行只引 `findLocalSessionByExactId` 项目内臂，漏引 pi 同文件 `:313-320` 的跨项目③与消费端 fork 提示；java 阶梯③与 pi 同形（精确优先、global 标、确认后 fork），非 java 独有形状差。原挂的 **D271** 实为 `docs/08` 的 codemode 渲染器条目（`:577`），与本行无关，撤销引用。残余仅提示着色（pi yellow vs java 无 B213 族），属窄差不扣分 |
 
 ---
 
@@ -148,22 +149,24 @@ web 对齐面：已对齐且无差异 13 条（逐条证据见 git 历史）；�
 
 **权重规则**（已定，未自创）：权重 = **用户可观察影响 × 频率**，只看「如果用户用这个模块，这个单元有多重要」，**不掺排期优先级**。
 `3` = 每轮对话都走／默认路径；`2` = 每次会话走／常用命令；`1` = 低频／边缘／纯内部；`0` = 非目标（排除出分母）。
-**完成系数**：对齐 = 1.0 ／ 存疑 = 0.5 ／ 缺失 = 0。
+**完成系数**：对齐 = 1.0 ／ 部分对齐（形状差） = 0.5 ／ 缺失 = 0。
 
 **L7 读数**
 
 | 域 | Σ权重 | Σ(w×系数) | 加权完成度 | 未加权完成度 |
 |---|---:|---:|---:|---:|
-| 屏幕/面板（35 单元） | 47 | 45.5 | **96.8%** | 91.4%（32/35） |
-| 渲染特性（R1–R33，31 计分单元；R21 权重 0 已剔；R29 出分母） | 45 | 35.5 | **78.9%** | 71.0%（22/31） |
-| 键绑定/交互（K1–K41，39 计分单元；K36 权重 0 已剔） | 67 | 63.5 | **94.8%** | 92.3%（36/39） |
-| TUI 组件（C1–C21，21 单元） | 42 | 39.5 | **94.0%** | 90.5%（19/21） |
-| 主题/样式（T1–T11，11 单元） | 18 | 15.0 | **83.3%** | 72.7%（8/11） |
-| web 对齐面（W1–W16，16 单元） | 33 | 32.5 | **98.5%** | 93.8%（15/16） |
-| **合计** | **252** | **232.5** | **92.3%** | **86.9%（133/153）** |
+| 屏幕/面板（35 单元） | 47 | 45.5 | **96.8%** | 94.3%（33/35） |
+| 渲染特性（R1–R33，31 计分单元；R21 权重 0 已剔；R29 出分母） | 45 | 39.0 | **86.7%** | 83.9%（26/31） |
+| 键绑定/交互（K1–K41，39 计分单元；K36 权重 0 已剔） | 67 | 64.5 | **96.3%** | 94.9%（37/39） |
+| TUI 组件（C1–C21，21 单元） | 42 | 41.0 | **97.6%** | 95.2%（20/21） |
+| 主题/样式（T1–T11，11 单元） | 18 | 16.5 | **91.7%** | 81.8%（9/11） |
+| web 对齐面（W1–W16，16 单元） | 33 | 33.0 | **100%** | 100%（16/16） |
+| **合计** | **252** | **239.5** | **95.0%** | **92.2%（141/153）** |
 
-**权重 3 子集（26 条）**：Σ权重 **78** ／ Σ(w×c) **73.5** ／ **94.2%**（对齐 23 条＝69.0、存疑 3 条＝4.5）。
+**权重 3 子集（26 条）**：Σ权重 **78** ／ Σ(w×c) **76.5** ／ **98.1%**（对齐 25 条＝75.0、部分对齐（形状差） 1 条＝1.5）。
+
+> 2026-11-26 逐行复算：C16／T2／W16 部分对齐（形状差）→对齐（＋3.5）；同日 §3.1 修复批次 K5／S32／R12／R13／R28 翻正（＋4.0），六域之和＝合计＝239.5。旧发布读数 232.5/252 与逐行不自洽——逐行 232.0、逐域行合计 231.5，已按每行权重×系数重算。未加权旧值「渲染 22/31」同属误记。
 
 **读数口径**：未加权百分比的分母是计分单元数（153）；S31 作废、R21/R29/K36 出分母。
 
-**权重 3 的差异项与剩余差距（按可观察影响排序）**：K19（模型不同）、C16（大粘贴折叠/jump mode 缺）、T2（token 覆盖未逐键核）；其余 23 条权重 3 对齐项不再逐条列出（证据见 git 历史）。
+**权重 3 的差异项与剩余差距（按可观察影响排序）**：K19（滚轮/触控板归一化模型不同）；其余 25 条权重 3 对齐项不再逐条列出（证据见 git 历史）。C16／T2 已于 2026-11-26 锚点复核收口为对齐。

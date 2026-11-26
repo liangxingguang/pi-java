@@ -144,9 +144,14 @@ final class PiLaneSink implements PiLoop.Sink {
                 // _replaceMessageInPlace 的对位）。宿主事件在 flush 之后、Message 不可变
                 // —— 唯一能保语义的缝在这里：换引用则工作副本/transcript/下游事件三处
                 // 同换（onMessageEnd 与 downstream 都拿替换后的事件）。
+                var lane = ctx.requireLane(laneName);
+                // D322：custom 队列项的 LLM 投影是 UserMessage（role="user"），但 pi 的
+                // message_end 载荷是 role="custom" 的 AgentMessage。按身份登记识别投影，
+                // 只把 pi role 交给钩上下文；message 本体与下游事件不变。
+                String role = lane.customOrigins.containsKey(end.message())
+                    ? "custom" : end.message().role();
                 var replaced = ctx.hookSystem().fireMessageEnd(laneName,
-                    new MessageEndContext(laneName, ctx.requireLane(laneName).runId,
-                        end.message()));
+                    new MessageEndContext(laneName, lane.runId, end.message(), role));
                 if (replaced != null) {
                     end = new PiLoop.Event.MessageEnd(replaced);
                     event = end;

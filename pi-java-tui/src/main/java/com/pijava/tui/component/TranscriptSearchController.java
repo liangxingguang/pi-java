@@ -22,6 +22,8 @@ import dev.tamboui.toolkit.element.Element;
  */
 public final class TranscriptSearchController {
 
+    private Supplier<KeybindingsManager> keybindings =
+        KeybindingsManager::new;
     private final Supplier<List<RenderRow>> rowsSupplier;
     private final IntSupplier firstVisibleRow;
     private final Consumer<Integer> scroller;
@@ -45,6 +47,11 @@ public final class TranscriptSearchController {
         this.rowsSupplier = rowsSupplier;
         this.firstVisibleRow = firstVisibleRow;
         this.scroller = scroller;
+    }
+
+    /** 注入键位表，供搜索条底部提示按当前绑定渲染。 */
+    public void setKeybindings(KeybindingsManager keybindings) {
+        this.keybindings = keybindings == null ? KeybindingsManager::new : () -> keybindings;
     }
 
     /** 搜索是否打开。 */
@@ -172,7 +179,7 @@ public final class TranscriptSearchController {
 
     /** 搜索条元素（三行框线）。 */
     public Element bar() {
-        return new TranscriptSearchBar(this);
+        return new TranscriptSearchBar(this, keybindings.get());
     }
 
     private void refresh(boolean keepSelection) {

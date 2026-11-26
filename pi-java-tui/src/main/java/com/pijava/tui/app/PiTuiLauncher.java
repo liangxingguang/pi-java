@@ -81,6 +81,20 @@ public final class PiTuiLauncher {
             TamboUIAdapter.isWindows() ? 1 : 3,
             session.services().settings().uiPrefs().getFullscreenWheelScrollLines());
         var app = new PiTuiApp(mode, chatScreen, keybindings, dispatcher, scrollConfig);
+        // B145（pi interactive-mode.ts:1245-1252）：启动后台刷新模型目录；PI_OFFLINE
+        // 真值门，失败静默（pi 的 .catch(() => {})）。网络超时由 provider 层兜底。
+        var offline = System.getenv("PI_OFFLINE");
+        if (offline == null || offline.isEmpty()) {
+            Thread.startVirtualThread(() -> {
+                try {
+                    new com.pijava.coding.agent.core.ModelCatalogRefresh(
+                        com.pijava.ai.catalog.FileModelsStore.defaultStore())
+                        .refresh(session.services().providers().listAll(), true, false);
+                } catch (RuntimeException ignored) {
+                    // pi: .catch(() => {})
+                }
+            });
+        }
         // L7 W6（C15/C20）：编辑器边框随思考等级、假光标随硬件光标开关（现读）。
         chatScreen.configureEditor(
             () -> com.pijava.tui.theme.ThinkingBorderPalette.forLevel(

@@ -47,7 +47,7 @@ class HtmlExporterTest {
             .contains("sess-1")
             .contains("class=\"msg user\"")
             .contains("<strong>Hello</strong>")
-            .contains("class=\"language-java\"")
+            .contains("class=\"hljs\"")
             .contains("int x = 1 &lt; 2;")
             .contains("class=\"tool\"")
             .contains("bash")

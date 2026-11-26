@@ -1,9 +1,11 @@
 package com.pijava.tui.screen;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
 import com.pijava.agent.context.ContextUsage;
+import com.pijava.agent.entry.Entry;
 import com.pijava.agent.harness.SessionSnapshot;
 import com.pijava.coding.agent.core.AgentSessionEvent;
 import com.pijava.coding.agent.core.AgentSessionEvent.CompactionReason;
@@ -405,6 +407,50 @@ class ChatScreenSessionEventTest {
         rows = renderText(screen.render(), 100, 40);
         assertThat(rows)
             .noneMatch(r -> r.contains("Steering") || r.contains("Follow-up"));
+    }
+
+    @Test
+    void bashStreamingAccumulatesIntoOneCardAndFinalizesWithoutDuplication() throws Exception {
+        var screen = new ChatScreen();
+        screen.onSessionEvent(new AgentSessionEvent.BashExecutionUpdate("b1", "a"));
+        screen.onSessionEvent(new AgentSessionEvent.BashExecutionUpdate("b1", "b"));
+        screen.onSessionEvent(new AgentSessionEvent.BashExecutionUpdate("b1", "c"));
+
+        assertThat(screen.messageCount()).isEqualTo(1);
+        var running = (ChatMessage.BashRunning) screen.lastMessage();
+        assertThat(running.output()).isEqualTo("abc");
+        var runningLines = com.pijava.tui.component.MessageBubble.lines(running);
+        assertThat(runningLines.stream().map(com.pijava.tui.component.LogicalLine::markup))
+            .anyMatch(m -> m.contains("Running..."));
+
+        screen.onSessionEvent(new AgentSessionEvent.EntryAppended(
+            new Entry.BashExecution("b1", 1L, null, Instant.EPOCH,
+                "echo abc", "abc", 0, false, false, null, false)));
+        assertThat(screen.messageCount()).isEqualTo(1);
+        assertThat(screen.lastMessage()).isInstanceOf(ChatMessage.BashCard.class);
+    }
+
+    @Test
+    void onEntryFinalizesTheStreamingBashCardWithoutDuplicate() throws Exception {
+        var screen = new ChatScreen();
+        screen.onSessionEvent(new AgentSessionEvent.BashExecutionUpdate("b2", "out"));
+        screen.onEntry(new Entry.BashExecution("entry-uuid", 1L, null, Instant.EPOCH,
+            "echo out", "out", 0, false, false, null, false));
+        assertThat(screen.messageCount()).isEqualTo(1);
+        assertThat(screen.lastMessage()).isInstanceOf(ChatMessage.BashCard.class);
+    }
+
+    @Test
+    void pendingQueueShowsRunningBashCardAndClearsOnFinalize() throws Exception {
+        var view = new com.pijava.tui.component.PendingQueueView();
+        assertThat(view.isEmpty()).isTrue();
+        view.addRunningCard(com.pijava.tui.util.TamboUIAdapter.markupText("[dim]$ echo hi[/]"));
+        assertThat(view.isEmpty()).isFalse();
+        var rows = renderText(view.render(), 80, 10);
+        assertThat(rows).anyMatch(r -> r.contains("$ echo hi"));
+        view.removeRunningCard();
+        assertThat(view.isEmpty()).isTrue();
+        assertThat(view.render()).isNull();
     }
 
     @Test

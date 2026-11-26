@@ -18,6 +18,7 @@ import dev.tamboui.toolkit.event.EventRouter;
 import dev.tamboui.toolkit.focus.FocusManager;
 import dev.tamboui.tui.event.KeyCode;
 import dev.tamboui.tui.event.KeyEvent;
+import dev.tamboui.tui.event.KeyModifiers;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -104,6 +105,51 @@ class LoginDialogDeviceCodeTest {
 
         assertThat(opened).containsExactly(URL);
         assertThat(render(dialog)).contains("Copy code manually");
+    }
+
+    @Test
+    void ctrlXCopiesAuthUrlAndShowsSuccess() throws Exception {
+        var copied = new ArrayList<String>();
+        LoginDialogScreen.overrideBrowserForTest(url -> { });
+        ClipboardSupport.overrideForTest(copied::add);
+        var dialog = dialog();
+        dialog.notify(new OAuthEvent.AuthUrl(URL, null));
+
+        assertThat(render(dialog)).contains("to copy");
+        dialog.onKeyEvent(KeyEvent.ofChar('x', KeyModifiers.CTRL));
+
+        assertThat(copied).containsExactly(URL);
+        assertThat(render(dialog)).contains("Copied URL to clipboard");
+    }
+
+    @Test
+    void copyFailureShowsManualInstruction() throws Exception {
+        LoginDialogScreen.overrideBrowserForTest(url -> { });
+        ClipboardSupport.overrideForTest(text -> {
+            throw new IOException("clipboard unavailable");
+        });
+        var dialog = dialog();
+        dialog.notify(new OAuthEvent.AuthUrl(URL, null));
+
+        dialog.onKeyEvent(KeyEvent.ofChar('x', KeyModifiers.CTRL));
+
+        assertThat(render(dialog)).contains("Copy URL manually");
+    }
+
+    @Test
+    void deviceCodePathDoesNotCopyUrl() throws Exception {
+        var copied = new ArrayList<String>();
+        LoginDialogScreen.overrideBrowserForTest(url -> { });
+        ClipboardSupport.overrideForTest(copied::add);
+        var dialog = dialog();
+        dialog.notify(new OAuthEvent.AuthUrl(URL, null));
+        dialog.notify(new OAuthEvent.DeviceCode(CODE, URL, 1L, 60L));
+
+        dialog.onKeyEvent(KeyEvent.ofChar('x', KeyModifiers.CTRL));
+
+        assertThat(copied).isEmpty();
+        assertThat(render(dialog)).doesNotContain("to copy")
+            .doesNotContain("Copied URL to clipboard");
     }
 
     @Test

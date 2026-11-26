@@ -20,6 +20,17 @@ final class SessionEventRouter {
     private final ChatPanel chatPanel;
     private final PendingQueueView pendingQueue;
     private final CacheNoticeRenderer cacheNotices;
+    // B46：实时工具卡（pi pendingTools）——toolCallId ⇒ chatPanel 下标；终态后登记
+    // 已完成 id，供条目流跳过重复的 tool result 气泡。
+    private final java.util.Set<String> liveCompletedToolCalls;
+    private final java.util.Map<String, Integer> liveTools = new java.util.HashMap<>();
+    // R12：实时工具卡起始时刻（record 不可变 ⇒ update 时从此处取，避免读 ChatPanel）。
+    private final java.util.Map<String, Long> toolStartNanos = new java.util.HashMap<>();
+    // R13/R28：bash 实时卡（id ⇒ chatPanel 下标）与排队区卡槽（null id 用哨兵键）。
+    private final java.util.Map<String, Integer> liveBash = new java.util.HashMap<>();
+    // R13：已由流式卡收口的 bash 落盘条目 id（SessionRunner 只走 onEntry，不走 EntryAppended）。
+    private final java.util.Set<String> finalizedBashIds = new java.util.HashSet<>();
+    private static final String NULL_BASH_ID = "<null-bash-id>";
     // 唯一一个激活指示器槽（pi activeStatusIndicator）。volatile：写入在渲染线程，
     // 读取还来自 inline 模式的倒计时唤醒线程（hasTickingIndicator）。
     private volatile StatusIndicator indicator;
@@ -41,22 +52,27 @@ final class SessionEventRouter {
     private com.pijava.tui.util.ProgramStatusReporter programStatus;
     // E2-32：OSC 9;4 进度（PiTuiLauncher 装配；可 null ⇒ 不报）。
     private com.pijava.tui.util.TerminalProgressReporter terminalProgress;
+    // B38：压缩成功后的上下文条目现读源与整表重放钩（PiTuiApp / ChatScreen 装配）。
+    private java.util.function.Supplier<java.util.List<Entry>> contextEntriesSupplier =
+        java.util.List::of;
+    private java.util.function.Consumer<java.util.List<Entry>> contextReplay = entries -> { };
 
     SessionEventRouter(ChatPanel chatPanel, PendingQueueView pendingQueue,
-                       CacheNoticeRenderer cacheNotices) {
+                       CacheNoticeRenderer cacheNotices,
+                       java.util.Set<String> liveCompletedToolCalls) {
         this.chatPanel = chatPanel;
         this.pendingQueue = pendingQueue;
         this.cacheNotices = cacheNotices;
+        this.liveCompletedToolCalls = liveCompletedToolCalls;
     }
 
     /**
      * 会话级事件 → 指示器 / 聊天区。**只在渲染线程被调用**（经 {@code SessionEventChannel}）。
      *
-     * <p>覆盖 pi 的五个重试/摘要重试 case，外加压缩指示器的置/清位
-     * （pi {@code compaction_start}/{@code compaction_end} 的指示器那一半）。
-     * 不做：{@code agent_end} 不看 {@code willRetry}（pi 也不看）、压缩结束时的
-     * 聊天区重建与取消消息（台账 B38）、Esc 换绑（pi-java 的 {@code abort()} 已经
-     * 先调 {@code abortRetry()}，提示反而是真的）。</p>
+     * <p>覆盖 pi 的五个重试/摘要重试 case，外加压缩起止（pi
+     * {@code compaction_start}/{@code compaction_end}）的指示器、取消消息、成功后的
+     * 整表重建与摘要卡（B38）。{@code agent_end} 不看 {@code willRetry}（pi 也不看）；
+     * Esc 换绑在 {@code GlobalKeyRouter}（B39，状态门等价）。</p>
      *
      * @param event 会话事件
      */
@@ -92,6 +108,42 @@ final class SessionEventRouter {
                 // pi agent_end（:3848）：clearStatusIndicator("working")——kind 守卫
                 // ⇒ 不误清并发中的 compaction 指示器。
                 clearIndicator(StatusIndicator.Kind.WORKING);
+                // pi :3854：agent_end 清空 pendingTools（未收尾的实时卡保留末态）。
+                liveTools.clear();
+                toolStartNanos.clear();
+                liveBash.clear();
+            }
+            // B46（pi interactive-mode.ts:3797-3842）：实时工具卡。
+            case AgentSessionEvent.ToolExecutionStart start -> {
+                // 嵌套调用显示在父行内（pi :3798-3799）。
+                if (start.parentToolCallId() != null) {
+                    break;
+                }
+                long startNanos = System.nanoTime();
+                liveTools.put(start.toolCallId(), chatPanel.size());
+                toolStartNanos.put(start.toolCallId(), startNanos);
+                chatPanel.append(new ChatMessage.ToolRunning(
+                    start.toolName(), String.valueOf(start.args()),
+                    java.util.List.of(), false, startNanos));
+            }
+            case AgentSessionEvent.ToolExecutionUpdate update -> {
+                var index = liveTools.get(update.toolCallId());
+                if (index != null) {
+                    chatPanel.replaceAt(index, new ChatMessage.ToolRunning(
+                        update.toolName(), String.valueOf(update.args()),
+                        resultContent(update.partialResult()), false,
+                        toolStartNanos.get(update.toolCallId())));
+                }
+            }
+            case AgentSessionEvent.ToolExecutionEnd end -> {
+                var index = liveTools.remove(end.toolCallId());
+                toolStartNanos.remove(end.toolCallId());
+                if (index != null) {
+                    liveCompletedToolCalls.add(end.toolCallId());
+                    chatPanel.replaceAt(index, new ChatMessage.ToolResult(
+                        resultContent(end.result()), end.isError(),
+                        end.durationMs(), end.toolName()));
+                }
             }
             case AgentSessionEvent.AutoRetryStart start -> setIndicator(
                 StatusIndicator.retry(start.attempt(), start.maxAttempts(),
@@ -128,14 +180,47 @@ final class SessionEventRouter {
                 setIndicator(new StatusIndicator.Compaction(
                     System.nanoTime(), start.reason().name().toLowerCase(), interruptHint));
             }
-            case AgentSessionEvent.CompactionEnd ignored -> {
+            case AgentSessionEvent.CompactionEnd end -> {
                 // E2-32（pi interactive-mode.ts:3887-3892）：压缩结束停进度。
                 var progress = terminalProgress;
                 if (progress != null) {
                     progress.stop();
                 }
                 clearIndicator(StatusIndicator.Kind.COMPACTION);
+                // B38（pi :3895-3935 逐臂对位）。
+                if (end.aborted()) {
+                    if (end.reason() == AgentSessionEvent.CompactionReason.MANUAL) {
+                        showError("Compaction cancelled");
+                    } else {
+                        showStatus("Auto-compaction cancelled");
+                    }
+                } else if (end.result() != null) {
+                    var entries = contextEntriesSupplier.get();
+                    if (entries.isEmpty() || !(entries.get(0) instanceof Entry.Compaction compaction)) {
+                        throw new IllegalStateException(
+                            "Completed compaction is missing from the session context");
+                    }
+                    // pi renderSessionEntries(entries.slice(1))：压缩条目按时间序追加在下方。
+                    liveTools.clear();
+                    contextReplay.accept(entries.subList(1, entries.size()));
+                    chatPanel.append(new ChatMessage.CompactionCard(
+                        compaction.tokensBefore(), compaction.summary(),
+                        compaction.id(), compaction.timestamp().toString()));
+                    if (end.result().usage() != null) {
+                        cacheNotices.appendCompactionCostNotice(end.result().usage());
+                    }
+                } else if (end.errorMessage() != null) {
+                    if (end.reason() == AgentSessionEvent.CompactionReason.MANUAL) {
+                        showError(end.errorMessage());
+                    } else {
+                        // pi :3928-3930：自动压缩错误只追加红字，不加 "Error: " 前缀。
+                        chatPanel.append(new ChatMessage.Error(end.errorMessage()));
+                    }
+                }
             }
+            // R13/R28：bash 输出增量 → 聊天区实时卡 + 排队区卡槽；终态由 EntryAppended 收口。
+            case AgentSessionEvent.BashExecutionUpdate bash ->
+                handleBashUpdate(bash.id(), bash.delta());
             case AgentSessionEvent.QueueUpdate q ->
                 pendingQueue.update(q.steering(), q.followUp());
             case AgentSessionEvent.FlashStatus status -> showStatus(status.message());
@@ -146,6 +231,10 @@ final class SessionEventRouter {
                         && "cache_warm".equals(usage.kind())) {
                     cacheNotices.appendUsageNotice(usage);
                     cacheNotices.markLiveNotice(usage.id());
+                }
+                // R13/R28：bash 终局条目到达 ⇒ 把实时卡换成终态 BashCard、清排队区卡槽。
+                if (appended.entry() instanceof Entry.BashExecution bash) {
+                    finalizeBash(bash);
                 }
             }
             // 批 13（T11 即时臂，pi :4185-4191＋:3593 挂点对位——message_end 先于
@@ -334,8 +423,78 @@ final class SessionEventRouter {
         this.terminalProgress = reporter;
     }
 
+    /** B38：压缩成功的上下文条目现读源（PiTuiApp 装配；会话切换后现读）。 */
+    void setContextEntriesSupplier(
+            java.util.function.Supplier<java.util.List<Entry>> supplier) {
+        this.contextEntriesSupplier = supplier == null ? java.util.List::of : supplier;
+    }
+
+    /** B38：压缩成功的整表重放钩（ChatScreen 装配到 TranscriptProjector）。 */
+    void setContextReplay(java.util.function.Consumer<java.util.List<Entry>> replay) {
+        this.contextReplay = replay == null ? entries -> { } : replay;
+    }
+
     /** 往聊天区追加一条错误（pi {@code showError}，{@code :4273-4277}：红字 + {@code Error: } 前缀）。 */
     void showError(String message) {
         chatPanel.append(new ChatMessage.Error("Error: " + message));
+    }
+
+    /** B46：工具结果载荷 → 内容块（非 ToolResult 载荷 ⇒ 空表）。 */
+    private static java.util.List<com.pijava.ai.message.ContentBlock> resultContent(Object result) {
+        return result instanceof com.pijava.agent.tool.ToolResult<?> toolResult
+            ? toolResult.content() : java.util.List.of();
+    }
+
+    // ── R13/R28：bash 流式增量 ────────────────────────────────
+
+    /** bash 增量：首块追加实时卡，后续块原地累积；排队区卡槽挂完整文本。 */
+    private void handleBashUpdate(String id, String delta) {
+        var key = id == null ? NULL_BASH_ID : id;
+        var index = liveBash.get(key);
+        if (index == null) {
+            index = chatPanel.size();
+            liveBash.put(key, index);
+            chatPanel.append(new ChatMessage.BashRunning("", delta, false));
+        } else {
+            var prev = chatPanel.messages().get(index);
+            var output = prev instanceof ChatMessage.BashRunning b ? b.output() + delta : delta;
+            var command = prev instanceof ChatMessage.BashRunning b ? b.command() : "";
+            var excluded = prev instanceof ChatMessage.BashRunning b && b.excludeFromContext();
+            chatPanel.replaceAt(index, new ChatMessage.BashRunning(command, output, excluded));
+        }
+        var live = chatPanel.messages().get(index);
+        if (live instanceof ChatMessage.BashRunning b) {
+            pendingQueue.clearRunningCards();
+            pendingQueue.addRunningCard(com.pijava.tui.util.TamboUIAdapter.markupText(
+                "[dim]$ " + b.command() + "[/]"));
+        }
+    }
+
+    /** 生产 onEntry 路径：流式 bash 卡原地收口，返回 true ⇒ 投影器跳过重复卡。 */
+    boolean finalizeBashFromEntry(Entry.BashExecution bash) {
+        if (finalizedBashIds.contains(bash.id())) { return true; }
+        var key = bash.id() == null ? NULL_BASH_ID : bash.id();
+        var streamed = liveBash.containsKey(key) || !liveBash.isEmpty();
+        if (streamed) { finalizedBashIds.add(bash.id()); finalizeBash(bash); }
+        return streamed;
+    }
+
+    /** bash 终局条目：实时卡 → 终态 BashCard；清排队区卡槽。 */
+    private void finalizeBash(Entry.BashExecution bash) {
+        // 按输出反查 liveBash（end 事件的 id 与 start 的 id 由 agent 侧透传一致）；
+        // 若未命中（如扩展直接落盘）则不退化为双卡。
+        var key = bash.id() == null ? NULL_BASH_ID : bash.id();
+        var index = liveBash.remove(key);
+        if (index == null && !liveBash.isEmpty()) {
+            // 落盘条目的 id 与流式 id 不一致时取首个未结卡（单卡场景）。
+            var first = liveBash.entrySet().iterator().next();
+            index = liveBash.remove(first.getKey());
+        }
+        if (index != null) {
+            chatPanel.replaceAt(index, new ChatMessage.BashCard(bash.command(), bash.output(),
+                bash.exitCode(), bash.cancelled(), bash.truncated(), bash.fullOutputPath(),
+                Boolean.TRUE.equals(bash.excludeFromContext())));
+            pendingQueue.removeRunningCard();
+        }
     }
 }

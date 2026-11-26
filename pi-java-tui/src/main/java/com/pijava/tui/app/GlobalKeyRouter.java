@@ -216,6 +216,14 @@ final class GlobalKeyRouter {
     private void handleAction(String keyId) {
         switch (keyId) {
             case KeybindingsManager.INTERRUPT -> {
+                // B39（pi interactive-mode.ts:3866-3893）：压缩窗口内 Esc 的唯一语义是
+                // abortCompaction——pi 在 compaction_start 整体替换 defaultEditor.onEscape，
+                // compaction_end 恢复；java 无处理函数替换，用状态门等价。
+                if (app.session.isCompacting()) {
+                    app.session.abortCompaction();
+                    lastEscapeAt = 0L;
+                    return;
+                }
                 // docs/21（T5，D41 重裁）：pi onEscape 首臂（:3071-3073）——流式中
                 // Esc 先把排队消息回填编辑器再 abort（pi 的 {abort:true} 在 restore 内
                 // 触发；java 拆开等价：restore 同步清队列，abort 紧随其后无交错窗口）。
@@ -254,7 +262,7 @@ final class GlobalKeyRouter {
                     break;
                 }
                 var text = chatScreen.inputText();
-                // A5：pi Alt+Enter —— 运行中才排 followUp；空闲等同普通 Enter
+                // A5：pi app.message.followUp（Windows/WSL ⇒ Ctrl+Q）—— 运行中才排 followUp；空闲等同普通 Enter
                 // （interactive-mode.ts:4418-4429）。
                 // B175（原 docs/26）：压缩中 ⇒ 缓冲为 followUp。
                 if (app.session.isCompacting() || app.session.isRunning()) {

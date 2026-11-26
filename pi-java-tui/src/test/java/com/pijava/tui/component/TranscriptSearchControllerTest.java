@@ -2,10 +2,17 @@ package com.pijava.tui.component;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.pijava.coding.agent.core.FileSettingsStorage;
+import com.pijava.coding.agent.core.KeybindingsManager;
+
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import dev.tamboui.style.Style;
 
@@ -49,6 +56,32 @@ class TranscriptSearchControllerTest {
         assertThat(controller.selectedIndex()).isZero();
         controller.previous();
         assertThat(controller.selectedIndex()).isEqualTo(1);
+    }
+
+    @Test
+    void barHintUsesConfiguredKeybindings(@TempDir Path dir) throws IOException {
+        var controller = new TranscriptSearchController(
+            () -> List.of(row("abc")), () -> 0, r -> { });
+        var bar = (TranscriptSearchBar) controller.bar();
+        assertThat(bar.hintText()).isEqualTo("↑ Shift+Enter · ↓ Enter · Esc close");
+
+        Files.writeString(dir.resolve("keybindings.json"), """
+            {"tui.altScreen.searchPrevious": "up", "tui.altScreen.searchNext": "down"}
+            """);
+        var property = FileSettingsStorage.AGENT_DIR_PROPERTY;
+        var previous = System.getProperty(property);
+        System.setProperty(property, dir.toString());
+        try {
+            controller.setKeybindings(KeybindingsManager.create());
+            var customBar = (TranscriptSearchBar) controller.bar();
+            assertThat(customBar.hintText()).isEqualTo("↑ Up · ↓ Down · Esc close");
+        } finally {
+            if (previous == null) {
+                System.clearProperty(property);
+            } else {
+                System.setProperty(property, previous);
+            }
+        }
     }
 
     @Test

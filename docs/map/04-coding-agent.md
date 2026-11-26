@@ -2,12 +2,12 @@
 
 > 【背景摘要】范围：pi `packages/coding-agent` ↔ `pi-java-coding-agent`（CLI 参数、子命令、slash 命令、扩展系统、settings 键、会话管理、包管理器、RPC）。
 > 读数：**458.0/458＝100%**（settings 四条已清：E2-32／E2-54 对齐、E2-43 重判对齐、E2-50 按 R5 出分母）。
-> 差异：在册 D 窄差（新增 D322）＋D233/D234/D274/D275/D277/D278；转出 3 条（E3-3／E5-31／E5-33）；面外 G-6/G-7（R5）、N-4（R2）；缺失 E8-4／E8-6（不计入本层）。
+> 差异：在册 D 窄差 D233/D234/D274/D275/D277/D278；转出 3 条（E3-3／E5-31／E5-33）；面外 G-6/G-7（R5）、N-4（R2）；缺失 E8-4／E8-6（不计入本层）。
 
 ## 口径
 
-- 判定三档：**对齐**（两侧都有且行为相同）/ **缺失**（pi 有、pi-java 无）/ **存疑**（形状存在但语义/可达性有差）。
-- **权重**：用户可观察影响 × 频率，不含排期优先级。`3`＝每轮主路；`2`＝每次会话或常用；`1`＝低频/内部；`0`＝非目标（出分母）。完成系数：对齐 1、存疑 0.5、缺失 0。
+- 判定三档：**对齐**（两侧都有且行为相同）/ **缺失**（pi 有、pi-java 无）/ **部分对齐（形状差）**（形状存在但语义/可达性有差）。
+- **权重**：用户可观察影响 × 频率，不含排期优先级。`3`＝每轮主路；`2`＝每次会话或常用；`1`＝低频/内部；`0`＝非目标（出分母）。完成系数：对齐 1、部分对齐（形状差） 0.5、缺失 0。
 - **R5 可达性**：只算 `bin pi` 主流可达的；`coding-agent/src/experimental/**` 权重 0。
 - **R1 作废**：`src/experimental/micro/**` 与 `.../mini/**` 已被 pi 删除，相关单元权重 0、出分母。
 - **MCP 面**由 [`07-mcp.md`](07-mcp.md) 覆盖；本图只保留判定指针，不重复计分。
@@ -59,7 +59,6 @@
 | D32 | google 车道 payload 载体是 `GooglePayload(model, contents, config)` record（pi 是单一 `GenerateContentParameters`） | [内部] |
 | D33 | `before_provider_headers` 头集＝models.json 三层（provider⨁model⨁override）合并值；pi 另有 `auth.headers` 与调用方 `options.headers` 两层（java 无生产者）；attribution 已并入钩前头集 | [内部] |
 | D34 | null 抑制 **SDK 默认头**不可达（通道只作用于 extra["headers"] 合并集）；合并集内 null＝删除 | [内部，边缘] |
-| D322 | custom 队列项的 LLM 投影是 `UserMessage` ⇒ `message_end` 扩展事件里 role 为 `user`（pi 为 `custom`）；条目、落盘序与上下文不受影响 | [内部，边缘] |
 
 **其他窄差**：D233（无 `findOfType`/`classify`）、D234（无 `newSession.setup`）、D274（重复信号强退）、D275（`/export` OSC 8 不转 `<a>`）、D277（会话内 cwd 缺失只走非交互错误臂）、D278（capture 输出无 TUI 安装触发点）。
 
@@ -71,10 +70,10 @@
 
 | # | 键 | 处置 | 依据 |
 |---|---|---|---|
-| E2-32 | `terminal` | **对齐** | 设置侧能力覆盖（hyperlinks/images/trueColor）叠进 `TerminalCapabilities`；OSC 9;4 进度接 turn/agent/compaction 事件（docs/12）。`clearOnShrink` 两臂在 pi 终态均逐行清空缩短行，Java `InlineDisplay.deleteLines` 同终态，设置只影响重绘策略 ⇒ 无行为差。 |
+| E2-32 | `terminal` | **对齐** | 设置侧能力覆盖（hyperlinks/images/trueColor）叠进 `TerminalCapabilities`（`PiTuiLauncher:101-104`）；OSC 9;4 进度接 turn/agent/compaction 事件（`SessionEventRouter:69/86/122/131`）。`clearOnShrink` 两臂在 pi 终态均逐行清空缩短行，Java `InlineDisplay.deleteLines` 同终态，设置只影响重绘策略 ⇒ 无行为差。 |
 | E2-43 | `markdown` | **对齐（重判）** | `codeBlockIndent` 已消费；mermaid 渲染缺口已由 L7 R7／D309 单计，按「整块与细单元不重复扣分」不在 settings 键重复扣分。 |
 | E2-50 | `websocketConnectTimeoutMs` | **出分母（R5/R2）** | 唯一消费链是 codex WebSocket 车道（`openai-codex-responses`），本仓无该车道；与 E2-45 codemode 同口径 weight 0。 |
-| E2-54 | `fullscreenCopyOnSelect` | **对齐** | 拖拽释放按开关复制（`ViewportInteraction.finish`＋`ChatViewportElement` 现读源）；Ctrl+X 优先选区分支已对位（docs/12）。 |
+| E2-54 | `fullscreenCopyOnSelect` | **对齐** | 拖拽释放按开关复制（`ViewportInteraction.finish`＋`ChatViewportElement` 现读源）；Ctrl+X 优先选区分支已对位（`GlobalKeyRouter:320-326`）。 |
 
 `E2-45 codemode` 权重 2，出分母（R5：java 无 codemode 子系统）。`queueMode`/`websockets` 只存在于 schema 输入侧，不列单元。
 
@@ -83,7 +82,7 @@
 | 项 | 去向 | 说明 |
 |---|---|---|
 | E3-3 `-r` 会话选择器 | L7（TUI） | 选择器本体与搜索排序都在 `pi-java-tui`；权重 0 |
-| E5-31 扩展 UI 注入（28 成员） | L7（TUI） | 13 个已有 TUI 实现，其余 default＝noOp；权重 0 |
+| E5-31 扩展 UI 注入（28 成员） | L7（TUI） | 21 个已有 TUI 实现（含 `pasteToEditor`）；余 7 个（`setHiddenThinkingLabel`／`addAutocompleteProvider`／`setEditorComponent`／`getEditorComponent`／`getToolsExpanded`／`setToolsExpanded`／`onTerminalInput`）无 TUI 面或由设置驱动，登记窄差 D323；权重 0 |
 | E5-33 扩展示例库 | L8（examples） | 88/88；权重 0 |
 | G-6/G-7 codemode | 面外（R5） | 沙箱运行时与 codemode 工具不对齐、不进分母 |
 | N-4 llama.cpp 默认端口 | 出分母（R2） | java 无 llama 扩展；本地 OpenAI 兼容服务经 `models.json` 可接 |

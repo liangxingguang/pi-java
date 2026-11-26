@@ -42,7 +42,7 @@ public final class KeybindingsManager {
     // 批 34（S8；pi keybindings.ts app.thinking.save）：thinking 选择器内 ctrl+s。
     public static final String THINKING_SAVE = "app.thinking.save";      // Ctrl+S（仅选择器）
     public static final String EXTERNAL_EDITOR = "app.editor.external";  // Ctrl+G
-    public static final String FOLLOW_UP = "app.message.followUp";       // Alt+Enter
+    public static final String FOLLOW_UP = "app.message.followUp";       // Alt+Enter（Windows/WSL ⇒ Ctrl+Q）
     public static final String DEQUEUE = "app.message.dequeue";          // Alt+Up（Windows/WSL ⇒ Alt+Q）
 
     // ── app.tree.*／app.message.copy（docs/19 §3.11，pi keybindings.ts 默认键）─
@@ -325,7 +325,9 @@ public final class KeybindingsManager {
         bindings.put(TOOLS_EXPAND, List.of(KeyStroke.of("o", true, false, false)));
         bindings.put(THINKING_TOGGLE, List.of(KeyStroke.of("t", true, false, false)));
         bindings.put(EXTERNAL_EDITOR, List.of(KeyStroke.of("g", true, false, false)));
-        bindings.put(FOLLOW_UP, List.of(KeyStroke.of("enter", false, true, false)));
+        bindings.put(FOLLOW_UP, windowsKeybindings
+            ? List.of(KeyStroke.of("q", true, false, false))
+            : List.of(KeyStroke.of("enter", false, true, false)));
         // L7 W7（K13/K14；pi keybindings.ts:63,75-78）：全局复制/粘贴图片。
         // MESSAGE_COPY 另在 overlay 表（tree 选择器语境）同键，两表各解各的。
         bindings.put(MESSAGE_COPY, List.of(KeyStroke.of("x", true, false, false)));

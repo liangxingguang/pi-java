@@ -8,7 +8,7 @@
 > 只保留差异：判定为「对齐」的单元不逐条列，逐条证据见 git 历史；窄差 D 项见 `docs/04` §6.5。
 ## 基准与范围
 
-- 判定三档：**对齐** / **缺失** / **存疑**。每条给两侧 `file:line`。
+- 判定三档：**对齐** / **缺失** / **部分对齐（形状差）**。每条给两侧 `file:line`。
 - 范围：会话持久化（sqlite 模块与 agent-core 的 JSONL 面）、评测（evals）、chord（R5 不可达）、防漂移脚本（口径外）。
 
 ---
@@ -73,7 +73,7 @@ java 契约面：`SessionStorage.java`（`:19-93`）＋ `SessionRepository.java`
 | 6 | 2 | 分支创建 / 移动 | `branch:1597`／`resetLeaf:1609`／`branchWithSummary:1618`（树 + leaf 指针） | `SessionStorage.createLane:30`／`moveLane:33`；`TreeCompaction` 走 `navigateTree` 同序 | **对齐（形状不同）**：lane 是 Java 内部扩展，落线 `lane` 键被 pi 忽略 | **D218** |
 | 10 | 3 | compaction-aware 上下文投影（含 provenance） | `buildContextEntries:476`／`buildSessionProjection:544`／`SessionProjection:216` | `ContextEntries.projectEntries`＋`ProjectedEntry` | 对齐（形状不同） | — |
 
-**行数**：20 行 —— 对齐 **20** / 缺失 **0** / 存疑 **0**。
+**行数**：20 行 —— 对齐 **20** / 缺失 **0** / 部分对齐（形状差） **0**。
 **权重**：**Σ = 44**（20 行全部进分母）。
 **Σ(w×c) = 44.0** ⇒ **加权完成度 = 44.0/44 = 100%**。
 
@@ -110,7 +110,7 @@ pi-java 侧：自研框架 `EvalSuite`/`EvalCase`/`EvalRunner`/`EvalReporter` �
 | 16 | 3 | eval 框架本体 | **外部 npm ×2**（`vitest-evals`/`@vitest-evals/core`；`autoevals` 本锚点已删） | 自研（`evals/api/*.java`） | 对齐（自研替代） | D185 |
 | 20 | 2 | **TUI 文档审计 eval** | `evals/tui.docs.eval.ts:23-37/207-260`（context-footer oracle） | `contents/TuiDocsEval.java`（Java 文档问答＋Levenshtein 0.75）＋`fixtures/RecordingFooterOracle.java`＋`tui/component/StatusBar.java`（B293：内置 `percent%/window (auto)` 状态行，pi oracle 同形） | **对齐（形状不同）** | D183/D189 |
 
-**行数**：24 行 —— 对齐 **24** / 缺失 **0** / 存疑 **0**。
+**行数**：24 行 —— 对齐 **24** / 缺失 **0** / 部分对齐（形状差） **0**。
 **权重**：**Σ = 49** ⇒ **Σ(w×c) = 49.0（对齐）＝ 49.0** ⇒ **加权完成度 = 49.0/49 ＝ 100%**。
 
 ---
@@ -158,10 +158,10 @@ maven-enforcer、L5 跨语言差分一致性框架（`harness/conformance/`）�
 |---|---|---|---|
 | **对齐** | 20 | 24 | **44** |
 | **缺失** | 0 | 0 | **0** |
-| **存疑** | 0 | 0 | **0** |
+| **部分对齐（形状差）** | 0 | 0 | **0** |
 | 合计 | 20 | 24 | **44** |
 
-**未加权完成度（按行数）= 44 / 44 = 100%**；**按系数（对齐 1 / 存疑 0.5 / 缺失 0）
+**未加权完成度（按行数）= 44 / 44 = 100%**；**按系数（对齐 1 / 部分对齐（形状差） 0.5 / 缺失 0）
 = 44 / 44 = 100%**（存储后端单独 100%，见下节；评测单独 100%，见上表，B293 后）。
 
 ### 移出分母的整块（R1 / R5 / 口径外）
@@ -180,7 +180,7 @@ maven-enforcer、L5 跨语言差分一致性框架（`harness/conformance/`）�
 ## 加权汇总
 
 **权重规则**：权重 = 用户可观察影响 × 频率（**3** = 每轮对话都走；**2** = 每次会话走；**1** = 低频/边缘；
-**0** = 非目标，排除出分母）。**完成系数**：对齐 = 1.0 ／ 存疑 = 0.5 ／ 缺失 = 0。
+**0** = 非目标，排除出分母）。**完成系数**：对齐 = 1.0 ／ 部分对齐（形状差） = 0.5 ／ 缺失 = 0。
 
 | 域 | Σ权重 | Σ(w×系数) | 加权完成度 | 未加权（按系数） |
 |---|---:|---:|---:|---:|
@@ -200,9 +200,9 @@ maven-enforcer、L5 跨语言差分一致性框架（`harness/conformance/`）�
 | harness-only / `durable` / pico3 / micro | 全部 59 行 | R1（删除）/ R5（不可达） |
 | 防漂移脚本 | 全部 | 非 `bin pi` 产品面 |
 
-## 存疑清单（0 个判定单元）
+## 部分对齐（形状差）清单（0 个判定单元）
 
-| # | 能力 | 存疑点 |
+| # | 能力 | 部分对齐（形状差）点 |
 |---|---|---|
 | S7 | TUI 文档审计（评测 #20） | pi 用 context-footer oracle（`42.2%/272k` 状态行）；**B293 已落地**：L7 `StatusBar` 显示同形 `percent%/window (auto)`（`SessionSnapshot` 携带 `ContextUsage`/`autoCompact`），#20 改判「对齐（形状不同）」。eval 仍用 Java 文档问答＋Levenshtein 0.75 替代 pi 的代码修改任务（D183／D189 保留）。oracle 形态未变（`BUILT_IN_CONTEXT_PATTERN` `:13-15`、内联 `levenshteinSimilarity` `:19-30`） |
 

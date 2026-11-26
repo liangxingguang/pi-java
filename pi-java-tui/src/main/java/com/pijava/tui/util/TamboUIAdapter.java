@@ -284,7 +284,7 @@ public final class TamboUIAdapter {
     /**
      * Whether the event submits the editor: a plain Enter (CR) with no
      * modifiers, matching Codex CLI's composer default {@code submit=[Enter]}.
-     * Shift/Alt/Ctrl variants never submit (Shift/Alt+Enter insert a newline).
+     * Shift/Alt/Ctrl variants never submit (Shift+Enter inserts a newline).
      */
     public static boolean isSendEnter(KeyEvent event) {
         if (event.hasCtrl() || event.hasAlt() || event.hasShift()) {
@@ -304,8 +304,8 @@ public final class TamboUIAdapter {
      *       normalizes U+000A to logical Ctrl+J bound to {@code insert_newline}
      *       (openai/codex #20555, PR #20798); {@code EventParser} surfaces LF
      *       as a plain {@code '\n'} character.</li>
-     *   <li>Shift+Enter / Alt+Enter when a terminal reports the modifier —
-     *       Codex's editor default {@code insert_newline} includes both.</li>
+     *   <li>Shift+Enter when a terminal reports the modifier — Alt+Enter is
+     *       reserved for the follow-up action and never inserts a newline.</li>
      * </ul>
      */
     public static boolean isNewlineEnter(KeyEvent event) {
@@ -315,6 +315,6 @@ public final class TamboUIAdapter {
         if (!event.isKey(KeyCode.ENTER)) {
             return false;
         }
-        return event.hasShift() || event.hasAlt();
+        return event.hasShift();
     }
 }

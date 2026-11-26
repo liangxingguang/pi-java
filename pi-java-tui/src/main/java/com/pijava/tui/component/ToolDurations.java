@@ -13,8 +13,9 @@ import java.util.Locale;
  * <p><b>Java 接缝</b>：计时来源是持久化 {@code Message.ToolResultMessage.durationMs}
  * （B234，pi {@code types.ts:635}；只围 {@code execute()} 本体），经
  * {@code ChatMessage.ToolResult} 传到结果行的 {@link #timerText} 终局优先臂。
- * 「Elapsed」流中臂没有生产调用点：Java 的逻辑行模型是一次性投影，没有 pi 那种逐行
- * 1 秒 {@code invalidate} 重绘；纯函数保留两臂对位与测试。</p>
+ * 「Elapsed」流中臂由实时工具卡（{@link ChatMessage.ToolRunning}）在每次 update 时
+ * 现读实测耗时产出一行；Java 的逻辑行模型不做 pi 那种逐行 1 秒 {@code invalidate}
+ * 重绘，只在事件到达时刷新。</p>
  */
 public final class ToolDurations {
 

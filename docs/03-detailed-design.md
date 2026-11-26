@@ -806,8 +806,8 @@ com.pijava.tui/
 
 - **Markdown 渲染未接线**：`MarkdownRenderer`/`SyntaxHighlighter` 是死代码，
   助手消息走 `MessageBubble`＋`TextLayout` 纯文本；「接线还是删声明」＝台账 B65
-- TUI 其它已知缺口（压缩后不重建聊天区 B38、压缩窗口 Esc 换绑 B39、
-  tool_execution_update 不发射 B46、fuzzy 语义 B78 等）见 docs/04
+- TUI 已知缺口已清：B38（压缩后整表重建）、B39（压缩窗口 Esc 换绑）、
+  B46（tool_execution_update 实时卡）均已对齐；fuzzy 语义 B78 等见 docs/04
 - TamboUI 版本由 BOM/dependencyManagement 锁定，升级走 `TamboUIAdapter`
   隔离面与专项验证
 

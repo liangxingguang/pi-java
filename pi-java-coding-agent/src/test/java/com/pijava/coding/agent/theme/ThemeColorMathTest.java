@@ -139,6 +139,15 @@ class ThemeColorMathTest {
     }
 
     @Test
+    void styleTextWithBlinkSgrFive() {
+        assertThat(ThemeColorMath.styleTextWithAnsi("x", null, null,
+            Set.of(ThemeColorMath.TextAttr.BLINK))).isEqualTo("\033[5mx\033[25m");
+        assertThat(ThemeColorMath.styleTextWithAnsi("x", null, null,
+            Set.of(ThemeColorMath.TextAttr.BOLD, ThemeColorMath.TextAttr.BLINK)))
+            .isEqualTo("\033[1m\033[5mx\033[25m\033[22m");
+    }
+
+    @Test
     void styleTextPlainPassthrough() {
         assertThat(ThemeColorMath.styleTextWithAnsi("x", null, null, Set.of()))
             .isEqualTo("x");

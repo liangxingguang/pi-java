@@ -1,5 +1,6 @@
 package com.pijava.tui.component;
 
+import com.pijava.coding.agent.core.KeybindingsManager;
 import com.pijava.tui.theme.SemanticColors;
 import com.pijava.tui.util.TextColumns;
 
@@ -17,12 +18,20 @@ import dev.tamboui.toolkit.element.StyledElement;
  */
 final class TranscriptSearchBar extends StyledElement<TranscriptSearchBar> {
 
-    private static final String HINT = "↑ prev · ↓ next · Esc close";
-
     private final TranscriptSearchController controller;
+    private final KeybindingsManager keybindings;
 
-    TranscriptSearchBar(TranscriptSearchController controller) {
+    TranscriptSearchBar(TranscriptSearchController controller, KeybindingsManager keybindings) {
         this.controller = controller;
+        this.keybindings = keybindings;
+    }
+
+    String hintText() {
+        return "↑ " + KeybindingHints.displayText(
+                keybindings.strokeFor(KeybindingsManager.ALT_SEARCH_PREVIOUS))
+            + " · ↓ " + KeybindingHints.displayText(
+                keybindings.strokeFor(KeybindingsManager.ALT_SEARCH_NEXT))
+            + " · Esc close";
     }
 
     @Override
@@ -54,7 +63,7 @@ final class TranscriptSearchBar extends StyledElement<TranscriptSearchBar> {
                 SemanticColors.muted());
         }
 
-        String hint = TextColumns.truncateToWidth(HINT, Math.max(0, width - 6));
+        String hint = TextColumns.truncateToWidth(hintText(), Math.max(0, width - 6));
         String tail = "─".repeat(Math.max(0, width - 4 - TextColumns.width(hint)));
         buffer.setString(area.left(), y + 2, "└─ " + hint + " " + tail + "┘", border);
     }

@@ -1,16 +1,20 @@
 package com.pijava.tui.screen;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * L7 W6（S2c，pi {@code components/alt-screen-flash.ts} 对位）：短暂状态行。
  *
- * <p>单条消息（新 flash 覆盖旧值）；到期由渲染 tick 现读（{@link #messageAt}），
- * 不引入定时器——与 pi 的 {@code flash(msg, durationMs)} 同可观察行为（视觉反白、
- * 默认 1000 ms，错误 5000 ms）。栈式多条为窄差 N4。</p>
+ * <p>每条 flash 独立到期；到期由渲染 tick 现读（{@link #messagesAt}），不引入
+ * 定时器——与 pi 的 {@code flash(msg, durationMs)} 可观察行为对齐（视觉反白、
+ * 默认 1000 ms，错误 5000 ms）。{@link #messageAt} 保留单条读面以兼容旧调用。</p>
  */
 final class FlashNotice {
 
-    private String message;
-    private long expiresAtNanos;
+    private record Entry(String message, long expiresAtNanos) { }
+
+    private final List<Entry> entries = new ArrayList<>();
 
     /** 显示 1000 ms。 */
     void show(String text) {
@@ -23,25 +27,28 @@ final class FlashNotice {
             clear();
             return;
         }
-        message = text;
-        expiresAtNanos = System.nanoTime() + Math.max(0, durationMs) * 1_000_000L;
+        entries.add(new Entry(text,
+            System.nanoTime() + Math.max(0, durationMs) * 1_000_000L));
     }
 
-    /** 当前应显示的消息；过期/无消息 ⇒ null。 */
+    /** 当前应显示的第一条消息；过期/无消息 ⇒ null。 */
     String messageAt(long nowNanos) {
-        if (message == null) {
-            return null;
+        var messages = messagesAt(nowNanos);
+        return messages.isEmpty() ? null : messages.get(0);
+    }
+
+    /** 当前应显示的所有消息（按 show 顺序；清理过期项）。 */
+    List<String> messagesAt(long nowNanos) {
+        entries.removeIf(entry -> nowNanos >= entry.expiresAtNanos());
+        var messages = new ArrayList<String>(entries.size());
+        for (var entry : entries) {
+            messages.add(entry.message());
         }
-        if (nowNanos >= expiresAtNanos) {
-            message = null;
-            return null;
-        }
-        return message;
+        return messages;
     }
 
     /** 清空。 */
     void clear() {
-        message = null;
-        expiresAtNanos = 0;
+        entries.clear();
     }
 }

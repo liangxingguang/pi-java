@@ -10,8 +10,8 @@
 
 | 层 | 发布读数 | 未对齐项 |
 |---|---:|---|
-| L7 TUI/web（map/05） | **232.5/252＝92.3%** | 20 个非对齐计分单元＋5 个开放缺口（§3） |
-| **全仓 L0–L7** | **1,366.5/1,386＝98.6%** | 仅 L7 |
+| L7 TUI/web（map/05） | **239.5/252＝95.0%** | 12 个非对齐计分单元（§3.1）；§3.2 开放缺口已清 |
+| **全仓 L0–L7** | **1,373.5/1,386＝99.1%** | 仅 L7 |
 
 ## 2. L5 coding-agent（458/458＝100%）
 
@@ -19,50 +19,41 @@ settings 四条已清：E2-32／E2-54 对齐、E2-43 重判、E2-50 按 R5 出�
 
 ### 2.1 仍可动作的窄差
 
-| 编号 | 边界 |
-|---|---|
-| D322 | custom 队列项的 LLM 投影是 `UserMessage` ⇒ `message_end` 扩展事件里 role 为 `user`（pi 为 `custom`）；条目、落盘序与上下文不受影响。 |
+无。
 
-## 3. L7 TUI/web 未对齐（19.5 分）
+## 3. L7 TUI/web 未对齐（12.5 分）
 
-> 153 个计分单元中 20 个非对齐（对齐 133，未加权 133/153＝86.9%）。逐行证据与 D 账见 `map/05`。
+> 153 个计分单元中 12 个非对齐（对齐 141，未加权 141/153＝92.2%）。逐行证据与 D 账见 `map/05`。
+>
+> 锚点 `a00a5048d` 逐项复核后，本轮对 §3.1 可修项实施修复：K5／S32／R12／R13／R28 翻正为对齐（平台键位与 newline 分流、登录 URL 复制、工具卡流式计时、bash 增量与排队区、生产 onEntry 终态去重均已落地并有定向测试），S2／S28／T6／T11／K19 维持部分对齐（形状差）。读数按逐行复算 239.5/252（＋4.0）。
 
 ### 3.1 非对齐计分单元
 
 | 域 | 编号 | 判定 | 权重 | 当前缺口 |
 |---|---|---:|---:|---|
-| 屏幕/面板 | S2 | 存疑 | 2 | TamboUI 通用 runner 与 pi alt-screen 自带搜索/选择/复制/图像/闪烁的形状差（搜索选择长尾同族，D299–D301）。 |
-| 屏幕/面板 | S28 | 存疑 | 1 | `/export` HTML 输出形状未逐项核：pi 用 vendored marked/highlight，java 自写 `MarkdownToHtml`（D-W8-3）。 |
-| 屏幕/面板 | S32 | 存疑 | 1 | 登录 URL 独立复制键未证实；Radius 登录/MCP 入口已落地。 |
+| 屏幕/面板 | S2 | 部分对齐（形状差） | 2 | 已修：搜索条动态键位提示、flash 栈式多条、SGR 5 blink 属性。残余：双击选词/行选/边缘自动滚动未实现、图像为 Kitty/iTerm2 子集（D299–D301 中②）。 |
+| 屏幕/面板 | S28 | 部分对齐（形状差） | 1 | 已修：GFM 表格、URL scheme 白名单、代码块 `class="hljs"`。残余：pi 的 hljs 实际高亮 span 未产出（java 仅转义代码块文本，TUI 侧 SyntaxHighlighter 已有九类着色）（D-W8-3）。 |
+| 屏幕/面板 | S32 | 对齐 | 1 | `LoginDialogScreen` 已保存 `authUrl`，Ctrl+X 复制完整 URL 并渲染 `Copied URL to clipboard`／失败提示；设备码路径按 pi 不提供 URL 复制。 |
 | 渲染特性 | R7 | 缺失 | 1 | Mermaid 渲染：pi 依赖 `lovely-mermaid`，Java 无等价库（D309；围栏按代码块渲染）。 |
-| 渲染特性 | R12 | 存疑 | 2 | 工具执行卡流式部分结果缺（`ToolCallRenderer` 无 `isPartial` 通道，D197）；卡形面按 1/2 计。 |
-| 渲染特性 | R13 | 存疑 | 2 | bash 卡运行中流式增量臂缺（`BashExecutionUpdate` 无消费面）；卡形面按 1/2 计。 |
+| 渲染特性 | R12 | 对齐 | 2 | `ToolRunning` 实时卡原地更新＋`Elapsed X.Ys` 计时，终态转 `Took X.Ys` 无重复；事件级对位 pi `isPartial`。窄差：无 1Hz 定时重绘（仅事件到达时刷新）。 |
+| 渲染特性 | R13 | 对齐 | 2 | `executeBash` 传 `outputSink` 每 chunk 发 `BashExecutionUpdate`；TUI `BashRunning` 卡原地累积、挂排队区，`EntryAppended` 与生产 `onEntry` 两条终态路径均去重收口。 |
 | 渲染特性 | R22 | 缺失 | 1 | 启动公告组件无 Java 消费面，不移植（D-W8-2）。 |
 | 渲染特性 | R27 | 缺失 | 1 | 3D 彩蛋/header logo（1292 行）无等价/消费面，不移植（D-W8-2）。 |
-| 渲染特性 | R28 | 存疑 | 1 | 流式期间 bash/工具组件挂排队消息区仍缺（D-W8-4）。 |
+| 渲染特性 | R28 | 对齐 | 1 | `PendingQueueView` 增 `runningCards` 组件槽，bash 流式期间挂卡、终局移出；与 R13 同批交付。 |
 | 渲染特性 | R30 | 缺失（窄差 D） | 2 | 全屏滚动帧 O(viewport)：TamboUI 布局内部无应用层接缝（D286–D288）。 |
 | 渲染特性 | R33 | 缺失（窄差 D） | 1 | ASCII/字素快路径与 `Text.setText` 性能契约无 Java 等价（D286–D288）。 |
-| 键绑定/交互 | K5 | 存疑 | 2 | Windows 上 pi 绑 `ctrl+q`，java 绑 `alt+enter`（H-9.2-②）。 |
+| 键绑定/交互 | K5 | 对齐 | 2 | `FOLLOW_UP` 按 `windowsKeybindings` 分流（Windows/WSL ⇒ Ctrl+Q，其余 Alt+Enter）；`isNewlineEnter` 收窄为 Shift+Enter／LF，followUp 不再被提前吞掉。窄差：设置页提示仍硬编码 Alt+Enter。 |
 | 键绑定/交互 | K12 | 缺失 | 1 | `Ctrl+Z` 挂起进程：JVM 无 signal API（D316）。 |
-| 键绑定/交互 | K19 | 存疑 | 3 | 滚轮/触控板归一化模型不同（Codex TUI2 移植 vs pi `wheel-scroll`）。 |
-| TUI 组件 | C16 | 存疑 | 3 | 编辑组件（pi 2473 行 vs java 500 行）仍有形状差；逐项见 `map/05` C16。 |
+| 键绑定/交互 | K19 | 部分对齐（形状差） | 3 | pi `wheel-scroll.ts` 按事件速度连续加速（≤6 行）；java `ScrollInputNormalizer` 为 Codex TUI2 流分类模型，无 macOS/SSH 分支、无 Alt+wheel×5。 |
 | TUI 组件 | C21 | 缺失（窄差 D） | 1 | render 只读/缓存契约：TamboUI 组件协议不可改，无应用层接缝（D286–D288）。 |
-| 主题/样式 | T2 | 存疑 | 3 | 约 70 个语义色 token 覆盖未逐键复核。 |
-| 主题/样式 | T6 | 存疑 | 2 | 语法高亮 10 token 覆盖未复核。 |
-| 主题/样式 | T11 | 存疑 | 1 | system 主题终端查询面未复核；无 OSC 探测时走既有 tier-3（D123）。 |
-| web 对齐面 | W16 | 存疑 | 1 | `find()` 阶梯③保留跨项目扫描；项目内命中与 pi 一致（D271）。 |
+| 主题/样式 | T6 | 部分对齐（形状差） | 2 | 已修：9 个 syntax token 全接主题 accessor，词法器新增 type/function/operator/punctuation 分支。残余：未识别标识符保守保持 plain（不染 variable 色），无 hljs 20+ 类按语言映射（D197 邻项）。 |
+| 主题/样式 | T11 | 部分对齐（形状差） | 1 | 已修半面：`TerminalColors.parseOscReply` 解析 OSC 10/11/4（BEL/ST、hex6/12、rgb），`ThemeController` 暴露注入缝。残余：TamboUI 后端无 OSC 查询发送面，仍走 COLORFGBG／tier-3（D123）。 |
 
-**权重 3 优先项**：K19、C16、T2。
+**权重 3 剩余差异项**：K19（C16／T2 本轮已收口，证据见 `map/05` 对应行）。
 
-### 3.2 开放缺口（未收口，`docs/04` §1.2）
+### 3.2 开放缺口（已收口）
 
-| 编号 | 当前缺口 |
-|---|---|
-| E5-31 | 扩展 UI 的 working 指示器、终端输入、补全、编辑器替换等 TUI 成员未收口（`map/04`：13 个已有实现，其余 default＝noOp；权重 0）。 |
-| B38 | compaction 后缺少整表重建和完整压缩摘要消息卡。 |
-| B39 | 压缩窗口的 Esc 行为尚未完成换绑。 |
-| B46 | Bash `onUpdate` 已有生产链和 web 消费，TUI 实时输出消费者仍缺。 |
-| B145 | 启动、登录后等定向模型目录刷新点未全部接线（登录后已落，其余启动点证据不足）。 |
+无。E5-31（余 7 个无 TUI 面的成员登记窄差 D323，权重 0）、B38、B39、B46、B145 均已对齐：B39 压缩窗口 Esc ⇒ `abortCompaction`；B38 压缩成功后按上下文条目整表重建并追加摘要卡/成本通知、中止/错误文案逐字；B46 TUI 消费工具执行实时卡（终态条目去重）；B145 补启动后台目录刷新点。
 
 ## 4. 关闭口径
 

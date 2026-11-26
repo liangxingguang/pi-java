@@ -385,7 +385,7 @@ public final class EngineHookBridge {
         boolean modified = false;
         for (var h : bus.snapshot(MESSAGE_END)) {
             try {
-                var r = h.handle(new MessageEndEvent(current), ctx);
+                var r = h.handle(new MessageEndEvent(current, c.role()), ctx);
                 if (r == null || r.message() == null) {
                     continue;
                 }

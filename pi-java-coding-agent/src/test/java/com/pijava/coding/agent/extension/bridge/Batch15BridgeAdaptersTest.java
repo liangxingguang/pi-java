@@ -75,6 +75,26 @@ class Batch15BridgeAdaptersTest {
     }
 
     @Test
+    void messageEndCarriesPiRoleForCustomProjection() {
+        var bus = new ExtensionEventBus();
+        var seen = new ArrayList<String>();
+        bus.on("recorder", MESSAGE_END, (e, c) -> {
+            seen.add(e.role() + "/" + e.message().role());
+            return null;
+        });
+        var hooks = new HookSystem(new LaneState());
+        EngineHookBridge.install(hooks, "default", bus, null);
+
+        // 3 参兼容构造器：role 默认取 message.role()。
+        hooks.fireMessageEnd("default",
+            new com.pijava.agent.hook.MessageEndContext("default", "r1", user("u")));
+        // 4 参：custom 投影的 UserMessage 本体不变，事件 role 报 pi 的 custom（D322）。
+        hooks.fireMessageEnd("default",
+            new com.pijava.agent.hook.MessageEndContext("default", "r2", user("c"), "custom"));
+        assertThat(seen).containsExactly("user/user", "custom/user");
+    }
+
+    @Test
     void messageEndRoleMismatchIsReportedAndSkipped() {
         var bus = new ExtensionEventBus();
         var errors = new ArrayList<ExtensionError>();

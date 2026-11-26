@@ -20,6 +20,7 @@ import com.pijava.coding.agent.core.SettingsManager;
 public final class ThemeController {
 
     private final Supplier<SettingsManager> getSettingsManager;
+    private Supplier<TerminalColors> terminalColorsSource = () -> TerminalColors.EMPTY;
     private final Consumer<String> showError;
     private final Runnable onChanged;
     private String currentThemeSetting;
@@ -105,6 +106,22 @@ public final class ThemeController {
     /** pi {@code getTerminalTheme}（:165-167）。 */
     public ThemeAppearance getTerminalTheme() {
         return Themes.terminalTheme();
+    }
+
+    /**
+     * 注入终端颜色来源（pi {@code requestTerminalColors} 的窄缝）。默认空实现，
+     * 不参与构造/启动流程；有 OSC 查询能力的后端可注入 supplier 后显式调用。
+     */
+    public void setTerminalColorsSource(Supplier<TerminalColors> source) {
+        this.terminalColorsSource = source == null ? () -> TerminalColors.EMPTY : source;
+    }
+
+    /**
+     * 有能力的后端填入的查询钩子；当前实现只把注入源交给 {@link Themes}。
+     * 不抛异常、不改启动流程。
+     */
+    public void queryTerminalColors() {
+        Themes.setTerminalColors(terminalColorsSource.get());
     }
 
     private String getThemeSetting() {
