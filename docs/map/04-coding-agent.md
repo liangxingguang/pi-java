@@ -1,8 +1,8 @@
 # 04 CLI 宿主 / 产品层（pi-java-coding-agent）
 
 > 【背景摘要】范围：pi `packages/coding-agent` ↔ `pi-java-coding-agent`（CLI 参数、子命令、slash 命令、扩展系统、settings 键、会话管理、包管理器、RPC）。
-> 读数：**457.0/459＝99.6%**（4 条 settings 键存疑，各扣 0.5）。
-> 差异：在册 D 窄差（新增 D322）＋D233/D234/D274/D275/D277/D278；E2 四条存疑；转出 3 条（E3-3／E5-31／E5-33）；面外 G-6/G-7（R5）、N-4（R2）；缺失 E8-4／E8-6（不计入本层）。
+> 读数：**458.0/458＝100%**（settings 四条已清：E2-32／E2-54 对齐、E2-43 重判对齐、E2-50 按 R5 出分母）。
+> 差异：在册 D 窄差（新增 D322）＋D233/D234/D274/D275/D277/D278；转出 3 条（E3-3／E5-31／E5-33）；面外 G-6/G-7（R5）、N-4（R2）；缺失 E8-4／E8-6（不计入本层）。
 
 ## 口径
 
@@ -21,7 +21,7 @@
 | C slash 命令 | 25 | 38 | 38.0 | 100% |
 | D 扩展事件 | 41 | 83 | 83.0 | 100% |
 | E1 配置/清单 | 5 | 10 | 10.0 | 100% |
-| E2 settings 键 | 58（53 对齐／4 存疑／1 出分母） | 85 | 83.0 | **97.6%** |
+| E2 settings 键 | 58（56 对齐／2 出分母） | 84 | 84.0 | 100% |
 | E3 会话管理 | 24（23 对齐／1 转出） | 38 | 38.0 | 100% |
 | E4 资源发现 | 7 | 14 | 14.0 | 100% |
 | E5 扩展 API | 35（33 对齐／2 转出） | 53 | 53.0 | 100% |
@@ -29,7 +29,7 @@
 | E7 RPC | 7 | 13 | 13.0 | 100% |
 | G 新增子系统 | 10（8 对齐／2 面外） | 5 | 5.0 | 100% |
 | N 新单元 | 7（6 计分／llama 出分母） | 9 | 9.0 | 100% |
-| **合计** | — | **459** | **457.0** | **99.6%** |
+| **合计** | — | **458** | **458.0** | **100%** |
 
 ## D 窄差（在册）
 
@@ -65,16 +65,16 @@
 
 **非窄差说明**：google 车道不发 `after_provider_response` 与 pi 同缺；SDK 车道只在成功获取后发、fetch 车道含错误状态——pi 自身两族口径即如此。
 
-## E2 settings 存疑（4 条）
+## E2 settings 处置（4 条已清）
 
 `enableInstallTelemetry` 字段、访问器与 provider 归因头均已对齐；pi 的安装 ping 发往 `pi.dev` 自有端点，复刻会污染其遥测 ⇒ 有意不移植，不扣分。
 
-| # | 键 | 判定 | 边界 |
+| # | 键 | 处置 | 依据 |
 |---|---|---|---|
-| E2-32 | `terminal` | 存疑 | 7/7 字段齐；pi 的消费面依赖 TamboUI 后端能力（hyperlinks/trueColor/images/OSC 9;4/clearOnShrink） |
-| E2-43 | `markdown` | 存疑 | `codeBlockIndent` 已消费；`mermaid` 只补 accessor 不渲染（mermaid 围栏按普通代码块） |
-| E2-50 | `websocketConnectTimeoutMs` | 存疑 | 字段＋访问器齐；java 无 WS 传输（codex 车道走 HTTP/SSE） |
-| E2-54 | `fullscreenCopyOnSelect` | 存疑 | 字段＋访问器齐；依赖 alt-screen 选区/复制子系统（未排期） |
+| E2-32 | `terminal` | **对齐** | 设置侧能力覆盖（hyperlinks/images/trueColor）叠进 `TerminalCapabilities`；OSC 9;4 进度接 turn/agent/compaction 事件（docs/12）。`clearOnShrink` 两臂在 pi 终态均逐行清空缩短行，Java `InlineDisplay.deleteLines` 同终态，设置只影响重绘策略 ⇒ 无行为差。 |
+| E2-43 | `markdown` | **对齐（重判）** | `codeBlockIndent` 已消费；mermaid 渲染缺口已由 L7 R7／D309 单计，按「整块与细单元不重复扣分」不在 settings 键重复扣分。 |
+| E2-50 | `websocketConnectTimeoutMs` | **出分母（R5/R2）** | 唯一消费链是 codex WebSocket 车道（`openai-codex-responses`），本仓无该车道；与 E2-45 codemode 同口径 weight 0。 |
+| E2-54 | `fullscreenCopyOnSelect` | **对齐** | 拖拽释放按开关复制（`ViewportInteraction.finish`＋`ChatViewportElement` 现读源）；Ctrl+X 优先选区分支已对位（docs/12）。 |
 
 `E2-45 codemode` 权重 2，出分母（R5：java 无 codemode 子系统）。`queueMode`/`websockets` 只存在于 schema 输入侧，不列单元。
 
