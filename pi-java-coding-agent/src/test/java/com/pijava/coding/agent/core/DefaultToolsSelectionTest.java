@@ -47,10 +47,13 @@ class DefaultToolsSelectionTest {
      * 激活面经 _isAllowedTool 门）。pi 的 default-tools-setting.test.ts 夹具
      * 不加载 builtInExtensions，故 pi 侧断言无 tool_search——生产行为两侧一致。
      */
-    private static final List<String> PI_NINE = List.of(
-        "bash", "edit", "find", "grep", "ls", "powershell", "read", "tool_search", "write");
+    /** B161：codemode 扩展同样注册但不激活。 */
+    private static final List<String> PI_TEN = List.of(
+        "bash", "codemode", "edit", "find", "grep", "ls", "powershell", "read", "tool_search", "write");
     /** tool_search 注册但不激活（注册面恒在、激活面恒不在）。 */
     private static final String TOOL_SEARCH = "tool_search";
+    /** B161 codemode 注册但不激活。 */
+    private static final String CODEMODE = "codemode";
     private static final List<String> PI_FOUR = List.of("read", "bash", "edit", "write");
 
     @TempDir Path tmp;
@@ -110,7 +113,7 @@ class DefaultToolsSelectionTest {
     void bareRunRegistersEightAndActivatesDefaultFour() throws Exception {
         // 行 1（pi default-tools-setting.test.ts:241 实证）。
         try (var session = rig("bare", new String[] {}, null)) {
-            assertThat(registeredNames(session)).isEqualTo(PI_NINE);
+            assertThat(registeredNames(session)).isEqualTo(PI_TEN);
             assertThat(activeNames(session)).isEqualTo(sorted(PI_FOUR));
         }
     }
@@ -119,7 +122,7 @@ class DefaultToolsSelectionTest {
     void defaultToolsSettingReplacesTheActiveSelection() throws Exception {
         // 行 2（pi "uses the configured list as the initial built-in selection"）。
         try (var session = rig("cfg", new String[] {}, List.of("grep", "find"))) {
-            assertThat(registeredNames(session)).isEqualTo(PI_NINE);
+            assertThat(registeredNames(session)).isEqualTo(PI_TEN);
             assertThat(activeNames(session)).containsExactly("find", "grep");
         }
     }
@@ -128,7 +131,7 @@ class DefaultToolsSelectionTest {
     void defaultToolsModifierAddsPowerShell() throws Exception {
         // 行 3：settings ["+powershell"] ⇒ 默认四件＋powershell。
         try (var session = rig("cfgmod", new String[] {}, List.of("+powershell"))) {
-            assertThat(registeredNames(session)).isEqualTo(PI_NINE);
+            assertThat(registeredNames(session)).isEqualTo(PI_TEN);
             assertThat(activeNames(session))
                 .containsExactly("bash", "edit", "powershell", "read", "write");
         }
@@ -138,7 +141,7 @@ class DefaultToolsSelectionTest {
     void toolsModifierStacksOnDefaults() throws Exception {
         // 行 4：--tools +powershell（pi "applies +name and -name tool options"）。
         try (var session = rig("mod", new String[] {"--tools", "+powershell"}, null)) {
-            assertThat(registeredNames(session)).isEqualTo(PI_NINE);
+            assertThat(registeredNames(session)).isEqualTo(PI_TEN);
             assertThat(activeNames(session))
                 .containsExactly("bash", "edit", "powershell", "read", "write");
         }
@@ -148,7 +151,7 @@ class DefaultToolsSelectionTest {
     void toolsAllowlistNarrowsTheRegistry() throws Exception {
         // 行 5：--tools read,grep ⇒ 注册面只留点名者。
         try (var session = rig("allow", new String[] {"--tools", "read,grep"}, null)) {
-            assertThat(registeredNames(session)).containsExactly("grep", "read", TOOL_SEARCH);
+            assertThat(registeredNames(session)).containsExactly(CODEMODE, "grep", "read", TOOL_SEARCH);
             assertThat(activeNames(session)).containsExactly("grep", "read");
         }
     }
@@ -167,7 +170,7 @@ class DefaultToolsSelectionTest {
     void toolsPatternMatchesAndActivates() throws Exception {
         // 行 6：--tools 'gr*' ⇒ grep 注册并激活（模式点名激活，含默认不激活者）。
         try (var session = rig("pat", new String[] {"--tools", "gr*"}, null)) {
-            assertThat(registeredNames(session)).containsExactly("grep", TOOL_SEARCH);
+            assertThat(registeredNames(session)).containsExactly(CODEMODE, "grep", TOOL_SEARCH);
             assertThat(activeNames(session)).containsExactly("grep");
         }
     }
@@ -175,10 +178,10 @@ class DefaultToolsSelectionTest {
     @Test
     void excludedWinsOverAllowlisted() throws Exception {
         // 行 7：--tools read --exclude-tools read ⇒ 内置注册面空；扩展工具
-        // tool_search 不经注册面过滤（见 PI_NINE 注），激活面空。
+        // tool_search 不经注册面过滤（见 PI_TEN 注），激活面空。
         try (var session = rig("excl", new String[] {
                 "--tools", "read", "--exclude-tools", "read"}, null)) {
-            assertThat(registeredNames(session)).containsExactly(TOOL_SEARCH);
+            assertThat(registeredNames(session)).containsExactly(CODEMODE, TOOL_SEARCH);
             assertThat(activeNames(session)).isEmpty();
         }
     }
@@ -188,7 +191,7 @@ class DefaultToolsSelectionTest {
         // 行 8：--exclude-tools bash ⇒ 注册七件，激活 read/edit/write。
         try (var session = rig("deny", new String[] {"--exclude-tools", "bash"}, null)) {
             assertThat(registeredNames(session))
-                .containsExactly("edit", "find", "grep", "ls", "powershell", "read",
+                .containsExactly(CODEMODE, "edit", "find", "grep", "ls", "powershell", "read",
                     TOOL_SEARCH, "write");
             assertThat(activeNames(session)).containsExactly("edit", "read", "write");
         }
@@ -200,7 +203,7 @@ class DefaultToolsSelectionTest {
         // getAllTools()==[]——pi 夹具不载 builtInExtensions；生产两侧一致：
         // 扩展注册的 tool_search 恒在注册面、不在激活面）。
         try (var session = rig("none", new String[] {"--no-tools"}, null)) {
-            assertThat(registeredNames(session)).containsExactly(TOOL_SEARCH);
+            assertThat(registeredNames(session)).containsExactly(CODEMODE, TOOL_SEARCH);
             assertThat(activeNames(session)).isEmpty();
         }
     }
@@ -209,7 +212,7 @@ class DefaultToolsSelectionTest {
     void noBuiltinToolsKeepsRegistryButActivatesNothing() throws Exception {
         // 行 10：--no-builtin-tools ⇒ 注册面保留，激活面空。
         try (var session = rig("nobin", new String[] {"--no-builtin-tools"}, null)) {
-            assertThat(registeredNames(session)).isEqualTo(PI_NINE);
+            assertThat(registeredNames(session)).isEqualTo(PI_TEN);
             assertThat(activeNames(session)).isEmpty();
         }
     }
@@ -219,7 +222,7 @@ class DefaultToolsSelectionTest {
         // 行 11：--tools "" ⇒ 空 allowlist，内置零工具（pi 的 [] 非 undefined）；
         // 扩展注册的 tool_search 恒在注册面（同上行 9 注）。
         try (var session = rig("blank", new String[] {"--tools", ""}, null)) {
-            assertThat(registeredNames(session)).containsExactly(TOOL_SEARCH);
+            assertThat(registeredNames(session)).containsExactly(CODEMODE, TOOL_SEARCH);
             assertThat(activeNames(session)).isEmpty();
         }
     }
@@ -230,7 +233,7 @@ class DefaultToolsSelectionTest {
         // +name ⇒ 零基础上点名激活，sdk.ts:287-290 例外臂）。
         try (var session = rig("ex", new String[] {
                 "--no-tools", "--tools", "+grep"}, null)) {
-            assertThat(registeredNames(session)).containsExactly("grep", TOOL_SEARCH);
+            assertThat(registeredNames(session)).containsExactly(CODEMODE, "grep", TOOL_SEARCH);
             assertThat(activeNames(session)).containsExactly("grep");
         }
     }

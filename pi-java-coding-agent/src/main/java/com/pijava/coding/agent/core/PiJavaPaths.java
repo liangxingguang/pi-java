@@ -97,6 +97,15 @@ public final class PiJavaPaths {
             Files.isDirectory(examples) ? slashify(examples) : null);
     }
 
+    /**
+     * {@code codemode} 参考文档（pi {@code CODEMODE_DOCS_PATH}，tool.ts:121）；
+     * 发行根解析不到 ⇒ {@code null}。
+     */
+    public static @Nullable Path codemodeDocs() {
+        var root = packageDir();
+        return root == null ? null : root.resolve("docs").resolve("codemode.md");
+    }
+
     /** pi {@code normalizePath} 对位：反斜杠一律换正斜杠。 */
     private static String slashify(Path path) {
         return path.toString().replace('\\', '/');

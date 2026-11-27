@@ -5,3 +5,6 @@ com.pijava.coding.agent.extension.mcp.McpExtension
 # builtin:tool-search；defaultActive:false ⇒ 注册不激活，经 --tools/defaultTools/
 # setActiveTools/MCP ensureDiscoveryActive 激活）。
 com.pijava.coding.agent.extension.toolsearch.ToolSearchExtension
+# B4：内置 codemode 扩展（pi extensions/codemode/index.ts:49 对位；builtin:codemode；
+# defaultActive:false ⇒ 注册不激活，经 --tools/defaultTools/setActiveTools/MCP 激活）。
+com.pijava.coding.agent.codemode.CodemodeExtension

@@ -129,6 +129,17 @@ public interface AgentTool<TParams, TDetails> {
     }
 
     /**
+     * Optional hook to rewrite request loadout (B288, pi {@code prepareLoadout}).
+     * Tools without a hook keep their declarations unchanged.
+     *
+     * @param loadout tools visible in the current request
+     * @return changes to apply, or empty
+     */
+    default java.util.Optional<ToolLoadoutChanges> prepareLoadout(ToolLoadout loadout) {
+        return java.util.Optional.empty();
+    }
+
+    /**
      * Optional compatibility shim for raw tool-call arguments before
      * schema validation. Must return an object matching TParams.
      */

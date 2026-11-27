@@ -69,9 +69,19 @@ class ToolSearchMcpActivationTest {
     }
 
     @Test
-    void codemodeOnlyServerDoesNotActivateToolSearch() throws Exception {
-        // codemode 臂维持 R5 面外替身（java 无 codemode 工具）⇒ tool_search 不激活
+    void codemodeOnlyServerActivatesCodemodeNotToolSearch() throws Exception {
         try (var session = rig("cm", "{\"mcpServers\":{\"docs\":{\"command\":\"run-x\"}}}")) {
+            // B177：codemode 服务器且存在声明 reachesTools 的 codemode 工具 ⇒ 自动激活 codemode
+            assertThat(session.getActiveToolNames()).contains("codemode");
+            assertThat(session.getActiveToolNames()).doesNotContain("tool_search");
+        }
+    }
+
+    @Test
+    void autoEnableCodemodeFalseLeavesCodemodeInactive() throws Exception {
+        try (var session = rig("cm-off", "{\"autoEnableCodemode\":false,"
+                + "\"mcpServers\":{\"docs\":{\"command\":\"run-x\"}}}")) {
+            assertThat(session.getActiveToolNames()).doesNotContain("codemode");
             assertThat(session.getActiveToolNames()).doesNotContain("tool_search");
         }
     }

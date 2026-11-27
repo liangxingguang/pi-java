@@ -30,7 +30,7 @@
 | session-sqlite＋evals（map/06） | 93 | 93.0 | **100%** | 存储 44/44、评测 49/49；`#20` 判「对齐（形状不同）」。 |
 | telemetry（map/01） | 36 | 36.0 | **100%** | 17/17 对齐；T20 按 R5/w0 出分母。 |
 | tui/web（map/05） | 252 | 239.5 | **95.0%** | 逐域见 §1.1；C16／T2／W16 复核收口，§3.1 修复 K5／S32／R12／R13／R28 翻正，余 render 性能契约、Mermaid 与长尾窄差。 |
-| coding-agent（map/04，去重） | 458 | 458.0 | **100%** | settings 四条已清（E2-50 按 R5 出分母）；codemode 键 weight 2 出分母；MCP 面只作 map/07 指针。 |
+| coding-agent（map/04，去重） | 458 | 458.0 | **100%** | settings 四条已清（E2-50 按 R5 出分母）；codemode 能力版已落地（B161/B177），键 weight 2 仍出分母；MCP 面只作 map/07 指针。 |
 | **合计** | **1,386** | **1,373.5** | **99.1%** | 七层直接相加（行值 246+123+178+93+36+239.5+458＝1,373.5；分母 246+123+178+93+36+252+458＝1,386），无重叠单元。 |
 
 > L8 examples：**88/88**（按件，不进加权合计）。
@@ -76,7 +76,7 @@
 
 - **R1**：已删除的 experimental harness、session-backends、旧 server/client/plugin 发布面和其他经证据确认的删除面。
 - **R2**：只覆盖已批准的主流 Provider；新增长尾 Provider 不自动扩面。
-- **R5**：codemode、durable、chord、pico3、micro 不做，不进分母。
+- **R5**：codemode 能力版已按 B161/B177 落地（不进分母）；durable、chord、pico3、micro 不做，不进分母。
 - **pi-java 独有面**：web 和 SQLite 独立后端不虚构 pi 对照分母，只做行为与兼容验证。
 
 ## 5. 权威入口

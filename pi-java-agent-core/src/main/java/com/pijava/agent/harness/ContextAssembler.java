@@ -171,7 +171,10 @@ final class ContextAssembler {
             return List.of();
         }
         var names = ctx.activeTools().get().stream().map(AgentTool::name).toList();
-        return ctx.toolRegistry().activeOf(names);
+        var tools = ctx.toolRegistry().activeOf(names);
+        // B288：隐藏的声明不应再进系统提示的 snippet/guidelines。
+        return com.pijava.agent.tool.ToolLoadouts.apply(
+            tools, com.pijava.agent.tool.ToolLoadouts.of(ctx.toolRegistry(), names));
     }
 
     private static boolean isPresent(String value) {

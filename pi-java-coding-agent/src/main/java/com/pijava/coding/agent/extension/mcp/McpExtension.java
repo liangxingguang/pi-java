@@ -181,6 +181,7 @@ public final class McpExtension implements PiExtension {
             fired.services().settings().isProjectTrusted());
         state.configErrors = loaded.errors();
         state.projectConfig = loaded.projectConfig();
+        state.autoEnableCodemode = loaded.autoEnableCodemode() == null || loaded.autoEnableCodemode();
         state.warnedUnreachable = false;
         state.waitedForStartup = false;
         scope = McpSessionScope.active();
@@ -194,9 +195,8 @@ public final class McpExtension implements PiExtension {
         }
         state.servers.addAll(registered.servers);
         state.emitChange();
-        // 批 27（docs/38 T8 裁决⑥）：pi ensureDiscoveryActive 的 deferred 臂真化
-        //（:499-529 逐字——配置含 deferred ⇒ 激活 tool_search；codemode 臂维持
-        // R5 面外替身：无 codemode 工具，只余不可达警告）。
+        // pi ensureDiscoveryActive（:499-534 逐字）：配置含 codemode/deferred ⇒ 自动激活
+        // 对应可达工具（B177 codemode 臂 + 批 27 tool_search 臂）。
         lifecycle.ensureDiscoveryActive(fired);
         var enabled = state.servers.stream().filter(McpExtensionState::isEnabled).toList();
         if (enabled.isEmpty()) {
@@ -280,7 +280,7 @@ public final class McpExtension implements PiExtension {
         return null;
     }
 
-    // ── tool_call（pi :1187-1207；批 27：tool_search 臂落地，codemode 臂 R5 面外） ──
+    // ── tool_call（pi :1187-1207；tool_search/codemode 均经 reachesTools 判等待面） ──
 
     private com.pijava.coding.agent.extension.event.ExtensionResults.ToolCallEventResult
             onToolCall(ToolCallEvent event, ExtensionContext fired) {

@@ -218,6 +218,8 @@ class ExtensionToolActivationTest {
                 .filter(tool -> !tool.name().equals(REACH_TOOL))
                 .filter(tool -> !tool.name().equals(
                     com.pijava.coding.agent.extension.toolsearch.ToolSearchTool.NAME))
+                .filter(tool -> !tool.name().equals(
+                    com.pijava.coding.agent.codemode.CodemodeTool.NAME))
                 .map(com.pijava.coding.agent.extension.ExtensionToolInfo::reachesTools))
                 .as("未声明者投影为 null（pi 的缺席）")
                 .containsOnlyNulls();

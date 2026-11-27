@@ -40,6 +40,8 @@ public final class Settings {
     public String followUpMode;
     public String theme;
     public Compaction compaction;
+    /** pi {@code codemode} settings（settings-schema.ts:154-167）; B161 能力版。 */
+    public Codemode codemode;
     /** pi {@code BranchSummarySettingsSchema}（settings-schema.ts:29-42）。 */
     public BranchSummary branchSummary;
     public Boolean hideThinkingBlock;
@@ -223,6 +225,16 @@ public final class Settings {
             @JsonProperty("keepRecentTokens") Integer keepRecentTokens
         ) {}
     }
+
+    /**
+     * codemode 展示设置，对齐 pi {@code CodemodeSettingsSchema}
+     * （settings-schema.ts:154-167）。缺省在消费点兜底为 {@code on} / {@code 3000}。
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public record Codemode(
+        @JsonProperty("mode") String mode,
+        @JsonProperty("inlineBudget") Integer inlineBudget
+    ) {}
 
     /**
      * pi {@code BranchSummarySettingsSchema}（settings-schema.ts:29-42）。与压缩的

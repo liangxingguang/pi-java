@@ -42,6 +42,8 @@ final class McpExtensionState {
     boolean waitedForStartup;
     /** 不可达警告本会话是否已报（pi {@code warnedUnreachable}）。 */
     boolean warnedUnreachable;
+    /** 顶层 {@code autoEnableCodemode}，缺省 true（pi {@code loaded.autoEnableCodemode ?? true}）。 */
+    boolean autoEnableCodemode = true;
     /** 首提示等待 direct 服务器的上限（pi {@code startupWaitMs}，默认 10s；测试可覆写）。 */
     long startupWaitMs = 10_000L;
     /** 会话工作目录（stdio 服务器相对路径的基）。 */

@@ -66,6 +66,7 @@ telemetry ← ai ← mcp ← coding-agent ← tui
                      └ session-backend-sqlite
 coding-agent ← evals
 coding-agent + tui ← examples
+pi-java-codemode（无 pi-java 依赖）← coding-agent
 ```
 
 禁止反向依赖，禁止循环依赖，禁止跨层穿透调用。
@@ -74,7 +75,7 @@ coding-agent + tui ← examples
 
 ## 2. Maven 模块结构
 
-根 `pom.xml` 当前声明 **12 个子模块**；连同根 POM，reactor 共 13 个。
+根 `pom.xml` 当前声明 **13 个子模块**；连同根 POM，reactor 共 14 个。
 
 ```
 pi-java/
@@ -82,6 +83,7 @@ pi-java/
 ├── pi-java-bom/                     ← 统一依赖版本
 ├── pi-java-telemetry/               ← 遥测契约与适配器
 ├── pi-java-ai/                      ← LLM API、Provider、目录与鉴权
+├── pi-java-codemode/                ← codemode 脚本沙箱（Endive/QuickJS，独立于 pi-java 其余模块）
 ├── pi-java-mcp/                     ← MCP 客户端、传输、OAuth 与配置
 ├── pi-java-agent-core/              ← Agent 运行时、工具与 JSONL 会话
 ├── pi-java-session-backend-sqlite/  ← 独立 SQLite 后端
@@ -98,6 +100,7 @@ pi-java/
 | bom | — | 依赖版本管理 |
 | telemetry | `packages/telemetry` | 遥测契约 |
 | ai | `packages/ai` | LLM API |
+| codemode | `packages/codemode`＋`extensions/codemode` 沙箱面 | 脚本沙箱（B161） |
 | mcp | `packages/mcp` | MCP 协议与运行时 |
 | agent-core | `packages/agent` | Agent 运行时 |
 | sqlite-backend | —（pi 参照后端已删） | 独立 SQLite 后端 |

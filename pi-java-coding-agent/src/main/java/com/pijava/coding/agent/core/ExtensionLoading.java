@@ -274,10 +274,19 @@ final class ExtensionLoading {
         // :3601-3604——declarable 且 defaultActive≠false 才激活；tool_search 因此
         // 注册不激活），D89 收窄（余：无元数据的通用扩展工具仍按默认全量激活）。
         var selection = owner.toolSelection();
+        // pi agent-session.ts:3741-3748：allowlist 在册时「点名/匹配即激活」，与
+        // defaultActive 无关（`--tools +codemode` 依赖此臂）；无 allowlist 时仍按
+        // 注册即激活的 defaultActive 闸（:3753-3758）。
+        var allowlistMode = selection != null && selection.hasAllowlist();
         var newToolNames = services.tools().toolNames().stream()
             .filter(name -> !baselineToolNames.contains(name))
             .filter(name -> selection == null || selection.isAllowed(name))
-            .filter(owner::isActivatedOnRegistration)
+            .filter(name -> allowlistMode
+                ? (com.pijava.coding.agent.core.ToolNameMatcher.isMcpToolName(name)
+                    // 批 1 裁决③：mcp__ 名在装配期经保留臂激活（既有行为）。
+                    ? owner.isActivatedOnRegistration(name)
+                    : selection.isRawAllowed(name) && owner.isDeclarableTool(name))
+                : owner.isActivatedOnRegistration(name))
             .toList();
         if (!newToolNames.isEmpty()) {
             harness.activateTools(newToolNames);

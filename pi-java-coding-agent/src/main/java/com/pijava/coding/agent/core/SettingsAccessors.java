@@ -18,6 +18,28 @@ public final class SettingsAccessors {
         this.manager = manager;
     }
 
+    /**
+     * Returns {@code codemode.mode}, defaulting to {@code on}
+     * (pi settings-defaults.ts:57-60).
+     *
+     * @return codemode presentation mode
+     */
+    public String codemodeMode() {
+        var codemode = manager.effective().codemode;
+        return codemode == null || codemode.mode() == null ? "on" : codemode.mode();
+    }
+
+    /**
+     * Returns {@code codemode.inlineBudget}, defaulting to 3000
+     * (pi settings-defaults.ts:57-60).
+     *
+     * @return token budget for inline declarations
+     */
+    public int codemodeInlineBudget() {
+        var codemode = manager.effective().codemode;
+        return codemode == null || codemode.inlineBudget() == null ? 3000 : codemode.inlineBudget();
+    }
+
     public String getDefaultProvider() {
         return manager.effective().defaultProvider;
     }

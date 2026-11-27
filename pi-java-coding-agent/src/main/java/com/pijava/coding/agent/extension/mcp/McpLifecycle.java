@@ -256,17 +256,14 @@ final class McpLifecycle {
         ctx.ui().notify(body.toString(), NotifyType.WARNING);
     }
 
-    // ── ensureDiscoveryActive（批 27 真化：pi :499-529 的 deferred 臂逐字） ──
+    // ── ensureDiscoveryActive（pi :499-534：codemode 与 tool_search 两臂） ──
 
     /**
-     * pi {@code ensureDiscoveryActive}（index.ts:499-529）：任一启用服务器配置含
-     * {@code deferred} ⇒ 自动激活 tool_search（不受 autoEnableCodemode 约束——该开关
-     * 只管 codemode 臂；java 无 codemode 工具〔B161 R5 面外〕，pi 的
-     * {@code hasCodemode} 恒 false 对位）。从<b>配置</b>判断而非等连接（:501-502
-     * 注释逐字）；同名第三方工具不顶替——判据是<b>声明了 {@code reachesTools}</b>
-     * （pi :507-515 {@code tool.reachesTools} 属性在场，不是调用；L5 W7 前用
-     * schema 引用判等且傀名已随 pi 删除）。仍不可达才一次性警告
-     * （pi :521-528；文案逐字，[模型可见]）。
+     * pi {@code ensureDiscoveryActive}（index.ts:499-534）：配置含 {@code codemode} 的启用服务器、
+     * 会话存在声明 {@code reachesTools} 的 codemode 工具且 {@code autoEnableCodemode} 未关时
+     * 激活 codemode；配置含 {@code deferred} 时同理激活 tool_search。两臂都从<b>配置</b>判断，
+     * 不等连接（:501-502）；同名第三方工具不顶替——判据是<b>声明了 {@code reachesTools}</b>
+     * （:507-515）。两臂都不可达才一次性警告（:525-533；文案逐字，[模型可见]）。
      */
     void ensureDiscoveryActive(ExtensionContext ctx) {
         var exposures = new java.util.LinkedHashSet<McpExposure>();
@@ -275,15 +272,15 @@ final class McpLifecycle {
                 exposures.addAll(McpExtensionState.configuredExposures(server.entry));
             }
         }
+        var needsCodemode = exposures.contains(McpExposure.CODEMODE);
         var needsToolSearch = exposures.contains(McpExposure.DEFERRED);
-        if (!exposures.contains(McpExposure.CODEMODE) && !needsToolSearch) {
+        if (!needsCodemode && !needsToolSearch) {
             return;
         }
-        // pi :505-515: only a tool of that name that declares `reachesTools` can
-        // reach MCP tools; another extension's tool of the same name without it is
-        // never activated. The check is the property's presence, not a call.
-        var hasToolSearch = hasReachingTool(ctx,
-            com.pijava.coding.agent.extension.toolsearch.ToolSearchTool.NAME);
+        var codemode = com.pijava.coding.agent.codemode.CodemodeTool.NAME;
+        var toolSearch = com.pijava.coding.agent.extension.toolsearch.ToolSearchTool.NAME;
+        var hasCodemode = hasReachingTool(ctx, codemode);
+        var hasToolSearch = hasReachingTool(ctx, toolSearch);
         // 无宿主会话的轻量路径（测试 rig／--help 轻量道）激活面不可得——跳过激活臂，
         // 按「不可达」落警告（pi 恒在会话内，无此臂；java 方言，内部）。
         java.util.List<String> active;
@@ -295,23 +292,35 @@ final class McpLifecycle {
         var reachable = active == null
             ? new java.util.ArrayList<String>()
             : new java.util.ArrayList<>(active);
-        if (active != null && needsToolSearch && hasToolSearch
-                && !active.contains(com.pijava.coding.agent.extension.toolsearch.ToolSearchTool.NAME)) {
-            reachable.add(com.pijava.coding.agent.extension.toolsearch.ToolSearchTool.NAME);
-            ctx.setActiveTools(reachable);
+        if (active != null) {
+            var activate = new java.util.ArrayList<String>();
+            if (needsCodemode && hasCodemode && state.autoEnableCodemode
+                    && !active.contains(codemode)) {
+                activate.add(codemode);
+            }
+            if (needsToolSearch && hasToolSearch && !active.contains(toolSearch)) {
+                activate.add(toolSearch);
+            }
+            if (!activate.isEmpty()) {
+                reachable.addAll(activate);
+                ctx.setActiveTools(reachable);
+            }
         }
-        // pi :521-524：可达即返（codemode 臂恒 false——无 codemode 工具）
-        if (hasToolSearch && reachable.contains(
-                com.pijava.coding.agent.extension.toolsearch.ToolSearchTool.NAME)) {
+        if (hasCodemode && reachable.contains(codemode)) {
+            return;
+        }
+        if (hasToolSearch && reachable.contains(toolSearch)) {
             return;
         }
         if (state.warnedUnreachable) {
             return;
         }
         state.warnedUnreachable = true;
-        // pi :525-528 逐字（reason 段只盖 codemode/autoEnableCodemode 臂 ⇒ java 恒空）
+        // pi :529 逐字：只有「需要 codemode、工具在、但开关关掉」才带原因后缀。
+        var reason = needsCodemode && hasCodemode && !state.autoEnableCodemode
+            ? " (autoEnableCodemode is false)" : "";
         ctx.ui().notify("MCP tools are only reachable from the codemode or tool_search tool,"
-            + " but neither is active; they cannot be called.", NotifyType.WARNING);
+            + " but neither is active" + reason + "; they cannot be called.", NotifyType.WARNING);
     }
 
     /** Whether a registered tool of {@code name} declares {@code reachesTools} ({@code index.ts:507-515}). */

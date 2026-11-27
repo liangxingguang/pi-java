@@ -21,6 +21,11 @@
             <groupId>com.pi-java</groupId>
             <artifactId>pi-java-agent-core</artifactId>
         </dependency>
+        <!-- B161 codemode：Endive/quickjs-wasi 沙箱与 host 执行层。 -->
+        <dependency>
+            <groupId>com.pi-java</groupId>
+            <artifactId>pi-java-codemode</artifactId>
+        </dependency>
         <!-- MCP 扩展面：客户端/传输/OAuth/配置/运行时（原 docs/28 §2 的模块图）。
              工具与资源的 AgentTool 适配必须落在这里——pi-java-mcp 看不见 agent-core。 -->
         <dependency>

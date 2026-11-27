@@ -2,7 +2,7 @@
 
 > 【背景摘要】范围：pi `packages/coding-agent` ↔ `pi-java-coding-agent`（CLI 参数、子命令、slash 命令、扩展系统、settings 键、会话管理、包管理器、RPC）。
 > 读数：**458.0/458＝100%**（settings 四条已清：E2-32／E2-54 对齐、E2-43 重判对齐、E2-50 按 R5 出分母）。
-> 差异：在册 D 窄差 D233/D234/D274/D275/D277/D278；转出 3 条（E3-3／E5-31／E5-33）；面外 G-6/G-7（R5）、N-4（R2）；缺失 E8-4／E8-6（不计入本层）。
+> 差异：在册 D 窄差 D233/D234/D274/D275/D277/D278；转出 3 条（E3-3／E5-31／E5-33）；G-6/G-7 codemode 已按 B161/B177 实现能力版（不进分母）；面外 N-4（R2）；缺失 E8-4／E8-6（不计入本层）。
 
 ## 口径
 
@@ -75,7 +75,7 @@
 | E2-50 | `websocketConnectTimeoutMs` | **出分母（R5/R2）** | 唯一消费链是 codex WebSocket 车道（`openai-codex-responses`），本仓无该车道；与 E2-45 codemode 同口径 weight 0。 |
 | E2-54 | `fullscreenCopyOnSelect` | **对齐** | 拖拽释放按开关复制（`ViewportInteraction.finish`＋`ChatViewportElement` 现读源）；Ctrl+X 优先选区分支已对位（`GlobalKeyRouter:320-326`）。 |
 
-`E2-45 codemode` 权重 2，出分母（R5：java 无 codemode 子系统）。`queueMode`/`websockets` 只存在于 schema 输入侧，不列单元。
+`E2-45 codemode` 权重 2，出分母（R5：不进对齐分母；能力版已按 B161/B177 落地）。`queueMode`/`websockets` 只存在于 schema 输入侧，不列单元。
 
 ## 转出 / 面外 / 缺失
 
@@ -84,7 +84,7 @@
 | E3-3 `-r` 会话选择器 | L7（TUI） | 选择器本体与搜索排序都在 `pi-java-tui`；权重 0 |
 | E5-31 扩展 UI 注入（28 成员） | L7（TUI） | 21 个已有 TUI 实现（含 `pasteToEditor`）；余 7 个（`setHiddenThinkingLabel`／`addAutocompleteProvider`／`setEditorComponent`／`getEditorComponent`／`getToolsExpanded`／`setToolsExpanded`／`onTerminalInput`）无 TUI 面或由设置驱动，登记窄差 D323；权重 0 |
 | E5-33 扩展示例库 | L8（examples） | 88/88；权重 0 |
-| G-6/G-7 codemode | 面外（R5） | 沙箱运行时与 codemode 工具不对齐、不进分母 |
+| G-6/G-7 codemode | 已实现（能力版，不进分母） | B161/B177：`pi-java-codemode` 沙箱（Endive/QuickJS）、工具/描述/store/workers、TUI 渲染、MCP `exposure=codemode` 自动激活；设计与验证见 `docs/08` |
 | N-4 llama.cpp 默认端口 | 出分母（R2） | java 无 llama 扩展；本地 OpenAI 兼容服务经 `models.json` 可接 |
 | E8-4 扩展加载器 jiti lazy/Bun·SEA static | 缺失（不适用） | 不计入本层合计 |
 | E8-6 WSL 工具 | 缺失 | zip 已收编为 `core/util/ZipArchives`（JDK 形）；java 无 WSL 调用面 |

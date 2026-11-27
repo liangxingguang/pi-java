@@ -4,11 +4,11 @@
 >
 > 当前锚点为 pi `a00a5048d`（2026-11-24 P12 收口后切换，见 `docs/map/ANCHOR.md`）。
 >
-> **保留文档**：`docs/08-b161-codemode-mechanism-design.md`（B161 codemode 机制，**设计待审、未实施**）、`docs/09-pi-latest-reanchor-plan.md`（**未对齐项清单**，只保留未完成项）。现行结论入口为 `docs/01`–`docs/05`、`docs/07`、`docs/map/`。
+> **保留文档**：`docs/08-b161-codemode-mechanism-design.md`（B161 codemode 机制，**已实施**：能力版落地、仍不进对齐分母）、`docs/09-pi-latest-reanchor-plan.md`（**未对齐项清单**，只保留未完成项）。现行结论入口为 `docs/01`–`docs/05`、`docs/07`、`docs/map/`。
 
 ## 0. 口径与读数
 
-- **B**：功能或行为缺口。编号已用到 **B293**；B288 是 codemode 提案拟新增接缝，未批准；新工单从 **B294** 起。
+- **B**：功能或行为缺口。编号已用到 **B293**；B288 已随 B161 落地（`AgentTool.prepareLoadout`）；新工单从 **B294** 起。
 - **D**：已登记的窄差。编号已用到 **D323**；新窄差从 **D324** 起，明细存于对应 `docs/map/`。
 - **当前读数（2026-11-26）**：L0–L6 ＝ **100%**；L7 未收口（§1.2 开放缺口已清；余计分单元见 `docs/09` §3.1）；L8 按件 **88/88**。发布读数 **1,373.5/1,386＝99.1%**（L7 复核：C16／T2／W16 与修复批次 K5／S32／R12／R13／R28 部分对齐（形状差）→对齐，逐行复算见 `map/05`）。
 - **为什么还有 D/B 条目却仍是 100%**：`100%` 按加权单元计；权重 0 的已裁决窄差、R5 面外项与持续约束不进分母。未结项只列在 §1。
@@ -29,28 +29,16 @@ R29 安装变更重启警告维持不做；若新的 `selfUpdateCommand` 形成�
 
 无。
 
-## 2. 待用户拍板：codemode 机制（R5 现状仍是不做、不进分母）
-
-完整设计见 `docs/08-b161-codemode-mechanism-design.md`（设计待审、未实施）。
-
-| 编号 | 问题 | 建议与依据 |
-|---|---|---|
-| F1 | R5 是否改为「实现 codemode **能力版**、仍不进对齐分母」？ | 建议同意。模型可见语言保持 JavaScript；B161（机制）与 B177（MCP 默认激活）随之重开。 |
-| F2 | 引擎选型 | 建议 **Endive 1.1.0 + quickjs-wasi** 优先（2026-11-20 实测运行时全能力可用，压缩体积仅 +0.95 MB；1.2.0 有编译器 bug 故锁 1.1.0），**GraalJS 兜底**（+64 MB、零 ABI 绑定），Chicory 备选；若 Java 绑定超预算回落 GraalJS。 |
-| F3 | 是否批准新接缝 `B288 AgentTool.prepareLoadout(ToolLoadout)` 对位 `mode`/内联目录？ | 建议批准；否则降级并另登新窄差。原稿曾预占编号 D264–D272，该批编号已被 L7 正式占用，若采纳必须重新分配。 |
-| F4 | `models` 命名空间 v1 是否直接不做？ | 建议不做：classifier 无对位；**provider 级图像生成已具备**（`OpenRouterImagesApi`／`OpenAIImagesApi`），但脚本面按 R5 不暴露，调用报 `models is not defined`。 |
-| F5 | web 模式是否默认允许 codemode？ | 建议与 CLI 同策略：本地单用户默认可用、可关闭；多租户/远程默认关闭或改用进程后端。 |
-
-## 3. 仍需遵守的范围裁决
+## 2. 仍需遵守的范围裁决
 
 - **R1**：pi 已删除的面，不为旧参照物补功能；删除项须给 pi 删除提交或新锚点缺席证据后才出分母。
 - **R2**：Provider 只覆盖已批准的主流范围（26 个内置）；其余长尾 provider 仍排除。
-- **R5**：codemode、durable、chord、pico3、micro 等面外子系统不做对齐、不进分母；新锚点 telemetry 的 links/propagation、TelemetryStore、renderTrace 同属面外。共享主流行为不能随 R5 跳过。
+- **R5**：codemode 能力版已按 B161/B177 落地（仍不进对齐分母）；durable、chord、pico3、micro 等面外子系统不做对齐、不进分母；新锚点 telemetry 的 links/propagation、TelemetryStore、renderTrace 同属面外。共享主流行为不能随 R5 跳过。
 - **模型可见面**：模型能读到的提示、工具声明、参数、结果和错误文本，优先逐字对齐。
 - **MCP 持续约束**（B185 SpotBugs 排除、B205 适配层位置、B208 参数序、B219 排序）与跨层转出清单见 `docs/map/07-mcp.md`；改动对应代码时必须回归。
 - **D 窄差总账**：121 条已裁决窄差按层见各层 `docs/map/` 的 D 节（L1 AI/协议 25、L6 评测 8＋产物 8、L8 examples 18、L5 4、L7 TUI 57，含 D323），本表不复写。
 
-## 4. 维护规则
+## 3. 维护规则
 
 1. 本文只留当前结论，不追加批次实施过程。
 2. 新缺口先给新锚点源码证据，再登记 B；新差异无法消除时登记 D。

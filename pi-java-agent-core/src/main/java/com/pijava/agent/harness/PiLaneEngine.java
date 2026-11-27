@@ -367,7 +367,10 @@ public final class PiLaneEngine {
         }
         var names = ctx.activeTools().get().stream()
             .map(AgentTool::name).collect(Collectors.toSet());
-        return ctx.toolRegistry().activeOf(names);
+        var tools = ctx.toolRegistry().activeOf(names);
+        // B288：prepareLoadout 允许工具重写声明；无 hook 的工具保持原样。
+        return com.pijava.agent.tool.ToolLoadouts.apply(
+            tools, com.pijava.agent.tool.ToolLoadouts.of(ctx.toolRegistry(), names));
     }
 
     private static List<Message> transcriptMessages(LaneState lane) {

@@ -7,17 +7,17 @@
 > 本文覆盖问题定义、模型可见契约、引擎裁决、模块架构、pi 逐件对位、Java 集成点、
 > 裁剪与窄差、测试计划、实施批次与台账影响。
 >
-> **文档状态：设计待审（2026-11-19；§2.2 引擎实测数据于 2026-11-20 补入）。** 用户批准后才写代码。
+> **文档状态：已实施（2026-11-28，按锚点 `a00a5048d` 复核；B0–B5 与 B6 的 `models` 最小目录完成，Chicory/进程后端未做）。** 实施记录见 §12。
 >
 > 【术语】
 > - **codemode**：模型写一段 JavaScript，脚本内调用其他工具；只有脚本输出回到模型上下文。
 > - **对齐分母**：`docs/05` 计分表中的计分单元集合；出分母即不计分、不拉低完成度。
 > - **窄差**：Java 与 pi 无法完全一致、已登记的行为差异（D 编号）。
 > - **模型可见面 / 内部面**：前者是模型能读到的文本、schema、报错；后者是线程、IO、栈等实现细节。
-> - **SPI**：可替换实现的接口缝；本设计指 `CodemodeVmLauncher`。
+> - **SPI**：可替换实现的接口缝；本设计指 `CodeModeVmLauncher`。
 
-- pi 锚点：设计时 `56cae7823`（**当前锚点为 `a00a5048d`；实施前须按新锚点复核**，见 `docs/map/ANCHOR.md`）
-- 台账：`docs/04` B161（重开）、B177（MCP 默认 codemode 激活）、R5（修订建议）、拟新增 B288（loadout 接缝）
+- pi 锚点：设计时 `56cae7823`（实施按锚点 `a00a5048d` 复核，见 `docs/map/ANCHOR.md`）
+- 台账：`docs/04` B161、B177、B288 均已闭环；R5 已修订为「能力版已落地、仍不进分母」
 - 上游裁决：`docs/01` §R5、`docs/04` §5.1（原 `docs/08` 已清理，现行裁决以 `docs/04` 为准）
 - 相关既有实现：`NestedToolCallRunner`、`ToolExposure.CODEMODE`、`ToolReach`、`tool_search`、`GrammarSampling`
 
@@ -62,7 +62,7 @@
 
 - `RemoteCodemodeSandbox`、`InlineCodemodeSandbox`、Cloudflare/Durable Objects（pi `runtime/remote.ts`、`inline.ts`、`cloudflare.ts`）。
 - 确定性 `start()`（`execution.ts:530-566`、`deterministic.test.ts`）；消费者是 durable/chord。
-- `models.classify`、`models.generateImages`；`models` 目录查询视 review 结论决定是否做最小集合。
+- `models.classify`、`models.generateImages`；`models` 仅实现只读目录 `models.list`（B6）。
 - TypeScript 扩展运行时、`pi-env`、chord、durable。
 - 对齐计分：不改 `docs/05` 分母与完成度。
 
@@ -89,7 +89,7 @@
 > (c) Rhino/Nashorn；(d) Kotlin/Groovy/Lua 等 JVM 脚本语言；(e) 受限 DSL。
 >
 > 【决定】**B0 以 Endive 1.1.0 + quickjs-wasi 为首选后端**（机制已实测走通，见下），
-> 在 `CodemodeVmLauncher` SPI 后实现；**GraalJS Community**（Maven
+> 在 `CodeModeVmLauncher` SPI 后实现；**GraalJS Community**（Maven
 > `org.graalvm.polyglot:js-community:25.0.5`，JDK 25 LTS 线）作为同 SPI 的**兜底**——
 > 若 Endive 的 Java ABI 移植超出 B0 预算，直接切 GraalJS 继续，不阻塞机制开发。
 > Chicory 作为第三备选（绑定可复用 Endive 的 Java 包装）。
@@ -123,7 +123,7 @@
 > - [模型可见] GraalJS 的 `name/message/stack` 与 QuickJS 不完全一致；按 §7 登记窄差。
 > - **Spike 是硬闸门**：若 GraalJS 不能在 JDK 25 上完成「prelude 往返 + 工具调用 + settle 回调 + 微任务排空 + 超时取消」，改走 **Endive 1.1.0 + quickjs-wasi**（已实测全部能力可用，见下），Chicory 次选。
 >
-> 【Chicory 备选】改动仅在 `CodemodeVmLauncher` 实现层：加载 `quickjs-wasi/quickjs.wasm`，Java 侧重绑 `qjs_*` 导出（wasm 已直接导出 `qjs_init`/`qjs_eval`/`qjs_call`/`qjs_set_memory_limit`/`qjs_set_interrupt_handler`/`qjs_is_job_pending`/`qjs_execute_pending_job` 等，绑定面比预想小）。收益是内存上限、可中断、栈帧与 pi 同源。
+> 【Chicory 备选】改动仅在 `CodeModeVmLauncher` 实现层：加载 `quickjs-wasi/quickjs.wasm`，Java 侧重绑 `qjs_*` 导出（wasm 已直接导出 `qjs_init`/`qjs_eval`/`qjs_call`/`qjs_set_memory_limit`/`qjs_set_interrupt_handler`/`qjs_is_job_pending`/`qjs_execute_pending_job` 等，绑定面比预想小）。收益是内存上限、可中断、栈帧与 pi 同源。
 >
 > **Chicory 本机实测（2026-11-20，Chicory 1.7.5 + quickjs-wasi 3.6.2 + JDK 25.0.4）：**
 > - 体积：`runtime` 151,620 B＋`wasm` 213,420＋`wasi` 59,497＋`log` 9,419＋`quickjs.wasm` 637,405 ≈ **1.07 MB（约 1.02 MiB）**；对比 GraalJS **+64 MB**。
@@ -188,15 +188,15 @@
 > **风险排序**：GraalJS = 体积 + 无内存上限；Endive = ABI 工作量 + 计算仍比原生 QuickJS 慢
 > （~3 µs/迭代）+ 1.1.0 编译器锁版；Chicory = 计算速度。三者都不改变模型可见契约。
 
-### 2.3 `models` 命名空间：v1 不做
+### 2.3 `models` 命名空间：B6 最小目录
 
 > 【场景】pi 的工具描述与 `docs/codemode.md` 都包含 `models.*`（目录、classifier、图像生成）。Java 无 `findOfType`/`classify`（D233）；provider 级图像生成已具备（`OpenRouterImagesApi`／`OpenAIImagesApi`），但 codemode 脚本面不暴露。
 >
-> 【决定】v1 以 `models = false` 构造工具：不声明 `models`，脚本调用 `models.*` 得到 `models is not defined`。`docs/codemode.md` 的 Models 一节保留但标注「pi-java 暂不可用」。
+> 【决定】B6 只实现只读目录 `models.list(provider?)`（pi-java 特有名字，非上游 global）：返回每个已注册 provider 的模型条目（`provider`/`id`/`name`/`contextWindow`/`maxTokens`/`deprecated`/`capabilities`），构造时天然不带 `headers`。不声明 `classify`/`generateImages`/`getModel*`；工具描述只加一行如实说明。
 >
 > 【风险/代价】
-> - [模型可见] 描述少一行 `models` 提示；与 pi 默认 `models: true` 有差。登记窄差。
-> - 使用 classify 的脚本不能运行；provider 级图像生成虽已具备，脚本面仍不可用，若未来把它接进 `models` 命名空间需另开 B 包；classifier 仍需新实现。
+> - [模型可见] 描述与 pi 默认 `models: true` 的文案不同；`models.list` 为增量能力，已登记于 `docs/codemode.md`。
+> - 使用 classify/图像生成/getModel* 的脚本不能运行；若未来接入需另开 B 包（classifier 仍需新实现）。
 
 ### 2.4 host 接缝：`prepareLoadout`（拟新增 B288）
 
@@ -235,7 +235,7 @@ Run JavaScript that calls other tools. The input is raw JavaScript (not JSON, no
 - Optional first line: `// @options: {"max_output_tokens": 10000, "timeout_ms": 60000}`
 ```
 
-`describeGlobals` 逐字（`tool.ts:123-134`），`models=false` 时省略最后一行：
+`describeGlobals` 逐字（`tool.ts:123-134`）；pi-java 以 `models.list` 的一行如实说明替代 pi 的 `models` 行（B6）。
 
 ```text
 Globals:
@@ -333,7 +333,7 @@ public interface VmChannel {
 
 `VmStartData`（`protocol.ts:14-28`）：`code`、`tools`（`name/jsName/description`）、`globals`（`name/spread`）、`store`（key→JSON text）、`memoryLimitBytes`（GraalJS 忽略，登记窄差）。
 
-`Protocol` 用 sealed 接口 + record 逐字对位 `protocol.ts:43-60`；JSON 字符串仍是唯一跨边界值形式。这样 host 侧 `CodemodeExecution` 可**先于引擎实现并用假后端测试**（对位 pi `execution.ts`）。
+`Protocol` 用 sealed 接口 + record 逐字对位 `protocol.ts:43-60`；JSON 字符串仍是唯一跨边界值形式。这样 host 侧 `CodeModeExecution` 可**先于引擎实现并用假后端测试**（对位 pi `execution.ts`）。
 
 ### 4.4 线程模型与生命周期
 
@@ -369,9 +369,9 @@ AgentSession 工具线程
 
 | pi | 行数 | Java | 口径 |
 |---|---|---|---|
-| `identifier.ts` | 12 | `CodemodeIdentifier` | 逐字算法：首字符 `[A-Za-z_$]`，其后 `[A-Za-z0-9_$]`，非法→`_`，空→`_` |
-| `source.ts` | 125 | `CodemodeSource` | 逐字：首行 `// @options:`、行号保持、非首行报错、字段校验、`timeout_ms` 上界 |
-| `declarations.ts` | 340 | `CodemodeDeclarations` | 逐字：`schemaToType`、本地 `$ref`、标签、`inputMaxChars`、`renderToolSample`、`renderDeclarations` |
+| `identifier.ts` | 12 | `CodeModeIdentifier` | 逐字算法：首字符 `[A-Za-z_$]`，其后 `[A-Za-z0-9_$]`，非法→`_`，空→`_` |
+| `source.ts` | 125 | `CodeModeSource` | 逐字：首行 `// @options:`、行号保持、非首行报错、字段校验、`timeout_ms` 上界 |
+| `declarations.ts` | 340 | `CodeModeDeclarations` | 逐字：`schemaToType`、本地 `$ref`、标签、`inputMaxChars`、`renderToolSample`、`renderDeclarations` |
 | `types.ts` | 254 | 多个 record/sealed | 只保留 execute 路径使用的成员；删 `start()`/确定性字段 |
 
 `source.ts` 关键错误文案（`source.ts:56-125`）全部保留，包括：
@@ -390,7 +390,7 @@ The // @options: line must be the first line of the input; found one on line N
 |---|---|---|---|
 | `prelude-source.ts` | 522 | `codemode-prelude.js` 资源 + `CodemodePrelude` | **逐字 vendoring**（MIT）；常量 `MAX_OUTPUT_CHARS`/`MAX_OUTPUT_ITEMS`/`MAX_STORE_*` 由 Java 注入或保留 |
 | `protocol.ts` | 93 | `Protocol` | sealed 消息逐字段对位 |
-| `execution.ts` | 573 | `CodemodeExecution` + `CodemodeSandboxBase` | 逐字语义：首个终局事件胜出、done 解析、pending 中止、unsent 队列、错误分类 |
+| `execution.ts` | 573 | `CodeModeExecution` + `CodeModeSandboxBase` | 逐字语义：首个终局事件胜出、done 解析、pending 中止、unsent 队列、错误分类 |
 | `vm.ts` | 341 | `GraalJsVm` | 适配：bridge/run/settle/stalled 接线；Promise job 排空；异常格式化 |
 | `host.ts` | 88 | `GraalJsVmLauncher` | 适配：每执行一个线程/Context；stop 语义 |
 | `worker.ts` | 39 | 不移植 | 由 launcher 取代 |
@@ -557,7 +557,7 @@ Codemode 侧逐字实现 `prepareCodemodeLoadout`（`tool.ts:343-379`）：
 - 目录输入：列出非 direct 工具；`deferred` 不进目录但保持可调用；
 - 目录预算 `inlineBudget`；`selectCatalog` 逐字（`tool.ts:203-220`）。
 
-若 B288 未获批准：`codemode.mode` 与 `inlineBudget` 不实施，工具描述固定为「globals + 请用 discovery globals 查工具」，登 D265。
+若 B288 未获批准：`codemode.mode` 与 `inlineBudget` 不实施，工具描述固定为「globals + 请用 discovery globals 查工具」，登 D265。（B288 已批准并落地。）
 
 ## 7. 裁剪与窄差
 
@@ -585,15 +585,15 @@ RED-first；每个新增类先落夹具。分组：
 
 ### 8.1 纯函数（B1）
 
-- `CodemodeIdentifierTest`：`mcp__docs__search` 保持、`my-tool`→`my_tool`、首字符非法、空→`_`。
-- `CodemodeSourceTest`：逐条转 `source.test.ts` 5 组（plain、options/行号、仅首行、错位、非法）。
-- `CodemodeDeclarationsTest`：逐条转 `declarations.test.ts`（基元/字面量/联合、对象排序、描述注释、约束标签、非空分支、draft-04、长标签转义、超预算去标签→unknown、本地/递归 `$ref`、数组/元组、签名、MCP 输出形状、sample、tools/globals、命名空间、注释转义）。
+- `CodeModeIdentifierTest`：`mcp__docs__search` 保持、`my-tool`→`my_tool`、首字符非法、空→`_`。
+- `CodeModeSourceTest`：逐条转 `source.test.ts` 5 组（plain、options/行号、仅首行、错位、非法）。
+- `CodeModeDeclarationsTest`：逐条转 `declarations.test.ts`（基元/字面量/联合、对象排序、描述注释、约束标签、非空分支、draft-04、长标签转义、超预算去标签→unknown、本地/递归 `$ref`、数组/元组、签名、MCP 输出形状、sample、tools/globals、命名空间、注释转义）。
 - `CodemodePreludeResourceTest`：资源存在、逐字哈希锁定（防误改）。
 
 ### 8.2 host 执行层（B2，假后端）
 
-- `CodemodeExecutionTest`：done/ok+value/writes、done/error、crash、首个终局事件、unsent 队列、malformed payload→sandbox error、pending 调用 abort、call 记录口径。
-- `CodemodeSandboxBaseTest`：工具重名、globals 校验（保留名/命名空间冲突）、close 后 execute、并行执行隔离、deadline/abort。
+- `CodeModeExecutionTest`：done/ok+value/writes、done/error、crash、首个终局事件、unsent 队列、malformed payload→sandbox error、pending 调用 abort、call 记录口径。
+- `CodeModeSandboxBaseTest`：工具重名、globals 校验（保留名/命名空间冲突）、close 后 execute、并行执行隔离、deadline/abort。
 
 ### 8.3 GraalJS 后端（B3，spike 闸门）
 
@@ -650,7 +650,7 @@ RED-first；每个新增类先落夹具。分组：
 | B3 | 首选引擎的 launcher/vm + prelude 资源 + 沙箱行为测试（GraalJS 或 Endive，B0 定） | ~1,200–1,500 行 |
 | B4 | tool/execute + store + 输出/截断/图片 + discovery globals | ~1,200 行 |
 | B5 | settings + B288 loadout 接缝 + 扩展注册 + MCP 激活 + renderer + docs + e2e | ~900 行 |
-| B6（可选） | Chicory 后端 / 进程后端；`models` 最小目录 | 另立 |
+| B6（可选） | `models` 最小目录（`models.list`，已实施）；Chicory 后端 / 进程后端（未做） | 另立 |
 
 每批独立可编译、独立 commit（200–500 行/次），B0 失败则停止并回写本设计。
 
@@ -678,10 +678,19 @@ RED-first；每个新增类先落夹具。分组：
 | F4 | `models` 命名空间 v1 是否直接不做？ | 建议不做（classifier 无对位；provider 级 `ImageApi` 已具备，脚本面按 R5 不暴露） |
 | F5 | web 模式是否默认允许 codemode？ | 建议与 CLI 同策略（本地单用户默认可用，可经工具选择关闭）；多租户/远程部署默认关闭或接进程后端 |
 
-## 11. 台账回填计划（闭环时）
+## 11. 台账回填（已完成）
 
-- `docs/04`：B161 重开 → 实施/闭环；B177 随 MCP 激活闭环；B288 实施/闭环；R5 §5.1 加注；新增 D264–D272 指向 `docs/map/04`。
-- `docs/map/04` G-6/G-7：从「面外 0」改为「能力版已实施、不计分」；E2-45 同步。
-- `docs/05`：**不改分母与完成度**，只在说明栏加「codemode 能力版存在，未计分」。
-- `docs/02`：模块数 15→16，补依赖方向。
-- 本文档：实施记录与 spike 数据（启动、体积、取消行为）。
+- `docs/04`：B161/B177/B288 已闭环；R5 已修订为「codemode 能力版已落地、仍不进分母」；无新增 D。
+- `docs/map/04` G-6/G-7：改为「能力版已实施、不计分」；E2-45 同步。
+- `docs/05`：分母与完成度不变，说明栏注明 codemode 能力版存在、未计分。
+- `docs/02`：模块数 12→13，补 `pi-java-codemode` 依赖方向。
+- 本文档：实施记录见 §12。
+
+## 12. 实施记录（2026-11-28）
+
+- **模块**：新增 reactor 第 13 模块 `pi-java-codemode`（Endive 1.1.0 + quickjs-wasi；无 pi-java 依赖）。
+- **B0–B4**：引擎绑定、identifier/source/declarations、`CodeModeExecution`/`CodeModeSandboxBase`、Endive launcher/VM/prelude、tool/execute/store/输出截断/图片/discovery。
+- **B5**：settings（`codemode.mode`/`codemode.inlineBudget`）、B288 `prepareLoadout`、扩展注册（`builtin:codemode`，默认不激活）、MCP `exposure=codemode` 自动激活、worker 准入（默认 2／`PI_CODEMODE_MAX_WORKERS`／60s）、`AbortSignal` 取消、TUI renderer、`docs/codemode.md`、端到端用例。
+- **B6**：`models.list(provider?)` 只读目录已实施（pi-java 特有；条目含 `provider`/`id`/`name`/`contextWindow`/`maxTokens`/`deprecated`/`capabilities`，不含 `classify`/`generateImages`/`getModel*`）；Chicory/进程后端未做。
+- **验证**：`pi-java-codemode` 47/47；`CodemodeStoreTest`、`CodemodeExecutorTest`、`CodemodeToolDescriptionTest`、`CodemodeWorkersTest`、`CodemodeModelsTest`、`CodemodeSessionE2eTest`、`ToolSearchMcpActivationTest` 全通过（JDK 25）。
+- **实现取向**：worker 槽位在 `sandbox.close()` 后释放（与 pi「取消中的 worker 可有一个替补」同向）；无宿主会话的轻量路径跳过激活臂并落不可达警告（java 方言）。
