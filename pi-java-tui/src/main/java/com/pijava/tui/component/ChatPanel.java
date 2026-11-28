@@ -96,6 +96,11 @@ public final class ChatPanel {
         return element.hasActiveSelection();
     }
 
+    /** S2：每 tick 推进拖选边缘自动滚动。 */
+    public boolean tickSelectionAutoScroll(long nowMs) {
+        return element.tickSelectionAutoScroll(nowMs);
+    }
+
     /** L7 W6（S2b）：复制当前选区；有选区 ⇒ true。 */
     public boolean copyActiveSelection() {
         return element.copyActiveSelection();

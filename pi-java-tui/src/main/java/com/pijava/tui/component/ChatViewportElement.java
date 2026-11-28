@@ -13,7 +13,6 @@ import dev.tamboui.text.Line;
 import dev.tamboui.toolkit.element.RenderContext;
 import dev.tamboui.toolkit.element.Size;
 import dev.tamboui.toolkit.element.StyledElement;
-import dev.tamboui.toolkit.event.DragHandler;
 import dev.tamboui.toolkit.event.EventResult;
 import dev.tamboui.tui.event.MouseEvent;
 import dev.tamboui.tui.event.MouseEventKind;
@@ -124,11 +123,11 @@ public final class ChatViewportElement extends StyledElement<ChatViewportElement
     /** 渲染期现读 ⇒ 改值下一帧生效（天然热更，docs/23 §3 T11）。 */
     private java.util.function.Supplier<ScrollbarMode> scrollbarMode =
         () -> ScrollbarMode.ALWAYS;
-    private int lastRowCount;
-    private int lastVisibleRows = 1;
-    private Rect lastArea;
-    private boolean scrollbarHovered;
-    private boolean scrollbarDragging;
+    int lastRowCount;
+    int lastVisibleRows = 1;
+    Rect lastArea;
+    boolean scrollbarHovered;
+    boolean scrollbarDragging;
     /** 本帧 committed 消息的行区间（flatten 与 lastRowCount 同帧更新）。 */
     private List<int[]> messageRowRanges = List.of();
     /** L7 W2（K37/C14）：卡类消息 per-card 展开态（null ≙ 全局 toolsExpanded 回落）。 */
@@ -141,70 +140,17 @@ public final class ChatViewportElement extends StyledElement<ChatViewportElement
     private List<ImageRenderSupport.Anchor> imageRows = List.of();
     /** L7 W6（S2a）：搜索/选区高亮（显示列区间；本帧渲染时应用）。 */
     public record Highlight(int row, int startCol, int endCol, boolean current) {}
-    private final ViewportInteraction interaction = new ViewportInteraction();
-    private int lastContentWidth = 1;
+    final ViewportInteraction interaction = new ViewportInteraction();
+    int lastContentWidth = 1;
 
-    /** Creates a chat viewport with scrollbar-drag (Codex-CLI style) handling. */
+    /** 选区点击计数/自动滚动时钟（毫秒；测试可注入）。 */
+    java.util.function.LongSupplier selectionClock =
+        () -> System.nanoTime() / 1_000_000L;
+
+    /** Creates a chat viewport with scrollbar-drag and selection handling. */
     public ChatViewportElement() {
-        // Scrollbar drag (Codex-CLI style): pressing the thumb scrolls the
-        // transcript proportionally to the pointer row; Windows X10 input
-        // repeats PRESS events for every dragged position, so onDragStart is
-        // the position channel there, while SGR terminals use onDrag.
-        onDrag(new DragHandler() {
-            @Override
-            public void onDragStart(int startX, int startY) {
-                if (scrollbarDragging || inScrollbar(startX, startY)) {
-                    scrollbarDragging = true;
-                    scrollbarHovered = true;
-                    scrollToMouseY(startY);
-                    return;
-                }
-                // L7 W6（S2b）：内容区按下＝选区锚点；Windows X10 对每个拖拽位置
-                // 重复 PRESS ⇒ 已按下时按拖动处理。
-                if (lastArea != null && lastArea.contains(startX, startY)) {
-                    interaction.press(startX, startY, lastArea,
-                        scrollState.offset(), lastContentWidth);
-                }
-            }
-
-            @Override
-            public void onDrag(int currentX, int currentY, int deltaX, int deltaY) {
-                if (scrollbarDragging) {
-                    scrollToMouseY(currentY);
-                    return;
-                }
-                if (lastArea != null) {
-                    interaction.drag(currentX, currentY, lastArea,
-                        scrollState.offset(), lastContentWidth);
-                }
-            }
-
-            @Override
-            public void onDragEnd(int endX, int endY) {
-                if (scrollbarDragging) {
-                    scrollbarDragging = false;
-                    scrollbarHovered = inScrollbar(endX, endY);
-                    return;
-                }
-                // L7 W6（S2b）＋E2-54：拖出非空选区 ⇒ 按 fullscreenCopyOnSelect 决定是否复制。
-                if (interaction.finishAndCopy()) {
-                    return;
-                }
-                // L7 W2（K37/C14）：PRESS 被 toolkit 的 startDrag 吞掉（routeMouseEvent
-                // 对 draggable 元素只走 drag 通道），RELEASE 经 onDragEnd 送达——非滚动条
-                // 臂即内容点击 ⇒ 命中卡类消息行块则切换展开态（C14 窄差 N：MouseRegion
-                // 组件不移植，拖拽通道上的 press→release 承担同可观察行为）。
-                if (endX >= 0 && !inScrollbar(endX, endY)) {
-                    int index = cardMessageAt(endY);
-                    if (index >= 0) {
-                        toggleCard(index);
-                        if (cardToggler != null) {
-                            cardToggler.accept(index);
-                        }
-                    }
-                }
-            }
-        });
+        // 滚动条拖拽 + 内容选区（S2：双击/三击/自动滚动）统一在拖拽通道。
+        onDrag(new SelectionDragHandler(this));
     }
 
     /**
@@ -327,11 +273,48 @@ public final class ChatViewportElement extends StyledElement<ChatViewportElement
             } else {
                 scrollbarHovered = inScrollbar(event.x(), event.y());
             }
+            if (interaction.selectionActive()) {
+                // X10 的内容区释放同样落在按钮无关的 MOVE 上。
+                releaseSelection(event.x(), event.y());
+            }
             return scrollbarHovered ? EventResult.HANDLED : EventResult.UNHANDLED;
         }
         // K37/C14 的点击臂在 DragHandler.onDragEnd（见构造器注释：PRESS 被
         // startDrag 吞掉，本方法收不到 PRESS/拖拽 RELEASE）。
         return EventResult.UNHANDLED;
+    }
+
+    /** 释放内容选区；点击（未拖动）先派发卡片切换（pi click 优先于复制）。 */
+    void releaseSelection(int endX, int endY) {
+        boolean click = !interaction.selectionDragged();
+        if (click && endX >= 0 && !inScrollbar(endX, endY)) {
+            int index = cardMessageAt(endY);
+            if (index >= 0) {
+                toggleCard(index);
+                if (cardToggler != null) {
+                    cardToggler.accept(index);
+                }
+                interaction.clearSelection();
+                return;
+            }
+        }
+        interaction.finishAndCopy();
+    }
+
+    /** 选区点击计数/自动滚动时钟注入（毫秒；测试用）。 */
+    void selectionClock(java.util.function.LongSupplier clock) {
+        if (clock != null) {
+            selectionClock = clock;
+        }
+    }
+
+    /** 每 tick 推进拖选边缘自动滚动（GlobalKeyRouter 的 TickEvent 臂调用）。 */
+    boolean tickSelectionAutoScroll(long nowMs) {
+        if (lastArea == null) {
+            return false;
+        }
+        return interaction.tickAutoScroll(nowMs, lastArea, scrollState.offset(),
+            lastContentWidth, lastRowCount, Math.max(1, lastVisibleRows), scrollState);
     }
 
     /** 点击行 → 卡类消息的 committed 索引；非卡/越界 ⇒ -1。 */
@@ -476,7 +459,7 @@ public final class ChatViewportElement extends StyledElement<ChatViewportElement
     }
 
     /** Whether the pointer position falls on the scrollbar column(s). */
-    private boolean inScrollbar(int x, int y) {
+    boolean inScrollbar(int x, int y) {
         if (lastArea == null || !scrollbarVisible()) {
             return false;
         }
@@ -486,7 +469,7 @@ public final class ChatViewportElement extends StyledElement<ChatViewportElement
     }
 
     /** Maps a pointer row inside the viewport to a scroll offset. */
-    private void scrollToMouseY(int y) {
+    void scrollToMouseY(int y) {
         if (lastArea == null || lastArea.height() <= 0) {
             return;
         }

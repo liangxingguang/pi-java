@@ -27,13 +27,13 @@ settings 四条已清：E2-32／E2-54 对齐、E2-43 重判、E2-50 按 R5 出�
 >
 > 锚点 `a00a5048d` 逐项复核后，本轮对 §3.1 可修项实施修复：K5／S32／R12／R13／R28 翻正为对齐（平台键位与 newline 分流、登录 URL 复制、工具卡流式计时、bash 增量与排队区、生产 onEntry 终态去重均已落地并有定向测试），S2／S28／T6／T11 维持部分对齐（形状差）。读数按逐行复算 239.5/252（＋4.0）。
 >
-> 2026-11-28：K19 滚轮归一化按 pi `wheel-scroll.ts` 模型移植（速度加速 ≤6 行、macOS/SSH 平台分支、Alt+wheel×5、数字臂固定行数），部分对齐（形状差）→对齐；读数 241.0/252（＋1.5）。
+> 2026-11-28：K19 滚轮归一化按 pi `wheel-scroll.ts` 模型移植（速度加速 ≤6 行、macOS/SSH 平台分支、Alt+wheel×5、数字臂固定行数），部分对齐（形状差）→对齐；读数 241.0/252（＋1.5）。同日 S2 补齐双击选词/三击行选/拖选边缘自动滚动，残余收窄为图像协议子集，维持部分对齐（读数不变）。
 
 ### 3.1 非对齐计分单元
 
 | 域 | 编号 | 判定 | 权重 | 当前缺口 |
 |---|---|---:|---:|---|
-| 屏幕/面板 | S2 | 部分对齐（形状差） | 2 | 已修：搜索条动态键位提示、flash 栈式多条、SGR 5 blink 属性。残余：双击选词/行选/边缘自动滚动未实现、图像为 Kitty/iTerm2 子集（D299–D301 中②）。 |
+| 屏幕/面板 | S2 | 部分对齐（形状差） | 2 | 已修：搜索条动态键位提示、flash 栈式多条、SGR 5 blink 属性、双击选词/三击行选/拖选边缘自动滚动（`WordSegments`＋`TranscriptSelection` 粒度/点击计数＋`ViewportInteraction` 50ms tick；X10 释放与点击优先卡片切换）。残余：终端图像协议为 Kitty/iTerm2 子集（无 Kitty placement 元数据/全量清理、滚动裁剪与离屏图片缓存上限，D299–D301 中②）；CJK 选词单字分段（`Intl.Segmenter` 词典不可复现）。 |
 | 屏幕/面板 | S28 | 部分对齐（形状差） | 1 | 已修：GFM 表格、URL scheme 白名单、代码块 `class="hljs"`。残余：pi 的 hljs 实际高亮 span 未产出（java 仅转义代码块文本，TUI 侧 SyntaxHighlighter 已有九类着色）（D-W8-3）。 |
 | 屏幕/面板 | S32 | 对齐 | 1 | `LoginDialogScreen` 已保存 `authUrl`，Ctrl+X 复制完整 URL 并渲染 `Copied URL to clipboard`／失败提示；设备码路径按 pi 不提供 URL 复制。 |
 | 渲染特性 | R7 | 缺失 | 1 | Mermaid 渲染：pi 依赖 `lovely-mermaid`，Java 无等价库（D309；围栏按代码块渲染）。 |

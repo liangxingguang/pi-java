@@ -63,6 +63,8 @@ final class GlobalKeyRouter {
         if (event instanceof TickEvent) {
             // Redraw on every tick so streamed text (dispatched from the
             // virtual-thread observer) reaches the draft inside the viewport.
+            // S2：拖选边缘自动滚动按 50ms 节奏在此推进（pi setInterval 对位）。
+            chatScreen.tickSelectionAutoScroll(System.nanoTime() / 1_000_000L);
             return EventResult.HANDLED;
         }
         if (event instanceof ResizeEvent resizeEvent) {

@@ -24,8 +24,7 @@ import java.util.function.Consumer;
  * Implements the coding-agent observers; all mutations happen on the render
  * thread via {@code TuiEventDispatcher}.
  *
- * <p>批 29（E2）把扩展注入层、会话事件面、cache 通知、输入口、转录投影核与
- * 渲染装配下沉成件；本类为装配根＋对外委托面（约 30 个测试类直接 new ChatScreen）。</p>
+ * <p>批 29（E2）把扩展注入层、会话事件面、cache 通知、输入口、转录投影核与渲染装配下沉成件；本类为装配根＋对外委托面。</p>
  */
 public final class ChatScreen implements EntryObserver, StreamObserver {
 
@@ -208,6 +207,10 @@ public final class ChatScreen implements EntryObserver, StreamObserver {
     /** 是否有非空选区（测试钩子）。 */
     public boolean hasActiveSelection() {
         return layout.hasActiveSelection();
+    }
+    /** S2：每 tick 推进拖选边缘自动滚动（{@code GlobalKeyRouter} 调用）。 */
+    public void tickSelectionAutoScroll(long nowMs) {
+        chatPanel.tickSelectionAutoScroll(nowMs);
     }
 
     /** L7 W6（C15/C20）：编辑器边框色（thinking 等级）与硬件光标源注入。 */
