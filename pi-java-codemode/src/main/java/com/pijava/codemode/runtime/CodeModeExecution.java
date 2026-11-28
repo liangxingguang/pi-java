@@ -64,6 +64,7 @@ public final class CodeModeExecution {
                              CodeModeAbortSignal signal) {
         this.tools = tools;
         this.globals = globals;
+        this.finished = false;
         this.timerService = timeoutMs > 0 && timeoutMs != Long.MAX_VALUE
                 ? Executors.newSingleThreadScheduledExecutor(runnable -> {
                     Thread thread = new Thread(runnable, "codemode-execution-deadline");

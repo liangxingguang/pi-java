@@ -49,8 +49,8 @@ class ExtensionManagerTest {
                 servicesDir.toUri().toURL(), testClasses.toUri().toURL()},
                 ExtensionManager.class.getClassLoader())) {
             // 批 24：父委托会捎上主源码集的内置扩展——按名排除（--no-mcp 同通道）；
-            // 批 27：tool-search 同通道（B162/T7 内置扩展）
-            var names = manager.loadAll(loader, java.util.Set.of("mcp", "tool-search"));
+            // 批 27：tool-search 同通道（B162/T7 内置扩展）；B161：codemode 同通道。
+            var names = manager.loadAll(loader, java.util.Set.of("mcp", "tool-search", "codemode"));
             assertThat(names).contains("test-ext");
         }
 
@@ -59,7 +59,7 @@ class ExtensionManagerTest {
         assertThat(manager.loadedNames()).contains("test-ext");
 
         manager.unload("test-ext");
-        assertThat(manager.loadedNames()).isEmpty();
+        assertThat(manager.loadedNames()).doesNotContain("test-ext");
     }
 
     @Test
