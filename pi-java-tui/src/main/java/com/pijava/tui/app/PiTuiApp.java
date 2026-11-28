@@ -17,6 +17,7 @@ import com.pijava.tui.util.InlineRenderContext;
 import com.pijava.tui.util.InlineTuiShell;
 import com.pijava.tui.util.ScrollConfig;
 import com.pijava.tui.util.ScrollInputNormalizer;
+import com.pijava.tui.util.WheelScrollAccelerator;
 import com.pijava.tui.util.ScrollbackTranscript;
 import com.pijava.tui.util.TamboUIAdapter;
 import com.pijava.tui.util.TuiEventDispatcher;
@@ -30,12 +31,9 @@ import dev.tamboui.toolkit.event.EventResult;
 import dev.tamboui.tui.event.Event;
 
 /**
- * TUI application shell (Phase 3 design §7.1): owns the render loop, drains
- * cross-thread events, intercepts global keybindings, drives interactive mode,
- * hosts modal overlays, and routes wheel/keys to the chat viewport.
- *
- * <p>批 29（E1 结构债拆分）：启动通知、全局键分派、overlay 开合、扩展宿主接线、
- * prompt/slash 流均已移出成件；本类只留装配、渲染帧面与对外委托桩。</p>
+ * TUI application shell (Phase 3 design §7.1): render loop, cross-thread events,
+ * global keys, overlays and viewport routing. 批 29（E1）：启动通知、键分派、
+ * overlay、扩展宿主与 prompt/slash 均已移出成件，本类只留装配与委托桩。
  */
 public final class PiTuiApp {
 
@@ -44,6 +42,8 @@ public final class PiTuiApp {
     private final KeybindingsManager keys;
     private final TuiEventDispatcher dispatcher;
     private final ScrollInputNormalizer normalizer;
+    volatile WheelScrollAccelerator wheelScroll;
+    final boolean scrollInvert;
     // 会话事件通道（pi subscribeToAgent）：唯一一处结构性接线，见 SessionEventChannel。
     private final SessionEventChannel sessionEvents;
     // 批 29（E1）：责任件（构造期仅持引用、不回调——原构造体语句序不变）。
@@ -102,6 +102,7 @@ public final class PiTuiApp {
         this.keys = keys;
         this.dispatcher = dispatcher;
         this.normalizer = new ScrollInputNormalizer(scrollConfig);
+        this.scrollInvert = scrollConfig != null && scrollConfig.invert();
         this.session = mode.session();
         this.slashFlow = new SlashFlowRouter(this, chatScreen, mode, dispatcher, keys);
         this.overlayManager = new OverlayManager(this, chatScreen, slashFlow);

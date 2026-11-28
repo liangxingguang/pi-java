@@ -30,6 +30,9 @@ import dev.tamboui.tui.event.TickEvent;
  */
 final class GlobalKeyRouter {
 
+    /** pi tui-alt-screen.ts:77：SGR Alt 位（button & 8）⇒ 滚轮行数 ×5。 */
+    private static final int ALT_WHEEL_SCROLL_MULTIPLIER = 5;
+
     private final PiTuiApp app;
     private final ChatScreen chatScreen;
     private final KeybindingsManager keys;
@@ -88,6 +91,18 @@ final class GlobalKeyRouter {
         if (event.kind() == MouseEventKind.SCROLL_UP
                 || event.kind() == MouseEventKind.SCROLL_DOWN) {
             int direction = event.kind() == MouseEventKind.SCROLL_UP ? -1 : 1;
+            if (app.wheelScroll != null) {
+                // K19（pi tui-alt-screen.ts:719-724）：速度模型 + SGR Alt 位 ×5。
+                int dir = app.scrollInvert ? -direction : direction;
+                int lines = app.wheelScroll.next(dir, System.nanoTime() / 1_000_000L);
+                if (event.modifiers().alt()) {
+                    lines *= ALT_WHEEL_SCROLL_MULTIPLIER;
+                }
+                if (lines != 0) {
+                    chatScreen.scrollByRows(dir * lines);
+                }
+                return EventResult.HANDLED;
+            }
             int lines = normalizer.onEvent(direction, System.currentTimeMillis());
             if (lines != 0) {
                 chatScreen.scrollByRows(lines);

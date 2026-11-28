@@ -86,6 +86,11 @@ class PiTuiAppScrollTest {
     }
 
     private static Harness start(ScrollConfig config, java.util.List<dev.tamboui.tui.event.Event> harnessRouted) throws Exception {
+        return start(config, null, harnessRouted);
+    }
+
+    private static Harness start(ScrollConfig config, com.pijava.tui.util.WheelScrollAccelerator wheel,
+            java.util.List<dev.tamboui.tui.event.Event> harnessRouted) throws Exception {
         var backend = new FakeBackend();
         var routed = harnessRouted != null ? harnessRouted
             : new java.util.concurrent.CopyOnWriteArrayList<dev.tamboui.tui.event.Event>();
@@ -101,6 +106,7 @@ class PiTuiAppScrollTest {
         var dispatcher = new TuiEventDispatcher();
         var app = new PiTuiApp(mode, chatScreen,
             new KeybindingsManager(), dispatcher, config);
+        app.wheelScroll = wheel;
         mode.setObservers(
             entry -> dispatcher.dispatch(() -> chatScreen.onEntry(entry)),
             event -> dispatcher.dispatch(() -> chatScreen.onStreamEvent(event)));
@@ -147,6 +153,22 @@ class PiTuiAppScrollTest {
             // Scrolling back down returns to the bottom and resumes follow.
             harness.backend.feed(SCROLL_DOWN.repeat(3));
             awaitOffset(harness, bottomWithDraft);
+        }
+    }
+
+    /** K19（pi tui-alt-screen.ts:719-724）：固定行数 + SGR Alt 位 ×5。 */
+    @Test
+    void piWheelAcceleratorAppliesFixedLinesAndAltMultiplier() throws Exception {
+        try (var harness = start(wheelConfig(),
+                com.pijava.tui.util.WheelScrollAccelerator.fixed(2), null)) {
+            harness.chatScreen.appendSystemText(lines(60));
+            Thread.sleep(300);
+            int bottom = harness.chatScreen.scrollOffset();
+            assertThat(bottom).isGreaterThan(10);
+
+            // SGR wheel-up button 64 + Alt bit 8 = 72 ⇒ 2 行 × 5。
+            harness.backend.feed("\u001b[<72;5;5M");
+            awaitOffset(harness, bottom - 10);
         }
     }
 

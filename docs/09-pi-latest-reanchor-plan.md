@@ -10,8 +10,8 @@
 
 | 层 | 发布读数 | 未对齐项 |
 |---|---:|---|
-| L7 TUI/web（map/05） | **239.5/252＝95.0%** | 12 个非对齐计分单元（§3.1）；§3.2 开放缺口已清 |
-| **全仓 L0–L7** | **1,373.5/1,386＝99.1%** | 仅 L7 |
+| L7 TUI/web（map/05） | **241.0/252＝95.6%** | 11 个非对齐计分单元（§3.1）；§3.2 开放缺口已清 |
+| **全仓 L0–L7** | **1,375.0/1,386＝99.2%** | 仅 L7 |
 
 ## 2. L5 coding-agent（458/458＝100%）
 
@@ -21,11 +21,13 @@ settings 四条已清：E2-32／E2-54 对齐、E2-43 重判、E2-50 按 R5 出�
 
 无。
 
-## 3. L7 TUI/web 未对齐（12.5 分）
+## 3. L7 TUI/web 未对齐（11.0 分）
 
-> 153 个计分单元中 12 个非对齐（对齐 141，未加权 141/153＝92.2%）。逐行证据与 D 账见 `map/05`。
+> 153 个计分单元中 11 个非对齐（对齐 142，未加权 142/153＝92.8%）。逐行证据与 D 账见 `map/05`。
 >
-> 锚点 `a00a5048d` 逐项复核后，本轮对 §3.1 可修项实施修复：K5／S32／R12／R13／R28 翻正为对齐（平台键位与 newline 分流、登录 URL 复制、工具卡流式计时、bash 增量与排队区、生产 onEntry 终态去重均已落地并有定向测试），S2／S28／T6／T11／K19 维持部分对齐（形状差）。读数按逐行复算 239.5/252（＋4.0）。
+> 锚点 `a00a5048d` 逐项复核后，本轮对 §3.1 可修项实施修复：K5／S32／R12／R13／R28 翻正为对齐（平台键位与 newline 分流、登录 URL 复制、工具卡流式计时、bash 增量与排队区、生产 onEntry 终态去重均已落地并有定向测试），S2／S28／T6／T11 维持部分对齐（形状差）。读数按逐行复算 239.5/252（＋4.0）。
+>
+> 2026-11-28：K19 滚轮归一化按 pi `wheel-scroll.ts` 模型移植（速度加速 ≤6 行、macOS/SSH 平台分支、Alt+wheel×5、数字臂固定行数），部分对齐（形状差）→对齐；读数 241.0/252（＋1.5）。
 
 ### 3.1 非对齐计分单元
 
@@ -44,12 +46,12 @@ settings 四条已清：E2-32／E2-54 对齐、E2-43 重判、E2-50 按 R5 出�
 | 渲染特性 | R33 | 缺失（窄差 D） | 1 | ASCII/字素快路径与 `Text.setText` 性能契约无 Java 等价（D286–D288）。 |
 | 键绑定/交互 | K5 | 对齐 | 2 | `FOLLOW_UP` 按 `windowsKeybindings` 分流（Windows/WSL ⇒ Ctrl+Q，其余 Alt+Enter）；`isNewlineEnter` 收窄为 Shift+Enter／LF，followUp 不再被提前吞掉。窄差：设置页提示仍硬编码 Alt+Enter。 |
 | 键绑定/交互 | K12 | 缺失 | 1 | `Ctrl+Z` 挂起进程：JVM 无 signal API（D316）。 |
-| 键绑定/交互 | K19 | 部分对齐（形状差） | 3 | pi `wheel-scroll.ts` 按事件速度连续加速（≤6 行）；java `ScrollInputNormalizer` 为 Codex TUI2 流分类模型，无 macOS/SSH 分支、无 Alt+wheel×5。 |
+| 键绑定/交互 | K19 | 对齐 | 3 | `WheelScrollAccelerator` 精确移植 pi 模型：事件间隔速度加速（≤6 行）、单 notch 突发不加速、`defaultAccelerate()` 在 macOS 本地终端返回 false（SSH 视为未知平台）；`PiTuiLauncher` 按 `fullscreenWheelScrollLines` 数字/auto 分流；`GlobalKeyRouter` 应用 SGR Alt 位 ×5 与 invert。`WheelScrollAcceleratorTest` 7 用例＋`PiTuiAppScrollTest` 6 用例全过。 |
 | TUI 组件 | C21 | 缺失（窄差 D） | 1 | render 只读/缓存契约：TamboUI 组件协议不可改，无应用层接缝（D286–D288）。 |
 | 主题/样式 | T6 | 部分对齐（形状差） | 2 | 已修：9 个 syntax token 全接主题 accessor，词法器新增 type/function/operator/punctuation 分支。残余：未识别标识符保守保持 plain（不染 variable 色），无 hljs 20+ 类按语言映射（D197 邻项）。 |
 | 主题/样式 | T11 | 部分对齐（形状差） | 1 | 已修半面：`TerminalColors.parseOscReply` 解析 OSC 10/11/4（BEL/ST、hex6/12、rgb），`ThemeController` 暴露注入缝。残余：TamboUI 后端无 OSC 查询发送面，仍走 COLORFGBG／tier-3（D123）。 |
 
-**权重 3 剩余差异项**：K19（C16／T2 本轮已收口，证据见 `map/05` 对应行）。
+**权重 3 剩余差异项**：无（26 条权重 3 单元全部对齐；K19 于 2026-11-28 收口，C16／T2 于 2026-11-26 收口，证据见 `map/05` 对应行）。
 
 ### 3.2 开放缺口（已收口）
 

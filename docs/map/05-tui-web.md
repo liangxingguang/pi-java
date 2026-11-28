@@ -1,8 +1,8 @@
 # 05 用户界面层（pi-java-tui / pi-java-web）
 
-> 【背景摘要】读数：加权 **239.5/252＝95.0%**（未加权 **141/153＝92.2%**）；已对齐项不再逐条列出。
+> 【背景摘要】读数：加权 **241.0/252＝95.6%**（未加权 **142/153＝92.8%**）；已对齐项不再逐条列出。
 > 范围：用户界面层（pi-java-tui / pi-java-web）的屏幕、渲染、键绑定、TUI 组件、主题、web 面；已对齐证据见 git 历史。
-> 差异结论：仅保留差异/窄差/出分母/web 面差异；剩余部分对齐（形状差）按权重为 K19(3)、S2(2)、T6(2)、S28(1)、T11(1)，开放缺口以 [`../04-open-items-register.md`](../04-open-items-register.md) 为准。
+> 差异结论：仅保留差异/窄差/出分母/web 面差异；剩余部分对齐（形状差）按权重为 S2(2)、T6(2)、S28(1)、T11(1)，开放缺口以 [`../04-open-items-register.md`](../04-open-items-register.md) 为准。
 > 开放缺口收口（2026-11-26）：B38／B39／B46 已对齐；E5-31 余 7 个无 TUI 面的成员登记窄差 D323（权重 0）。
 
 
@@ -83,7 +83,7 @@
 |---|---|---|---|---|---|---|---|
 | K5 | `Alt+Enter` 排队 follow-up | 键绑定 | `keybindings.ts:67-70`：**Windows 上是 `ctrl+q`**，`alt+enter` 归 `tui.input.newLine` | ✓ `KeybindingsManager.installDefaults` 按 `windowsKeybindings` 分流；`TamboUIAdapter.isNewlineEnter` 只认 Shift/LF；`GlobalKeyRouter` followUp 臂（压缩中缓冲，B175） | **对齐** | 2 | 2026-11-26 修复：`FOLLOW_UP` 默认键 Windows/WSL ⇒ Ctrl+Q、其余 Alt+Enter；`isNewlineEnter` 不再吞 Alt+Enter，followUp 不被提前拦截。`KeybindingsManagerTest`／`TamboUIAdapterTest` 全过。窄差：设置页 followUp 提示仍硬编码 `Alt+Enter`（需跨文件接线，未做） |
 | K12 | `Ctrl+Z` 挂起进程 | 键绑定 | `keybindings.ts:29-32 app.suspend`（非 Windows） | ✗ | **缺失** | 1 | — |
-| K19 | 滚轮/触控板归一化（事件流 → 行滚动） | 交互 | `tui/src/tui-alt-screen.ts:491 scrollBy` + `tui/src/wheel-scroll.ts` | `ScrollInputNormalizer.java:20`（274 行，Codex TUI2 PR#8357 移植）+ `ScrollConfig.java:35` | **部分对齐（形状差）** | 3 | — |
+| K19 | 滚轮/触控板归一化（事件流 → 行滚动） | 交互 | `tui/src/wheel-scroll.ts`（`BURST_GAP_MS=5`／`GESTURE_GAP_MS=200`／`REFERENCE_GAP_MS=100`／`MAX_AUTO_LINES=6`）；`tui/src/tui-alt-screen.ts:491 scrollBy`、`:719-724`（SGR Alt 位 ×5） | ✓ `WheelScrollAccelerator.java:13`（pi 模型移植：速度加速 ≤6 行、`defaultAccelerate()` 的 macOS/SSH 分支、数字臂固定行数、分数进位）；`GlobalKeyRouter.java:94`（速度模型＋Alt 位 ×5＋invert）；`PiTuiLauncher.java:86`（`fullscreenWheelScrollLines` 数字/auto 分流）。legacy `ScrollInputNormalizer` 仅保留给显式旧配置与既有测试 | **对齐** | 3 | 2026-11-28 修复：按锚点 `a00a5048d` 移植 pi 滚轮模型；`WheelScrollAcceleratorTest`（7 用例，含上游 6 个场景与 fixed(0) clamp）与 `PiTuiAppScrollTest`（6 用例，含 Alt 位解析×5）全过 |
 | K36 | 模式 2027 握手规避（ConPTY 字节泄漏修复） | 平台 | —（pi 无此构造） | `NoMode2027Backend.java:20` + `NoMode2027JLineBackend.java:1` | **非对齐项**（java 独有） | 0 | **排除出分母** |
 
 ### TUI 组件
@@ -137,7 +137,7 @@ web 对齐面：已对齐且无差异 13 条（逐条证据见 git 历史）；�
 | 前端：移动端侧栏覆盖层 / Tailwind 响应式 | `client/app.css`（675 行）、`vite.config.ts:5`（`@tailwindcss/vite`） |
 | web 共享协议（29 条客户端消息 + 服务端消息族） | `shared/protocol.ts:1`（117 行）、`WebProtocol.java:1`（418 行） |
 | **模式 2027 握手规避后端** | `NoMode2027Backend.java:20`（ConPTY 字节泄漏修复）+ `NoMode2027JLineBackend.java:1` + 2 个测试 |
-| 滚轮/触控板归一化（Codex TUI2 PR#8357 移植） | `ScrollInputNormalizer.java:20`（274 行）—— pi 现代码是 `wheel-scroll.ts`（K38），两者模型不同 |
+| 滚轮/触控板归一化（Codex TUI2 PR#8357 移植） | `ScrollInputNormalizer.java:20`（274 行）—— legacy 回退路径；默认生产路径已于 2026-11-28 切至 pi 模型 `WheelScrollAccelerator`（K19） |
 | 回合分隔条 `Worked for Ns • Local tools: N calls` | `ChatScreen.java:170-181`（Codex CLI 风格） |
 | 元数据气泡 emoji 图标集（⚙/🧠/🗜/⎇/◆） | `MetaKind.java:15-29` |
 | Codex 风格启动方框卡 | `WelcomeOverlay.java:41 buildCard` |
@@ -157,16 +157,18 @@ web 对齐面：已对齐且无差异 13 条（逐条证据见 git 历史）；�
 |---|---:|---:|---:|---:|
 | 屏幕/面板（35 单元） | 47 | 45.5 | **96.8%** | 94.3%（33/35） |
 | 渲染特性（R1–R33，31 计分单元；R21 权重 0 已剔；R29 出分母） | 45 | 39.0 | **86.7%** | 83.9%（26/31） |
-| 键绑定/交互（K1–K41，39 计分单元；K36 权重 0 已剔） | 67 | 64.5 | **96.3%** | 94.9%（37/39） |
+| 键绑定/交互（K1–K41，39 计分单元；K36 权重 0 已剔） | 67 | 66.0 | **98.5%** | 97.4%（38/39） |
 | TUI 组件（C1–C21，21 单元） | 42 | 41.0 | **97.6%** | 95.2%（20/21） |
 | 主题/样式（T1–T11，11 单元） | 18 | 16.5 | **91.7%** | 81.8%（9/11） |
 | web 对齐面（W1–W16，16 单元） | 33 | 33.0 | **100%** | 100%（16/16） |
-| **合计** | **252** | **239.5** | **95.0%** | **92.2%（141/153）** |
+| **合计** | **252** | **241.0** | **95.6%** | **92.8%（142/153）** |
 
-**权重 3 子集（26 条）**：Σ权重 **78** ／ Σ(w×c) **76.5** ／ **98.1%**（对齐 25 条＝75.0、部分对齐（形状差） 1 条＝1.5）。
+**权重 3 子集（26 条）**：Σ权重 **78** ／ Σ(w×c) **78.0** ／ **100%**（对齐 26 条＝78.0）。
 
 > 2026-11-26 逐行复算：C16／T2／W16 部分对齐（形状差）→对齐（＋3.5）；同日 §3.1 修复批次 K5／S32／R12／R13／R28 翻正（＋4.0），六域之和＝合计＝239.5。旧发布读数 232.5/252 与逐行不自洽——逐行 232.0、逐域行合计 231.5，已按每行权重×系数重算。未加权旧值「渲染 22/31」同属误记。
+>
+> 2026-11-28：K19 按 pi 模型移植（速度加速 ≤6、macOS/SSH 平台分支、Alt×5、数字臂固定），部分对齐（形状差）→对齐（＋1.5）；六域之和＝合计＝241.0。
 
 **读数口径**：未加权百分比的分母是计分单元数（153）；S31 作废、R21/R29/K36 出分母。
 
-**权重 3 的差异项与剩余差距（按可观察影响排序）**：K19（滚轮/触控板归一化模型不同）；其余 25 条权重 3 对齐项不再逐条列出（证据见 git 历史）。C16／T2 已于 2026-11-26 锚点复核收口为对齐。
+**权重 3 的差异项与剩余差距**：无（26 条权重 3 单元全部对齐）；K19（滚轮/触控板归一化）于 2026-11-28 收口，C16／T2 于 2026-11-26 锚点复核收口；逐条证据见 git 历史。

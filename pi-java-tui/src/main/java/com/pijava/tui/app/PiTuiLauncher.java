@@ -80,7 +80,15 @@ public final class PiTuiLauncher {
             session.services().settings().effective(),
             TamboUIAdapter.isWindows() ? 1 : 3,
             session.services().settings().uiPrefs().getFullscreenWheelScrollLines());
+        // K19（pi wheel-scroll.ts）：数字臂固定行数；"auto"/缺席走速度模型
+        // （macOS 本地终端已被 OS 加速 ⇒ 每事件 1 行）。Alt×5 在路由层应用。
+        var wheelSetting = session.services().settings().uiPrefs().getFullscreenWheelScrollLines();
+        var wheelScroll = wheelSetting instanceof Integer lines
+            ? com.pijava.tui.util.WheelScrollAccelerator.fixed(lines)
+            : com.pijava.tui.util.WheelScrollAccelerator.auto(
+                com.pijava.tui.util.WheelScrollAccelerator.defaultAccelerate());
         var app = new PiTuiApp(mode, chatScreen, keybindings, dispatcher, scrollConfig);
+        app.wheelScroll = wheelScroll;
         // B145（pi interactive-mode.ts:1245-1252）：启动后台刷新模型目录；PI_OFFLINE
         // 真值门，失败静默（pi 的 .catch(() => {})）。网络超时由 provider 层兜底。
         var offline = System.getenv("PI_OFFLINE");
